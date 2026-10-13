@@ -3093,3 +3093,122 @@ test("shell reports missing and non-executable commands and denied capabilities 
   expect(run.output?.exitCode).toBe(1);
   expect(run.output?.stdout).toBe("");
 });
+
+test("Rust WASI allocation and polling preserve byte contents, cursor, userdata, EOF and monotonic sleeps", async () => {
+  const token = await setup("wasi-poll");
+  const response = await act("wasi-poll", token, {
+    op: "process.run",
+    id: "poll",
+    language: "wasm",
+    source: await wasmFixture("poll"),
+  });
+  expect(response.status).toBe(200);
+  const run = Schema.decodeUnknownSync(RunRecord)(await response.json());
+  expect(run.status).toBe("exited");
+  expect(run.output?.exitCode).toBe(0);
+  expect(run.output?.stdout).toBe(
+    "allocation preserved cursor and zeros; poll preserved userdata, EOF and clocks\n",
+  );
+  const file = Schema.decodeUnknownSync(FileContent)(
+    await (
+      await act("wasi-poll", token, { op: "filesystem.readFile", path: "/tmp/allocated" })
+    ).json(),
+  );
+  expect(Buffer.from(file.content, "base64")).toEqual(
+    Buffer.concat([Buffer.from("original"), Buffer.alloc(8)]),
+  );
+});
+
+test("WASI allocation and poll ABI enforce descriptor rights, pointer bounds, clock flags and earliest deadlines", async () => {
+  const token = await setup("wasi-poll-abi");
+  expect(
+    (
+      await act("wasi-poll-abi", token, {
+        op: "filesystem.writeFile",
+        path: "/tmp/existing",
+        content: "original",
+        encoding: "utf8",
+      })
+    ).status,
+  ).toBe(200);
+  for (const [name, expected] of [
+    ["allocate-rights", 76],
+    ["allocate-overflow", 42],
+    ["poll-abi", 42],
+    ["poll-rights", 42],
+    ["poll-earliest", 42],
+  ] as const) {
+    const run = Schema.decodeUnknownSync(RunRecord)(
+      await (
+        await act("wasi-poll-abi", token, {
+          op: "process.run",
+          id: name,
+          language: "wasm",
+          source: await wasmFixture(name),
+        })
+      ).json(),
+    );
+    expect(run.output?.result).toBe(expected);
+  }
+});
+
+test("WASI allocation permission failure restores its buffer and polling stops when its capability expires", async () => {
+  const token = await setup("wasi-poll-grants");
+  expect(
+    (
+      await act("wasi-poll-grants", token, {
+        op: "filesystem.writeFile",
+        path: "/tmp/existing",
+        content: "original",
+        encoding: "utf8",
+      })
+    ).status,
+  ).toBe(200);
+  const readonly = Schema.decodeUnknownSync(TokenResponse)(
+    await (
+      await post("/v1/sandboxes/wasi-poll-grants/capabilities", admin, {
+        permissions: ["read", "execute"],
+        expiresInSeconds: 3600,
+      })
+    ).json(),
+  ).token;
+  const before = Schema.decodeUnknownSync(Status)(
+    await (await act("wasi-poll-grants", token, { op: "vm.status" })).json(),
+  );
+  const denied = Schema.decodeUnknownSync(RunRecord)(
+    await (
+      await act("wasi-poll-grants", readonly, {
+        op: "process.run",
+        id: "allocation",
+        language: "wasm",
+        source: await wasmFixture("allocate-denied"),
+      })
+    ).json(),
+  );
+  expect(denied.output?.result).toBe(42);
+  const after = Schema.decodeUnknownSync(Status)(
+    await (await act("wasi-poll-grants", token, { op: "vm.status" })).json(),
+  );
+  expect(after.generation).toBe(before.generation);
+  const source = await wasmFixture("poll-expiry");
+  const short = Schema.decodeUnknownSync(TokenResponse)(
+    await (
+      await post("/v1/sandboxes/wasi-poll-grants/capabilities", admin, {
+        permissions: ["execute"],
+        expiresInSeconds: 1,
+      })
+    ).json(),
+  ).token;
+  const expired = Schema.decodeUnknownSync(RunRecord)(
+    await (
+      await act("wasi-poll-grants", short, {
+        op: "process.run",
+        id: "expiry",
+        language: "wasm",
+        source,
+      })
+    ).json(),
+  );
+  expect(expired.status).toBe("failed");
+  expect(expired.output).toBeNull();
+});

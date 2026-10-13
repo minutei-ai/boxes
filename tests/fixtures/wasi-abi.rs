@@ -43,6 +43,8 @@ unsafe extern "C" {
         capacity: usize,
         used: *mut u32,
     ) -> i32;
+    fn fd_allocate(fd: u32, offset: u64, length: u64) -> i32;
+    fn poll_oneoff(input: *const u8, output: *mut u8, count: usize, ready: *mut u32) -> i32;
     fn fd_filestat_set_size(fd: u32, size: u64) -> i32;
     fn fd_filestat_set_times(fd: u32, atime: u64, mtime: u64, flags: u32) -> i32;
     fn path_filestat_set_times(
@@ -342,6 +344,141 @@ pub extern "C" fn run() -> i32 {
         if unsafe { clock_time_get(1, 0, &mut first) } != 0
             || unsafe { clock_time_get(1, 0, &mut second) } != 0
             || second < first
+        {
+            return -1;
+        }
+        return 42;
+    }
+    if cfg!(case = "allocate-rights")
+        || cfg!(case = "allocate-denied")
+        || cfg!(case = "allocate-overflow")
+    {
+        let rights = if cfg!(case = "allocate-rights") {
+            2
+        } else {
+            2 | (1 << 8)
+        };
+        let fd = match open(3, b"tmp/existing", 0, rights, 0, 1) {
+            Ok(fd) => fd,
+            Err(errno) => return errno,
+        };
+        if cfg!(case = "allocate-rights") {
+            return unsafe { fd_allocate(fd, 0, 12) };
+        }
+        if cfg!(case = "allocate-overflow") {
+            if unsafe { fd_allocate(fd, u64::MAX, 1) } != 61
+                || unsafe { fd_allocate(fd, 16_777_216, 1) } != 22
+            {
+                return -1;
+            }
+            return 42;
+        }
+        if unsafe { fd_allocate(fd, 0, 12) } != 2 {
+            return -1;
+        }
+        let mut data = [0u8; 8];
+        let vector = Iovec {
+            pointer: data.as_mut_ptr(),
+            length: data.len(),
+        };
+        let mut count = 0;
+        if unsafe { fd_read(fd, &vector, 1, &mut count) } != 0 || count != 8 || &data != b"original"
+        {
+            return -1;
+        }
+        return 42;
+    }
+    if cfg!(case = "poll-abi")
+        || cfg!(case = "poll-rights")
+        || cfg!(case = "poll-earliest")
+        || cfg!(case = "poll-expiry")
+    {
+        let mut subscriptions = [0u8; 96];
+        let mut events = [0u8; 64];
+        let mut ready = 0;
+        if cfg!(case = "poll-rights") {
+            let fd = match open(3, b"tmp/existing", 0, 2, 0, 1) {
+                Ok(fd) => fd,
+                Err(errno) => return errno,
+            };
+            subscriptions[8] = 1;
+            subscriptions[16..20].copy_from_slice(&fd.to_le_bytes());
+            if unsafe { poll_oneoff(subscriptions.as_ptr(), events.as_mut_ptr(), 1, &mut ready) }
+                != 0
+                || ready != 1
+                || events[8..10] != 76u16.to_le_bytes()
+            {
+                return -1;
+            }
+            return 42;
+        }
+        if cfg!(case = "poll-expiry") {
+            subscriptions[16..20].copy_from_slice(&1u32.to_le_bytes());
+            subscriptions[24..32].copy_from_slice(&2_000_000_000u64.to_le_bytes());
+            return unsafe {
+                poll_oneoff(subscriptions.as_ptr(), events.as_mut_ptr(), 1, &mut ready)
+            };
+        }
+        if cfg!(case = "poll-earliest") {
+            subscriptions[..8].copy_from_slice(&u64::MAX.to_le_bytes());
+            subscriptions[16..20].copy_from_slice(&1u32.to_le_bytes());
+            subscriptions[24..32].copy_from_slice(&2_000_000u64.to_le_bytes());
+            subscriptions[48..56].copy_from_slice(&2u64.to_le_bytes());
+            subscriptions[64..68].copy_from_slice(&1u32.to_le_bytes());
+            subscriptions[72..80].copy_from_slice(&2_000_000_000u64.to_le_bytes());
+            if unsafe { poll_oneoff(subscriptions.as_ptr(), events.as_mut_ptr(), 2, &mut ready) }
+                != 0
+                || ready != 1
+                || events[..8] != u64::MAX.to_le_bytes()
+            {
+                return -1;
+            }
+            subscriptions[16..20].copy_from_slice(&0u32.to_le_bytes());
+            subscriptions[24..32].copy_from_slice(&1u64.to_le_bytes());
+            subscriptions[40..42].copy_from_slice(&1u16.to_le_bytes());
+            if unsafe { poll_oneoff(subscriptions.as_ptr(), events.as_mut_ptr(), 1, &mut ready) }
+                != 0
+                || ready != 1
+            {
+                return -1;
+            }
+            return 42;
+        }
+        if unsafe { poll_oneoff(subscriptions.as_ptr(), events.as_mut_ptr(), 0, &mut ready) } != 28
+            || unsafe { poll_oneoff(subscriptions.as_ptr(), events.as_mut_ptr(), 129, &mut ready) }
+                != 28
+            || unsafe { poll_oneoff(usize::MAX as *const u8, events.as_mut_ptr(), 1, &mut ready) }
+                != 21
+            || unsafe { poll_oneoff(subscriptions.as_ptr(), usize::MAX as *mut u8, 1, &mut ready) }
+                != 21
+        {
+            return -1;
+        }
+        subscriptions[16..20].copy_from_slice(&2u32.to_le_bytes());
+        if unsafe { poll_oneoff(subscriptions.as_ptr(), events.as_mut_ptr(), 1, &mut ready) } != 0
+            || ready != 1
+            || events[8..10] != 58u16.to_le_bytes()
+        {
+            return -1;
+        }
+        subscriptions[16..20].copy_from_slice(&0u32.to_le_bytes());
+        subscriptions[40..42].copy_from_slice(&2u16.to_le_bytes());
+        if unsafe { poll_oneoff(subscriptions.as_ptr(), events.as_mut_ptr(), 1, &mut ready) } != 0
+            || events[8..10] != 28u16.to_le_bytes()
+        {
+            return -1;
+        }
+        subscriptions[8] = 3;
+        if unsafe { poll_oneoff(subscriptions.as_ptr(), events.as_mut_ptr(), 1, &mut ready) } != 28
+        {
+            return -1;
+        }
+        subscriptions[8] = 1;
+        subscriptions[16..20].copy_from_slice(&1u32.to_le_bytes());
+        if unsafe { fd_close(1) } != 0
+            || unsafe { poll_oneoff(subscriptions.as_ptr(), events.as_mut_ptr(), 1, &mut ready) }
+                != 0
+            || events[8..10] != 8u16.to_le_bytes()
         {
             return -1;
         }

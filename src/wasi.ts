@@ -1,4 +1,4 @@
-import { Clock, Effect, Match, Schema, Struct } from "effect";
+import { Clock, Duration, Effect, Match, Schema, Struct } from "effect";
 import wasm from "cirro:wasi";
 import { createBindings } from "../dist/wasi/bindings";
 import { requirePermission } from "./auth";
@@ -434,6 +434,86 @@ export const wasi = Effect.fn("wasi.execute")(function* (
             const path = yield* resolvePath(kernel, input.path, input.base);
             const target = yield* kernelCall(() => kernel.readlink(path));
             return { data: Buffer.from(target), path, directory: false, value: 0n };
+          }),
+        ),
+        Match.when({ kind: "poll" }, (input) =>
+          Effect.gen(function* () {
+            const realtime = yield* Clock.currentTimeNanos;
+            const monotonic = yield* Clock.monotonicTimeNanos;
+            const deadlines = input.clocks.map((clock) => {
+              const now = Match.value(clock.clock).pipe(
+                Match.when(0, () => realtime),
+                Match.orElse(() => monotonic),
+              );
+              const deadline = Match.value(clock.absolute).pipe(
+                Match.when(true, () => BigInt(clock.timeout)),
+                Match.orElse(() => now + BigInt(clock.timeout)),
+              );
+              return {
+                index: clock.index,
+                clock: clock.clock,
+                deadline,
+                precision: BigInt(clock.precision),
+                remaining: deadline - now,
+              };
+            });
+            const readings = { realtime, monotonic };
+            while (
+              !input.immediate &&
+              !deadlines.some((clock) => {
+                const actual = Match.value(clock.clock).pipe(
+                  Match.when(0, () => readings.realtime),
+                  Match.orElse(() => readings.monotonic),
+                );
+                return clock.deadline <= actual;
+              })
+            ) {
+              const untilExpiry = BigInt(capability.expiresAt) * 1_000_000n - readings.realtime;
+              if (untilExpiry <= 0n)
+                return yield* new Fault({
+                  code: "UNAUTHORIZED",
+                  status: 401,
+                  message: "Capability expired while waiting",
+                });
+              const first = deadlines.reduce((minimum, clock) => {
+                const actual = Match.value(clock.clock).pipe(
+                  Match.when(0, () => readings.realtime),
+                  Match.orElse(() => readings.monotonic),
+                );
+                const remaining = clock.deadline - actual;
+                if (remaining < minimum) return remaining;
+                return minimum;
+              }, untilExpiry);
+              yield* Effect.sleep(Duration.nanos(((first + 999_999n) / 1_000_000n) * 1_000_000n));
+              readings.realtime = yield* Clock.currentTimeNanos;
+              readings.monotonic = yield* Clock.monotonicTimeNanos;
+            }
+            const now = yield* Clock.currentTimeMillis;
+            if (capability.expiresAt <= now)
+              return yield* new Fault({
+                code: "UNAUTHORIZED",
+                status: 401,
+                message: "Capability expired while waiting",
+              });
+            const actualRealtime = readings.realtime;
+            const actualMonotonic = readings.monotonic;
+            const ready = deadlines
+              .filter((clock) => {
+                const actual = Match.value(clock.clock).pipe(
+                  Match.when(0, () => actualRealtime),
+                  Match.orElse(() => actualMonotonic),
+                );
+                return clock.deadline <= actual;
+              })
+              .map((clock) => clock.index);
+            return {
+              data: Buffer.from(
+                Schema.encodeSync(Schema.fromJsonString(Schema.Array(Schema.Int)))(ready),
+              ),
+              path: "/",
+              directory: false,
+              value: 0n,
+            };
           }),
         ),
         Match.when({ kind: "sync" }, () =>

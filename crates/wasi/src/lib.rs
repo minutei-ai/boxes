@@ -37,6 +37,16 @@ struct FileBuffer {
     metadata: [u8; 64],
 }
 
+#[derive(Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+struct PollClock {
+    index: usize,
+    clock: u32,
+    timeout: String,
+    precision: String,
+    absolute: bool,
+}
+
 #[derive(Serialize)]
 #[serde(
     tag = "kind",
@@ -112,6 +122,10 @@ enum Request {
         path: String,
         base: String,
     },
+    Poll {
+        clocks: Vec<PollClock>,
+        immediate: bool,
+    },
     Sync,
     Random {
         length: usize,
@@ -153,6 +167,12 @@ enum Completion {
     },
     Metadata {
         fd: Option<u32>,
+    },
+    Poll {
+        events: Vec<[u8; 32]>,
+        clocks: BTreeSet<usize>,
+        pointer: usize,
+        output: usize,
     },
     Unit,
     Readlink {
@@ -476,7 +496,7 @@ fn dispatch(caller: &mut Caller<'_, State>, name: &str, args: &[u64]) -> Result<
             let mut stat = [0u8; 24];
             if a[0] < 3 {
                 stat[0] = 2;
-                let rights: u64 = if a[0] == 0 { 2 } else { 64 };
+                let rights: u64 = (if a[0] == 0 { 2 } else { 64 }) | (1 << 27);
                 stat[8..16].copy_from_slice(&rights.to_le_bytes());
             } else {
                 let descriptor = caller
@@ -666,20 +686,30 @@ fn dispatch(caller: &mut Caller<'_, State>, name: &str, args: &[u64]) -> Result<
             }
             put(caller, output, &(data.len() as u32).to_le_bytes())?;
         }
-        "fd_filestat_set_size" => {
+        "fd_filestat_set_size" | "fd_allocate" => {
             let state = caller.data_mut();
             let descriptor = state
                 .descriptors
                 .get(&(a[0] as u32))
                 .cloned()
                 .ok_or(Failure::Errno(8))?;
-            if descriptor.rights & (1 << 22) == 0 {
+            let right = if name == "fd_allocate" {
+                1 << 8
+            } else {
+                1 << 22
+            };
+            if descriptor.rights & right == 0 {
                 return Err(Failure::Errno(76));
             }
             if descriptor.directory {
                 return Err(Failure::Errno(31));
             }
-            let size = usize::try_from(args[1]).map_err(|_| Failure::Errno(22))?;
+            let requested = if name == "fd_allocate" {
+                args[1].checked_add(args[2]).ok_or(Failure::Errno(61))?
+            } else {
+                args[1]
+            };
+            let size = usize::try_from(requested).map_err(|_| Failure::Errno(22))?;
             if size > MAX_BYTES {
                 return Err(Failure::Errno(22));
             }
@@ -690,6 +720,11 @@ fn dispatch(caller: &mut Caller<'_, State>, name: &str, args: &[u64]) -> Result<
                 .ok_or(Failure::Errno(8))?
                 .bytes
                 .len();
+            let size = if name == "fd_allocate" {
+                size.max(previous_length)
+            } else {
+                size
+            };
             let total: usize = state.files.values().map(|file| file.bytes.len()).sum();
             if total - previous_length + size > MAX_BYTES {
                 return Err(Failure::Errno(48));
@@ -766,6 +801,144 @@ fn dispatch(caller: &mut Caller<'_, State>, name: &str, args: &[u64]) -> Result<
                     flags: flags as u16,
                 },
                 Completion::Metadata { fd: None },
+            )?;
+        }
+        "poll_oneoff" => {
+            if a[2] == 0 || a[2] > 128 {
+                return Err(Failure::Errno(28));
+            }
+            let subscriptions = bytes(
+                caller,
+                a[0],
+                a[2].checked_mul(48).ok_or(Failure::Errno(21))?,
+            )?;
+            bytes(
+                caller,
+                a[1],
+                a[2].checked_mul(32).ok_or(Failure::Errno(21))?,
+            )?;
+            bytes(caller, a[3], 4)?;
+            let mut clocks = Vec::new();
+            let mut clock_indices = BTreeSet::new();
+            let mut events = Vec::new();
+            let state = caller.data();
+            for (index, subscription) in subscriptions.chunks_exact(48).enumerate() {
+                let mut event = [0u8; 32];
+                event[..8].copy_from_slice(&subscription[..8]);
+                event[10] = subscription[8];
+                let mut errno = 0u16;
+                match subscription[8] {
+                    0 => {
+                        let clock = u32::from_le_bytes(
+                            subscription[16..20]
+                                .try_into()
+                                .map_err(|_| Failure::Errno(28))?,
+                        );
+                        let flags = u16::from_le_bytes(
+                            subscription[40..42]
+                                .try_into()
+                                .map_err(|_| Failure::Errno(28))?,
+                        );
+                        if flags & !1 != 0 {
+                            errno = 28;
+                        } else if clock > 1 {
+                            errno = 58;
+                        } else {
+                            let timeout = u64::from_le_bytes(
+                                subscription[24..32]
+                                    .try_into()
+                                    .map_err(|_| Failure::Errno(28))?,
+                            );
+                            let precision = u64::from_le_bytes(
+                                subscription[32..40]
+                                    .try_into()
+                                    .map_err(|_| Failure::Errno(28))?,
+                            );
+                            clocks.push(PollClock {
+                                index,
+                                clock,
+                                timeout: timeout.to_string(),
+                                precision: precision.to_string(),
+                                absolute: flags & 1 != 0,
+                            });
+                            clock_indices.insert(index);
+                        }
+                    }
+                    1 | 2 => {
+                        let fd = u32::from_le_bytes(
+                            subscription[16..20]
+                                .try_into()
+                                .map_err(|_| Failure::Errno(28))?,
+                        );
+                        let writing = subscription[8] == 2;
+                        if state.closed.contains(&fd) {
+                            errno = 8;
+                        } else if fd < 3 {
+                            if fd == 0 && !writing {
+                                let available =
+                                    state.stdin.len().saturating_sub(state.stdin_offset);
+                                event[16..24].copy_from_slice(&(available as u64).to_le_bytes());
+                                if available == 0 {
+                                    event[24..26].copy_from_slice(&1u16.to_le_bytes());
+                                }
+                            } else if fd > 0 && writing {
+                                let available = state
+                                    .max_output
+                                    .saturating_sub(state.stdout.len() + state.stderr.len());
+                                event[16..24].copy_from_slice(&(available as u64).to_le_bytes());
+                                if available == 0 {
+                                    errno = 22;
+                                }
+                            } else {
+                                errno = 76;
+                            }
+                        } else if let Some(descriptor) = state.descriptors.get(&fd) {
+                            if descriptor.rights & (1 << 27) == 0
+                                || (writing && !descriptor.write)
+                                || (!writing && !descriptor.read)
+                            {
+                                errno = 76;
+                            } else if descriptor.directory {
+                                errno = 31;
+                            } else if let Some(file) =
+                                descriptor.cache.and_then(|cache| state.files.get(&cache))
+                            {
+                                let available = if writing {
+                                    let total: usize =
+                                        state.files.values().map(|file| file.bytes.len()).sum();
+                                    let position = if descriptor.flags & 1 != 0 {
+                                        file.bytes.len()
+                                    } else {
+                                        descriptor.offset
+                                    };
+                                    (MAX_BYTES - (total - file.bytes.len()))
+                                        .saturating_sub(position)
+                                } else {
+                                    file.bytes.len().saturating_sub(descriptor.offset)
+                                };
+                                event[16..24].copy_from_slice(&(available as u64).to_le_bytes());
+                            } else {
+                                errno = 8;
+                            }
+                        } else {
+                            errno = 8;
+                        }
+                    }
+                    _ => return Err(Failure::Errno(28)),
+                }
+                event[8..10].copy_from_slice(&errno.to_le_bytes());
+                events.push(event);
+            }
+            let immediate = events.len() != clock_indices.len();
+            suspend(
+                caller,
+                Request::Poll { clocks, immediate },
+                Completion::Poll {
+                    events,
+                    clocks: clock_indices,
+                    pointer: a[1],
+                    output: a[3],
+                },
             )?;
         }
         "fd_filestat_get" => {
@@ -1146,6 +1319,8 @@ fn linker(engine: &Engine) -> Result<Linker<State>, String> {
     bind!("fd_seek",a:i32,b:i64,c:i32,d:i32);
     bind!("fd_tell",a:i32,b:i32);
     bind!("fd_filestat_set_size",a:i32,b:i64);
+    bind!("fd_allocate",a:i32,b:i64,c:i64);
+    bind!("poll_oneoff",a:i32,b:i32,c:i32,d:i32);
     bind!("fd_filestat_set_times",a:i32,b:i64,c:i64,d:i32);
     bind!("path_filestat_set_times",a:i32,b:i32,c:i32,d:i32,e:i64,f:i64,g:i32);
     bind!("fd_filestat_get",a:i32,b:i32);
@@ -1620,6 +1795,40 @@ impl WasmGuest {
                             }
                         }
                     }
+                }
+                Completion::Poll {
+                    events,
+                    clocks,
+                    pointer,
+                    output,
+                } => {
+                    let ready: Vec<usize> = serde_json::from_slice(data)
+                        .map_err(|_| JsValue::from_str("Invalid poll response"))?;
+                    if ready.iter().any(|index| !clocks.contains(index)) {
+                        return Err(JsValue::from_str(
+                            "Unknown clock subscription in poll response",
+                        ));
+                    }
+                    let ready: BTreeSet<_> = ready.into_iter().collect();
+                    let bytes: Vec<u8> = events
+                        .into_iter()
+                        .enumerate()
+                        .filter(|(index, _)| !clocks.contains(index) || ready.contains(index))
+                        .flat_map(|(_, event)| event)
+                        .collect();
+                    let count = (bytes.len() / 32) as u32;
+                    if count == 0 {
+                        return Err(JsValue::from_str("Poll completed without a ready event"));
+                    }
+                    let memory = self
+                        .memory
+                        .ok_or_else(|| JsValue::from_str("Missing Wasm memory"))?;
+                    memory
+                        .write(&mut self.store, pointer, &bytes)
+                        .map_err(|error| JsValue::from_str(&error.to_string()))?;
+                    memory
+                        .write(&mut self.store, output, &count.to_le_bytes())
+                        .map_err(|error| JsValue::from_str(&error.to_string()))?;
                 }
                 Completion::Unit => {}
                 Completion::Remove => detach(self.store.data_mut(), path),

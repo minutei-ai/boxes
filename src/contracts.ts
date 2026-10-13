@@ -319,6 +319,19 @@ export const WasmStep = Schema.Union([
   }),
   Schema.Struct({ kind: Schema.Literal("symlink"), path: Path, base: Path, target: Path }),
   Schema.Struct({ kind: Schema.Literal("readlink"), path: Path, base: Path }),
+  Schema.Struct({
+    kind: Schema.Literal("poll"),
+    immediate: Schema.Boolean,
+    clocks: Schema.Array(
+      Schema.Struct({
+        index: Schema.Int,
+        clock: Schema.Int,
+        timeout: Schema.String.check(Schema.isPattern(/^[0-9]+$/)),
+        precision: Schema.String.check(Schema.isPattern(/^[0-9]+$/)),
+        absolute: Schema.Boolean,
+      }),
+    ).check(Schema.isMaxLength(128)),
+  }),
   Schema.Struct({ kind: Schema.Literal("sync") }),
   Schema.Struct({
     kind: Schema.Literal("random"),

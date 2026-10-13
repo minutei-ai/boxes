@@ -448,10 +448,28 @@ const packageMissingCommand = await action({
   id: "removed-package",
   command: "probe",
 });
+const pollSource = Buffer.from(
+  await Bun.file(join(import.meta.dir, "../dist/wasi-poll.wasm")).arrayBuffer(),
+).toString("base64");
+const pollRun = Schema.decodeUnknownSync(RunRecord)(
+  await (
+    await action({ op: "process.run", id: "poll", language: "wasm", source: pollSource })
+  ).json(),
+);
+const allocated = Schema.decodeUnknownSync(FileContent)(
+  await (await action({ op: "filesystem.readFile", path: "/tmp/allocated" })).json(),
+);
 const alive = await action({ op: "vm.status" });
 const disposed = await action({ op: "vm.dispose" });
 const afterDispose = await action({ op: "vm.status" });
 const checks = {
+  wasiAllocationPoll:
+    pollRun.output?.exitCode === 0 &&
+    pollRun.output.stdout ===
+      "allocation preserved cursor and zeros; poll preserved userdata, EOF and clocks\n" &&
+    Buffer.from(allocated.content, "base64").equals(
+      Buffer.concat([Buffer.from("original"), Buffer.alloc(8)]),
+    ),
   softwareShell:
     packageShell.output?.exitCode === 0 &&
     packageShell.output.stdout.includes("before\n") &&
