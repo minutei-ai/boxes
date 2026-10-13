@@ -11,6 +11,8 @@ import {
   RunRecord,
   ProcessListAction,
   ProcessWaitAction,
+  ProcessOutputAction,
+  ProcessOutputPage,
   ProcessCancelAction,
 } from "./contracts";
 import { load } from "./modules";
@@ -564,4 +566,83 @@ export const cancel = Effect.fn("process.cancel")(function* (
       message: "Execution changed during cancellation; inspect process.get",
     });
   return Struct.omit(updated, ["authority", "deadlineAt", "output"]);
+});
+
+export const output = Effect.fn("process.output")(function* (
+  env: Env,
+  capability: typeof Capability.Type,
+  action: typeof ProcessOutputAction.Type,
+) {
+  const record = yield* inspect(env, capability, action.id);
+  const position = action.after ?? 0;
+  if (record.output === null) {
+    if (position !== 0)
+      return yield* new Fault({
+        code: "EINVAL",
+        status: 400,
+        message: "Output cursor is beyond retained bytes",
+      });
+    const availability = yield* Effect.sync(() => {
+      if (
+        record.status === "queued" ||
+        record.status === "running" ||
+        record.status === "cancelling"
+      )
+        return "pending" as const;
+      return "unobserved" as const;
+    });
+    return {
+      state: record.status,
+      availability,
+      events: [],
+      nextCursor: 0,
+      hasMore: false,
+      truncated: false as const,
+    };
+  }
+  const stdout = Buffer.from(record.output.stdout, "utf8");
+  const stderr = Buffer.from(record.output.stderr, "utf8");
+  const total = stdout.byteLength + stderr.byteLength;
+  if (position > total)
+    return yield* new Fault({
+      code: "EINVAL",
+      status: 400,
+      message: "Output cursor is beyond retained bytes",
+    });
+  const events: (typeof ProcessOutputPage.Type.events)[number][] = [];
+  const progress = { position, bytes: 0 };
+  while (
+    progress.position < total &&
+    progress.bytes < action.maxBytes &&
+    events.length < action.maxEvents
+  ) {
+    const stream = yield* Effect.sync(() => {
+      if (progress.position < stdout.byteLength)
+        return { name: "stdout" as const, data: stdout, start: 0 };
+      return { name: "stderr" as const, data: stderr, start: stdout.byteLength };
+    });
+    const offset = progress.position - stream.start;
+    const length = Math.min(
+      4096,
+      action.maxBytes - progress.bytes,
+      stream.data.byteLength - offset,
+    );
+    events.push({
+      stream: stream.name,
+      offset,
+      cursor: progress.position,
+      data: stream.data.subarray(offset, offset + length).toString("base64"),
+      encoding: "base64",
+    });
+    progress.position += length;
+    progress.bytes += length;
+  }
+  return {
+    state: record.status,
+    availability: "retained" as const,
+    events,
+    nextCursor: progress.position,
+    hasMore: progress.position < total,
+    truncated: false as const,
+  };
 });

@@ -12,6 +12,7 @@ import {
   CanonicalPath,
   NetworkResult,
   ProcessPage,
+  ProcessOutputPage,
   RunRecord,
   RunSummary,
   ErrorResponse,
@@ -644,9 +645,72 @@ const hostFs = Schema.decodeUnknownSync(RunRecord)(
     await action({ op: "process.run", id: "host-fs", language: "wasm", source: hostFsSource })
   ).json(),
 );
+
+const replaySource = Schema.decodeUnknownSync(RunRecord)(
+  await (
+    await action({
+      op: "process.run",
+      id: "replay-proof",
+      language: "javascript",
+      source:
+        "export default ({console}) => { console.log('😀stdout'); console.error('stderr'); return 42; }",
+    })
+  ).json(),
+);
+const replayFirst = Schema.decodeUnknownSync(ProcessOutputPage)(
+  await (
+    await action({
+      op: "process.output.read",
+      id: "replay-proof",
+      after: null,
+      maxBytes: 3,
+      maxEvents: 1,
+    })
+  ).json(),
+);
+const replayRest = Schema.decodeUnknownSync(ProcessOutputPage)(
+  await (
+    await action({
+      op: "process.output.read",
+      id: "replay-proof",
+      after: replayFirst.nextCursor,
+      maxBytes: 65_536,
+      maxEvents: 128,
+    })
+  ).json(),
+);
+const replayEof = Schema.decodeUnknownSync(ProcessOutputPage)(
+  await (
+    await action({
+      op: "process.output.read",
+      id: "replay-proof",
+      after: replayRest.nextCursor,
+      maxBytes: 65_536,
+      maxEvents: 128,
+    })
+  ).json(),
+);
 const disposed = await action({ op: "vm.dispose" });
 const afterDispose = await action({ op: "vm.status" });
 const checks = {
+  outputReplay:
+    replayFirst.availability === "retained" &&
+    replayFirst.nextCursor === 3 &&
+    Buffer.concat(
+      [...replayFirst.events, ...replayRest.events]
+        .filter((event) => event.stream === "stdout")
+        .map((event) => Buffer.from(event.data, "base64")),
+    ).toString() === replaySource.output?.stdout &&
+    Buffer.concat(
+      replayRest.events
+        .filter((event) => event.stream === "stderr")
+        .map((event) => Buffer.from(event.data, "base64")),
+    ).toString() === replaySource.output?.stderr,
+  outputReplayEof:
+    replayEof.events.length === 0 &&
+    replayEof.nextCursor === replayRest.nextCursor &&
+    replayEof.hasMore === false,
+
   processCancellation:
     cancelledStarted.status === "queued" &&
     observedCancellation.length === 1 &&

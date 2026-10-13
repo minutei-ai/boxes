@@ -2,7 +2,7 @@ import { Clock, Effect } from "effect";
 import { Capability, Fault, GuestAction, NetworkResult } from "./contracts";
 import { filesystem } from "./filesystem";
 import { HttpFailure, readBounded } from "./http";
-import { inspect, list, wait, cancel } from "./process";
+import { inspect, list, wait, cancel, output } from "./process";
 import { open } from "./storage";
 import { fetchAuthorized } from "./network";
 import { software } from "./software";
@@ -16,6 +16,7 @@ export const guestAction = Effect.fn("guest.action")(function* (
   const now = yield* Clock.currentTimeMillis;
   if (capability.expiresAt <= now)
     return yield* new Fault({ code: "UNAUTHORIZED", status: 401, message: "Capability expired" });
+  if (action.op === "process.output.read") return yield* output(env, capability, action);
   if (action.op === "process.cancel") return yield* cancel(env, capability, action);
   if (action.op === "process.wait") return yield* wait(env, capability, action);
   if (action.op === "process.get") return yield* inspect(env, capability, action.id);

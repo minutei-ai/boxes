@@ -38,6 +38,12 @@ The API requires `execute` and returns only the native summary, so it cannot rev
 
 Metadata-only process operations use the shared head acquisition owner without creating a filesystem kernel. Actual execution and filesystem operations acquire the kernel through `open`. This avoids rebuilding and retaining manifest heaps merely to inspect authorization/disposal during polling.
 
+## Retained output replay
+
+The completed run result remains the single output owner. `process.output.read` pages its captured stdout/stderr bytes without introducing another retained log or mutable cursor document. It converts the captured text to UTF-8 once per call, emits at most 4096 bytes per event and respects both caller byte and event limits. An absolute byte cursor spans stdout then stderr; each event also identifies its offset within the stream. This presentation is stable across completed-receipt reads, but it does not claim observed ordering between streams or recover invalid raw WASI bytes previously converted by the runtime.
+
+Authorization and sandbox existence/disposal are checked through the same inspection owner. Unknown executions, invalid byte cursors and unsupported request inputs fail explicitly. Active receipts report pending availability; failed/cancelled receipts with no retained result report unobserved availability. Native guest responses use the concrete page Schema. Each page currently reads the complete bounded receipt; page size bounds delivery, not R2 source bytes or repeated parsing. Persisting snapshots at guest yields, storing individually readable chunks and keeping their original stream order remain required for live output parity and large-output efficiency.
+
 ## Guest boundary
 
 One ordinary Worker loads precompiled Rust/Wasm modules for its filesystem kernel, QuickJS, Oxc and WASI/Wasmi. JavaScript runs in a fresh QuickJS runtime with its own heap, stack ceiling, interrupt budget and microtask ceiling. TypeScript is transpiled by Oxc before entering that runtime. Each module compilation owns a fresh Wasm instance with 64 MiB maximum linear memory; generated native bindings are instantiated through a build-time factory. This contains compiler stack/memory traps instead of retaining a poisoned instance across requests. Guest Wasm is interpreted with Wasmi fuel and memory limits; it is never dynamically compiled using the platform WebAssembly API.

@@ -129,7 +129,15 @@ export const ProcessWaitAction = Schema.Struct({
   timeoutMs: Schema.Int.check(Schema.isBetween({ minimum: 0, maximum: 25_000 })),
 });
 export const ProcessCancelAction = Schema.Struct({ op: Schema.Literal("process.cancel"), id: Id });
+export const ProcessOutputAction = Schema.Struct({
+  op: Schema.Literal("process.output.read"),
+  id: Id,
+  after: Schema.NullOr(Schema.Int.check(Schema.isBetween({ minimum: 0, maximum: 2_097_152 }))),
+  maxBytes: Schema.Int.check(Schema.isBetween({ minimum: 1, maximum: 65_536 })),
+  maxEvents: Schema.Int.check(Schema.isBetween({ minimum: 1, maximum: 128 })),
+});
 export const ProcessReadAction = Schema.Union([
+  ProcessOutputAction,
   ProcessWaitAction,
   Schema.Struct({ op: Schema.Literal("process.get"), id: Id }),
   ProcessListAction,
@@ -467,6 +475,22 @@ export const ProcessPage = Schema.Struct({
   items: Schema.Array(RunSummary),
   cursor: Schema.NullOr(Schema.String),
 });
+export const ProcessOutputPage = Schema.Struct({
+  state: RunRecord.fields.status,
+  availability: Schema.Literals(["pending", "retained", "unobserved"]),
+  events: Schema.Array(
+    Schema.Struct({
+      stream: Schema.Literals(["stdout", "stderr"]),
+      offset: Schema.Int,
+      cursor: Schema.Int,
+      data: Schema.String,
+      encoding: Schema.Literal("base64"),
+    }),
+  ).check(Schema.isMaxLength(128)),
+  nextCursor: Schema.Int,
+  hasMore: Schema.Boolean,
+  truncated: Schema.Literal(false),
+});
 export const FileContent = Schema.Struct({
   content: Schema.String,
   encoding: Schema.Literal("base64"),
@@ -567,6 +591,7 @@ export const PackageInstallation = PackagePreparation.mapFields((fields) =>
 );
 
 export const GuestResponse = Schema.Union([
+  ProcessOutputPage,
   PackagePreparation.fields.installed,
   SoftwareCatalog,
   BatchReadResults,
