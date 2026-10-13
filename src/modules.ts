@@ -33,15 +33,25 @@ export const load = Effect.fn("modules.load")(function* (
     action.op === "process.execFile" ||
     (action.op === "process.run" && action.language === "wasm")
   ) {
+    const defaults = yield* kernelCall(() => kernel.package_environment()).pipe(
+      Effect.flatMap(
+        Schema.decodeUnknownEffect(Schema.fromJsonString(WasmConfiguration.fields.env)),
+      ),
+    );
     const binary = yield* Effect.gen(function* () {
       if (action.op === "process.run")
         return { source: action.source, entry: "/tmp/__cirro_inline__.wasm" };
       yield* requirePermission(capability, "read");
       const path = yield* Effect.gen(function* () {
         if (action.op === "wasm.executeFile") return action.path;
-        if (action.command.includes("/"))
-          return yield* kernelCall(() => kernel.canonical(action.command, "/home/cirro"));
-        return yield* kernelCall(() => kernel.package_command(action.command));
+        const environment = { ...defaults, ...(action.env ?? {}) };
+        return yield* kernelCall(() =>
+          kernel.command_path(
+            action.command,
+            "/home/cirro",
+            environment.PATH ?? "/opt/cirro/bin:/usr/local/bin:/usr/bin:/bin",
+          ),
+        );
       });
       const stat = yield* kernelCall(() => kernel.stat(path, true)).pipe(
         Effect.flatMap(Schema.decodeUnknownEffect(Schema.fromJsonString(FileStat))),
@@ -87,11 +97,6 @@ export const load = Effect.fn("modules.load")(function* (
         });
       return encoded;
     });
-    const defaults = yield* kernelCall(() => kernel.package_environment()).pipe(
-      Effect.flatMap(
-        Schema.decodeUnknownEffect(Schema.fromJsonString(WasmConfiguration.fields.env)),
-      ),
-    );
     const program = {
       language: "wasm" as const,
       source: binary.source,

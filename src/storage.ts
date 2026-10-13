@@ -74,6 +74,8 @@ export const publish = Effect.fn("filesystem.publish")(function* (
       status: 409,
       message: "Sandbox changed concurrently; read current state before retrying",
     });
+  session.head = { ...session.head, manifest };
+  session.etag = written.etag;
   return written.etag;
 });
 

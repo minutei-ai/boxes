@@ -593,6 +593,12 @@ impl Kernel {
         }
     }
 
+    pub fn restore_manifest(&mut self, manifest: &str) -> Result<(), JsValue> {
+        let restored = Self::new(Some(manifest.into()))?;
+        self.state = restored.state;
+        Ok(())
+    }
+
     pub fn set_time(&mut self, now: u64) {
         self.now = now;
     }

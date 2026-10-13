@@ -93,3 +93,20 @@ test("filesystem migration preserves version 2 identities and precise historical
   expect(migrate_filesystem(migrated)).toBe(migrated);
   kernel.free();
 });
+
+test("native snapshot rollback preserves inode identities and package catalog while rejecting malformed snapshots", () => {
+  const kernel = new Kernel();
+  const initial = kernel.manifest();
+  const root = Schema.decodeUnknownSync(Schema.fromJsonString(FileStat))(kernel.stat("/", true));
+  kernel.mkdir("/tmp/transient", false);
+  kernel.advance();
+  expect(kernel.manifest()).not.toBe(initial);
+  kernel.restore_manifest(initial);
+  expect(kernel.manifest()).toBe(initial);
+  expect(
+    Schema.decodeUnknownSync(Schema.fromJsonString(FileStat))(kernel.stat("/", true)).inode,
+  ).toBe(root.inode);
+  expect(() => kernel.restore_manifest("{}")).toThrow();
+  expect(kernel.manifest()).toBe(initial);
+  kernel.free();
+});

@@ -425,6 +425,17 @@ const packageAlias = Schema.decodeUnknownSync(RunRecord)(
     })
   ).json(),
 );
+const packageShell = Schema.decodeUnknownSync(RunRecord)(
+  await (
+    await action({
+      op: "process.run",
+      id: "package-shell",
+      language: "shell",
+      source:
+        "echo before > /tmp/shell-before; echo input | custom argument > /tmp/shell-output; cat /tmp/shell-before; cat /tmp/shell-output",
+    })
+  ).json(),
+);
 const packageRemoved = await action({
   op: "software.uninstall",
   packageId: packageInstalled.packageId,
@@ -441,6 +452,11 @@ const alive = await action({ op: "vm.status" });
 const disposed = await action({ op: "vm.dispose" });
 const afterDispose = await action({ op: "vm.status" });
 const checks = {
+  softwareShell:
+    packageShell.output?.exitCode === 0 &&
+    packageShell.output.stdout.includes("before\n") &&
+    packageShell.output.stdout.includes("marker=package") &&
+    packageShell.output.stdout.includes("stdin=[105, 110, 112, 117, 116, 10]"),
   softwareInstallation:
     packageWritten.status === 200 &&
     packageInstalledResponse.status === 200 &&

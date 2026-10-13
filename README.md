@@ -33,7 +33,7 @@ bun run bench
 
 The benchmark records distributions and artifact sizes in [performance-local.json](docs/evidence/performance-local.json). These are local measurements, not production latency or upstream comparisons.
 
-Validation passed 28 Rust tests, 67 workerd integration tests, four compiled wasm32 SDK tests and 42 production checks. Deployment uses the `minutei` profile. [Production evidence](docs/evidence/production.json) covers implemented operations, isolation and resource limits; it includes the explicit Python rejection and does not establish upstream parity. Repeat it with `CIRRO_URL=<deployed-url> bun run live` and the private administrator key in `.env`.
+Validation passed 28 Rust tests, 71 workerd integration tests, five compiled wasm32 SDK tests and 43 production checks. Deployment uses the `minutei` profile. [Production evidence](docs/evidence/production.json) covers implemented operations, isolation and resource limits; it includes the explicit Python rejection and does not establish upstream parity. Repeat it with `CIRRO_URL=<deployed-url> bun run live` and the private administrator key in `.env`.
 
 ## Deploy
 
@@ -132,4 +132,4 @@ Install an upstream v2 `.aospkg` file from a sandbox path or an authorized HTTPS
 }
 ```
 
-Installed command execution currently supports WASI. It accepts the same argv/environment/stdin options as file execution; explicit environment values override package defaults. Default release bundles, shell PATH dispatch and other command runtimes are still pending. Filesystem deployment migrates existing manifests to version 3, preserving data and timestamps and initializing the package catalog.
+Installed command execution currently supports WASI. It accepts the same argv/environment/stdin options as file execution; explicit environment values override package defaults. The shell executes installed WASI commands through PATH with pipes and redirections. Qualified executable paths resolve relative to the shell directory; the guest libc working directory still defaults to root. Default release bundles, child working-directory semantics and other command runtimes are still pending. Filesystem deployment migrates existing manifests to version 3, preserving data and timestamps and initializing the package catalog.

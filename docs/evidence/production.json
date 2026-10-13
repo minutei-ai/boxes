@@ -1,12 +1,13 @@
 {
-  "measuredAt": "2026-10-13T18:09:42.285Z",
+  "measuredAt": "2026-10-13T18:37:09.557Z",
   "url": "https://cirro-sandbox-prod-rs7wexxow56rmsoz.manoel-carvalhoneto.workers.dev",
   "profile": "minutei",
   "runtime": "standard-worker-rust-quickjs-wasmi",
   "parityComplete": false,
   "scope": "Implemented operations and explicit Python rejection",
-  "sandboxId": "proof-e7be60ab-93de-43d5-857c-73c23f072085",
+  "sandboxId": "proof-56149b46-7aeb-4bfa-9b7c-00df62f839c3",
   "checks": {
+    "softwareShell": true,
     "softwareInstallation": true,
     "softwareExecution": true,
     "softwareProtection": true,

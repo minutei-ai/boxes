@@ -678,14 +678,56 @@ impl Kernel {
         serde_json::to_string(&self.state.packages)
             .map_err(|_| super::fail("EIO: package serialization failed"))
     }
-    pub fn package_command(&self, alias: &str) -> Result<String, wasm_bindgen::JsValue> {
-        let link = self
-            .state
-            .links
-            .get(alias)
-            .ok_or_else(|| super::fail("ENOENT: installed command does not exist"))?;
-        self.package_target(link)
-            .map_err(|error| super::fail(&error))
+    pub fn command_path(
+        &self,
+        command: &str,
+        cwd: &str,
+        search: &str,
+    ) -> Result<String, wasm_bindgen::JsValue> {
+        if command.is_empty() || command.contains('\0') || search.len() > 4096 {
+            return Err(super::fail("EINVAL: invalid command or PATH"));
+        }
+        let candidates: Vec<String> = if command.contains('/') {
+            vec![super::normalize(command, cwd).map_err(|error| super::fail(&error))?]
+        } else {
+            search
+                .split(':')
+                .map(|directory| {
+                    let directory = if directory.is_empty() {
+                        cwd.to_string()
+                    } else {
+                        super::normalize(directory, cwd)?
+                    };
+                    super::normalize(command, &directory)
+                })
+                .collect::<Result<_, String>>()
+                .map_err(|error| super::fail(&error))?
+        };
+        let mut denied = false;
+        for candidate in candidates {
+            let path = match self.resolve(&candidate, true) {
+                Ok(path) => path,
+                Err(error) if error.starts_with("ENOENT:") || error.starts_with("ENOTDIR:") => {
+                    continue;
+                }
+                Err(error) if error.starts_with("EACCES:") => {
+                    denied = true;
+                    continue;
+                }
+                Err(error) => return Err(super::fail(&error)),
+            };
+            match self.state.nodes.get(&path) {
+                Some(super::Node::File { mode, .. }) if mode & 0o111 != 0 => return Ok(path),
+                Some(_) => denied = true,
+                None => {}
+            }
+        }
+        if denied {
+            return Err(super::fail(
+                "EACCES: command is not executable or accessible",
+            ));
+        }
+        Err(super::fail("ENOENT: command was not found in PATH"))
     }
     pub fn package_environment(&self) -> Result<String, wasm_bindgen::JsValue> {
         let mut env = BTreeMap::new();

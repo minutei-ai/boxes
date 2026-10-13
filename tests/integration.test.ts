@@ -2857,3 +2857,239 @@ test("package command ownership falls back after removal and conflicting project
     ),
   ).toHaveLength(1);
 });
+
+test("shell executes installed PATH commands with argv, stdin pipes, output redirection and coherent publication", async () => {
+  const token = await setup("shell-packages");
+  const binary = new Uint8Array(
+    await Bun.file(join(import.meta.dir, "../dist/wasi-inputs.wasm")).arrayBuffer(),
+  );
+  const bytes = commandPackage(binary);
+  expect(
+    (
+      await act("shell-packages", token, {
+        op: "filesystem.writeFile",
+        path: "/tmp/package",
+        content: bytes.toString("base64"),
+        encoding: "base64",
+      })
+    ).status,
+  ).toBe(200);
+  expect(
+    (
+      await act("shell-packages", token, {
+        op: "software.install",
+        source: { path: "/tmp/package" },
+      })
+    ).status,
+  ).toBe(200);
+  const record = Schema.decodeUnknownSync(RunRecord)(
+    await (
+      await act("shell-packages", token, {
+        op: "process.run",
+        id: "shell",
+        language: "shell",
+        source:
+          "echo before > /tmp/before; echo input | probe argument > /tmp/output; cat /tmp/before; cat /tmp/output",
+      })
+    ).json(),
+  );
+  expect(record.status).toBe("exited");
+  expect(record.output?.exitCode).toBe(0);
+  expect(record.output?.stdout).toContain("before\n");
+  expect(record.output?.stdout).toContain(
+    'argv=["/opt/cirro/pkgs/probe/1.0.0/bin/probe", "argument"]',
+  );
+  expect(record.output?.stdout).toContain("marker=package");
+  expect(record.output?.stdout).toContain("stdin=[105, 110, 112, 117, 116, 10]");
+  const persisted = Schema.decodeUnknownSync(FileContent)(
+    await (
+      await act("shell-packages", token, { op: "filesystem.readFile", path: "/tmp/output" })
+    ).json(),
+  );
+  expect(Buffer.from(persisted.content, "base64").toString()).toContain("marker=package");
+});
+
+test("shell resolves PATH and qualified executable paths relative to cd while preserving builtin precedence", async () => {
+  const token = await setup("shell-path");
+  const binary = new Uint8Array(
+    await Bun.file(join(import.meta.dir, "../dist/wasi-inputs.wasm")).arrayBuffer(),
+  );
+  const bytes = commandPackage(binary, "path-provider", "1.0.0", {
+    PATH: "/tmp",
+    CIRRO_MARKER: "path",
+  });
+  for (const [path, content] of [
+    ["/tmp/package", bytes],
+    ["/tmp/local", binary],
+  ] as const)
+    expect(
+      (
+        await act("shell-path", token, {
+          op: "filesystem.writeFile",
+          path,
+          content: Buffer.from(content).toString("base64"),
+          encoding: "base64",
+        })
+      ).status,
+    ).toBe(200);
+  expect(
+    (await act("shell-path", token, { op: "filesystem.chmod", path: "/tmp/local", mode: 0o755 }))
+      .status,
+  ).toBe(200);
+  expect(
+    (await act("shell-path", token, { op: "software.install", source: { path: "/tmp/package" } }))
+      .status,
+  ).toBe(200);
+  const record = Schema.decodeUnknownSync(RunRecord)(
+    await (
+      await act("shell-path", token, {
+        op: "process.run",
+        id: "qualified",
+        language: "shell",
+        source: "cd /tmp; ./local relative | grep '^argv='; local lookup | grep '^marker='; pwd",
+      })
+    ).json(),
+  );
+  expect(record.output?.exitCode).toBe(0);
+  expect(record.output?.stdout).toBe('argv=["/tmp/local", "relative"]\nmarker=path\n/tmp\n');
+  const direct = Schema.decodeUnknownSync(RunRecord)(
+    await (
+      await act("shell-path", token, {
+        op: "process.execFile",
+        id: "direct",
+        command: "local",
+        env: { PATH: "/tmp" },
+      })
+    ).json(),
+  );
+  expect(direct.output?.exitCode).toBe(0);
+  expect(direct.output?.stdout).toContain("marker=path");
+  expect(
+    (
+      await act("shell-path", token, {
+        op: "process.execFile",
+        id: "excluded",
+        command: "local",
+        env: { PATH: "/not-present" },
+      })
+    ).status,
+  ).toBe(404);
+});
+
+test("shell resumes after WASI traps with pending shell writes preserved and only synchronized guest mutations visible", async () => {
+  for (const name of ["trap", "synced-trap"]) {
+    const id = `shell-${name}`;
+    const token = await setup(id);
+    const binary = new Uint8Array(
+      await Bun.file(join(import.meta.dir, `../dist/wasi-${name}.wasm`)).arrayBuffer(),
+    );
+    const bytes = commandPackage(binary);
+    expect(
+      (
+        await act(id, token, {
+          op: "filesystem.writeFile",
+          path: "/tmp/package",
+          content: bytes.toString("base64"),
+          encoding: "base64",
+        })
+      ).status,
+    ).toBe(200);
+    expect(
+      (await act(id, token, { op: "software.install", source: { path: "/tmp/package" } })).status,
+    ).toBe(200);
+    const record = Schema.decodeUnknownSync(RunRecord)(
+      await (
+        await act(id, token, {
+          op: "process.run",
+          id: "recover",
+          language: "shell",
+          source:
+            "echo before > /tmp/before; probe || echo recovered > /tmp/recovered; cat /tmp/before; cat /tmp/recovered",
+        })
+      ).json(),
+    );
+    expect(record.status).toBe("exited");
+    expect(record.output?.exitCode).toBe(0);
+    expect(record.output?.stdout).toBe("before\nrecovered\n");
+    expect(record.output?.stderr).toContain("WASI execution failed");
+    const guestFile = await act(id, token, { op: "filesystem.readFile", path: "/tmp/from-abi" });
+    if (name === "trap") expect(guestFile.status).toBe(404);
+    else {
+      expect(guestFile.status).toBe(200);
+      expect(
+        Buffer.from(
+          Schema.decodeUnknownSync(FileContent)(await guestFile.json()).content,
+          "base64",
+        ).toString(),
+      ).toBe("before trap");
+    }
+  }
+});
+
+test("shell reports missing and non-executable commands and denied capabilities without bypassing grants", async () => {
+  const token = await setup("shell-executable");
+  const binary = new Uint8Array(
+    await Bun.file(join(import.meta.dir, "../dist/wasi-inputs.wasm")).arrayBuffer(),
+  );
+  expect(
+    (
+      await act("shell-executable", token, {
+        op: "filesystem.writeFile",
+        path: "/tmp/local",
+        content: Buffer.from(binary).toString("base64"),
+        encoding: "base64",
+      })
+    ).status,
+  ).toBe(200);
+  const denied = Schema.decodeUnknownSync(RunRecord)(
+    await (
+      await act("shell-executable", token, {
+        op: "process.run",
+        id: "denied-exec",
+        language: "shell",
+        source: "/tmp/local",
+      })
+    ).json(),
+  );
+  expect(denied.output?.exitCode).toBe(126);
+  const missing = Schema.decodeUnknownSync(RunRecord)(
+    await (
+      await act("shell-executable", token, {
+        op: "process.run",
+        id: "missing",
+        language: "shell",
+        source: "/tmp/missing",
+      })
+    ).json(),
+  );
+  expect(missing.output?.exitCode).toBe(127);
+  expect(
+    (
+      await act("shell-executable", token, {
+        op: "filesystem.chmod",
+        path: "/tmp/local",
+        mode: 0o755,
+      })
+    ).status,
+  ).toBe(200);
+  const noRead = Schema.decodeUnknownSync(TokenResponse)(
+    await (
+      await post("/v1/sandboxes/shell-executable/capabilities", admin, {
+        permissions: ["execute"],
+        expiresInSeconds: 3600,
+      })
+    ).json(),
+  ).token;
+  const run = Schema.decodeUnknownSync(RunRecord)(
+    await (
+      await act("shell-executable", noRead, {
+        op: "process.run",
+        id: "no-read",
+        language: "shell",
+        source: "/tmp/local",
+      })
+    ).json(),
+  );
+  expect(run.output?.exitCode).toBe(1);
+  expect(run.output?.stdout).toBe("");
+});
