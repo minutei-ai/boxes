@@ -18,6 +18,7 @@ jobs:
           targets: wasm32-unknown-unknown
           components: clippy,rustfmt
       - run: bun install --frozen-lockfile
+      - run: sudo apt-get update && sudo apt-get install -y clang llvm
       - run: cargo install wasm-bindgen-cli --version 0.2.129 --locked
       - run: bun run format:check
       - run: bun run check
