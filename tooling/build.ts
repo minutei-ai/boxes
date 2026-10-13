@@ -130,6 +130,17 @@ await Effect.runPromise(
       "-o",
       "dist/wasi-test.wasm",
     ]);
+    yield* run([
+      "rustc",
+      "--target",
+      "wasm32-wasip1",
+      "-O",
+      "-C",
+      "strip=symbols",
+      "tests/fixtures/wasi-inputs.rs",
+      "-o",
+      "dist/wasi-inputs.wasm",
+    ]);
     yield* Effect.forEach(
       [
         "bad-pointer",

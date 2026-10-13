@@ -307,6 +307,39 @@ const wasiSyncedTrap = Schema.decodeUnknownSync(RunRecord)(
 const wasiCheckpoint = Schema.decodeUnknownSync(FileContent)(
   await (await action({ op: "filesystem.readFile", path: "/tmp/from-abi" })).json(),
 );
+const wasiInputsSource = Buffer.from(
+  await Bun.file(join(import.meta.dir, "../dist/wasi-inputs.wasm")).arrayBuffer(),
+).toString("base64");
+const wasiInputs = Schema.decodeUnknownSync(RunRecord)(
+  await (
+    await action({
+      op: "process.run",
+      id: "wasi-inputs",
+      language: "wasm",
+      source: wasiInputsSource,
+      args: ["ação"],
+      env: { CIRRO_MARKER: "supplied" },
+      stdin: { content: "AP8K", encoding: "base64" },
+    })
+  ).json(),
+);
+const wasiInputsFile = await action({
+  op: "filesystem.writeFile",
+  path: "/tmp/inputs.wasm",
+  content: wasiInputsSource,
+  encoding: "base64",
+});
+const wasiFromFile = Schema.decodeUnknownSync(RunRecord)(
+  await (
+    await action({
+      op: "wasm.executeFile",
+      id: "wasi-file",
+      path: "/tmp/inputs.wasm",
+      args: ["file"],
+      stdin: { content: "fala", encoding: "utf8" },
+    })
+  ).json(),
+);
 const alive = await action({ op: "vm.status" });
 const disposed = await action({ op: "vm.dispose" });
 const afterDispose = await action({ op: "vm.status" });
@@ -332,6 +365,16 @@ const checks = {
   wasiCheckpoint:
     wasiSyncedTrap.status === "failed" &&
     Buffer.from(wasiCheckpoint.content, "base64").toString() === "before trap",
+  wasiInputs:
+    wasiInputs.output?.stdout.includes('argv=["/tmp/__cirro_inline__.wasm", "ação"]') === true &&
+    wasiInputs.output.stdout.includes("marker=supplied") &&
+    wasiInputs.output.stdout.includes("private=unset") &&
+    wasiInputs.output.stdout.includes("stdin=[0, 255, 10]") &&
+    wasiInputs.output.stdout.includes("eof=0"),
+  wasiExecuteFile:
+    wasiInputsFile.status === 200 &&
+    wasiFromFile.output?.stdout.includes('argv=["/tmp/inputs.wasm", "file"]') === true &&
+    wasiFromFile.output.stdout.includes("stdin=[102, 97, 108, 97]"),
   health: health.status === 200,
   created: created.status === 201,
   r2RoundTrip:

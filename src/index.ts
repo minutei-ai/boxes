@@ -28,6 +28,7 @@ import {
 } from "./contracts";
 import { guestAction } from "./capabilities";
 import { migrate } from "./migration";
+import { migrateWasm } from "./wasm-migration";
 import { readBounded } from "./http";
 import { inspect, list, run } from "./process";
 import { kernelCall, open, publish, StorageFailure } from "./storage";
@@ -59,6 +60,13 @@ const route = Effect.fn("api.route")(function* (request: Request, env: Env) {
   if (url.pathname === "/v1/migrations/execution-policy-v2") {
     yield* administrator(env, token);
     const receipt = yield* migrate(env);
+    return new Response(Schema.encodeSync(Schema.fromJsonString(MigrationReceipt))(receipt), {
+      headers: { "content-type": "application/json", "cache-control": "no-store" },
+    });
+  }
+  if (url.pathname === "/v1/migrations/wasm-inputs-v1") {
+    yield* administrator(env, token);
+    const receipt = yield* migrateWasm(env);
     return new Response(Schema.encodeSync(Schema.fromJsonString(MigrationReceipt))(receipt), {
       headers: { "content-type": "application/json", "cache-control": "no-store" },
     });
@@ -140,6 +148,7 @@ const route = Effect.fn("api.route")(function* (request: Request, env: Env) {
   const value = yield* Match.value(action).pipe(
     Match.whenOr(
       { op: "process.run" },
+      { op: "wasm.executeFile" },
       { op: "javascript.execute" },
       { op: "javascript.evaluate" },
       { op: "javascript.executeFile" },

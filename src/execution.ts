@@ -45,7 +45,7 @@ export const execute = Effect.fn("execution.run")(function* (
         "Python requires a bounded interpreter inside the standard Worker; Dynamic Workers are disabled",
     });
   if (program.language === "wasm") {
-    const outcome = yield* wasi(env, capability, program.source, session).pipe(Effect.result);
+    const outcome = yield* wasi(env, capability, program, session).pipe(Effect.result);
     return { outcome, program, changed: false };
   }
   if (!("modules" in program))

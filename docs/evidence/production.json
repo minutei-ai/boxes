@@ -1,11 +1,11 @@
 {
-  "measuredAt": "2026-10-13T14:46:40.624Z",
+  "measuredAt": "2026-10-13T15:22:30.077Z",
   "url": "https://cirro-sandbox-prod-rs7wexxow56rmsoz.manoel-carvalhoneto.workers.dev",
   "profile": "minutei",
   "runtime": "standard-worker-rust-quickjs-wasmi",
   "parityComplete": false,
   "scope": "Implemented operations and explicit Python rejection",
-  "sandboxId": "proof-1bac3863-1c8b-42e2-9cec-768105ea4fdb",
+  "sandboxId": "proof-85054e05-14f8-4397-ab39-0c1b77e08f72",
   "checks": {
     "batchPartialSuccess": true,
     "batchRead": true,
@@ -16,6 +16,8 @@
     "wasiClockAndRandom": true,
     "wasiUncommittedTrap": true,
     "wasiCheckpoint": true,
+    "wasiInputs": true,
+    "wasiExecuteFile": true,
     "health": true,
     "created": true,
     "r2RoundTrip": true,

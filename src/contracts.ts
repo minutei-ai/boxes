@@ -101,12 +101,48 @@ export const GuestAction = Schema.Union([FilesystemAction, NetworkAction, Proces
 const InlineRun = Schema.Struct({
   op: Schema.Literal("process.run"),
   id: Id,
-  language: Schema.Literals(["javascript", "typescript", "python", "shell", "wasm"]),
+  language: Schema.Literals(["javascript", "typescript", "python", "shell"]),
   source: Schema.String.check(Schema.isMaxLength(1_048_576)),
 });
 const ScriptSource = Schema.String.check(Schema.isMaxLength(1_048_576));
+export const WasmConfiguration = Schema.Struct({
+  argv: Schema.Array(
+    Schema.String.check(Schema.isMaxLength(4096), Schema.isPattern(/^[^\0]*$/)),
+  ).check(Schema.isMaxLength(129)),
+  env: Schema.Record(
+    Schema.String.check(Schema.isPattern(/^[^=\0]{1,128}$/)),
+    Schema.String.check(Schema.isMaxLength(4096), Schema.isPattern(/^[^\0]*$/)),
+  ).check(Schema.isMaxProperties(128)),
+  stdin: Schema.String.check(
+    Schema.isMaxLength(1_398_104),
+    Schema.isPattern(/^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$/),
+  ),
+});
+const WasmOptions = {
+  args: Schema.optionalKey(WasmConfiguration.fields.argv.check(Schema.isMaxLength(128))),
+  env: Schema.optionalKey(WasmConfiguration.fields.env),
+  stdin: Schema.optionalKey(
+    Schema.Struct({
+      content: Schema.String.check(Schema.isMaxLength(1_398_104)),
+      encoding: Schema.Literals(["utf8", "base64"]),
+    }),
+  ),
+};
+export const WasmProgram = Schema.Struct({
+  language: Schema.Literal("wasm"),
+  source: ScriptSource,
+  ...WasmConfiguration.fields,
+});
 export const RunAction = Schema.Union([
   InlineRun,
+  Schema.Struct({
+    op: Schema.Literal("process.run"),
+    id: Id,
+    language: Schema.Literal("wasm"),
+    source: ScriptSource,
+    ...WasmOptions,
+  }),
+  Schema.Struct({ op: Schema.Literal("wasm.executeFile"), id: Id, path: Path, ...WasmOptions }),
   Schema.Struct({
     op: Schema.Literals(["javascript.execute", "typescript.execute"]),
     id: Id,
@@ -153,7 +189,8 @@ export const ModuleBatch = Schema.Struct({
 });
 export const Program = Schema.Union([
   ScriptProgram,
-  Schema.Struct({ language: Schema.Literals(["python", "shell", "wasm"]), source: ScriptSource }),
+  WasmProgram,
+  Schema.Struct({ language: Schema.Literals(["python", "shell"]), source: ScriptSource }),
 ]);
 export const Action = Schema.Union([
   GuestAction,

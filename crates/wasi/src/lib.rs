@@ -1,10 +1,17 @@
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 use std::collections::{BTreeMap, BTreeSet};
 use wasm_bindgen::prelude::*;
 use wasmi::{
     Caller, Config, Engine, Error, Func, Linker, Memory, Module, ResumableCall,
     ResumableCallHostTrap, Store, StoreLimits, StoreLimitsBuilder, Val,
 };
+
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+struct Configuration {
+    argv: Vec<String>,
+    env: BTreeMap<String, String>,
+}
 
 const MAX_FILES: usize = 128;
 const MAX_BYTES: usize = 16_777_216;
@@ -90,6 +97,10 @@ struct State {
     pending: Option<Pending>,
     requests: usize,
     closed: BTreeSet<u32>,
+    argv: Vec<Vec<u8>>,
+    environment: Vec<Vec<u8>>,
+    stdin: Vec<u8>,
+    stdin_offset: usize,
 }
 
 enum Failure {
@@ -222,10 +233,52 @@ fn dispatch(caller: &mut Caller<'_, State>, name: &str, args: &[u64]) -> Result<
     }
     match name {
         "args_sizes_get" | "environ_sizes_get" => {
-            put(caller, a[0], &0u32.to_le_bytes())?;
-            put(caller, a[1], &0u32.to_le_bytes())?;
+            bytes(caller, a[0], 4)?;
+            bytes(caller, a[1], 4)?;
+            let values = if name == "args_sizes_get" {
+                &caller.data().argv
+            } else {
+                &caller.data().environment
+            };
+            let count = values.len() as u32;
+            let size = values.iter().map(Vec::len).sum::<usize>() as u32;
+            put(caller, a[0], &count.to_le_bytes())?;
+            put(caller, a[1], &size.to_le_bytes())?;
         }
-        "args_get" | "environ_get" | "sched_yield" => {}
+        "args_get" | "environ_get" => {
+            let values = if name == "args_get" {
+                &caller.data().argv
+            } else {
+                &caller.data().environment
+            };
+            if values.is_empty() {
+                return Ok(0);
+            }
+            let size: usize = values.iter().map(Vec::len).sum();
+            let array_end = a[0]
+                .checked_add(values.len() * 4)
+                .ok_or(Failure::Errno(21))?;
+            let buffer_end = a[1].checked_add(size).ok_or(Failure::Errno(21))?;
+            if memory(caller)?
+                .data(&*caller)
+                .get(a[0]..array_end)
+                .is_none()
+                || memory(caller)?
+                    .data(&*caller)
+                    .get(a[1]..buffer_end)
+                    .is_none()
+            {
+                return Err(Failure::Errno(21));
+            }
+            let values = values.clone();
+            let mut offset = a[1];
+            for (index, value) in values.iter().enumerate() {
+                put(caller, a[0] + index * 4, &(offset as u32).to_le_bytes())?;
+                put(caller, offset, value)?;
+                offset += value.len();
+            }
+        }
+        "sched_yield" => {}
         "fd_prestat_get" => {
             if a[0] != 3 {
                 return Err(Failure::Errno(8));
@@ -265,7 +318,23 @@ fn dispatch(caller: &mut Caller<'_, State>, name: &str, args: &[u64]) -> Result<
             bytes(caller, output, 4)?;
             let vectors = vectors(caller, a[1], a[2])?;
             if a[0] == 0 {
-                put(caller, output, &0u32.to_le_bytes())?;
+                if name == "fd_pread" {
+                    return Err(Failure::Errno(70));
+                }
+                let mut read = 0usize;
+                for (pointer, length) in vectors {
+                    let state = caller.data();
+                    let start = state.stdin_offset;
+                    let end = start.saturating_add(length).min(state.stdin.len());
+                    let data = state.stdin[start..end].to_vec();
+                    put(caller, pointer, &data)?;
+                    caller.data_mut().stdin_offset = end;
+                    read += data.len();
+                    if data.len() < length {
+                        break;
+                    }
+                }
+                put(caller, output, &(read as u32).to_le_bytes())?;
                 return Ok(0);
             }
             let descriptor = caller
@@ -627,7 +696,14 @@ pub struct WasmGuest {
 }
 
 impl WasmGuest {
-    fn create(bytes: &[u8], memory: usize, fuel: u64, max_output: usize) -> Result<Self, String> {
+    fn create(
+        bytes: &[u8],
+        configuration: &str,
+        stdin: &[u8],
+        memory: usize,
+        fuel: u64,
+        max_output: usize,
+    ) -> Result<Self, String> {
         if bytes.len() > 1_048_576
             || !(4_194_304..=33_554_432).contains(&memory)
             || fuel == 0
@@ -636,6 +712,46 @@ impl WasmGuest {
         {
             return Err("Invalid Wasm execution limits".into());
         }
+        if configuration.len() > 65_536 || stdin.len() > 1_048_576 {
+            return Err("WASI input budget exceeded".into());
+        }
+        let configuration: Configuration =
+            serde_json::from_str(configuration).map_err(|error| error.to_string())?;
+        if configuration.argv.len() > 129
+            || configuration.env.len() > 128
+            || configuration
+                .argv
+                .iter()
+                .any(|value| value.len() > 4096 || value.contains('\0'))
+            || configuration.env.iter().any(|(key, value)| {
+                key.is_empty()
+                    || key.chars().count() > 128
+                    || key.contains('=')
+                    || key.contains('\0')
+                    || value.len() > 4096
+                    || value.contains('\0')
+            })
+        {
+            return Err("Invalid WASI argument or environment".into());
+        }
+        let argv = configuration
+            .argv
+            .into_iter()
+            .map(|value| {
+                let mut bytes = value.into_bytes();
+                bytes.push(0);
+                bytes
+            })
+            .collect();
+        let environment = configuration
+            .env
+            .into_iter()
+            .map(|(key, value)| {
+                let mut bytes = format!("{key}={value}").into_bytes();
+                bytes.push(0);
+                bytes
+            })
+            .collect();
         let mut config = Config::default();
         config.consume_fuel(true);
         config.wasm_tail_call(false);
@@ -673,6 +789,10 @@ impl WasmGuest {
                 pending: None,
                 requests: 0,
                 closed: BTreeSet::new(),
+                argv,
+                environment,
+                stdin: stdin.to_vec(),
+                stdin_offset: 0,
             },
         );
         store.limiter(|state| &mut state.limits);
@@ -753,11 +873,14 @@ impl WasmGuest {
     #[wasm_bindgen(constructor)]
     pub fn new(
         bytes: &[u8],
+        configuration: &str,
+        stdin: &[u8],
         memory: usize,
         fuel: u64,
         max_output: usize,
     ) -> Result<WasmGuest, JsValue> {
-        Self::create(bytes, memory, fuel, max_output).map_err(|error| JsValue::from_str(&error))
+        Self::create(bytes, configuration, stdin, memory, fuel, max_output)
+            .map_err(|error| JsValue::from_str(&error))
     }
 
     pub fn step(&mut self) -> Result<String, JsValue> {
@@ -928,7 +1051,17 @@ mod tests {
     use super::*;
     #[test]
     fn invalid_binary_and_limits_are_rejected() {
-        assert!(WasmGuest::create(b"invalid", 8_388_608, 1000, 1024).is_err());
+        assert!(
+            WasmGuest::create(
+                b"invalid",
+                r#"{"argv":[],"env":{}}"#,
+                &[],
+                8_388_608,
+                1000,
+                1024
+            )
+            .is_err()
+        );
     }
     #[test]
     fn paths_cannot_escape_the_directory_descriptor() {

@@ -13,31 +13,33 @@ class MigrationRequestFailure extends Schema.TaggedError<MigrationRequestFailure
   { cause: Schema.Unknown },
 ) {}
 const migrate = Alchemy.Action(
-  "ExecutionPolicyV2",
+  "Migrations",
   Effect.gen(function* () {
     const key = yield* Config.Redacted("CIRRO_API_KEY");
-    return Effect.fn("deployment.migrateExecutionPolicy")(function* (
-      input: typeof Deployment.Type,
-    ) {
+    return Effect.fn("deployment.migrate")(function* (input: typeof Deployment.Type) {
       const url = yield* Schema.decodeUnknownEffect(Schema.String)(input.url);
-      const response = yield* Effect.tryPromise({
-        try: () =>
-          fetch(new URL("/v1/migrations/execution-policy-v2", url), {
-            method: "POST",
-            headers: { authorization: `Bearer ${Redacted.value(key)}` },
-            signal: AbortSignal.timeout(120_000),
+      const receipts = yield* Effect.forEach(
+        ["/v1/migrations/execution-policy-v2", "/v1/migrations/wasm-inputs-v1"],
+        (path) =>
+          Effect.gen(function* () {
+            const response = yield* Effect.tryPromise({
+              try: () =>
+                fetch(new URL(path, url), {
+                  method: "POST",
+                  headers: { authorization: `Bearer ${Redacted.value(key)}` },
+                  signal: AbortSignal.timeout(120_000),
+                }),
+              catch: (cause) => new MigrationRequestFailure({ cause }),
+            });
+            if (!response.ok) return yield* new MigrationRequestFailure({ cause: response.status });
+            const text = yield* Effect.tryPromise({
+              try: () => response.text(),
+              catch: (cause) => new MigrationRequestFailure({ cause }),
+            });
+            return yield* Schema.decodeUnknownEffect(Schema.fromJsonString(MigrationReceipt))(text);
           }),
-        catch: (cause) => new MigrationRequestFailure({ cause }),
-      });
-      if (!response.ok) return yield* new MigrationRequestFailure({ cause: response.status });
-      const text = yield* Effect.tryPromise({
-        try: () => response.text(),
-        catch: (cause) => new MigrationRequestFailure({ cause }),
-      });
-      const receipt = yield* Schema.decodeUnknownEffect(Schema.fromJsonString(MigrationReceipt))(
-        text,
       );
-      return { ...receipt, deployedAt: input.deployedAt };
+      return { receipts, deployedAt: input.deployedAt };
     });
   }),
 );

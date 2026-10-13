@@ -12,6 +12,8 @@ import {
   ModuleSource,
   RunAction,
   ScriptProgram,
+  WasmProgram,
+  WasmConfiguration,
 } from "./contracts";
 import { requirePermission } from "./auth";
 import { kernelCall, open, read } from "./storage";
@@ -26,6 +28,84 @@ export const load = Effect.fn("modules.load")(function* (
   kernel: Kernel,
   action: typeof RunAction.Type,
 ) {
+  if (
+    action.op === "wasm.executeFile" ||
+    (action.op === "process.run" && action.language === "wasm")
+  ) {
+    const binary = yield* Effect.gen(function* () {
+      if (action.op === "process.run")
+        return { source: action.source, entry: "/tmp/__cirro_inline__.wasm" };
+      yield* requirePermission(capability, "read");
+      const stat = yield* kernelCall(() => kernel.stat(action.path, true)).pipe(
+        Effect.flatMap(Schema.decodeUnknownEffect(Schema.fromJsonString(FileStat))),
+      );
+      if (stat.size > 786_432)
+        return yield* new Fault({
+          code: "EFBIG",
+          status: 413,
+          message: "Wasm file exceeds its encoded source limit",
+        });
+      const data = yield* read(env, capability.sandboxId, kernel, stat.path);
+      return { source: data.toString("base64"), entry: stat.path };
+    });
+    const stdin = yield* Effect.gen(function* () {
+      if (action.stdin === undefined) return "";
+      if (
+        action.stdin.encoding === "base64" &&
+        !Schema.is(WasmConfiguration.fields.stdin)(action.stdin.content)
+      )
+        return yield* new Fault({
+          code: "EINVAL",
+          status: 400,
+          message: "Invalid canonical stdin base64",
+        });
+      const data = Buffer.from(action.stdin.content, action.stdin.encoding);
+      if (data.byteLength > 1_048_576)
+        return yield* new Fault({ code: "EFBIG", status: 413, message: "Stdin exceeds 1 MiB" });
+      const encoded = data.toString("base64");
+      if (action.stdin.encoding === "base64" && encoded !== action.stdin.content)
+        return yield* new Fault({
+          code: "EINVAL",
+          status: 400,
+          message: "Invalid canonical stdin base64",
+        });
+      return encoded;
+    });
+    const program = {
+      language: "wasm" as const,
+      source: binary.source,
+      argv: [binary.entry, ...(action.args ?? [])],
+      env: action.env ?? {},
+      stdin,
+    } satisfies typeof WasmProgram.Type;
+    if (
+      program.argv.some((value) => !value.isWellFormed() || Buffer.byteLength(value) > 4096) ||
+      Object.values(program.env).some(
+        (value) => !value.isWellFormed() || Buffer.byteLength(value) > 4096,
+      ) ||
+      Object.keys(program.env).some((key) => !key.isWellFormed())
+    )
+      return yield* new Fault({
+        code: "EINVAL",
+        status: 400,
+        message:
+          "WASI arguments and environment require valid UTF-8 with at most 4096 bytes per value",
+      });
+    const configurationBytes = Buffer.byteLength(
+      Schema.encodeSync(
+        Schema.fromJsonString(
+          WasmConfiguration.mapFields((fields) => Struct.omit(fields, ["stdin"])),
+        ),
+      )(program),
+    );
+    if (configurationBytes > 65_536)
+      return yield* new Fault({
+        code: "E2BIG",
+        status: 413,
+        message: "WASI argv and environment exceed 64 KiB",
+      });
+    return program;
+  }
   if (
     action.op === "process.run" &&
     action.language !== "javascript" &&

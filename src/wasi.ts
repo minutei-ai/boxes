@@ -1,8 +1,16 @@
-import { Clock, Effect, Match, Schema } from "effect";
+import { Clock, Effect, Match, Schema, Struct } from "effect";
 import wasm from "cirro:wasi";
 import { createBindings } from "../dist/wasi/bindings";
 import { requirePermission } from "./auth";
-import { Capability, Fault, FileStat, RunResult, WasmStep } from "./contracts";
+import {
+  Capability,
+  Fault,
+  FileStat,
+  RunResult,
+  WasmStep,
+  WasmProgram,
+  WasmConfiguration,
+} from "./contracts";
 import type { open } from "./storage";
 import { kernelCall, publish, read, write } from "./storage";
 import type { Env } from "./resources";
@@ -14,7 +22,7 @@ export class WasmFailure extends Schema.TaggedError<WasmFailure>()("WasmFailure"
 export const wasi = Effect.fn("wasi.execute")(function* (
   env: Env,
   capability: typeof Capability.Type,
-  source: string,
+  program: typeof WasmProgram.Type,
   initial: Effect.Success<ReturnType<typeof open>>,
 ) {
   const policy = initial.head.policy;
@@ -24,7 +32,13 @@ export const wasi = Effect.fn("wasi.execute")(function* (
         const bindings = createBindings();
         bindings.initSync({ module: wasm });
         return new bindings.WasmGuest(
-          Buffer.from(source, "base64"),
+          Buffer.from(program.source, "base64"),
+          Schema.encodeSync(
+            Schema.fromJsonString(
+              WasmConfiguration.mapFields((fields) => Struct.omit(fields, ["stdin"])),
+            ),
+          )(program),
+          Buffer.from(program.stdin, "base64"),
           policy.memoryBytes,
           BigInt(policy.interruptBudget) * 1000n,
           policy.maxOutputBytes,

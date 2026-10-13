@@ -2,7 +2,7 @@ import { afterAll, beforeAll, expect, test } from "bun:test";
 import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { Schema } from "effect";
+import { Schema, Struct } from "effect";
 import {
   DirectoryEntries,
   BatchReadResults,
@@ -18,6 +18,8 @@ import {
   Head,
   MigrationReceipt,
   ScriptProgram,
+  WasmProgram,
+  RunMetadata,
 } from "../src/contracts";
 import { runtime } from "../tooling/runtime";
 
@@ -1746,4 +1748,266 @@ test("concurrent WASI executions publish complete file sets and never combine di
   );
   expect(files[0]?.content).toBe(files[1]?.content);
   expect(["QQ==", "Qg=="].includes(files[0]?.content ?? "")).toBe(true);
+});
+
+test("WASI argv, isolated environment and binary stdin persist as a complete code artifact", async () => {
+  const token = await setup("wasi-inputs");
+  const source = Buffer.from(
+    await Bun.file(join(import.meta.dir, "../dist/wasi-inputs.wasm")).arrayBuffer(),
+  ).toString("base64");
+  const env = JSON.parse('{"CIRRO_MARKER":"ação","__proto__":"safe"}');
+  const response = await act("wasi-inputs", token, {
+    op: "process.run",
+    id: "inputs",
+    language: "wasm",
+    source,
+    args: ["ação", "two words"],
+    env,
+    stdin: { content: "AP8K", encoding: "base64" },
+  });
+  expect(response.status).toBe(200);
+  const run = Schema.decodeUnknownSync(RunRecord)(await response.json());
+  expect(run.output?.exitCode).toBe(0);
+  expect(run.output?.stdout).toBe(
+    'argv=["/tmp/__cirro_inline__.wasm", "ação", "two words"]\nmarker=ação\nprivate=unset\nproto=safe\nstdin=[0, 255, 10]\neof=0\n',
+  );
+  const bucket = await mf.getR2Bucket("OBJECTS");
+  const object = await bucket.get(`sandboxes/wasi-inputs/code/${run.sourceHash}`);
+  if (object === null) return expect(object).not.toBeNull();
+  const program = Schema.decodeUnknownSync(Schema.fromJsonString(WasmProgram))(await object.text());
+  expect(program.argv).toEqual(["/tmp/__cirro_inline__.wasm", "ação", "two words"]);
+  expect(program.env.CIRRO_MARKER).toBe("ação");
+  expect(program.env.__proto__).toBe("safe");
+  expect(program.stdin).toBe("AP8K");
+});
+
+test("WASI executeFile requires read and captures binary bytes before subsequent file changes", async () => {
+  const token = await setup("wasi-file-inputs");
+  const source = Buffer.from(
+    await Bun.file(join(import.meta.dir, "../dist/wasi-inputs.wasm")).arrayBuffer(),
+  ).toString("base64");
+  expect(
+    (
+      await act("wasi-file-inputs", token, {
+        op: "filesystem.writeFile",
+        path: "/tmp/cli.wasm",
+        content: source,
+        encoding: "base64",
+      })
+    ).status,
+  ).toBe(200);
+  const executeOnly = Schema.decodeUnknownSync(TokenResponse)(
+    await (
+      await post("/v1/sandboxes/wasi-file-inputs/capabilities", admin, {
+        permissions: ["execute"],
+        expiresInSeconds: 3600,
+      })
+    ).json(),
+  ).token;
+  expect(
+    (
+      await act("wasi-file-inputs", executeOnly, {
+        op: "wasm.executeFile",
+        id: "file",
+        path: "/tmp/cli.wasm",
+      })
+    ).status,
+  ).toBe(403);
+  const run = Schema.decodeUnknownSync(RunRecord)(
+    await (
+      await act("wasi-file-inputs", token, {
+        op: "wasm.executeFile",
+        id: "file",
+        path: "/tmp/cli.wasm",
+        args: ["file"],
+        stdin: { content: "fala", encoding: "utf8" },
+      })
+    ).json(),
+  );
+  expect(run.output?.stdout).toContain('argv=["/tmp/cli.wasm", "file"]');
+  expect(run.output?.stdout).toContain("stdin=[102, 97, 108, 97]");
+  expect(
+    (
+      await act("wasi-file-inputs", token, {
+        op: "filesystem.writeFile",
+        path: "/tmp/cli.wasm",
+        content: "changed",
+        encoding: "utf8",
+      })
+    ).status,
+  ).toBe(200);
+  const bucket = await mf.getR2Bucket("OBJECTS");
+  const object = await bucket.get(`sandboxes/wasi-file-inputs/code/${run.sourceHash}`);
+  if (object === null) return expect(object).not.toBeNull();
+  const archived = Schema.decodeUnknownSync(Schema.fromJsonString(WasmProgram))(
+    await object.text(),
+  );
+  expect(archived.source).toBe(source);
+});
+
+test("WASI malformed inputs reject before reserving a run and cannot enter other language contracts", async () => {
+  const token = await setup("wasi-bad-inputs");
+  const source = await wasmFixture("exit");
+  for (const input of [
+    { args: ["bad\0value"] },
+    { args: Array.from({ length: 17 }, () => "x".repeat(4096)) },
+    { env: { "BAD=KEY": "value" } },
+    { args: ["é".repeat(4096)] },
+    { args: ["\ud800"] },
+    { stdin: { content: "AB==", encoding: "base64" } },
+    { stdin: { content: "x".repeat(1_048_577), encoding: "utf8" } },
+  ]) {
+    const response = await act("wasi-bad-inputs", token, {
+      op: "process.run",
+      id: "bad",
+      language: "wasm",
+      source,
+      ...input,
+    });
+    expect([400, 413].includes(response.status)).toBe(true);
+    expect((await act("wasi-bad-inputs", token, { op: "process.get", id: "bad" })).status).toBe(
+      404,
+    );
+  }
+  expect(
+    (
+      await act("wasi-bad-inputs", token, {
+        op: "process.run",
+        id: "js",
+        language: "javascript",
+        source: "export default()=>42",
+        args: ["ignored"],
+      })
+    ).status,
+  ).toBe(400);
+  const valid = Schema.decodeUnknownSync(RunRecord)(
+    await (
+      await act("wasi-bad-inputs", token, {
+        op: "process.run",
+        id: "bad",
+        language: "wasm",
+        source,
+      })
+    ).json(),
+  );
+  expect(valid.output?.exitCode).toBe(7);
+});
+
+test("Wasm input migration preserves old results and updates source references and native listing metadata", async () => {
+  const token = await setup("wasm-input-migration");
+  const source = Buffer.from(
+    await Bun.file(join(import.meta.dir, "../dist/guest-test.wasm")).arrayBuffer(),
+  );
+  const run = Schema.decodeUnknownSync(RunRecord)(
+    await (
+      await act("wasm-input-migration", token, {
+        op: "process.run",
+        id: "prior",
+        language: "wasm",
+        source: source.toString("base64"),
+      })
+    ).json(),
+  );
+  const bucket = await mf.getR2Bucket("OBJECTS");
+  const oldHash = Buffer.from(await crypto.subtle.digest("SHA-256", source)).toString("hex");
+  await bucket.put(`sandboxes/wasm-input-migration/code/${oldHash}`, source);
+  const prior = { ...run, sourceHash: oldHash };
+  await bucket.put(
+    "sandboxes/wasm-input-migration/runs/prior.json",
+    Schema.encodeSync(Schema.fromJsonString(RunRecord))(prior),
+    { customMetadata: Schema.encodeSync(RunMetadata)({ summary: Struct.omit(prior, ["output"]) }) },
+  );
+  await bucket.put(
+    "sandboxes/wasm-input-migration/runs/no-metadata.json",
+    Schema.encodeSync(Schema.fromJsonString(RunRecord))({ ...prior, id: "no-metadata" }),
+  );
+  expect((await post("/v1/migrations/wasm-inputs-v1", token, {})).status).toBe(401);
+  const receipt = Schema.decodeUnknownSync(MigrationReceipt)(
+    await (await post("/v1/migrations/wasm-inputs-v1", admin, {})).json(),
+  );
+  expect(receipt.migrated).toBe(2);
+  const converted = Schema.decodeUnknownSync(RunRecord)(
+    await (await act("wasm-input-migration", token, { op: "process.get", id: "prior" })).json(),
+  );
+  expect(converted.sourceHash).not.toBe(oldHash);
+  expect(converted.output).toEqual(run.output);
+  expect(converted.startedAt).toBe(run.startedAt);
+  const artifact = await bucket.get(`sandboxes/wasm-input-migration/code/${converted.sourceHash}`);
+  if (artifact === null) return expect(artifact).not.toBeNull();
+  const program = Schema.decodeUnknownSync(Schema.fromJsonString(WasmProgram))(
+    await artifact.text(),
+  );
+  expect(program.argv).toEqual([]);
+  expect(program.env).toEqual({});
+  expect(program.stdin).toBe("");
+  expect(program.source).toBe(source.toString("base64"));
+  const page = Schema.decodeUnknownSync(ProcessPage)(
+    await (
+      await act("wasm-input-migration", token, { op: "process.list", limit: 10, cursor: null })
+    ).json(),
+  );
+  expect(page.items.every((item) => item.sourceHash === converted.sourceHash)).toBe(true);
+  const repeated = Schema.decodeUnknownSync(MigrationReceipt)(
+    await (await post("/v1/migrations/wasm-inputs-v1", admin, {})).json(),
+  );
+  expect(repeated.migrated).toBe(0);
+});
+
+test("Wasm input migration rejects corrupt immutable source instead of rewriting a receipt", async () => {
+  const token = await setup("wasm-corrupt-migration");
+  const source = Buffer.from(
+    await Bun.file(join(import.meta.dir, "../dist/guest-test.wasm")).arrayBuffer(),
+  );
+  const run = Schema.decodeUnknownSync(RunRecord)(
+    await (
+      await act("wasm-corrupt-migration", token, {
+        op: "process.run",
+        id: "prior",
+        language: "wasm",
+        source: source.toString("base64"),
+      })
+    ).json(),
+  );
+  const hash = Buffer.from(await crypto.subtle.digest("SHA-256", source)).toString("hex");
+  const bucket = await mf.getR2Bucket("OBJECTS");
+  await bucket.put(`sandboxes/wasm-corrupt-migration/code/${hash}`, "corrupt");
+  await bucket.put(
+    "sandboxes/wasm-corrupt-migration/runs/prior.json",
+    Schema.encodeSync(Schema.fromJsonString(RunRecord))({ ...run, sourceHash: hash }),
+  );
+  expect((await post("/v1/migrations/wasm-inputs-v1", admin, {})).status).toBe(500);
+  const unchanged = Schema.decodeUnknownSync(RunRecord)(
+    await (await act("wasm-corrupt-migration", token, { op: "process.get", id: "prior" })).json(),
+  );
+  expect(unchanged.sourceHash).toBe(hash);
+  await bucket.put(`sandboxes/wasm-corrupt-migration/code/${hash}`, source);
+  expect((await post("/v1/migrations/wasm-inputs-v1", admin, {})).status).toBe(200);
+});
+
+test("concurrent WASI options stay isolated and different inputs have different artifact digests", async () => {
+  const token = await setup("wasi-input-isolation");
+  const source = Buffer.from(
+    await Bun.file(join(import.meta.dir, "../dist/wasi-inputs.wasm")).arrayBuffer(),
+  ).toString("base64");
+  const results = await Promise.all(
+    ["first", "second"].map(async (marker) =>
+      Schema.decodeUnknownSync(RunRecord)(
+        await (
+          await act("wasi-input-isolation", token, {
+            op: "process.run",
+            id: marker,
+            language: "wasm",
+            source,
+            args: [marker],
+            env: { CIRRO_MARKER: marker, API_KEY: "caller-value" },
+            stdin: { content: marker, encoding: "utf8" },
+          })
+        ).json(),
+      ),
+    ),
+  );
+  expect(results[0]?.output?.stdout).toContain("marker=first");
+  expect(results[1]?.output?.stdout).toContain("marker=second");
+  expect(results[0]?.output?.stdout).toContain("private=caller-value");
+  expect(results[0]?.sourceHash).not.toBe(results[1]?.sourceHash);
 });
