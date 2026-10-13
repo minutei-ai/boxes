@@ -1516,6 +1516,7 @@ test("WASI symlinks respect no-follow and directory descriptor confinement", asy
   for (const [name, expected] of [
     ["nofollow", 32],
     ["symlink-escape", 76],
+    ["setter-escape", 76],
   ] as const) {
     const record = Schema.decodeUnknownSync(RunRecord)(
       await (
@@ -2211,4 +2212,261 @@ test("WASI path mutations require write while directory and link reads require r
   expect(
     (await act("wasi-path-grants", token, { op: "filesystem.readdir", path: "/tmp/paths" })).status,
   ).toBe(404);
+});
+
+test("Rust filesystem setters preserve cursor, zero extension, precise timestamps and detached files", async () => {
+  const token = await setup("wasi-setters");
+  const response = await act("wasi-setters", token, {
+    op: "process.run",
+    id: "setters",
+    language: "wasm",
+    source: await wasmFixture("setters"),
+  });
+  expect(response.status).toBe(200);
+  const record = Schema.decodeUnknownSync(RunRecord)(await response.json());
+  expect(record.status).toBe("exited");
+  expect(record.output?.exitCode).toBe(0);
+  expect(record.output?.stdout).toBe(
+    "setters preserved offsets, zeros, precise times and detached inodes\n",
+  );
+  const file = Schema.decodeUnknownSync(FileContent)(
+    await (
+      await act("wasi-setters", token, { op: "filesystem.readFile", path: "/tmp/setters" })
+    ).json(),
+  );
+  expect(Buffer.from(file.content, "base64")).toEqual(Buffer.from([111, 114, 0, 0, 0, 0, 0, 0]));
+  const stat = Schema.decodeUnknownSync(FileStat)(
+    await (
+      await act("wasi-setters", token, {
+        op: "filesystem.stat",
+        path: "/tmp/setters",
+        follow: true,
+      })
+    ).json(),
+  );
+  expect(stat.atimeNs).toBe("18446744073709551615");
+  expect(stat.mtimeNs).toBe("9007199254740995");
+  const link = Schema.decodeUnknownSync(FileStat)(
+    await (
+      await act("wasi-setters", token, {
+        op: "filesystem.stat",
+        path: "/tmp/setters-link",
+        follow: false,
+      })
+    ).json(),
+  );
+  expect(link.atimeNs).toBe("111");
+  expect(link.mtimeNs).toBe("222");
+  const directory = Schema.decodeUnknownSync(FileStat)(
+    await (
+      await act("wasi-setters", token, {
+        op: "filesystem.stat",
+        path: "/tmp/setters-dir",
+        follow: true,
+      })
+    ).json(),
+  );
+  expect(directory.atimeNs).toBe("555");
+  expect(directory.mtimeNs).toBe("666");
+  expect(
+    (
+      await act("wasi-setters", token, {
+        op: "filesystem.stat",
+        path: "/tmp/setters-detached",
+        follow: true,
+      })
+    ).status,
+  ).toBe(404);
+});
+
+test("WASI setters enforce descriptor rights, validate flags and use one trusted timestamp for NOW", async () => {
+  const token = await setup("wasi-setter-abi");
+  expect(
+    (
+      await act("wasi-setter-abi", token, {
+        op: "filesystem.writeFile",
+        path: "/tmp/existing",
+        content: "original",
+        encoding: "utf8",
+      })
+    ).status,
+  ).toBe(200);
+  const before = Schema.decodeUnknownSync(FileStat)(
+    await (
+      await act("wasi-setter-abi", token, {
+        op: "filesystem.stat",
+        path: "/tmp/existing",
+        follow: true,
+      })
+    ).json(),
+  );
+  for (const name of ["setter-rights", "setter-flags", "setter-now"]) {
+    const record = Schema.decodeUnknownSync(RunRecord)(
+      await (
+        await act("wasi-setter-abi", token, {
+          op: "process.run",
+          id: name,
+          language: "wasm",
+          source: await wasmFixture(name),
+        })
+      ).json(),
+    );
+    expect(record.output?.result).toBe(42);
+  }
+  const after = Schema.decodeUnknownSync(FileStat)(
+    await (
+      await act("wasi-setter-abi", token, {
+        op: "filesystem.stat",
+        path: "/tmp/existing",
+        follow: true,
+      })
+    ).json(),
+  );
+  expect(after.atimeNs).toBe(after.mtimeNs);
+  expect(after.mtimeNs).toBe(after.ctimeNs);
+  expect(BigInt(after.atimeNs)).toBeGreaterThan(BigInt(before.atimeNs));
+  expect(after.inode).toBe(before.inode);
+});
+
+test("denied WASI setters roll back both shrinking and growing file buffers without publishing metadata", async () => {
+  const token = await setup("wasi-setter-denied");
+  expect(
+    (
+      await act("wasi-setter-denied", token, {
+        op: "filesystem.writeFile",
+        path: "/tmp/existing",
+        content: "original",
+        encoding: "utf8",
+      })
+    ).status,
+  ).toBe(200);
+  const before = Schema.decodeUnknownSync(FileStat)(
+    await (
+      await act("wasi-setter-denied", token, {
+        op: "filesystem.stat",
+        path: "/tmp/existing",
+        follow: true,
+      })
+    ).json(),
+  );
+  const status = Schema.decodeUnknownSync(Status)(
+    await (await act("wasi-setter-denied", token, { op: "vm.status" })).json(),
+  );
+  const readonly = Schema.decodeUnknownSync(TokenResponse)(
+    await (
+      await post("/v1/sandboxes/wasi-setter-denied/capabilities", admin, {
+        permissions: ["read", "execute"],
+        expiresInSeconds: 3600,
+      })
+    ).json(),
+  ).token;
+  const record = Schema.decodeUnknownSync(RunRecord)(
+    await (
+      await act("wasi-setter-denied", readonly, {
+        op: "process.run",
+        id: "denied",
+        language: "wasm",
+        source: await wasmFixture("setter-denied"),
+      })
+    ).json(),
+  );
+  expect(record.output?.result).toBe(42);
+  const after = Schema.decodeUnknownSync(FileStat)(
+    await (
+      await act("wasi-setter-denied", token, {
+        op: "filesystem.stat",
+        path: "/tmp/existing",
+        follow: true,
+      })
+    ).json(),
+  );
+  expect(after).toEqual(before);
+  const afterStatus = Schema.decodeUnknownSync(Status)(
+    await (await act("wasi-setter-denied", token, { op: "vm.status" })).json(),
+  );
+  expect(afterStatus.generation).toBe(status.generation);
+});
+
+test("WASI setters obey checkpoint publication on traps and remain isolated across sandboxes", async () => {
+  const token = await setup("wasi-setter-checkpoint");
+  const other = await setup("wasi-setter-other");
+  for (const [id, credential] of [
+    ["wasi-setter-checkpoint", token],
+    ["wasi-setter-other", other],
+  ] as const)
+    expect(
+      (
+        await act(id, credential, {
+          op: "filesystem.writeFile",
+          path: "/tmp/existing",
+          content: "original",
+          encoding: "utf8",
+        })
+      ).status,
+    ).toBe(200);
+  const before = Schema.decodeUnknownSync(FileStat)(
+    await (
+      await act("wasi-setter-checkpoint", token, {
+        op: "filesystem.stat",
+        path: "/tmp/existing",
+        follow: true,
+      })
+    ).json(),
+  );
+  const trap = Schema.decodeUnknownSync(RunRecord)(
+    await (
+      await act("wasi-setter-checkpoint", token, {
+        op: "process.run",
+        id: "trap",
+        language: "wasm",
+        source: await wasmFixture("setter-trap"),
+      })
+    ).json(),
+  );
+  expect(trap.status).toBe("failed");
+  const uncommitted = Schema.decodeUnknownSync(FileStat)(
+    await (
+      await act("wasi-setter-checkpoint", token, {
+        op: "filesystem.stat",
+        path: "/tmp/existing",
+        follow: true,
+      })
+    ).json(),
+  );
+  expect(uncommitted).toEqual(before);
+  const synced = Schema.decodeUnknownSync(RunRecord)(
+    await (
+      await act("wasi-setter-checkpoint", token, {
+        op: "process.run",
+        id: "sync",
+        language: "wasm",
+        source: await wasmFixture("setter-synced-trap"),
+      })
+    ).json(),
+  );
+  expect(synced.status).toBe("failed");
+  const committed = Schema.decodeUnknownSync(FileStat)(
+    await (
+      await act("wasi-setter-checkpoint", token, {
+        op: "filesystem.stat",
+        path: "/tmp/existing",
+        follow: true,
+      })
+    ).json(),
+  );
+  expect(committed.size).toBe(3);
+  expect(committed.atimeNs).toBe("111");
+  expect(committed.mtimeNs).toBe("222");
+  expect(committed.inode).toBe(before.inode);
+  const preserved = Schema.decodeUnknownSync(FileStat)(
+    await (
+      await act("wasi-setter-other", other, {
+        op: "filesystem.stat",
+        path: "/tmp/existing",
+        follow: true,
+      })
+    ).json(),
+  );
+  expect(preserved.size).toBe(8);
+  expect(preserved.atimeNs).not.toBe("111");
 });

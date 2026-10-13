@@ -64,6 +64,21 @@ enum Request {
         path: Option<String>,
         write: bool,
     },
+    FdTimes {
+        fd: u32,
+        path: Option<String>,
+        atime: String,
+        mtime: String,
+        flags: u16,
+    },
+    PathTimes {
+        path: String,
+        base: String,
+        follow: bool,
+        atime: String,
+        mtime: String,
+        flags: u16,
+    },
     PathStat {
         path: String,
         base: String,
@@ -114,7 +129,7 @@ enum Completion {
     },
     Flush {
         fd: u32,
-        pointer: usize,
+        pointer: Option<usize>,
         length: usize,
         previous: Vec<u8>,
         previous_length: usize,
@@ -135,6 +150,9 @@ enum Completion {
     Stat {
         fd: Option<u32>,
         pointer: usize,
+    },
+    Metadata {
+        fd: Option<u32>,
     },
     Unit,
     Readlink {
@@ -635,7 +653,7 @@ fn dispatch(caller: &mut Caller<'_, State>, name: &str, args: &[u64]) -> Result<
                     },
                     Completion::Flush {
                         fd: a[0] as u32,
-                        pointer: output,
+                        pointer: Some(output),
                         length: data.len(),
                         previous,
                         previous_length,
@@ -647,6 +665,108 @@ fn dispatch(caller: &mut Caller<'_, State>, name: &str, args: &[u64]) -> Result<
                 )?;
             }
             put(caller, output, &(data.len() as u32).to_le_bytes())?;
+        }
+        "fd_filestat_set_size" => {
+            let state = caller.data_mut();
+            let descriptor = state
+                .descriptors
+                .get(&(a[0] as u32))
+                .cloned()
+                .ok_or(Failure::Errno(8))?;
+            if descriptor.rights & (1 << 22) == 0 {
+                return Err(Failure::Errno(76));
+            }
+            if descriptor.directory {
+                return Err(Failure::Errno(31));
+            }
+            let size = usize::try_from(args[1]).map_err(|_| Failure::Errno(22))?;
+            if size > MAX_BYTES {
+                return Err(Failure::Errno(22));
+            }
+            let cache = descriptor.cache.ok_or(Failure::Errno(8))?;
+            let previous_length = state
+                .files
+                .get(&cache)
+                .ok_or(Failure::Errno(8))?
+                .bytes
+                .len();
+            let total: usize = state.files.values().map(|file| file.bytes.len()).sum();
+            if total - previous_length + size > MAX_BYTES {
+                return Err(Failure::Errno(48));
+            }
+            let file = state.files.get_mut(&cache).ok_or(Failure::Errno(8))?;
+            let previous = file.bytes[size.min(previous_length)..].to_vec();
+            let path = file.path.clone();
+            file.bytes.resize(size, 0);
+            suspend(
+                caller,
+                Request::Flush {
+                    path,
+                    fd: a[0] as u32,
+                },
+                Completion::Flush {
+                    fd: a[0] as u32,
+                    pointer: None,
+                    length: 0,
+                    previous,
+                    previous_length,
+                    start: size,
+                    previous_offset: descriptor.offset,
+                    offset: descriptor.offset,
+                    positioned: true,
+                },
+            )?;
+        }
+        "fd_filestat_set_times" => {
+            let flags = a[3];
+            if flags & !15 != 0 || flags & 3 == 3 || flags & 12 == 12 {
+                return Err(Failure::Errno(28));
+            }
+            let descriptor = caller
+                .data()
+                .descriptors
+                .get(&(a[0] as u32))
+                .ok_or(Failure::Errno(8))?;
+            if descriptor.rights & (1 << 23) == 0 {
+                return Err(Failure::Errno(76));
+            }
+            let path = if descriptor.linked {
+                Some(descriptor.path.clone())
+            } else {
+                None
+            };
+            suspend(
+                caller,
+                Request::FdTimes {
+                    fd: a[0] as u32,
+                    path,
+                    atime: args[1].to_string(),
+                    mtime: args[2].to_string(),
+                    flags: flags as u16,
+                },
+                Completion::Metadata {
+                    fd: Some(a[0] as u32),
+                },
+            )?;
+        }
+        "path_filestat_set_times" => {
+            let flags = a[6];
+            if a[1] & !1 != 0 || flags & !15 != 0 || flags & 3 == 3 || flags & 12 == 12 {
+                return Err(Failure::Errno(28));
+            }
+            let (path, base) = directory_path(caller, a[0] as u32, a[2], a[3], 1 << 20)?;
+            suspend(
+                caller,
+                Request::PathTimes {
+                    path,
+                    base,
+                    follow: a[1] & 1 != 0,
+                    atime: args[4].to_string(),
+                    mtime: args[5].to_string(),
+                    flags: flags as u16,
+                },
+                Completion::Metadata { fd: None },
+            )?;
         }
         "fd_filestat_get" => {
             bytes(caller, a[1], 64)?;
@@ -1025,6 +1145,9 @@ fn linker(engine: &Engine) -> Result<Linker<State>, String> {
     bind!("fd_datasync",a:i32);
     bind!("fd_seek",a:i32,b:i64,c:i32,d:i32);
     bind!("fd_tell",a:i32,b:i32);
+    bind!("fd_filestat_set_size",a:i32,b:i64);
+    bind!("fd_filestat_set_times",a:i32,b:i64,c:i64,d:i32);
+    bind!("path_filestat_set_times",a:i32,b:i32,c:i32,d:i32,e:i64,f:i64,g:i32);
     bind!("fd_filestat_get",a:i32,b:i32);
     bind!("path_filestat_get",a:i32,b:i32,c:i32,d:i32,e:i32);
     bind!("random_get",a:i32,b:i32);
@@ -1353,7 +1476,7 @@ impl WasmGuest {
                 )
                 .ok_or_else(|| JsValue::from_str("Missing file buffer"))?;
             let file = &mut file.bytes;
-            file.truncate(*previous_length);
+            file.resize(*previous_length, 0);
             if !previous.is_empty() {
                 let end = start
                     .checked_add(previous.len())
@@ -1449,10 +1572,12 @@ impl WasmGuest {
                             .ok_or_else(|| JsValue::from_str("Missing descriptor"))?
                             .offset = offset;
                     }
-                    self.memory
-                        .ok_or_else(|| JsValue::from_str("Missing Wasm memory"))?
-                        .write(&mut self.store, pointer, &(length as u32).to_le_bytes())
-                        .map_err(|error| JsValue::from_str(&error.to_string()))?;
+                    if let Some(pointer) = pointer {
+                        self.memory
+                            .ok_or_else(|| JsValue::from_str("Missing Wasm memory"))?
+                            .write(&mut self.store, pointer, &(length as u32).to_le_bytes())
+                            .map_err(|error| JsValue::from_str(&error.to_string()))?;
+                    }
                 }
                 Completion::Stat { fd, pointer } => {
                     let bytes: [u8; 64] = data
@@ -1477,6 +1602,24 @@ impl WasmGuest {
                         .ok_or_else(|| JsValue::from_str("Missing Wasm memory"))?
                         .write(&mut self.store, pointer, &bytes)
                         .map_err(|error| JsValue::from_str(&error.to_string()))?;
+                }
+                Completion::Metadata { fd } => {
+                    let metadata: [u8; 64] = data
+                        .try_into()
+                        .map_err(|_| JsValue::from_str("Invalid inode metadata"))?;
+                    let state = self.store.data_mut();
+                    for (number, descriptor) in state.descriptors.iter_mut() {
+                        if fd == Some(*number) || descriptor.metadata[8..16] == metadata[8..16] {
+                            descriptor.metadata = metadata;
+                            if let Some(cache) = descriptor.cache {
+                                state
+                                    .files
+                                    .get_mut(&cache)
+                                    .ok_or_else(|| JsValue::from_str("Missing file cache"))?
+                                    .metadata = metadata;
+                            }
+                        }
+                    }
                 }
                 Completion::Unit => {}
                 Completion::Remove => detach(self.store.data_mut(), path),

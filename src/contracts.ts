@@ -248,6 +248,23 @@ export const WasmStep = Schema.Union([
     write: Schema.Boolean,
   }),
   Schema.Struct({
+    kind: Schema.Literal("fdTimes"),
+    fd: Schema.Int,
+    path: Schema.NullOr(Path),
+    atime: Schema.String.check(Schema.isPattern(/^[0-9]+$/)),
+    mtime: Schema.String.check(Schema.isPattern(/^[0-9]+$/)),
+    flags: Schema.Int,
+  }),
+  Schema.Struct({
+    kind: Schema.Literal("pathTimes"),
+    path: Path,
+    base: Path,
+    follow: Schema.Boolean,
+    atime: Schema.String.check(Schema.isPattern(/^[0-9]+$/)),
+    mtime: Schema.String.check(Schema.isPattern(/^[0-9]+$/)),
+    flags: Schema.Int,
+  }),
+  Schema.Struct({
     kind: Schema.Literal("pathStat"),
     path: Path,
     base: Path,

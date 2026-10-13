@@ -865,6 +865,42 @@ impl Kernel {
         }
     }
 
+    pub fn set_times(
+        &mut self,
+        path: &str,
+        follow: bool,
+        atime: u64,
+        mtime: u64,
+        flags: u32,
+    ) -> Result<(), JsValue> {
+        if flags & !15 != 0 || flags & 3 == 3 || flags & 12 == 12 {
+            return Err(fail("EINVAL: invalid timestamp flags"));
+        }
+        let path = self.resolve(path, follow).map_err(|error| fail(&error))?;
+        let metadata = self
+            .state
+            .metadata
+            .get_mut(&path)
+            .ok_or_else(|| fail("ENOENT: file does not exist"))?;
+        if flags == 0 {
+            return Ok(());
+        }
+        if flags & 1 != 0 {
+            metadata.atime_ns = atime;
+        }
+        if flags & 2 != 0 {
+            metadata.atime_ns = self.now;
+        }
+        if flags & 4 != 0 {
+            metadata.mtime_ns = mtime;
+        }
+        if flags & 8 != 0 {
+            metadata.mtime_ns = self.now;
+        }
+        metadata.ctime_ns = self.now;
+        Ok(())
+    }
+
     pub fn chmod(&mut self, path: &str, mode: u32) -> Result<(), JsValue> {
         if mode > 0o777 {
             return Err(fail("EINVAL: invalid permission mode"));
@@ -886,6 +922,40 @@ impl Kernel {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn timestamp_flags_preserve_identity_and_unselected_fields() -> Result<(), String> {
+        let mut kernel = Kernel::fresh();
+        kernel.initialize_times(10);
+        kernel.set_time(20);
+        kernel
+            .set_times("/tmp", true, u64::MAX, 100, 1)
+            .map_err(|_| "timestamp update failed")?;
+        let metadata = kernel.state.metadata.get("/tmp").ok_or("missing inode")?;
+        assert_eq!(metadata.inode, 4);
+        assert_eq!(metadata.atime_ns, u64::MAX);
+        assert_eq!(metadata.mtime_ns, 10);
+        assert_eq!(metadata.ctime_ns, 20);
+        let before = serde_json::to_string(&kernel.state).map_err(|error| error.to_string())?;
+        kernel.set_time(30);
+        kernel
+            .set_times("/tmp", true, 0, 0, 0)
+            .map_err(|_| "timestamp no-op failed")?;
+        assert_eq!(
+            serde_json::to_string(&kernel.state).map_err(|error| error.to_string())?,
+            before
+        );
+        kernel
+            .set_times("/tmp", true, 0, 0, 10)
+            .map_err(|_| "timestamp NOW failed")?;
+        let metadata = kernel.state.metadata.get("/tmp").ok_or("missing inode")?;
+        assert_eq!(
+            (metadata.atime_ns, metadata.mtime_ns, metadata.ctime_ns),
+            (30, 30, 30)
+        );
+        kernel.validate()?;
+        Ok(())
+    }
 
     #[test]
     fn write_preparation_is_pure_and_rejects_before_mutation() -> Result<(), String> {

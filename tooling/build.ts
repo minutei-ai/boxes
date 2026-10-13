@@ -152,8 +152,26 @@ await Effect.runPromise(
       "-o",
       "dist/wasi-paths.wasm",
     ]);
+    yield* run([
+      "rustc",
+      "--target",
+      "wasm32-wasip1",
+      "-O",
+      "-C",
+      "strip=symbols",
+      "tests/fixtures/wasi-setters.rs",
+      "-o",
+      "dist/wasi-setters.wasm",
+    ]);
     yield* Effect.forEach(
       [
+        "setter-escape",
+        "setter-rights",
+        "setter-flags",
+        "setter-denied",
+        "setter-trap",
+        "setter-synced-trap",
+        "setter-now",
         "bad-pointer",
         "directory-cookies",
         "directory-rights",

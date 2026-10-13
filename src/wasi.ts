@@ -217,6 +217,72 @@ export const wasi = Effect.fn("wasi.execute")(function* (
           return { data: Buffer.alloc(0), path: "/", directory: false, value: 0n };
         }),
       ),
+      Match.when({ kind: "fdTimes" }, (input) =>
+        Effect.gen(function* () {
+          yield* requirePermission(capability, "write");
+          if (input.path === null) {
+            const metadata = Buffer.from(guest.file_metadata(input.fd));
+            if ((input.flags & 1) !== 0) metadata.writeBigUInt64LE(BigInt(input.atime), 40);
+            if ((input.flags & 2) !== 0) metadata.writeBigUInt64LE(timestamp, 40);
+            if ((input.flags & 4) !== 0) metadata.writeBigUInt64LE(BigInt(input.mtime), 48);
+            if ((input.flags & 8) !== 0) metadata.writeBigUInt64LE(timestamp, 48);
+            if (input.flags !== 0) metadata.writeBigUInt64LE(timestamp, 56);
+            return { data: metadata, path: "/", directory: false, value: 0n };
+          }
+          const path = input.path;
+          yield* kernelCall(() =>
+            kernel.set_times(path, true, BigInt(input.atime), BigInt(input.mtime), input.flags),
+          );
+          if (input.flags !== 0) state.dirty = true;
+          const stat = yield* kernelCall(() => kernel.stat(path, true)).pipe(
+            Effect.flatMap(Schema.decodeUnknownEffect(Schema.fromJsonString(FileStat))),
+          );
+          return {
+            data: statBytes(stat),
+            path: stat.path,
+            directory: stat.kind === "directory",
+            value: 0n,
+          };
+        }),
+      ),
+      Match.when({ kind: "pathTimes" }, (input) =>
+        Effect.gen(function* () {
+          yield* requirePermission(capability, "write");
+          const path = yield* resolvePath(kernel, input.path, input.base);
+          const stat = yield* kernelCall(() => kernel.stat(path, input.follow)).pipe(
+            Effect.flatMap(Schema.decodeUnknownEffect(Schema.fromJsonString(FileStat))),
+          );
+          if (
+            input.base !== "/" &&
+            stat.path !== input.base &&
+            !stat.path.startsWith(input.base + "/")
+          )
+            return yield* new Fault({
+              code: "ENOTCAPABLE",
+              status: 403,
+              message: "WASI timestamps follow a symlink outside its directory descriptor",
+            });
+          yield* kernelCall(() =>
+            kernel.set_times(
+              stat.path,
+              input.follow,
+              BigInt(input.atime),
+              BigInt(input.mtime),
+              input.flags,
+            ),
+          );
+          if (input.flags !== 0) state.dirty = true;
+          const updated = yield* kernelCall(() => kernel.stat(stat.path, input.follow)).pipe(
+            Effect.flatMap(Schema.decodeUnknownEffect(Schema.fromJsonString(FileStat))),
+          );
+          return {
+            data: statBytes(updated),
+            path: updated.path,
+            directory: updated.kind === "directory",
+            value: 0n,
+          };
+        }),
+      ),
       Match.when({ kind: "fdStat" }, (input) =>
         Effect.gen(function* () {
           if (input.write) yield* requirePermission(capability, "write");

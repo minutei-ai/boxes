@@ -2,6 +2,7 @@ import { Config, Effect, Redacted, Schema } from "effect";
 import { join } from "node:path";
 import {
   FileContent,
+  FileStat,
   BatchReadResults,
   BatchWriteResults,
   DirectoryTree,
@@ -349,6 +350,27 @@ const wasiPaths = Schema.decodeUnknownSync(RunRecord)(
   ).json(),
 );
 const wasiPathsRemoved = await action({ op: "filesystem.readdir", path: "/tmp/paths" });
+const wasiSettersSource = Buffer.from(
+  await Bun.file(join(import.meta.dir, "../dist/wasi-setters.wasm")).arrayBuffer(),
+).toString("base64");
+const wasiSetters = Schema.decodeUnknownSync(RunRecord)(
+  await (
+    await action({
+      op: "process.run",
+      id: "wasi-setters",
+      language: "wasm",
+      source: wasiSettersSource,
+    })
+  ).json(),
+);
+const wasiSettersStat = Schema.decodeUnknownSync(FileStat)(
+  await (await action({ op: "filesystem.stat", path: "/tmp/setters", follow: true })).json(),
+);
+const wasiDetachedMissing = await action({
+  op: "filesystem.stat",
+  path: "/tmp/setters-detached",
+  follow: true,
+});
 const alive = await action({ op: "vm.status" });
 const disposed = await action({ op: "vm.dispose" });
 const afterDispose = await action({ op: "vm.status" });
@@ -384,6 +406,14 @@ const checks = {
     wasiInputsFile.status === 200 &&
     wasiFromFile.output?.stdout.includes('argv=["/tmp/inputs.wasm", "file"]') === true &&
     wasiFromFile.output.stdout.includes("stdin=[102, 97, 108, 97]"),
+  wasiSetters:
+    wasiSetters.output?.exitCode === 0 &&
+    wasiSetters.output.stdout ===
+      "setters preserved offsets, zeros, precise times and detached inodes\n" &&
+    wasiSettersStat.atimeNs === "18446744073709551615" &&
+    wasiSettersStat.mtimeNs === "9007199254740995" &&
+    wasiSettersStat.size === 8 &&
+    wasiDetachedMissing.status === 404,
   wasiPaths:
     wasiPaths.output?.exitCode === 0 &&
     wasiPaths.output.stdout ===

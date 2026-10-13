@@ -43,6 +43,18 @@ unsafe extern "C" {
         capacity: usize,
         used: *mut u32,
     ) -> i32;
+    fn fd_filestat_set_size(fd: u32, size: u64) -> i32;
+    fn fd_filestat_set_times(fd: u32, atime: u64, mtime: u64, flags: u32) -> i32;
+    fn path_filestat_set_times(
+        fd: u32,
+        flags: u32,
+        path: *const u8,
+        length: usize,
+        atime: u64,
+        mtime: u64,
+        times: u32,
+    ) -> i32;
+    fn fd_filestat_get(fd: u32, metadata: *mut u8) -> i32;
     fn fd_sync(fd: u32) -> i32;
     fn fd_close(fd: u32) -> i32;
     fn random_get(bytes: *mut u8, length: usize) -> i32;
@@ -292,6 +304,13 @@ pub extern "C" fn run() -> i32 {
             Err(errno) => errno,
         };
     }
+    if cfg!(case = "setter-escape") {
+        let fd = match open(3, b"tmp/scoped", 2, 1 << 20, 0, 1) {
+            Ok(fd) => fd,
+            Err(errno) => return errno,
+        };
+        return unsafe { path_filestat_set_times(fd, 1, b"outside".as_ptr(), 7, 1, 2, 5) };
+    }
     if cfg!(case = "descriptors") {
         for _ in 0..129 {
             if let Err(errno) = open(3, b"tmp/existing", 0, 2, 0, 1) {
@@ -327,6 +346,134 @@ pub extern "C" fn run() -> i32 {
             return -1;
         }
         return 42;
+    }
+    if cfg!(case = "setter-rights") {
+        let fd = match open(3, b"tmp/existing", 0, 2 | 4 | (1 << 21), 0, 1) {
+            Ok(fd) => fd,
+            Err(errno) => return errno,
+        };
+        let directory = match open(3, b"tmp", 2, 1 << 13, 0, 1) {
+            Ok(fd) => fd,
+            Err(errno) => return errno,
+        };
+        if unsafe { fd_filestat_set_size(fd, 2) } != 76
+            || unsafe { fd_filestat_set_times(fd, 1, 2, 5) } != 76
+            || unsafe { path_filestat_set_times(directory, 1, b"existing".as_ptr(), 8, 1, 2, 5) }
+                != 76
+        {
+            return -1;
+        }
+        return 42;
+    }
+    if cfg!(case = "setter-flags") {
+        let fd = match open(
+            3,
+            b"tmp/existing",
+            0,
+            2 | (1 << 21) | (1 << 22) | (1 << 23),
+            0,
+            1,
+        ) {
+            Ok(fd) => fd,
+            Err(errno) => return errno,
+        };
+        for flags in [3, 12, 16] {
+            if unsafe { fd_filestat_set_times(fd, 1, 2, flags) } != 28
+                || unsafe {
+                    path_filestat_set_times(3, 1, b"tmp/existing".as_ptr(), 12, 1, 2, flags)
+                } != 28
+            {
+                return -1;
+            }
+        }
+        if unsafe { fd_filestat_set_size(fd, u64::MAX) } != 22
+            || unsafe { fd_filestat_set_size(1, 2) } != 8
+            || unsafe { fd_filestat_set_times(999, 1, 2, 5) } != 8
+            || unsafe { path_filestat_set_times(3, 2, b"tmp/existing".as_ptr(), 12, 1, 2, 5) } != 28
+        {
+            return -1;
+        }
+        return 42;
+    }
+    if cfg!(case = "setter-denied") {
+        let fd = match open(
+            3,
+            b"tmp/existing",
+            0,
+            2 | (1 << 21) | (1 << 22) | (1 << 23),
+            0,
+            1,
+        ) {
+            Ok(fd) => fd,
+            Err(errno) => return errno,
+        };
+        if unsafe { fd_filestat_set_size(fd, 2) } != 2
+            || unsafe { fd_filestat_set_size(fd, 12) } != 2
+            || unsafe { fd_filestat_set_times(fd, 1, 2, 5) } != 2
+            || unsafe { path_filestat_set_times(3, 1, b"tmp/existing".as_ptr(), 12, 1, 2, 5) } != 2
+        {
+            return -1;
+        }
+        let mut data = [0u8; 8];
+        let vector = Iovec {
+            pointer: data.as_mut_ptr(),
+            length: data.len(),
+        };
+        let mut count = 0;
+        if unsafe { fd_read(fd, &vector, 1, &mut count) } != 0 || count != 8 || &data != b"original"
+        {
+            return -1;
+        }
+        return 42;
+    }
+    if cfg!(case = "setter-trap") || cfg!(case = "setter-synced-trap") || cfg!(case = "setter-now")
+    {
+        let fd = match open(
+            3,
+            b"tmp/existing",
+            0,
+            2 | 64 | 16 | (1 << 21) | (1 << 22) | (1 << 23),
+            0,
+            1,
+        ) {
+            Ok(fd) => fd,
+            Err(errno) => return errno,
+        };
+        if cfg!(case = "setter-now") {
+            let mut before = [0u8; 64];
+            let mut after = [0u8; 64];
+            if unsafe { fd_filestat_get(fd, before.as_mut_ptr()) } != 0
+                || unsafe { fd_filestat_set_times(fd, 1, 2, 0) } != 0
+                || unsafe { fd_filestat_get(fd, after.as_mut_ptr()) } != 0
+                || before != after
+            {
+                return -1;
+            }
+            if unsafe { fd_filestat_set_times(fd, 0, 0, 10) } != 0
+                || unsafe { fd_filestat_get(fd, after.as_mut_ptr()) } != 0
+                || after[40..48] != after[48..56]
+                || after[48..56] != after[56..64]
+                || after[40..48] == [0u8; 8]
+            {
+                return -1;
+            }
+            return 42;
+        }
+        let errno = unsafe { fd_filestat_set_size(fd, 3) };
+        if errno != 0 {
+            return errno;
+        }
+        let errno = unsafe { fd_filestat_set_times(fd, 111, 222, 5) };
+        if errno != 0 {
+            return errno;
+        }
+        if cfg!(case = "setter-synced-trap") {
+            let errno = unsafe { fd_sync(fd) };
+            if errno != 0 {
+                return errno;
+            }
+        }
+        core::arch::wasm32::unreachable();
     }
     if cfg!(case = "fuel") {
         loop {
