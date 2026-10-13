@@ -1,15 +1,15 @@
 import { Effect, Schema } from "effect";
-import { migrate_metadata } from "../dist/kernel/cirro_kernel";
+import { migrate_filesystem } from "../dist/kernel/cirro_kernel";
 import { Head } from "./contracts";
 import { kernelCall, StorageFailure } from "./storage";
 import type { Env } from "./resources";
 
-class MetadataMigrationFailure extends Schema.TaggedError<MetadataMigrationFailure>()(
-  "MetadataMigrationFailure",
+class FilesystemMigrationFailure extends Schema.TaggedError<FilesystemMigrationFailure>()(
+  "FilesystemMigrationFailure",
   { key: Schema.String },
 ) {}
 
-export const migrateMetadata = Effect.fn("migration.filesystemMetadata")(function* (env: Env) {
+export const migrateFilesystem = Effect.fn("migration.filesystem")(function* (env: Env) {
   const cursors: (string | undefined)[] = [undefined];
   const migrated = { count: 0 };
   while (cursors.length > 0) {
@@ -30,13 +30,13 @@ export const migrateMetadata = Effect.fn("migration.filesystemMetadata")(functio
             catch: (cause) => new StorageFailure({ cause }),
           });
           if (stored === null || stored.size > 18_000_000)
-            return yield* new MetadataMigrationFailure({ key: object.key });
+            return yield* new FilesystemMigrationFailure({ key: object.key });
           const text = yield* Effect.tryPromise({
             try: () => stored.text(),
             catch: (cause) => new StorageFailure({ cause }),
           });
           const head = yield* Schema.decodeUnknownEffect(Schema.fromJsonString(Head))(text);
-          const manifest = yield* kernelCall(() => migrate_metadata(head.manifest));
+          const manifest = yield* kernelCall(() => migrate_filesystem(head.manifest));
           if (manifest === head.manifest) return;
           const changed = yield* Effect.tryPromise({
             try: () =>
@@ -47,7 +47,7 @@ export const migrateMetadata = Effect.fn("migration.filesystemMetadata")(functio
               ),
             catch: (cause) => new StorageFailure({ cause }),
           });
-          if (changed === null) return yield* new MetadataMigrationFailure({ key: object.key });
+          if (changed === null) return yield* new FilesystemMigrationFailure({ key: object.key });
           migrated.count += 1;
         }),
     );

@@ -482,6 +482,7 @@ export const wasi = Effect.fn("wasi.execute")(function* (
           ["FORBIDDEN", 2],
           ["EACCES", 2],
           ["EPERM", 63],
+          ["EROFS", 69],
           ["ENOENT", 44],
           ["EEXIST", 20],
           ["EISDIR", 31],

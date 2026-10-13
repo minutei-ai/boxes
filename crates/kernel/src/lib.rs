@@ -1,4 +1,5 @@
 mod shell;
+mod software;
 
 use serde::{Deserialize, Serialize};
 use std::collections::{BTreeMap, BTreeSet};
@@ -30,6 +31,8 @@ enum Node {
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 struct Metadata {
     inode: u64,
+    uid: u32,
+    gid: u32,
     atime_ns: u64,
     mtime_ns: u64,
     ctime_ns: u64,
@@ -43,6 +46,8 @@ struct Manifest {
     nodes: BTreeMap<String, Node>,
     metadata: BTreeMap<String, Metadata>,
     next_inode: u64,
+    packages: Vec<software::Installed>,
+    links: BTreeMap<String, software::Link>,
 }
 
 struct WritePlan {
@@ -61,6 +66,8 @@ struct Stat<'a> {
     mode: u32,
     inode: u64,
     nlink: u64,
+    uid: u32,
+    gid: u32,
     atime_ns: String,
     mtime_ns: String,
     ctime_ns: String,
@@ -101,46 +108,107 @@ struct PriorManifest {
 }
 
 #[wasm_bindgen]
-pub fn migrate_metadata(json: &str) -> Result<String, JsValue> {
+pub fn prepare_package(bytes: &[u8]) -> Result<String, JsValue> {
+    let prepared = software::prepare(bytes).map_err(|error| fail(&error))?;
+    serde_json::to_string(&prepared).map_err(|_| fail("EIO: package serialization failed"))
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+struct PriorMetadata {
+    inode: u64,
+    atime_ns: u64,
+    mtime_ns: u64,
+    ctime_ns: u64,
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+struct PriorMetadataManifest {
+    version: u32,
+    generation: u64,
+    nodes: BTreeMap<String, Node>,
+    metadata: BTreeMap<String, PriorMetadata>,
+    next_inode: u64,
+}
+
+#[wasm_bindgen]
+pub fn migrate_filesystem(json: &str) -> Result<String, JsValue> {
     if json.len() > 8_388_608 {
         return Err(fail("EFBIG: manifest exceeds its quota"));
     }
     let value: serde_json::Value =
         serde_json::from_str(json).map_err(|_| fail("EINVAL: invalid manifest"))?;
-    if value.get("version").and_then(serde_json::Value::as_u64) == Some(2) {
-        let state: Manifest =
-            serde_json::from_value(value).map_err(|_| fail("EINVAL: invalid manifest"))?;
-        let kernel = Kernel { state, now: 0 };
-        kernel.validate().map_err(|error| fail(&error))?;
-        return kernel.manifest();
-    }
-    let prior: PriorManifest =
-        serde_json::from_value(value).map_err(|_| fail("EINVAL: invalid prior manifest"))?;
-    if prior.version != 1 {
-        return Err(fail("EINVAL: unsupported manifest version"));
-    }
-    let metadata = prior
-        .nodes
-        .keys()
-        .enumerate()
-        .map(|(index, path)| {
-            (
-                path.clone(),
-                Metadata {
-                    inode: index as u64 + 1,
-                    atime_ns: 0,
-                    mtime_ns: 0,
-                    ctime_ns: 0,
-                },
-            )
-        })
-        .collect();
-    let state = Manifest {
-        version: 2,
-        generation: prior.generation,
-        next_inode: prior.nodes.len() as u64 + 1,
-        nodes: prior.nodes,
-        metadata,
+    let version = value.get("version").and_then(serde_json::Value::as_u64);
+    let state = match version {
+        Some(3) => serde_json::from_value(value).map_err(|_| fail("EINVAL: invalid manifest"))?,
+        Some(2) => {
+            let prior: PriorMetadataManifest = serde_json::from_value(value)
+                .map_err(|_| fail("EINVAL: invalid prior metadata manifest"))?;
+            if prior.version != 2 {
+                return Err(fail("EINVAL: invalid prior metadata version"));
+            }
+            Manifest {
+                version: 3,
+                generation: prior.generation,
+                nodes: prior.nodes,
+                next_inode: prior.next_inode,
+                metadata: prior
+                    .metadata
+                    .into_iter()
+                    .map(|(path, meta)| {
+                        (
+                            path,
+                            Metadata {
+                                inode: meta.inode,
+                                uid: 0,
+                                gid: 0,
+                                atime_ns: meta.atime_ns,
+                                mtime_ns: meta.mtime_ns,
+                                ctime_ns: meta.ctime_ns,
+                            },
+                        )
+                    })
+                    .collect(),
+                packages: Vec::new(),
+                links: BTreeMap::new(),
+            }
+        }
+        Some(1) => {
+            let prior: PriorManifest = serde_json::from_value(value)
+                .map_err(|_| fail("EINVAL: invalid prior manifest"))?;
+            if prior.version != 1 {
+                return Err(fail("EINVAL: invalid prior version"));
+            }
+            let metadata = prior
+                .nodes
+                .keys()
+                .enumerate()
+                .map(|(index, path)| {
+                    (
+                        path.clone(),
+                        Metadata {
+                            inode: index as u64 + 1,
+                            uid: 0,
+                            gid: 0,
+                            atime_ns: 0,
+                            mtime_ns: 0,
+                            ctime_ns: 0,
+                        },
+                    )
+                })
+                .collect();
+            Manifest {
+                version: 3,
+                generation: prior.generation,
+                next_inode: prior.nodes.len() as u64 + 1,
+                nodes: prior.nodes,
+                metadata,
+                packages: Vec::new(),
+                links: BTreeMap::new(),
+            }
+        }
+        _ => return Err(fail("EINVAL: unsupported manifest version")),
     };
     let kernel = Kernel { state, now: 0 };
     kernel.validate().map_err(|error| fail(&error))?;
@@ -272,8 +340,10 @@ impl Kernel {
     fn fresh() -> Self {
         Self {
             state: Manifest {
-                version: 2,
+                version: 3,
                 generation: 0,
+                packages: Vec::new(),
+                links: BTreeMap::new(),
                 next_inode: 5,
                 metadata: ["/", "/home", "/home/cirro", "/tmp"]
                     .into_iter()
@@ -283,6 +353,8 @@ impl Kernel {
                             path.into(),
                             Metadata {
                                 inode: index as u64 + 1,
+                                uid: 0,
+                                gid: 0,
                                 atime_ns: 0,
                                 mtime_ns: 0,
                                 ctime_ns: 0,
@@ -351,7 +423,7 @@ impl Kernel {
     }
 
     fn validate(&self) -> Result<(), String> {
-        if self.state.version != 2 || self.state.nodes.len() > MAX_NODES {
+        if self.state.version != 3 || self.state.nodes.len() > MAX_NODES {
             return Err("EINVAL: invalid manifest version or node count".into());
         }
         if !matches!(self.state.nodes.get("/"), Some(Node::Directory { .. })) {
@@ -398,6 +470,7 @@ impl Kernel {
                 normalize(target, parent(path))?;
             }
         }
+        self.validate_packages()?;
         if self.used_bytes() > MAX_TOTAL {
             return Err("ENOSPC: filesystem byte quota exceeded".into());
         }
@@ -417,6 +490,7 @@ impl Kernel {
 
     fn write_plan(&self, path: &str, size: u64, chunks: &str) -> Result<WritePlan, String> {
         let path = self.resolve(path, true)?;
+        self.package_writable(&path, false)?;
         let hashes: Vec<String> = serde_json::from_str(chunks)
             .map_err(|_| "EINVAL: invalid chunk references".to_string())?;
         if size > MAX_FILE
@@ -480,6 +554,8 @@ impl Kernel {
                 path.clone(),
                 Metadata {
                     inode: self.state.next_inode,
+                    uid: 0,
+                    gid: 0,
                     atime_ns: self.now,
                     mtime_ns: self.now,
                     ctime_ns: self.now,
@@ -587,6 +663,18 @@ impl Kernel {
                 .get(&path)
                 .ok_or_else(|| fail("EIO: missing metadata"))?
                 .inode,
+            uid: self
+                .state
+                .metadata
+                .get(&path)
+                .ok_or_else(|| fail("EIO: missing metadata"))?
+                .uid,
+            gid: self
+                .state
+                .metadata
+                .get(&path)
+                .ok_or_else(|| fail("EIO: missing metadata"))?
+                .gid,
             nlink: match node {
                 Node::Directory { .. } => {
                     2 + self
@@ -699,6 +787,8 @@ impl Kernel {
                 return Err(fail("ENOENT: parent does not exist"));
             }
             self.writable_parent(&resolved).map_err(|e| fail(&e))?;
+            self.package_writable(&resolved, false)
+                .map_err(|error| fail(&error))?;
             self.insert(resolved, Node::Directory { mode: 0o755 })
                 .map_err(|e| fail(&e))?;
         }
@@ -744,6 +834,8 @@ impl Kernel {
         if path == "/" {
             return Err(fail("EPERM: root cannot be removed"));
         }
+        self.package_writable(&path, true)
+            .map_err(|error| fail(&error))?;
         self.writable_parent(&path).map_err(|e| fail(&e))?;
         if !self.state.nodes.contains_key(&path) {
             return Err(fail("ENOENT: file does not exist"));
@@ -771,6 +863,10 @@ impl Kernel {
         if from == "/" || to == "/" || to.starts_with(&format!("{from}/")) {
             return Err(fail("EINVAL: invalid rename destination"));
         }
+        self.package_writable(&from, true)
+            .map_err(|error| fail(&error))?;
+        self.package_writable(&to, true)
+            .map_err(|error| fail(&error))?;
         self.writable_parent(&from).map_err(|e| fail(&e))?;
         self.writable_parent(&to).map_err(|e| fail(&e))?;
         let source = self
@@ -842,6 +938,8 @@ impl Kernel {
 
     pub fn symlink(&mut self, target: &str, path: &str) -> Result<(), JsValue> {
         let path = self.resolve(path, false).map_err(|e| fail(&e))?;
+        self.package_writable(&path, false)
+            .map_err(|error| fail(&error))?;
         normalize(target, parent(&path)).map_err(|e| fail(&e))?;
         self.writable_parent(&path).map_err(|e| fail(&e))?;
         if self.state.nodes.contains_key(&path) {
@@ -877,6 +975,8 @@ impl Kernel {
             return Err(fail("EINVAL: invalid timestamp flags"));
         }
         let path = self.resolve(path, follow).map_err(|error| fail(&error))?;
+        self.package_writable(&path, false)
+            .map_err(|error| fail(&error))?;
         let metadata = self
             .state
             .metadata
@@ -906,6 +1006,8 @@ impl Kernel {
             return Err(fail("EINVAL: invalid permission mode"));
         }
         let path = self.resolve(path, true).map_err(|e| fail(&e))?;
+        self.package_writable(&path, false)
+            .map_err(|error| fail(&error))?;
         match self.state.nodes.get_mut(&path) {
             Some(Node::File { mode: current, .. } | Node::Directory { mode: current }) => {
                 *current = mode;

@@ -30,13 +30,20 @@ export const load = Effect.fn("modules.load")(function* (
 ) {
   if (
     action.op === "wasm.executeFile" ||
+    action.op === "process.execFile" ||
     (action.op === "process.run" && action.language === "wasm")
   ) {
     const binary = yield* Effect.gen(function* () {
       if (action.op === "process.run")
         return { source: action.source, entry: "/tmp/__cirro_inline__.wasm" };
       yield* requirePermission(capability, "read");
-      const stat = yield* kernelCall(() => kernel.stat(action.path, true)).pipe(
+      const path = yield* Effect.gen(function* () {
+        if (action.op === "wasm.executeFile") return action.path;
+        if (action.command.includes("/"))
+          return yield* kernelCall(() => kernel.canonical(action.command, "/home/cirro"));
+        return yield* kernelCall(() => kernel.package_command(action.command));
+      });
+      const stat = yield* kernelCall(() => kernel.stat(path, true)).pipe(
         Effect.flatMap(Schema.decodeUnknownEffect(Schema.fromJsonString(FileStat))),
       );
       if (stat.size > 786_432)
@@ -46,6 +53,15 @@ export const load = Effect.fn("modules.load")(function* (
           message: "Wasm file exceeds its encoded source limit",
         });
       const data = yield* read(env, capability.sandboxId, kernel, stat.path);
+      if (
+        action.op === "process.execFile" &&
+        !data.subarray(0, 4).equals(Buffer.from([0, 97, 115, 109]))
+      )
+        return yield* new Fault({
+          code: "UNSUPPORTED_RUNTIME",
+          status: 501,
+          message: "Installed command execution currently requires a WASI module",
+        });
       return { source: data.toString("base64"), entry: stat.path };
     });
     const stdin = yield* Effect.gen(function* () {
@@ -71,11 +87,16 @@ export const load = Effect.fn("modules.load")(function* (
         });
       return encoded;
     });
+    const defaults = yield* kernelCall(() => kernel.package_environment()).pipe(
+      Effect.flatMap(
+        Schema.decodeUnknownEffect(Schema.fromJsonString(WasmConfiguration.fields.env)),
+      ),
+    );
     const program = {
       language: "wasm" as const,
       source: binary.source,
       argv: [binary.entry, ...(action.args ?? [])],
-      env: action.env ?? {},
+      env: { ...defaults, ...(action.env ?? {}) },
       stdin,
     } satisfies typeof WasmProgram.Type;
     if (

@@ -5,6 +5,8 @@ import { join } from "node:path";
 import { Schema, Struct } from "effect";
 import {
   DirectoryEntries,
+  PackagePreparation,
+  SoftwareCatalog,
   BatchReadResults,
   BatchWriteResults,
   DirectoryTree,
@@ -22,6 +24,7 @@ import {
   RunMetadata,
 } from "../src/contracts";
 import { runtime } from "../tooling/runtime";
+import { commandPackage } from "./fixtures/package";
 
 const directory = await mkdtemp(join(tmpdir(), "cirro-integration-"));
 const mf = runtime(directory);
@@ -2124,9 +2127,9 @@ test("metadata migration assigns persistent unique identities without inventing 
     Schema.encodeSync(Schema.fromJsonString(Head))({ ...head, manifest: prior }),
   );
   expect((await act("metadata-migration", token, { op: "vm.status" })).status).toBe(500);
-  expect((await post("/v1/migrations/filesystem-metadata-v2", token, {})).status).toBe(401);
+  expect((await post("/v1/migrations/filesystem-v3", token, {})).status).toBe(401);
   const receipt = Schema.decodeUnknownSync(MigrationReceipt)(
-    await (await post("/v1/migrations/filesystem-metadata-v2", admin, {})).json(),
+    await (await post("/v1/migrations/filesystem-v3", admin, {})).json(),
   );
   expect(receipt.migrated).toBe(1);
   const stat = Schema.decodeUnknownSync(FileStat)(
@@ -2145,7 +2148,7 @@ test("metadata migration assigns persistent unique identities without inventing 
   );
   expect(status.generation).toBe(7);
   const repeat = Schema.decodeUnknownSync(MigrationReceipt)(
-    await (await post("/v1/migrations/filesystem-metadata-v2", admin, {})).json(),
+    await (await post("/v1/migrations/filesystem-v3", admin, {})).json(),
   );
   expect(repeat.migrated).toBe(0);
 });
@@ -2469,4 +2472,388 @@ test("WASI setters obey checkpoint publication on traps and remain isolated acro
   );
   expect(preserved.size).toBe(8);
   expect(preserved.atimeNs).not.toBe("111");
+});
+
+test("package installation publishes immutable files, catalog, projections and executable WASI commands together", async () => {
+  const token = await setup("packages");
+  const binary = new Uint8Array(
+    await Bun.file(join(import.meta.dir, "../dist/wasi-inputs.wasm")).arrayBuffer(),
+  );
+  const bytes = commandPackage(
+    binary,
+    "probe",
+    "1.0.0",
+    { CIRRO_MARKER: "package" },
+    "/usr/local/share/probe",
+  );
+  const digest = `sha256:${Buffer.from(await crypto.subtle.digest("SHA-256", bytes)).toString("hex")}`;
+  expect(
+    (
+      await act("packages", token, {
+        op: "filesystem.writeFile",
+        path: "/tmp/probe.aospkg",
+        content: bytes.toString("base64"),
+        encoding: "base64",
+      })
+    ).status,
+  ).toBe(200);
+  const installedResponse = await act("packages", token, {
+    op: "software.install",
+    source: { path: "/tmp/probe.aospkg", digest },
+  });
+  expect(installedResponse.status).toBe(200);
+  const installed = Schema.decodeUnknownSync(PackagePreparation.fields.installed)(
+    await installedResponse.json(),
+  );
+  expect(installed.digest).toBe(digest);
+  const stat = Schema.decodeUnknownSync(FileStat)(
+    await (
+      await act("packages", token, {
+        op: "filesystem.stat",
+        path: "/opt/cirro/pkgs/probe/1.0.0/bin/probe",
+        follow: true,
+      })
+    ).json(),
+  );
+  expect(stat.mode).toBe(0o555);
+  expect(stat.uid).toBe(1000);
+  expect(stat.gid).toBe(1001);
+  expect(stat.mtimeNs).toBe("123000000000");
+  const immutable = Schema.decodeUnknownSync(RunRecord)(
+    await (
+      await act("packages", token, {
+        op: "process.run",
+        id: "immutable-times",
+        language: "wasm",
+        source: await wasmFixture("package-times"),
+      })
+    ).json(),
+  );
+  expect(immutable.output?.result).toBe(69);
+  const directoryMetadata = Schema.decodeUnknownSync(FileStat)(
+    await (
+      await act("packages", token, {
+        op: "filesystem.stat",
+        path: "/opt/cirro/pkgs/probe/1.0.0/bin",
+        follow: true,
+      })
+    ).json(),
+  );
+  expect(directoryMetadata.mtimeNs).toBe("0");
+  const catalog = Schema.decodeUnknownSync(SoftwareCatalog)(
+    await (await act("packages", token, { op: "software.list" })).json(),
+  );
+  expect(catalog).toEqual([installed]);
+  const run = Schema.decodeUnknownSync(RunRecord)(
+    await (
+      await act("packages", token, {
+        op: "process.execFile",
+        id: "command",
+        command: "probe",
+        args: ["argument"],
+        stdin: { content: "abc", encoding: "utf8" },
+      })
+    ).json(),
+  );
+  expect(run.status).toBe("exited");
+  expect(run.output?.exitCode).toBe(0);
+  expect(run.output?.stdout).toContain(
+    'argv=["/opt/cirro/pkgs/probe/1.0.0/bin/probe", "argument"]',
+  );
+  expect(run.output?.stdout).toContain("marker=package");
+  expect(run.output?.stdout).toContain("private=unset");
+  expect(run.output?.stdout).toContain("stdin=[97, 98, 99]");
+  expect(
+    (
+      await act("packages", token, {
+        op: "software.link",
+        packageId: installed.packageId,
+        command: "probe",
+        alias: "custom",
+      })
+    ).status,
+  ).toBe(200);
+  const alias = Schema.decodeUnknownSync(RunRecord)(
+    await (
+      await act("packages", token, {
+        op: "process.execFile",
+        id: "alias",
+        command: "custom",
+        env: { CIRRO_MARKER: "caller" },
+      })
+    ).json(),
+  );
+  expect(alias.output?.stdout).toContain("marker=caller");
+  const guest = Schema.decodeUnknownSync(RunRecord)(
+    await (
+      await act("packages", token, {
+        op: "javascript.evaluate",
+        id: "guest-list",
+        expression: "(await tools.call({op:'software.installed'})).length",
+      })
+    ).json(),
+  );
+  expect(guest.output?.result).toBe(1);
+  for (const action of [
+    {
+      op: "filesystem.writeFile",
+      path: "/opt/cirro/pkgs/probe/1.0.0/bin/probe",
+      content: "overwrite",
+      encoding: "utf8",
+    },
+    { op: "filesystem.chmod", path: "/opt/cirro/pkgs/probe/1.0.0/bin/probe", mode: 0o777 },
+    { op: "filesystem.remove", path: "/opt", recursive: true },
+    { op: "filesystem.remove", path: "/usr/local/share/probe", recursive: false },
+    { op: "filesystem.move", from: "/usr/local/share", to: "/tmp/changed" },
+    { op: "filesystem.mkdir", path: "/opt/cirro/injected", recursive: true },
+  ])
+    expect((await act("packages", token, action)).status).toBe(403);
+  expect(
+    (
+      await act("packages", token, {
+        op: "filesystem.writeFile",
+        path: "/tmp/probe.aospkg",
+        content: "changed source",
+        encoding: "utf8",
+      })
+    ).status,
+  ).toBe(200);
+  const preserved = Schema.decodeUnknownSync(RunRecord)(
+    await (
+      await act("packages", token, { op: "process.execFile", id: "preserved", command: "probe" })
+    ).json(),
+  );
+  expect(preserved.output?.exitCode).toBe(0);
+  expect(
+    (await act("packages", token, { op: "software.uninstall", packageId: installed.packageId }))
+      .status,
+  ).toBe(200);
+  expect(
+    Schema.decodeUnknownSync(SoftwareCatalog)(
+      await (await act("packages", token, { op: "software.installed" })).json(),
+    ),
+  ).toEqual([]);
+  expect(
+    (await act("packages", token, { op: "process.execFile", id: "removed", command: "custom" }))
+      .status,
+  ).toBe(404);
+  expect(
+    (
+      await act("packages", token, {
+        op: "filesystem.stat",
+        path: "/usr/local/share/probe",
+        follow: false,
+      })
+    ).status,
+  ).toBe(404);
+});
+
+test("package grants, pinning and invalid projections reject before a new sandbox generation", async () => {
+  const token = await setup("package-grants");
+  const bytes = commandPackage(
+    new Uint8Array(await Bun.file(join(import.meta.dir, "../dist/wasi-inputs.wasm")).arrayBuffer()),
+  );
+  expect(
+    (
+      await act("package-grants", token, {
+        op: "filesystem.writeFile",
+        path: "/tmp/package",
+        content: bytes.toString("base64"),
+        encoding: "base64",
+      })
+    ).status,
+  ).toBe(200);
+  const readonly = Schema.decodeUnknownSync(TokenResponse)(
+    await (
+      await post("/v1/sandboxes/package-grants/capabilities", admin, {
+        permissions: ["read", "execute"],
+        expiresInSeconds: 3600,
+      })
+    ).json(),
+  ).token;
+  const before = Schema.decodeUnknownSync(Status)(
+    await (await act("package-grants", token, { op: "vm.status" })).json(),
+  );
+  expect(
+    (
+      await act("package-grants", readonly, {
+        op: "software.install",
+        source: { path: "/tmp/package" },
+      })
+    ).status,
+  ).toBe(403);
+  expect(
+    (
+      await act("package-grants", token, {
+        op: "software.install",
+        source: { path: "/tmp/package", digest: `sha256:${"0".repeat(64)}` },
+      })
+    ).status,
+  ).toBe(400);
+  expect(
+    (
+      await act("package-grants", token, {
+        op: "software.install",
+        source: { url: "https://example.com/package" },
+      })
+    ).status,
+  ).toBe(403);
+  expect(
+    (
+      await act("package-grants", token, {
+        op: "software.install",
+        source: { path: "/tmp/package", digest: "unrecognized" },
+      })
+    ).status,
+  ).toBe(400);
+  const after = Schema.decodeUnknownSync(Status)(
+    await (await act("package-grants", token, { op: "vm.status" })).json(),
+  );
+  expect(after.generation).toBe(before.generation);
+  expect(
+    Schema.decodeUnknownSync(SoftwareCatalog)(
+      await (await act("package-grants", token, { op: "software.list" })).json(),
+    ),
+  ).toEqual([]);
+});
+
+test("concurrent package installers publish one coherent catalog and preserve sandbox isolation", async () => {
+  const token = await setup("package-race");
+  const other = await setup("package-other");
+  const bytes = commandPackage(
+    new Uint8Array(await Bun.file(join(import.meta.dir, "../dist/wasi-inputs.wasm")).arrayBuffer()),
+  );
+  expect(
+    (
+      await act("package-race", token, {
+        op: "filesystem.writeFile",
+        path: "/tmp/package",
+        content: bytes.toString("base64"),
+        encoding: "base64",
+      })
+    ).status,
+  ).toBe(200);
+  const replies = await Promise.all(
+    [1, 2].map(() =>
+      act("package-race", token, { op: "software.install", source: { path: "/tmp/package" } }),
+    ),
+  );
+  expect(replies.filter((response) => response.status === 200)).toHaveLength(1);
+  expect(replies.filter((response) => response.status === 409)).toHaveLength(1);
+  const packages = Schema.decodeUnknownSync(SoftwareCatalog)(
+    await (await act("package-race", token, { op: "software.list" })).json(),
+  );
+  expect(packages).toHaveLength(1);
+  expect(
+    Schema.decodeUnknownSync(SoftwareCatalog)(
+      await (await act("package-other", other, { op: "software.list" })).json(),
+    ),
+  ).toEqual([]);
+  expect(
+    (
+      await act("package-other", other, {
+        op: "process.execFile",
+        id: "isolated",
+        command: "probe",
+      })
+    ).status,
+  ).toBe(404);
+});
+
+test("package command ownership falls back after removal and conflicting projections leave the catalog unchanged", async () => {
+  const token = await setup("package-ownership");
+  const binary = new Uint8Array(
+    await Bun.file(join(import.meta.dir, "../dist/wasi-inputs.wasm")).arrayBuffer(),
+  );
+  const first = commandPackage(binary, "probe", "1.0.0", { CIRRO_MARKER: "first" });
+  const second = commandPackage(binary, "probe", "2.0.0", { CIRRO_MARKER: "second" });
+  for (const [path, bytes] of [
+    ["/tmp/first", first],
+    ["/tmp/second", second],
+  ] as const)
+    expect(
+      (
+        await act("package-ownership", token, {
+          op: "filesystem.writeFile",
+          path,
+          content: bytes.toString("base64"),
+          encoding: "base64",
+        })
+      ).status,
+    ).toBe(200);
+  const installed = Schema.decodeUnknownSync(PackagePreparation.fields.installed)(
+    await (
+      await act("package-ownership", token, {
+        op: "software.install",
+        source: { path: "/tmp/first" },
+      })
+    ).json(),
+  );
+  expect(
+    (
+      await act("package-ownership", token, {
+        op: "software.install",
+        source: { path: "/tmp/second" },
+      })
+    ).status,
+  ).toBe(200);
+  const initial = Schema.decodeUnknownSync(RunRecord)(
+    await (
+      await act("package-ownership", token, {
+        op: "process.execFile",
+        id: "first",
+        command: "probe",
+      })
+    ).json(),
+  );
+  expect(initial.output?.stdout).toContain("marker=first");
+  expect(
+    (
+      await act("package-ownership", token, {
+        op: "software.uninstall",
+        packageId: installed.packageId,
+      })
+    ).status,
+  ).toBe(200);
+  const fallback = Schema.decodeUnknownSync(RunRecord)(
+    await (
+      await act("package-ownership", token, {
+        op: "process.execFile",
+        id: "fallback",
+        command: "probe",
+      })
+    ).json(),
+  );
+  expect(fallback.output?.stdout).toContain("marker=second");
+  const conflicting = commandPackage(binary, "conflicting", "1.0.0", {}, "/tmp");
+  expect(
+    (
+      await act("package-ownership", token, {
+        op: "filesystem.writeFile",
+        path: "/tmp/conflicting",
+        content: conflicting.toString("base64"),
+        encoding: "base64",
+      })
+    ).status,
+  ).toBe(200);
+  const before = Schema.decodeUnknownSync(Status)(
+    await (await act("package-ownership", token, { op: "vm.status" })).json(),
+  );
+  expect(
+    (
+      await act("package-ownership", token, {
+        op: "software.install",
+        source: { path: "/tmp/conflicting" },
+      })
+    ).status,
+  ).toBe(409);
+  const after = Schema.decodeUnknownSync(Status)(
+    await (await act("package-ownership", token, { op: "vm.status" })).json(),
+  );
+  expect(after.generation).toBe(before.generation);
+  expect(
+    Schema.decodeUnknownSync(SoftwareCatalog)(
+      await (await act("package-ownership", token, { op: "software.list" })).json(),
+    ),
+  ).toHaveLength(1);
 });

@@ -33,7 +33,7 @@ bun run bench
 
 The benchmark records distributions and artifact sizes in [performance-local.json](docs/evidence/performance-local.json). These are local measurements, not production latency or upstream comparisons.
 
-Validation passed 21 Rust tests, 63 workerd integration tests and 37 production checks. Deployment uses the `minutei` profile. [Production evidence](docs/evidence/production.json) covers implemented operations, isolation and resource limits; it includes the explicit Python rejection and does not establish upstream parity. Repeat it with `CIRRO_URL=<deployed-url> bun run live` and the private administrator key in `.env`.
+Validation passed 28 Rust tests, 67 workerd integration tests, four compiled wasm32 SDK tests and 42 production checks. Deployment uses the `minutei` profile. [Production evidence](docs/evidence/production.json) covers implemented operations, isolation and resource limits; it includes the explicit Python rejection and does not establish upstream parity. Repeat it with `CIRRO_URL=<deployed-url> bun run live` and the private administrator key in `.env`.
 
 ## Deploy
 
@@ -92,7 +92,7 @@ File execution and imports require `read` in addition to `execute`. Rust parses 
 
 The parser/compiler uses a fresh Wasm instance per module, with 64 MiB maximum linear memory. Stack exhaustion in one compilation cannot poison later requests. Graphs allow at most 128 modules, 128 imports per module and 8 MiB serialized data. Source compilation is not TypeScript project type checking.
 
-For `language: "shell"`, source is a shell script. For `language: "wasm"`, source is canonical base64 of a module exporting `_start()` for a WASI Preview 1 command or `run() -> i32` for a standalone guest. Wasmi interprets it with fuel and memory limits inside a fresh Rust host instance; arbitrary Wasm is never compiled through Worker JavaScript. WASI file descriptors support R2-backed open/read/write, positional I/O, seek, close and sync, plus captured stdio, clock and entropy. Directory/path operations include mkdir, readdir with cookies, rename, unlink/rmdir and symlink/readlink. Open file descriptions retain their identity and data after replacement or unlink; detached writes do not recreate a path. File stat and directory entries expose persistent inode identities; stat also exposes nanosecond timestamps. WASI descriptor resizing preserves the cursor and fills growth with zeros; descriptor/path timestamp setters preserve full unsigned 64-bit values and honor explicit, NOW and no-op flags. Files publish together at completion; explicit sync creates a durable checkpoint. Unsynced changes disappear after a trap; earlier checkpoints remain. Wasm runs accept optional `args`, `env` and `stdin: {content, encoding}` (`utf8` or `base64`). argv starts with the entry path; the environment contains only the supplied values. Stdin is a bounded byte stream with EOF after consumption. `wasm.executeFile` loads a binary from a sandbox `path` and additionally requires `read`. The archived JSON program includes binary bytes, argv, environment and stdin. Unsupported syscalls fail explicitly; this is not full WASI or software-package parity.
+For `language: "shell"`, source is a shell script. For `language: "wasm"`, source is canonical base64 of a module exporting `_start()` for a WASI Preview 1 command or `run() -> i32` for a standalone guest. Wasmi interprets it with fuel and memory limits inside a fresh Rust host instance; arbitrary Wasm is never compiled through Worker JavaScript. WASI file descriptors support R2-backed open/read/write, positional I/O, seek, close and sync, plus captured stdio, clock and entropy. Directory/path operations include mkdir, readdir with cookies, rename, unlink/rmdir and symlink/readlink. Open file descriptions retain their identity and data after replacement or unlink; detached writes do not recreate a path. File stat reports packed UID/GID metadata. File stat and directory entries expose persistent inode identities; stat also exposes nanosecond timestamps. WASI descriptor resizing preserves the cursor and fills growth with zeros; descriptor/path timestamp setters preserve full unsigned 64-bit values and honor explicit, NOW and no-op flags. Files publish together at completion; explicit sync creates a durable checkpoint. Unsynced changes disappear after a trap; earlier checkpoints remain. Wasm runs accept optional `args`, `env` and `stdin: {content, encoding}` (`utf8` or `base64`). argv starts with the entry path; the environment contains only the supplied values. Stdin is a bounded byte stream with EOF after consumption. `wasm.executeFile` loads a binary from a sandbox `path` and additionally requires `read`. The archived JSON program includes binary bytes, argv, environment and stdin. Unsupported syscalls fail explicitly; this is not full WASI or software-package parity.
 
 Read files using `filesystem.readFile`; the result contains canonical base64 bytes and a byte size. `filesystem.writeFile` accepts `utf8` or canonical `base64`. Unknown fields and unsupported operations are rejected. `filesystem.writeFiles` accepts up to 128 `{path,content,encoding}` entries, creates parent directories and returns per-file success/error results with one final root publication. `filesystem.readFiles` accepts `paths` and returns base64 content or an error per path from one snapshot. Batches allow at most 16 MiB total decoded content. `filesystem.readdirRecursive` accepts `path` with optional `maxDepth` (default 64; 0 lists immediate children) and `exclude` names; it does not descend through child symlinks. `filesystem.realpath` returns the canonical target path.
 
@@ -100,7 +100,7 @@ A `409 CONFLICT` means the filesystem changed during the operation. Read the cur
 
 ## Storage and limits
 
-[Architecture](docs/architecture.md) explains commit ordering, isolation and recovery. Files are split into 256 KiB SHA-256 blocks. Existing blocks of the same file are reused. Root publication uses an R2 ETag precondition. Head schema version 2 stores explicit execution budgets; the deploy action migrates version 1 policies to 1,000 interrupt callbacks and 8 MiB guest heaps, preserving files and disposal state. The filesystem-metadata deploy migration assigns inode identities to prior manifests, preserves files and leaves unavailable historical timestamps at zero. New nodes and mutations use the native clock; reads use a no-atime policy. No tenant data is stored in D1, KV or Durable Object SQLite.
+[Architecture](docs/architecture.md) explains commit ordering, isolation and recovery. Files are split into 256 KiB SHA-256 blocks. Existing blocks of the same file are reused. Root publication uses an R2 ETag precondition. Head schema version 2 stores explicit execution budgets; the deploy action migrates version 1 policies to 1,000 interrupt callbacks and 8 MiB guest heaps, preserving files and disposal state. The filesystem deploy migration upgrades prior manifests to version 3, preserving data and timestamps, assigning missing inode identities, defaulting ownership to zero and initializing the package catalog. New nodes and mutations use the native clock; reads use a no-atime policy. No tenant data is stored in D1, KV or Durable Object SQLite.
 
 WASI input limits: 128 supplied arguments, 128 environment entries, 4,096 bytes per value, 64 KiB serialized argv/environment and 1 MiB stdin. Source remains bounded to 1 MiB encoded text.
 
@@ -111,3 +111,25 @@ Unreferenced blocks and disposed sandboxes are retained. Safe garbage collection
 ## Inspiration
 
 Inspired by [rivet-dev/agentos](https://github.com/rivet-dev/agentos), inspected at `4d48628304c1ddedafc9d55f60752093fcf6f3d2`. Cirro is an independent implementation; the upstream native sidecar, V8 embedding and Unix socket transport are not used.
+
+## Command packages
+
+Install an upstream v2 `.aospkg` file from a sandbox path or an authorized HTTPS URL. An optional `sha256:<64 lowercase hex>` digest pins its source. Installation requires `manage` and `write`, plus `read` for a sandbox source or `network` for HTTPS. Redirects are rejected. Sources are bounded to 16 MiB and installation shares the existing filesystem quotas.
+
+```json
+{ "op": "software.install", "source": { "path": "/tmp/probe.aospkg" } }
+```
+
+`software.list` and `software.installed` read the durable catalog. `software.link` takes a `packageId`, declared `command` and optional `alias`; `software.uninstall` removes a package. Ordinary filesystem operations cannot mutate installed files or their declared directory projections. The catalog and files publish together through one conditional R2 root commit.
+
+```json
+{
+  "op": "process.execFile",
+  "id": "command-1",
+  "command": "probe",
+  "args": ["input"],
+  "env": { "MODE": "caller" }
+}
+```
+
+Installed command execution currently supports WASI. It accepts the same argv/environment/stdin options as file execution; explicit environment values override package defaults. Default release bundles, shell PATH dispatch and other command runtimes are still pending. Filesystem deployment migrates existing manifests to version 3, preserving data and timestamps and initializing the package catalog.

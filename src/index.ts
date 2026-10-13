@@ -4,6 +4,8 @@ import { initSync, Kernel } from "../dist/kernel/cirro_kernel";
 import { administrator, authorize, mint, requirePermission } from "./auth";
 import {
   Action,
+  SoftwareCatalog,
+  PackagePreparation,
   BatchReadResults,
   BatchWriteResults,
   DirectoryTree,
@@ -28,7 +30,7 @@ import {
 } from "./contracts";
 import { guestAction } from "./capabilities";
 import { migrate } from "./migration";
-import { migrateMetadata } from "./metadata-migration";
+import { migrateFilesystem } from "./filesystem-migration";
 import { migrateWasm } from "./wasm-migration";
 import { readBounded } from "./http";
 import { inspect, list, run } from "./process";
@@ -72,9 +74,9 @@ const route = Effect.fn("api.route")(function* (request: Request, env: Env) {
       headers: { "content-type": "application/json", "cache-control": "no-store" },
     });
   }
-  if (url.pathname === "/v1/migrations/filesystem-metadata-v2") {
+  if (url.pathname === "/v1/migrations/filesystem-v3") {
     yield* administrator(env, token);
-    const receipt = yield* migrateMetadata(env);
+    const receipt = yield* migrateFilesystem(env);
     return new Response(Schema.encodeSync(Schema.fromJsonString(MigrationReceipt))(receipt), {
       headers: { "content-type": "application/json", "cache-control": "no-store" },
     });
@@ -158,6 +160,7 @@ const route = Effect.fn("api.route")(function* (request: Request, env: Env) {
     Match.whenOr(
       { op: "process.run" },
       { op: "wasm.executeFile" },
+      { op: "process.execFile" },
       { op: "javascript.execute" },
       { op: "javascript.evaluate" },
       { op: "javascript.executeFile" },
@@ -230,6 +233,14 @@ const route = Effect.fn("api.route")(function* (request: Request, env: Env) {
           if (action.op === "network.fetch")
             return Schema.encodeUnknownSync(Schema.fromJsonString(NetworkResult))(result);
           return Match.value(action).pipe(
+            Match.when({ op: "software.install" }, () =>
+              Schema.encodeUnknownSync(Schema.fromJsonString(PackagePreparation.fields.installed))(
+                result,
+              ),
+            ),
+            Match.whenOr({ op: "software.list" }, { op: "software.installed" }, () =>
+              Schema.encodeUnknownSync(Schema.fromJsonString(SoftwareCatalog))(result),
+            ),
             Match.when({ op: "filesystem.readFiles" }, () =>
               Schema.encodeUnknownSync(Schema.fromJsonString(BatchReadResults))(result),
             ),

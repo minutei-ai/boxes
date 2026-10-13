@@ -97,7 +97,36 @@ export const ProcessReadAction = Schema.Union([
   Schema.Struct({ op: Schema.Literal("process.get"), id: Id }),
   ProcessListAction,
 ]);
-export const GuestAction = Schema.Union([FilesystemAction, NetworkAction, ProcessReadAction]);
+export const PackageDigest = Schema.String.check(Schema.isPattern(/^[0-9a-f]{64}$/));
+export const SourceDigest = Schema.String.check(Schema.isPattern(/^sha256:[0-9a-f]{64}$/));
+export const CommandName = Schema.String.check(Schema.isPattern(/^[a-zA-Z0-9_+.-]{1,128}$/));
+export const SoftwareAction = Schema.Union([
+  Schema.Struct({
+    op: Schema.Literal("software.install"),
+    source: Schema.Union([
+      Schema.Struct({ path: Path, digest: Schema.optionalKey(SourceDigest) }),
+      Schema.Struct({
+        url: Schema.String.check(Schema.isMaxLength(8192)),
+        digest: Schema.optionalKey(SourceDigest),
+      }),
+    ]),
+  }),
+  Schema.Struct({ op: Schema.Literal("software.list") }),
+  Schema.Struct({ op: Schema.Literal("software.installed") }),
+  Schema.Struct({ op: Schema.Literal("software.uninstall"), packageId: PackageDigest }),
+  Schema.Struct({
+    op: Schema.Literal("software.link"),
+    packageId: PackageDigest,
+    command: CommandName,
+    alias: Schema.optionalKey(CommandName),
+  }),
+]);
+export const GuestAction = Schema.Union([
+  FilesystemAction,
+  NetworkAction,
+  ProcessReadAction,
+  SoftwareAction,
+]);
 const InlineRun = Schema.Struct({
   op: Schema.Literal("process.run"),
   id: Id,
@@ -143,6 +172,7 @@ export const RunAction = Schema.Union([
     ...WasmOptions,
   }),
   Schema.Struct({ op: Schema.Literal("wasm.executeFile"), id: Id, path: Path, ...WasmOptions }),
+  Schema.Struct({ op: Schema.Literal("process.execFile"), id: Id, command: Path, ...WasmOptions }),
   Schema.Struct({
     op: Schema.Literals(["javascript.execute", "typescript.execute"]),
     id: Id,
@@ -208,6 +238,8 @@ export const FileStat = Schema.Struct({
   mode: Schema.Int,
   inode: Schema.Int,
   nlink: Schema.Int,
+  uid: Schema.Int,
+  gid: Schema.Int,
   atimeNs: Schema.String.check(Schema.isPattern(/^\d+$/)),
   mtimeNs: Schema.String.check(Schema.isPattern(/^\d+$/)),
   ctimeNs: Schema.String.check(Schema.isPattern(/^\d+$/)),
@@ -361,7 +393,56 @@ export const NetworkResult = Schema.Struct({
 });
 export const Exists = Schema.Struct({ exists: Schema.Boolean });
 export const Link = Schema.Struct({ target: Schema.String });
+export const PackagePreparation = Schema.Struct({
+  installed: Schema.Struct({
+    packageId: PackageDigest,
+    digest: SourceDigest,
+    sizeBytes: Schema.Int,
+    manifest: Schema.Struct({
+      name: Schema.String,
+      version: Schema.String,
+      provides: Schema.NullOr(
+        Schema.Struct({
+          env: Schema.Record(Schema.String, Schema.String),
+          files: Schema.Array(Schema.Struct({ source: Schema.String, target: Schema.String })),
+        }),
+      ),
+      commands: Schema.Array(Schema.Struct({ command: Schema.String, entry: Schema.String })),
+      man_pages: Schema.Array(Schema.Struct({ section: Schema.String, page: Schema.String })),
+    }),
+  }),
+  root: Path,
+  entries: Schema.Array(
+    Schema.Struct({
+      path: Path,
+      node: Schema.Union([
+        Schema.Struct({
+          kind: Schema.Literal("file"),
+          mode: Schema.Int,
+          size: Schema.Int,
+          chunks: Schema.Array(Schema.String),
+        }),
+        Schema.Struct({ kind: Schema.Literal("directory"), mode: Schema.Int }),
+        Schema.Struct({ kind: Schema.Literal("symlink"), target: Schema.String }),
+      ]),
+      uid: Schema.Int,
+      gid: Schema.Int,
+      mtimeNs: Schema.String.check(Schema.isPattern(/^[0-9]+$/)),
+    }),
+  ),
+  blocks: Schema.Array(
+    Schema.Struct({ hash: Schema.String, offset: Schema.Int, length: Schema.Int }),
+  ),
+});
+
+export const SoftwareCatalog = Schema.Array(PackagePreparation.fields.installed);
+export const PackageInstallation = PackagePreparation.mapFields((fields) =>
+  Struct.pick(fields, ["installed", "blocks"]),
+);
+
 export const GuestResponse = Schema.Union([
+  PackagePreparation.fields.installed,
+  SoftwareCatalog,
   BatchReadResults,
   BatchWriteResults,
   DirectoryTree,

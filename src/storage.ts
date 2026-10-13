@@ -38,7 +38,7 @@ export const kernelCall = <A>(call: () => A) =>
       if (Schema.is(Schema.String)(cause)) {
         const code = cause.split(":")[0];
         if (code === "ENOENT") return new Fault({ code, status: 404, message: cause });
-        if (code === "EACCES" || code === "EPERM")
+        if (code === "EACCES" || code === "EPERM" || code === "EROFS")
           return new Fault({ code, status: 403, message: cause });
         if (code === "EEXIST" || code === "ENOTEMPTY")
           return new Fault({ code, status: 409, message: cause });

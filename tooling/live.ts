@@ -1,7 +1,10 @@
 import { Config, Effect, Redacted, Schema } from "effect";
 import { join } from "node:path";
+import { commandPackage } from "../tests/fixtures/package";
 import {
   FileContent,
+  PackagePreparation,
+  SoftwareCatalog,
   FileStat,
   BatchReadResults,
   BatchWriteResults,
@@ -371,10 +374,92 @@ const wasiDetachedMissing = await action({
   path: "/tmp/setters-detached",
   follow: true,
 });
+const packageBytes = commandPackage(
+  new Uint8Array(await Bun.file(join(import.meta.dir, "../dist/wasi-inputs.wasm")).arrayBuffer()),
+);
+const packageDigest = `sha256:${Buffer.from(await crypto.subtle.digest("SHA-256", packageBytes)).toString("hex")}`;
+const packageWritten = await action({
+  op: "filesystem.writeFile",
+  path: "/tmp/probe.aospkg",
+  content: packageBytes.toString("base64"),
+  encoding: "base64",
+});
+const packageInstalledResponse = await action({
+  op: "software.install",
+  source: { path: "/tmp/probe.aospkg", digest: packageDigest },
+});
+const packageInstalled = Schema.decodeUnknownSync(PackagePreparation.fields.installed)(
+  await packageInstalledResponse.json(),
+);
+const packageCatalog = Schema.decodeUnknownSync(SoftwareCatalog)(
+  await (await action({ op: "software.list" })).json(),
+);
+const packageCommand = Schema.decodeUnknownSync(RunRecord)(
+  await (
+    await action({
+      op: "process.execFile",
+      id: "package-command",
+      command: "probe",
+      args: ["production"],
+    })
+  ).json(),
+);
+const packageProtected = await action({
+  op: "filesystem.chmod",
+  path: "/opt/cirro/pkgs/probe/1.0.0/bin/probe",
+  mode: 0o777,
+});
+const packageLinked = await action({
+  op: "software.link",
+  packageId: packageInstalled.packageId,
+  command: "probe",
+  alias: "custom",
+});
+const packageAlias = Schema.decodeUnknownSync(RunRecord)(
+  await (
+    await action({
+      op: "process.execFile",
+      id: "package-alias",
+      command: "custom",
+      env: { CIRRO_MARKER: "caller" },
+    })
+  ).json(),
+);
+const packageRemoved = await action({
+  op: "software.uninstall",
+  packageId: packageInstalled.packageId,
+});
+const packageAbsent = Schema.decodeUnknownSync(SoftwareCatalog)(
+  await (await action({ op: "software.installed" })).json(),
+);
+const packageMissingCommand = await action({
+  op: "process.execFile",
+  id: "removed-package",
+  command: "probe",
+});
 const alive = await action({ op: "vm.status" });
 const disposed = await action({ op: "vm.dispose" });
 const afterDispose = await action({ op: "vm.status" });
 const checks = {
+  softwareInstallation:
+    packageWritten.status === 200 &&
+    packageInstalledResponse.status === 200 &&
+    packageInstalled.digest === packageDigest &&
+    packageCatalog.length === 1,
+  softwareExecution:
+    packageCommand.output?.exitCode === 0 &&
+    packageCommand.output.stdout.includes("marker=package") &&
+    packageCommand.output.stdout.includes("production"),
+  softwareProtection: packageProtected.status === 403,
+  softwareAliases:
+    packageLinked.status === 200 &&
+    packageAlias.output?.exitCode === 0 &&
+    packageAlias.output.stdout.includes("marker=caller"),
+  softwareRemoval:
+    packageRemoved.status === 200 &&
+    packageAbsent.length === 0 &&
+    packageMissingCommand.status === 404,
+
   batchPartialSuccess:
     batchWrite.length === 3 &&
     batchWrite[0]?.success === true &&

@@ -347,6 +347,13 @@ pub extern "C" fn run() -> i32 {
         }
         return 42;
     }
+    if cfg!(case = "package-times") {
+        let fd = match open(3, b"opt/cirro/bin/probe", 0, 2 | (1 << 23), 0, 1) {
+            Ok(fd) => fd,
+            Err(errno) => return errno,
+        };
+        return unsafe { fd_filestat_set_times(fd, 1, 2, 5) };
+    }
     if cfg!(case = "setter-rights") {
         let fd = match open(3, b"tmp/existing", 0, 2 | 4 | (1 << 21), 0, 1) {
             Ok(fd) => fd,

@@ -165,6 +165,7 @@ await Effect.runPromise(
     ]);
     yield* Effect.forEach(
       [
+        "package-times",
         "setter-escape",
         "setter-rights",
         "setter-flags",

@@ -1,6 +1,6 @@
 import * as Alchemy from "alchemy";
 import * as Cloudflare from "alchemy/Cloudflare";
-import { Clock, Config, Effect, Layer, Redacted, Schema } from "effect";
+import { Clock, Config, Effect, Layer, Redacted, Schedule, Schema } from "effect";
 import { bucket, worker } from "./src/resources";
 import { MigrationReceipt } from "./src/contracts";
 
@@ -10,7 +10,7 @@ const Deployment = Schema.Struct({
 });
 class MigrationRequestFailure extends Schema.TaggedError<MigrationRequestFailure>()(
   "MigrationRequestFailure",
-  { cause: Schema.Unknown },
+  { cause: Schema.Unknown, path: Schema.String },
 ) {}
 const migrate = Alchemy.Action(
   "Migrations",
@@ -21,7 +21,7 @@ const migrate = Alchemy.Action(
       const receipts = yield* Effect.forEach(
         [
           "/v1/migrations/execution-policy-v2",
-          "/v1/migrations/filesystem-metadata-v2",
+          "/v1/migrations/filesystem-v3",
           "/v1/migrations/wasm-inputs-v1",
         ],
         (path) =>
@@ -33,15 +33,23 @@ const migrate = Alchemy.Action(
                   headers: { authorization: `Bearer ${Redacted.value(key)}` },
                   signal: AbortSignal.timeout(120_000),
                 }),
-              catch: (cause) => new MigrationRequestFailure({ cause }),
+              catch: (cause) => new MigrationRequestFailure({ cause, path }),
             });
-            if (!response.ok) return yield* new MigrationRequestFailure({ cause: response.status });
+            if (!response.ok)
+              return yield* new MigrationRequestFailure({ cause: response.status, path });
             const text = yield* Effect.tryPromise({
               try: () => response.text(),
-              catch: (cause) => new MigrationRequestFailure({ cause }),
+              catch: (cause) => new MigrationRequestFailure({ cause, path }),
             });
             return yield* Schema.decodeUnknownEffect(Schema.fromJsonString(MigrationReceipt))(text);
-          }),
+          }).pipe(
+            Effect.retry({
+              times: 10,
+              schedule: Schedule.spaced("2 seconds"),
+              while: (failure) =>
+                failure._tag === "MigrationRequestFailure" && failure.cause === 404,
+            }),
+          ),
       );
       return { receipts, deployedAt: input.deployedAt };
     });
