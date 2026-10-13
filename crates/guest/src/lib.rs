@@ -4,8 +4,6 @@ use serde::Serialize;
 use std::cell::{Cell, RefCell};
 use std::collections::VecDeque;
 use std::rc::Rc;
-use std::sync::Arc;
-use std::sync::atomic::{AtomicUsize, Ordering};
 use wasm_bindgen::prelude::*;
 
 mod binary;
@@ -30,7 +28,7 @@ pub struct Guest {
     output: Rc<RefCell<Option<String>>>,
     context: Context,
     runtime: Runtime,
-    fuel: Arc<AtomicUsize>,
+    fuel: Rc<Cell<usize>>,
     jobs: usize,
 }
 
@@ -62,14 +60,14 @@ impl Guest {
             BuiltinResolver::default().with_module("program"),
             BuiltinLoader::default().with_module("program", source),
         );
-        let fuel = Arc::new(AtomicUsize::new(ticks));
-        let counter = Arc::clone(&fuel);
-        runtime.set_interrupt_handler(Some(Box::new(move || {
-            counter
-                .fetch_update(Ordering::Relaxed, Ordering::Relaxed, |left| {
-                    left.checked_sub(1)
-                })
-                .is_err()
+        let fuel = Rc::new(Cell::new(ticks));
+        let counter = Rc::clone(&fuel);
+        runtime.set_interrupt_handler(Some(Box::new(move || match counter.get().checked_sub(1) {
+            Some(left) => {
+                counter.set(left);
+                false
+            }
+            None => true,
         })));
         let context = Context::full(&runtime).map_err(|error| error.to_string())?;
         let pending = Rc::new(RefCell::new(VecDeque::new()));
@@ -141,7 +139,7 @@ impl Guest {
             return Err("Respond to the pending capability before advancing".into());
         }
         loop {
-            if self.fuel.load(Ordering::Relaxed) == 0 {
+            if self.fuel.get() == 0 {
                 return Err("Execution interrupt budget exhausted".into());
             }
             if let Some(value) = self.output.borrow().as_ref() {
