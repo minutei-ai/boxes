@@ -97,10 +97,27 @@ export const FilesystemAction = Schema.Union([
     size: Schema.Int.check(Schema.isBetween({ minimum: 0, maximum: 16_777_216 })),
   }),
 ]);
-export const NetworkAction = Schema.Struct({
+export const NetworkHeaders = Schema.Record(
+  Schema.String.check(Schema.isPattern(/^[!#$%&'*+.^_`|~0-9A-Za-z-]{1,256}$/)),
+  Schema.String.check(Schema.isMaxLength(8192), Schema.isPattern(/^[\t\x20-\x7e\x80-\xff]*$/)),
+);
+export const NetworkRequest = Schema.Struct({
+  method: Schema.optionalKey(
+    Schema.Literals(["GET", "HEAD", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"]),
+  ),
+  headers: Schema.optionalKey(NetworkHeaders),
+  body: Schema.optionalKey(
+    Schema.Struct({
+      content: Schema.String.check(Schema.isMaxLength(1_398_104)),
+      encoding: ContentEncoding,
+    }),
+  ),
+});
+export const NetworkAction = NetworkRequest.mapFields((fields) => ({
+  ...fields,
   op: Schema.Literal("network.fetch"),
   url: Schema.String.check(Schema.isMaxLength(8192)),
-});
+}));
 export const ProcessListAction = Schema.Struct({
   op: Schema.Literal("process.list"),
   limit: Schema.Int.check(Schema.isBetween({ minimum: 1, maximum: 50 })),
@@ -472,6 +489,7 @@ export const Status = Schema.Struct({
 });
 export const NetworkResult = Schema.Struct({
   status: Schema.Int,
+  headers: NetworkHeaders,
   content: Schema.String,
   encoding: Schema.Literal("base64"),
 });

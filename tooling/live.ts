@@ -26,7 +26,7 @@ const configuration = await Effect.runPromise(
 );
 const id = `proof-${crypto.randomUUID()}`;
 const policy = {
-  networkHosts: ["example.com"],
+  networkHosts: ["example.com", "postman-echo.com"],
   interruptBudget: 1000,
   memoryBytes: 8_388_608,
   maxOutputBytes: 1_048_576,
@@ -126,6 +126,25 @@ const rust = Schema.decodeUnknownSync(RunRecord)(
 const network = Schema.decodeUnknownSync(NetworkResult)(
   await (await action({ op: "network.fetch", url: "https://example.com" })).json(),
 );
+const networkHead = Schema.decodeUnknownSync(NetworkResult)(
+  await (await action({ op: "network.fetch", url: "https://example.com", method: "HEAD" })).json(),
+);
+const networkPost = Schema.decodeUnknownSync(NetworkResult)(
+  await (
+    await action({
+      op: "network.fetch",
+      url: "https://postman-echo.com/post",
+      method: "POST",
+      headers: { "content-type": "text/plain", "x-agent": "cirro" },
+      body: { content: "cirro-http-native", encoding: "utf8" },
+    })
+  ).json(),
+);
+const postEcho = Schema.decodeUnknownSync(
+  Schema.fromJsonString(
+    Schema.Struct({ data: Schema.String, headers: Schema.Record(Schema.String, Schema.String) }),
+  ),
+)(Buffer.from(networkPost.content, "base64").toString());
 const denied = await action({ op: "network.fetch", url: "https://developers.cloudflare.com" });
 const page = Schema.decodeUnknownSync(ProcessPage)(
   await (await action({ op: "process.list", limit: 2, cursor: null })).json(),
@@ -531,6 +550,14 @@ const hostFs = Schema.decodeUnknownSync(RunRecord)(
 const disposed = await action({ op: "vm.dispose" });
 const afterDispose = await action({ op: "vm.status" });
 const checks = {
+  httpRequest:
+    networkPost.status === 200 &&
+    postEcho.data === "cirro-http-native" &&
+    postEcho.headers["x-agent"] === "cirro",
+  httpHead:
+    networkHead.status === 200 &&
+    networkHead.content === "" &&
+    typeof networkHead.headers["content-type"] === "string",
   largeFileBoundary:
     largeFileWritten.status === 200 &&
     Buffer.from(largeFileTail.content, "base64").equals(Buffer.alloc(16, 90)),

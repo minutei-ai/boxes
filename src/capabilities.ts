@@ -1,7 +1,7 @@
 import { Clock, Effect } from "effect";
 import { Capability, Fault, GuestAction, NetworkResult } from "./contracts";
 import { filesystem } from "./filesystem";
-import { readBounded } from "./http";
+import { HttpFailure, readBounded } from "./http";
 import { inspect, list } from "./process";
 import { open } from "./storage";
 import { fetchAuthorized } from "./network";
@@ -20,10 +20,30 @@ export const guestAction = Effect.fn("guest.action")(function* (
   if (action.op === "process.list") return yield* list(env, capability, action);
   if (action.op === "network.fetch") {
     const session = yield* open(env, capability.sandboxId);
-    const response = yield* fetchAuthorized(capability, session.head.policy, action.url);
+    const response = yield* fetchAuthorized(capability, session.head.policy, action.url, action);
+    const headers = Object.fromEntries(response.headers.entries());
+    if (
+      Object.values(headers).some((value) => value.length > 8192) ||
+      Object.keys(headers).length > 128 ||
+      Object.entries(headers).reduce(
+        (total, [key, value]) => total + key.length + value.length,
+        0,
+      ) > 65_536
+    ) {
+      yield* Effect.tryPromise({
+        try: () => response.body?.cancel() ?? Promise.resolve(),
+        catch: (cause) => new HttpFailure({ cause }),
+      });
+      return yield* new Fault({
+        code: "EFBIG",
+        status: 413,
+        message: "Response headers exceed the limit",
+      });
+    }
     const data = yield* readBounded(response.body, session.head.policy.maxOutputBytes);
     return {
       status: response.status,
+      headers,
       content: data.toString("base64"),
       encoding: "base64" as const,
     } satisfies typeof NetworkResult.Type;
