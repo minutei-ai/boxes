@@ -17,3 +17,5 @@ wasmi = { version = "=2.0.0", default-features = false, features = [
   "validate",
   "portable-dispatch",
 ] }
+
+url = "=2.5.8"

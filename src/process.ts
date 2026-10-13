@@ -7,10 +7,10 @@ import {
   RunMetadata,
   RunRecord,
   RunResult,
-  Program,
   ProcessListAction,
 } from "./contracts";
 import { load } from "./modules";
+import { archive } from "./code";
 import { execute } from "./execution";
 import { open, StorageFailure } from "./storage";
 import type { Env } from "./resources";
@@ -44,19 +44,7 @@ export const run = Effect.fn("process.run")(function* (
       status: 400,
       message: "Invalid canonical Wasm base64",
     });
-  const source = yield* Effect.sync(() => {
-    if (program.language === "wasm") return Buffer.from(program.source, "base64");
-    return Buffer.from(Schema.encodeSync(Schema.fromJsonString(Program))(program), "utf8");
-  });
-  const digest = yield* Effect.promise(() => crypto.subtle.digest("SHA-256", source));
-  const sourceHash = Buffer.from(digest).toString("hex");
-  yield* Effect.tryPromise({
-    try: () =>
-      env.OBJECTS.put(`sandboxes/${capability.sandboxId}/code/${sourceHash}`, source, {
-        onlyIf: { etagDoesNotMatch: "*" },
-      }),
-    catch: (cause) => new StorageFailure({ cause }),
-  });
+  const sourceHash = yield* archive(env, capability.sandboxId, program);
   const record: typeof RunRecord.Type = {
     id: action.id,
     status: "running",
@@ -83,15 +71,34 @@ export const run = Effect.fn("process.run")(function* (
       message: "Execution ID already exists; use process.get to inspect its confirmed state",
     });
   const output = yield* Effect.gen(function* () {
-    if (program.language === "shell") return yield* shell(env, capability, program.source);
+    if (program.language === "shell")
+      return {
+        program,
+        changed: false,
+        outcome: yield* shell(env, capability, program.source).pipe(Effect.result),
+      };
     return yield* execute(env, capability, program, session.head.policy);
   }).pipe(Effect.result);
+  const snapshot = yield* Effect.gen(function* () {
+    if (output._tag === "Success" && output.success.changed) {
+      const hash = yield* archive(env, capability.sandboxId, output.success.program);
+      return { ...record, sourceHash: hash };
+    }
+    return record;
+  });
   const finishedAt = yield* Clock.currentTimeMillis;
   const finished = yield* Effect.sync(() => {
-    if (output._tag === "Success")
-      return { ...record, status: "exited" as const, finishedAt, output: output.success };
-    console.error("Cirro guest failed", output.failure);
-    return { ...record, status: "failed" as const, finishedAt, output: null };
+    if (output._tag === "Success") {
+      if (output.success.outcome._tag === "Success")
+        return {
+          ...snapshot,
+          status: "exited" as const,
+          finishedAt,
+          output: output.success.outcome.success,
+        };
+      console.error("Cirro guest failed", output.success.outcome.failure);
+    } else console.error("Cirro guest failed", output.failure);
+    return { ...snapshot, status: "failed" as const, finishedAt, output: null };
   });
   const completed = yield* Effect.tryPromise({
     try: () =>

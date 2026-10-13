@@ -418,7 +418,7 @@ test("module source snapshots survive guest writes and a subsequent execution lo
   expect(second.sourceHash).not.toBe(first.sourceHash);
 });
 
-test("module loading respects permissions and rejects missing, malformed or computed imports before reserving a run", async () => {
+test("module loading respects permissions and rejects missing or malformed static imports before reserving a run", async () => {
   const token = await setup("module-errors");
   expect(
     (
@@ -457,15 +457,17 @@ test("module loading respects permissions and rejects missing, malformed or comp
       })
     ).status,
   ).toBe(422);
-  expect(
-    (
+  const denied = Schema.decodeUnknownSync(RunRecord)(
+    await (
       await act("module-errors", token, {
         op: "javascript.execute",
         id: "computed",
         source: "const name='./secret.mjs'; await import(name);",
       })
-    ).status,
-  ).toBe(422);
+    ).json(),
+  );
+  expect(denied.output?.exitCode).toBe(1);
+  expect(denied.output?.stderr).toContain("EACCES");
   expect(
     (
       await act("module-errors", token, {
@@ -523,6 +525,134 @@ test("compiler stack exhaustion cannot poison subsequent compilation in the same
     );
     expect(recovered.output?.result).toBe(42);
   }
+});
+
+test("computed imports load files created during execution and preserve ESM functions, cache and archived source", async () => {
+  const token = await setup("lazy-created");
+  const executed = Schema.decodeUnknownSync(RunRecord)(
+    await (
+      await act("lazy-created", token, {
+        op: "javascript.execute",
+        id: "created",
+        source:
+          "const path='/tmp/created.ts'; await tools.call({op:'filesystem.writeFile',path,content:'export function answer(): number {return 42;}',encoding:'utf8'}); const [first,second]=await Promise.all([import(path),import(path)]); console.log(first.answer(),first===second); await tools.call({op:'filesystem.writeFile',path,content:'export function answer(): number {return 99;}',encoding:'utf8'}); const cached=await import(path); console.log(cached.answer());",
+      })
+    ).json(),
+  );
+  expect(executed.output?.stdout).toBe("42 true\n42\n");
+  const bucket = await mf.getR2Bucket("OBJECTS");
+  const artifact = await bucket.get(`sandboxes/lazy-created/code/${executed.sourceHash}`);
+  if (artifact === null) return expect(artifact).not.toBeNull();
+  const graph = Schema.decodeUnknownSync(Schema.fromJsonString(ScriptProgram))(
+    await artifact.text(),
+  );
+  expect(graph.modules.length).toBe(2);
+  expect(
+    graph.modules.some(
+      (module) => module.name === "/tmp/created.ts" && module.source.includes("42"),
+    ),
+  ).toBe(true);
+  expect(
+    graph.modules
+      .filter((module) => module.name === "/tmp/created.ts")
+      .every((module) => !module.source.includes("return 99;")),
+  ).toBe(true);
+});
+
+test("literal imports are lazy, recover from missing modules and preserve primitive evaluation failures", async () => {
+  const token = await setup("lazy-failure");
+  const executed = Schema.decodeUnknownSync(RunRecord)(
+    await (
+      await act("lazy-failure", token, {
+        op: "javascript.execute",
+        id: "retry",
+        source:
+          "if(false) await import('./never.mjs'); const missing=await import('./later.mjs').catch(error=>error.code); console.log(missing); await tools.call({op:'filesystem.writeFile',path:'/tmp/later.mjs',content:'export const value=42;',encoding:'utf8'}); console.log((await import('./later.mjs')).value); await tools.call({op:'filesystem.writeFile',path:'/tmp/boom.mjs',content:'throw \\\"primitive boom\\\";',encoding:'utf8'}); const failure=await import('./boom.mjs').catch(error=>error); console.log(failure);",
+      })
+    ).json(),
+  );
+  expect(executed.output?.stdout).toBe("MODULE_NOT_FOUND\n42\nprimitive boom\n");
+});
+
+test("computed imports cannot bypass read permissions or platform boundaries", async () => {
+  const token = await setup("lazy-permission", ["execute"]);
+  const executed = Schema.decodeUnknownSync(RunRecord)(
+    await (
+      await act("lazy-permission", token, {
+        op: "javascript.evaluate",
+        id: "denied",
+        expression: "import('/tmp/private.mjs').catch(error=>error.code)",
+      })
+    ).json(),
+  );
+  expect(executed.output?.result).toBe("FORBIDDEN");
+  const full = Schema.decodeUnknownSync(TokenResponse)(
+    await (
+      await post("/v1/sandboxes/lazy-permission/capabilities", admin, {
+        permissions: ["execute", "read"],
+        expiresInSeconds: 3600,
+      })
+    ).json(),
+  ).token;
+  const platform = Schema.decodeUnknownSync(RunRecord)(
+    await (
+      await act("lazy-permission", full, {
+        op: "javascript.evaluate",
+        id: "platform",
+        expression: "import('cloudflare:workers').catch(error=>error.code)",
+      })
+    ).json(),
+  );
+  expect(platform.output?.result).toBe("MODULE_NOT_FOUND");
+});
+
+test("dynamic imports use import meta without capturing a shadowed global and support file URLs", async () => {
+  const token = await setup("lazy-meta");
+  expect(
+    (
+      await act("lazy-meta", token, {
+        op: "filesystem.writeFile",
+        path: "/tmp/a odd.mjs",
+        content: "export const value=42; export const location=import.meta.url;",
+        encoding: "utf8",
+      })
+    ).status,
+  ).toBe(200);
+  const executed = Schema.decodeUnknownSync(RunRecord)(
+    await (
+      await act("lazy-meta", token, {
+        op: "javascript.execute",
+        id: "meta",
+        source:
+          "const globalThis=0; const file='file:///tmp/a%20odd.mjs'; const loaded=await import(file); console.log(loaded.value,loaded.location);",
+      })
+    ).json(),
+  );
+  expect(executed.output?.stdout).toBe("42 file:///tmp/a%20odd.mjs\n");
+});
+
+test("an interrupted guest retains the sources it imported and its committed file writes", async () => {
+  const token = await setup("lazy-interrupted");
+  const executed = Schema.decodeUnknownSync(RunRecord)(
+    await (
+      await act("lazy-interrupted", token, {
+        op: "javascript.execute",
+        id: "loop",
+        source:
+          "await tools.call({op:'filesystem.writeFile',path:'/tmp/loaded.mjs',content:'export const answer=42;',encoding:'utf8'}); const path='/tmp/loaded.mjs'; await import(path); while(true) {}",
+      })
+    ).json(),
+  );
+  expect(executed.status).toBe("failed");
+  expect(
+    (await act("lazy-interrupted", token, { op: "filesystem.readFile", path: "/tmp/loaded.mjs" }))
+      .status,
+  ).toBe(200);
+  const bucket = await mf.getR2Bucket("OBJECTS");
+  const source = await bucket.get(`sandboxes/lazy-interrupted/code/${executed.sourceHash}`);
+  if (source === null) return expect(source).not.toBeNull();
+  const graph = Schema.decodeUnknownSync(Schema.fromJsonString(ScriptProgram))(await source.text());
+  expect(graph.modules.some((module) => module.name === "/tmp/loaded.mjs")).toBe(true);
 });
 
 test("guest cannot access network or host bindings", async () => {

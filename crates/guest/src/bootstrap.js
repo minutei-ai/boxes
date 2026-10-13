@@ -1,4 +1,21 @@
 const call = globalThis.__call;
+const moduleRequest = globalThis.__moduleRequest;
+delete globalThis.__moduleRequest;
+globalThis.__cirroImport = async (base, specifier, options) => {
+  const name = `${specifier}`;
+  if (options !== undefined) {
+    if (options === null || typeof options !== "object")
+      throw new TypeError("Import options must be an object");
+    const attributes = options.with;
+    if (attributes !== undefined) {
+      if (attributes === null || typeof attributes !== "object")
+        throw new TypeError("Import attributes must be an object");
+      if (Object.keys(attributes).length > 0)
+        throw new TypeError("Import attributes are not supported");
+    }
+  }
+  return await moduleRequest(base, name);
+};
 const finish = globalThis.__finish;
 const mode = globalThis.__mode;
 delete globalThis.__mode;

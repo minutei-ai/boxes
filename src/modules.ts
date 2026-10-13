@@ -1,17 +1,20 @@
-import { Effect, Match, Schema, Struct } from "effect";
+import { Clock, Effect, Match, Schema, Struct } from "effect";
 import compilerWasm from "cirro:compiler";
 import { createBindings } from "../dist/compiler/bindings";
 import {
   Capability,
   Fault,
   FileStat,
-  ModuleImports,
+  ModuleCompilation,
+  ModuleBatch,
+  ModuleRequest,
+  Path,
   ModuleSource,
   RunAction,
   ScriptProgram,
 } from "./contracts";
 import { requirePermission } from "./auth";
-import { kernelCall, read } from "./storage";
+import { kernelCall, open, read } from "./storage";
 import { Kernel } from "../dist/kernel/cirro_kernel";
 import type { Env } from "./resources";
 
@@ -110,10 +113,123 @@ export const load = Effect.fn("modules.load")(function* (
     ),
     Match.exhaustive,
   );
+  const entry = yield* Schema.decodeUnknownEffect(SourceEntry)({
+    language: root.language,
+    name: root.name,
+    source: root.source,
+  });
+  const modules = yield* graph(env, capability, kernel, entry, new Set(), root.mode);
+  return Schema.decodeUnknownSync(ScriptProgram)({
+    language: root.language,
+    entry: root.name,
+    mode: root.mode,
+    modules,
+  });
+});
+
+const SourceEntry = Schema.Struct({
+  language: ScriptProgram.fields.language,
+  name: Path,
+  source: ModuleSource.fields.source,
+});
+
+const resolve = Effect.fn("modules.resolve")(function* (
+  capability: typeof Capability.Type,
+  kernel: Kernel,
+  base: string,
+  specifier: string,
+  scheduled: ReadonlySet<string>,
+) {
+  yield* requirePermission(capability, "read");
+  const local = yield* Effect.gen(function* () {
+    if (!specifier.startsWith("file:")) return specifier;
+    const url = yield* Effect.try({
+      try: () => new URL(specifier),
+      catch: () => new Fault({ code: "EINVAL", status: 422, message: "Invalid module URL" }),
+    });
+    if (url.host && url.host !== "localhost")
+      return yield* new Fault({
+        code: "FORBIDDEN",
+        status: 403,
+        message: "Remote file authorities are not allowed",
+      });
+    if (url.search || url.hash)
+      return yield* new Fault({
+        code: "ENOTSUP",
+        status: 422,
+        message: "Module URL query and fragment identities are not implemented",
+      });
+    return yield* Effect.try({
+      try: () => decodeURIComponent(url.pathname),
+      catch: () =>
+        new Fault({ code: "EINVAL", status: 422, message: "Invalid module URL encoding" }),
+    });
+  });
+  if (!local.startsWith("/") && !local.startsWith("./") && !local.startsWith("../"))
+    return yield* new Fault({
+      code: "MODULE_NOT_FOUND",
+      status: 422,
+      message: `Package or platform import is unavailable: ${specifier}`,
+    });
+  const parent = base.slice(0, base.lastIndexOf("/") + 1);
+  const path = yield* kernelCall(() => kernel.canonical(local, parent));
+  if (scheduled.has(path)) return { cached: true as const, path };
+  const candidates = [path];
+  if (!/\.(m?js|m?ts)$/.test(path))
+    candidates.push(
+      `${path}.js`,
+      `${path}.mjs`,
+      `${path}.ts`,
+      `${path}/index.js`,
+      `${path}/index.mjs`,
+      `${path}/index.ts`,
+    );
+  const found: (typeof FileStat.Type)[] = [];
+  while (candidates.length > 0 && found.length === 0) {
+    const candidate = candidates.shift();
+    if (candidate === undefined)
+      return yield* new Fault({
+        code: "INTERNAL",
+        status: 500,
+        message: "Missing module candidate",
+      });
+    const result = yield* kernelCall(() => kernel.stat(candidate, true)).pipe(Effect.result);
+    if (result._tag === "Failure") {
+      if (result.failure._tag === "Fault" && result.failure.code === "ENOENT") continue;
+      return yield* result.failure;
+    }
+    const stat = yield* Schema.decodeUnknownEffect(Schema.fromJsonString(FileStat))(result.success);
+    if (stat.kind === "file") found.push(stat);
+  }
+  const stat = found[0];
+  if (stat === undefined)
+    return yield* new Fault({
+      code: "MODULE_NOT_FOUND",
+      status: 422,
+      message: `Cannot resolve ${specifier} from ${base}`,
+    });
+  if (stat.size > 1_048_576)
+    return yield* new Fault({
+      code: "EFBIG",
+      status: 413,
+      message: "Module source exceeds its byte budget",
+    });
+  if (scheduled.has(stat.path)) return { cached: true as const, path: stat.path };
+  return { cached: false as const, path: stat.path, stat };
+});
+
+const graph = Effect.fn("modules.graph")(function* (
+  env: Env,
+  capability: typeof Capability.Type,
+  kernel: Kernel,
+  root: typeof SourceEntry.Type,
+  known: ReadonlySet<string>,
+  mode: (typeof Header.Type)["mode"],
+) {
   const queue = [root];
   const modules = new Map<string, typeof ModuleSource.Type>();
-  const scheduled = new Set([root.name]);
-  const metadata = { language: root.language, entry: root.name, mode: root.mode };
+  const scheduled = new Set([...known, root.name]);
+  const metadata = { language: root.language, entry: root.name, mode };
   const budget = {
     bytes:
       new TextEncoder().encode(Schema.encodeUnknownSync(Schema.fromJsonString(Header))(metadata))
@@ -133,74 +249,22 @@ export const load = Effect.fn("modules.load")(function* (
         compiler.initSync({ module: compilerWasm });
         if (next.language === "typescript") {
           const source = compiler.transpile(next.source);
-          return { source, raw: compiler.imports(source) };
+          return compiler.compile_module(source, next.name);
         }
-        return { source: next.source, raw: compiler.imports(next.source) };
+        return compiler.compile_module(next.source, next.name);
       },
       catch: (cause) => new Fault({ code: "COMPILE_FAILED", status: 422, message: String(cause) }),
     });
-    const source = compiled.source;
-    const names = yield* Schema.decodeUnknownEffect(Schema.fromJsonString(ModuleImports))(
-      compiled.raw,
+    const parsed = yield* Schema.decodeUnknownEffect(Schema.fromJsonString(ModuleCompilation))(
+      compiled,
     );
+    const source = parsed.source;
+    const names = parsed.imports;
     const edges = yield* Effect.forEach(names, (specifier) =>
       Effect.gen(function* () {
-        yield* requirePermission(capability, "read");
-        if (
-          !specifier.startsWith("/") &&
-          !specifier.startsWith("./") &&
-          !specifier.startsWith("../")
-        )
-          return yield* new Fault({
-            code: "MODULE_NOT_FOUND",
-            status: 422,
-            message: `Package or platform import is unavailable: ${specifier}`,
-          });
-        const parent = next.name.slice(0, next.name.lastIndexOf("/") + 1);
-        const path = yield* kernelCall(() => kernel.canonical(specifier, parent));
-        if (scheduled.has(path)) return { specifier, target: path };
-        const candidates = [path];
-        if (!/\.(m?js|m?ts)$/.test(path))
-          candidates.push(
-            `${path}.js`,
-            `${path}.mjs`,
-            `${path}.ts`,
-            `${path}/index.js`,
-            `${path}/index.mjs`,
-            `${path}/index.ts`,
-          );
-        const found: (typeof FileStat.Type)[] = [];
-        while (candidates.length > 0 && found.length === 0) {
-          const candidate = candidates.shift();
-          if (candidate === undefined)
-            return yield* new Fault({
-              code: "INTERNAL",
-              status: 500,
-              message: "Missing module candidate",
-            });
-          const result = yield* kernelCall(() => kernel.stat(candidate, true)).pipe(Effect.result);
-          if (result._tag === "Failure") {
-            if (result.failure._tag === "Fault" && result.failure.code === "ENOENT") continue;
-            return yield* result.failure;
-          }
-          const stat = yield* Schema.decodeUnknownEffect(Schema.fromJsonString(FileStat))(
-            result.success,
-          );
-          if (stat.kind === "file") found.push(stat);
-        }
-        const stat = found[0];
-        if (stat === undefined)
-          return yield* new Fault({
-            code: "MODULE_NOT_FOUND",
-            status: 422,
-            message: `Cannot resolve ${specifier} from ${next.name}`,
-          });
-        if (stat.size > 1_048_576)
-          return yield* new Fault({
-            code: "EFBIG",
-            status: 413,
-            message: "Module source exceeds its byte budget",
-          });
+        const target = yield* resolve(capability, kernel, next.name, specifier, scheduled);
+        if (target.cached) return { specifier, target: target.path };
+        const stat = target.stat;
         if (!scheduled.has(stat.path)) {
           if (scheduled.size >= 128)
             return yield* new Fault({
@@ -218,14 +282,12 @@ export const load = Effect.fn("modules.load")(function* (
           if (/\.m?ts$/.test(stat.path))
             queue.push({
               language: "typescript",
-              mode: root.mode,
               name: stat.path,
               source: content,
             });
           else
             queue.push({
               language: "javascript",
-              mode: root.mode,
               name: stat.path,
               source: content,
             });
@@ -246,8 +308,43 @@ export const load = Effect.fn("modules.load")(function* (
       });
     modules.set(next.name, module);
   }
-  return Schema.decodeUnknownSync(ScriptProgram)({
-    ...metadata,
-    modules: Array.from(modules.values()),
+  return Array.from(modules.values());
+});
+
+export const dynamic = Effect.fn("modules.dynamic")(function* (
+  env: Env,
+  capability: typeof Capability.Type,
+  request: typeof ModuleRequest.Type,
+) {
+  const now = yield* Clock.currentTimeMillis;
+  if (capability.expiresAt <= now)
+    return yield* new Fault({ code: "UNAUTHORIZED", status: 401, message: "Capability expired" });
+  const session = yield* open(env, capability.sandboxId);
+  const known = new Set(request.known);
+  const target = yield* resolve(capability, session.kernel, request.base, request.specifier, known);
+  if (target.cached) return { entry: target.path, modules: [] };
+  if (known.size >= 128)
+    return yield* new Fault({
+      code: "EFBIG",
+      status: 413,
+      message: "Module graph exceeds its module budget",
+    });
+  const data = yield* read(env, capability.sandboxId, session.kernel, target.path);
+  const source = yield* Effect.try({
+    try: () => new TextDecoder("utf-8", { fatal: true }).decode(data),
+    catch: () => new Fault({ code: "EILSEQ", status: 422, message: "Module source must be UTF-8" }),
   });
+  const language = Match.value(/\.m?ts$/.test(target.path)).pipe(
+    Match.when(true, () => "typescript" as const),
+    Match.orElse(() => "javascript" as const),
+  );
+  const modules = yield* graph(
+    env,
+    capability,
+    session.kernel,
+    { language, name: target.path, source },
+    known,
+    "module",
+  );
+  return Schema.decodeUnknownSync(ModuleBatch)({ entry: target.path, modules });
 });

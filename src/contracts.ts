@@ -103,6 +103,12 @@ export const RunAction = Schema.Union([
 export const ModuleImports = Schema.Array(Schema.String.check(Schema.isMaxLength(4096))).check(
   Schema.isMaxLength(128),
 );
+export const ModuleCompilation = Schema.Struct({ source: ScriptSource, imports: ModuleImports });
+export const ModuleRequest = Schema.Struct({
+  base: Path,
+  specifier: Path,
+  known: Schema.Array(Path).check(Schema.isMaxLength(128)),
+});
 export const ModuleSource = Schema.Struct({
   name: Path,
   source: ScriptSource,
@@ -115,6 +121,10 @@ export const ScriptProgram = Schema.Struct({
   entry: Path,
   mode: Schema.Literals(["function", "module", "evaluate"]),
   modules: Schema.Array(ModuleSource).check(Schema.isMinLength(1), Schema.isMaxLength(128)),
+});
+export const ModuleBatch = Schema.Struct({
+  entry: Path,
+  modules: Schema.Array(ModuleSource).check(Schema.isMaxLength(128)),
 });
 export const Program = Schema.Union([
   ScriptProgram,

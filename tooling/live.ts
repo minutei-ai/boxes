@@ -191,6 +191,25 @@ const compilerRecovered = Schema.decodeUnknownSync(RunRecord)(
     })
   ).json(),
 );
+const lazy = Schema.decodeUnknownSync(RunRecord)(
+  await (
+    await action({
+      op: "javascript.execute",
+      id: "lazy",
+      source:
+        "const path='/tmp/lazy.ts'; await tools.call({op:'filesystem.writeFile',path,content:'export function answer(): number {return 42;}',encoding:'utf8'}); const [a,b]=await Promise.all([import(path),import(path)]); console.log(a.answer(),a===b); await tools.call({op:'filesystem.writeFile',path,content:'export function answer(): number {return 99;}',encoding:'utf8'}); console.log((await import(path)).answer());",
+    })
+  ).json(),
+);
+const lazyFailure = Schema.decodeUnknownSync(RunRecord)(
+  await (
+    await action({
+      op: "javascript.evaluate",
+      id: "lazy-failure",
+      expression: "import('/tmp/absent.mjs').catch(error=>error.code)",
+    })
+  ).json(),
+);
 const alive = await action({ op: "vm.status" });
 const disposed = await action({ op: "vm.dispose" });
 const afterDispose = await action({ op: "vm.status" });
@@ -227,6 +246,8 @@ const checks = {
     compilerDeep.status === 422 &&
     compilerDeepAgain.status === 422 &&
     compilerRecovered.output?.result === 42,
+  lazyModuleExecution: lazy.output?.stdout === "42 true\n42\n",
+  lazyModuleFailure: lazyFailure.output?.result === "MODULE_NOT_FOUND",
   disposal: disposed.status === 200 && afterDispose.status === 404,
 };
 const report = {

@@ -1,5 +1,6 @@
+use rquickjs::function::This;
 use rquickjs::{Context, Ctx, Exception, Function, Module, Persistent, Runtime};
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 use std::cell::{Cell, RefCell};
 use std::collections::VecDeque;
 use std::rc::Rc;
@@ -8,8 +9,20 @@ use wasm_bindgen::prelude::*;
 mod binary;
 mod modules;
 
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+struct HostError {
+    error: String,
+    message: String,
+}
+
+enum RequestKind {
+    Action(String),
+    Module { base: String, specifier: String },
+}
+
 struct Request {
-    action: String,
+    kind: RequestKind,
     resolve: Persistent<Function<'static>>,
     reject: Persistent<Function<'static>>,
 }
@@ -17,8 +30,17 @@ struct Request {
 #[derive(Serialize)]
 #[serde(tag = "kind", rename_all = "lowercase")]
 enum Step<'a> {
-    Request { action: &'a str },
-    Done { output: &'a str },
+    Request {
+        action: &'a str,
+    },
+    Module {
+        base: &'a str,
+        specifier: &'a str,
+        known: Vec<&'a str>,
+    },
+    Done {
+        output: &'a str,
+    },
 }
 
 #[wasm_bindgen]
@@ -26,6 +48,7 @@ pub struct Guest {
     pending: Rc<RefCell<VecDeque<Request>>>,
     active: Option<Request>,
     output: Rc<RefCell<Option<String>>>,
+    registry: Rc<RefCell<modules::Registry>>,
     context: Context,
     runtime: Runtime,
     fuel: Rc<Cell<usize>>,
@@ -55,11 +78,14 @@ impl Guest {
         }
         let program: modules::Program =
             serde_json::from_str(program).map_err(|error| error.to_string())?;
-        let (resolver, loader) = program.loaders()?;
+        let registry = Rc::new(RefCell::new(modules::Registry::new(program)?));
         let runtime = Runtime::new().map_err(|error| error.to_string())?;
         runtime.set_memory_limit(memory);
         runtime.set_max_stack_size(512 * 1024);
-        runtime.set_loader(resolver, loader);
+        runtime.set_loader(
+            modules::Modules(Rc::clone(&registry)),
+            modules::Modules(Rc::clone(&registry)),
+        );
         let fuel = Rc::new(Cell::new(ticks));
         let counter = Rc::clone(&fuel);
         runtime.set_interrupt_handler(Some(Box::new(move || match counter.get().checked_sub(1) {
@@ -75,6 +101,9 @@ impl Guest {
         let queue = Rc::downgrade(&pending);
         let completed = Rc::downgrade(&output);
         let requests = Rc::new(Cell::new(0usize));
+        let module_requests = Rc::clone(&requests);
+        let module_queue = Rc::downgrade(&pending);
+        let module_registry = Rc::downgrade(&registry);
         context.with(|ctx| {
             let call = Function::new(ctx.clone(), move |ctx: Ctx<'_>, action: String| {
                 if action.len() > 1_048_576 || requests.get() >= 256 {
@@ -89,13 +118,47 @@ impl Guest {
                 requests.set(requests.get() + 1);
                 let (promise, resolve, reject) = ctx.promise()?;
                 queue.borrow_mut().push_back(Request {
-                    action,
+                    kind: RequestKind::Action(action),
                     resolve: Persistent::save(&ctx, resolve),
                     reject: Persistent::save(&ctx, reject),
                 });
                 Ok(Persistent::save(&ctx, promise))
             })
             .map_err(|error| failure(&ctx, error))?;
+            let module_call = Function::new(
+                ctx.clone(),
+                move |ctx: Ctx<'_>, base: String, specifier: String| {
+                    if base.len() > 4096 || specifier.len() > 4096 || module_requests.get() >= 256 {
+                        return Err(Exception::throw_message(
+                            &ctx,
+                            "Module request budget exceeded",
+                        ));
+                    }
+                    module_requests.set(module_requests.get() + 1);
+                    let registry = module_registry
+                        .upgrade()
+                        .ok_or_else(|| Exception::throw_message(&ctx, "Guest disposed"))?;
+                    let cached = registry.borrow().cached(&base, &specifier);
+                    if let Some(target) = cached {
+                        return Module::import(&ctx, target)
+                            .map(|promise| Persistent::save(&ctx, promise));
+                    }
+                    let queue = module_queue
+                        .upgrade()
+                        .ok_or_else(|| Exception::throw_message(&ctx, "Guest disposed"))?;
+                    let (promise, resolve, reject) = ctx.promise()?;
+                    queue.borrow_mut().push_back(Request {
+                        kind: RequestKind::Module { base, specifier },
+                        resolve: Persistent::save(&ctx, resolve),
+                        reject: Persistent::save(&ctx, reject),
+                    });
+                    Ok(Persistent::save(&ctx, promise))
+                },
+            )
+            .map_err(|error| failure(&ctx, error))?;
+            ctx.globals()
+                .set("__moduleRequest", module_call)
+                .map_err(|error| failure(&ctx, error))?;
             let finish = Function::new(ctx.clone(), move |ctx: Ctx<'_>, value: String| {
                 if value.len() > max_output {
                     return Err(Exception::throw_message(
@@ -120,7 +183,7 @@ impl Guest {
                 .set("__maxOutput", max_output)
                 .map_err(|error| failure(&ctx, error))?;
             ctx.globals()
-                .set("__mode", program.mode.name())
+                .set("__mode", registry.borrow().mode().name())
                 .map_err(|error| failure(&ctx, error))?;
             Module::evaluate(ctx.clone(), "entry", include_str!("bootstrap.js"))
                 .map_err(|error| failure(&ctx, error))?;
@@ -130,6 +193,7 @@ impl Guest {
             pending,
             active: None,
             output,
+            registry,
             context,
             runtime,
             fuel,
@@ -149,11 +213,27 @@ impl Guest {
                 return serde_json::to_string(&Step::Done { output: value })
                     .map_err(|error| error.to_string());
             }
-            if let Some(request) = self.pending.borrow_mut().pop_front() {
-                let value = serde_json::to_string(&Step::Request {
-                    action: &request.action,
-                })
-                .map_err(|error| error.to_string())?;
+            let request = self.pending.borrow_mut().pop_front();
+            if let Some(request) = request {
+                if let RequestKind::Module { base, specifier } = &request.kind {
+                    let target = self.registry.borrow().cached(base, specifier);
+                    if let Some(target) = target {
+                        self.context
+                            .with(|ctx| finish_import(&ctx, request, target))?;
+                        continue;
+                    }
+                }
+                let registry = self.registry.borrow();
+                let event = match &request.kind {
+                    RequestKind::Action(action) => Step::Request { action },
+                    RequestKind::Module { base, specifier } => Step::Module {
+                        base,
+                        specifier,
+                        known: registry.names(),
+                    },
+                };
+                let value = serde_json::to_string(&event).map_err(|error| error.to_string())?;
+                drop(registry);
                 self.active = Some(request);
                 return Ok(value);
             }
@@ -181,6 +261,9 @@ impl Guest {
         }
         let request = self.active.take().ok_or("No pending capability request")?;
         self.context.with(|ctx| {
+            if rejected && matches!(request.kind, RequestKind::Module { .. }) {
+                return reject_import(&ctx, request, value);
+            }
             let function = if rejected {
                 request.reject
             } else {
@@ -192,6 +275,58 @@ impl Guest {
                 .map_err(|error| failure(&ctx, error))
         })
     }
+    fn settle_module(&mut self, value: &str) -> Result<(), String> {
+        if value.len() > 8_388_608 {
+            return Err("Module response byte budget exceeded".into());
+        }
+        let batch: modules::Batch =
+            serde_json::from_str(value).map_err(|error| error.to_string())?;
+        let request = self.active.take().ok_or("No pending module request")?;
+        let target = match &request.kind {
+            RequestKind::Module { base, specifier } => {
+                self.registry.borrow_mut().install(base, specifier, batch)
+            }
+            RequestKind::Action(_) => Err("Pending request is not a module import".into()),
+        };
+        self.context.with(|ctx| match target {
+            Ok(target) => finish_import(&ctx, request, target),
+            Err(message) => {
+                let value = serde_json::json!({"error":"EFBIG","message":message}).to_string();
+                reject_import(&ctx, request, &value)
+            }
+        })
+    }
+}
+
+fn reject_import(ctx: &Ctx<'_>, request: Request, value: &str) -> Result<(), String> {
+    let data: HostError = serde_json::from_str(value).map_err(|error| error.to_string())?;
+    let error =
+        Exception::from_message(ctx.clone(), &data.message).map_err(|error| failure(ctx, error))?;
+    error
+        .as_object()
+        .set("code", data.error)
+        .map_err(|error| failure(ctx, error))?;
+    request
+        .reject
+        .restore(ctx)
+        .and_then(|callback| callback.call::<_, ()>((error,)))
+        .map_err(|error| failure(ctx, error))
+}
+
+fn finish_import(ctx: &Ctx<'_>, request: Request, target: String) -> Result<(), String> {
+    let resolve = request
+        .resolve
+        .restore(ctx)
+        .map_err(|error| failure(ctx, error))?;
+    let reject = request
+        .reject
+        .restore(ctx)
+        .map_err(|error| failure(ctx, error))?;
+    let promise = Module::import(ctx, target).map_err(|error| failure(ctx, error))?;
+    promise
+        .then()
+        .and_then(|then| then.call::<_, ()>((This(promise.clone()), resolve, reject)))
+        .map_err(|error| failure(ctx, error))
 }
 
 #[wasm_bindgen]
@@ -208,6 +343,22 @@ impl Guest {
 
     pub fn step(&mut self) -> Result<String, JsValue> {
         self.advance().map_err(|error| JsValue::from_str(&error))
+    }
+
+    pub fn respond_module(&mut self, value: &str) -> Result<(), JsValue> {
+        self.settle_module(value)
+            .map_err(|error| JsValue::from_str(&error))
+    }
+
+    pub fn program(&self) -> Result<String, JsValue> {
+        self.registry
+            .borrow()
+            .program()
+            .map_err(|error| JsValue::from_str(&error))
+    }
+
+    pub fn revision(&self) -> usize {
+        self.registry.borrow().revision
     }
 
     pub fn respond(&mut self, value: &str, rejected: bool) -> Result<(), JsValue> {
