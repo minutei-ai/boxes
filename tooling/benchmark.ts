@@ -16,7 +16,12 @@ const post = (path: string, token: string, body: unknown) =>
   });
 const created = await post("/v1/sandboxes", "cirro-local-test-credential", {
   id: "bench",
-  policy: { cpuMs: 1000, maxOutputBytes: 1_048_576, networkHosts: [] },
+  policy: {
+    interruptBudget: 1000,
+    memoryBytes: 8_388_608,
+    maxOutputBytes: 1_048_576,
+    networkHosts: [],
+  },
 });
 if (created.status !== 201) process.exit(1);
 const minted = await post("/v1/sandboxes/bench/capabilities", "cirro-local-test-credential", {
@@ -95,7 +100,9 @@ const report = {
   },
   artifactBytes: {
     javascript: (await stat(join(import.meta.dir, "../dist/worker/index.js"))).size,
-    wasm: (await stat(join(import.meta.dir, "../dist/worker/cirro_kernel_bg.wasm"))).size,
+    kernelWasm: (await stat(join(import.meta.dir, "../dist/worker/cirro_kernel_bg.wasm"))).size,
+    guestWasm: (await stat(join(import.meta.dir, "../dist/worker/cirro_guest_bg.wasm"))).size,
+    compilerWasm: (await stat(join(import.meta.dir, "../dist/worker/cirro_compiler_bg.wasm"))).size,
   },
   measurements: {
     status,

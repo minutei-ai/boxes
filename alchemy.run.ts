@@ -1,7 +1,46 @@
 import * as Alchemy from "alchemy";
 import * as Cloudflare from "alchemy/Cloudflare";
-import { Effect, Layer, Schema } from "effect";
+import { Clock, Config, Effect, Layer, Redacted, Schema } from "effect";
 import { bucket, worker } from "./src/resources";
+import { MigrationReceipt } from "./src/contracts";
+
+const Deployment = Schema.Struct({
+  deployedAt: Schema.Int,
+  url: Schema.UndefinedOr(Schema.String),
+});
+class MigrationRequestFailure extends Schema.TaggedError<MigrationRequestFailure>()(
+  "MigrationRequestFailure",
+  { cause: Schema.Unknown },
+) {}
+const migrate = Alchemy.Action(
+  "ExecutionPolicyV2",
+  Effect.gen(function* () {
+    const key = yield* Config.Redacted("CIRRO_API_KEY");
+    return Effect.fn("deployment.migrateExecutionPolicy")(function* (
+      input: typeof Deployment.Type,
+    ) {
+      const url = yield* Schema.decodeUnknownEffect(Schema.String)(input.url);
+      const response = yield* Effect.tryPromise({
+        try: () =>
+          fetch(new URL("/v1/migrations/execution-policy-v2", url), {
+            method: "POST",
+            headers: { authorization: `Bearer ${Redacted.value(key)}` },
+            signal: AbortSignal.timeout(120_000),
+          }),
+        catch: (cause) => new MigrationRequestFailure({ cause }),
+      });
+      if (!response.ok) return yield* new MigrationRequestFailure({ cause: response.status });
+      const text = yield* Effect.tryPromise({
+        try: () => response.text(),
+        catch: (cause) => new MigrationRequestFailure({ cause }),
+      });
+      const receipt = yield* Schema.decodeUnknownEffect(Schema.fromJsonString(MigrationReceipt))(
+        text,
+      );
+      return { ...receipt, deployedAt: input.deployedAt };
+    });
+  }),
+);
 
 const state = Layer.unwrap(
   Alchemy.Stage.pipe(
@@ -18,6 +57,8 @@ export default Cirro.make(
   Effect.gen(function* () {
     const service = yield* worker;
     const objects = yield* bucket;
+    const deployedAt = yield* Clock.currentTimeMillis;
+    yield* migrate({ deployedAt, url: service.url });
     return { url: service.url, bucketName: objects.bucketName };
   }),
 );

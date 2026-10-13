@@ -1,5 +1,5 @@
 import { Effect, Schema } from "effect";
-import { Kernel } from "../dist/wasm/cirro_kernel";
+import { Kernel } from "../dist/kernel/cirro_kernel";
 import { Chunks, Fault, FileStat, Head } from "./contracts";
 import type { Env } from "./resources";
 

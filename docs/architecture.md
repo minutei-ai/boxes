@@ -10,19 +10,23 @@ The HTTP Worker authenticates the administrator or verifies an HMAC capability. 
 
 A write validates its filesystem mutation, uploads all required blocks with bounded concurrency, then publishes the new head only if the original ETag still matches. The ETag operation is the visibility boundary. A failure before it leaves the previous filesystem visible. A failure after a successful head write does not undo the committed operation. A racing writer gets a conflict instead of a silent lost update. Read operations retain their original manifest and read its immutable blocks, yielding a consistent snapshot.
 
-Rename modifies the metadata tree and publishes one new root; it does not rewrite file content. Shell scripts retain one private kernel and publish their filesystem changes in one commit after command execution. JavaScript/Python tools commit each filesystem action independently. Consequently, a failed guest can have already committed files, while a rejected shell commit leaves its private changes invisible.
+Rename modifies the metadata tree and publishes one new root; it does not rewrite file content. Shell scripts retain one private kernel and publish their filesystem changes in one commit after command execution. JavaScript/TypeScript tools commit each filesystem action independently. Consequently, a failed guest can have already committed files, while a rejected shell commit leaves its private changes invisible.
 
 Full bounded metadata is loaded per operation. That is acceptable for the initial validated workloads but is not proof of performance at 16,384 files. Paged metadata, random-access writes, hard links, ownership/timestamps and safe block reclamation remain unimplemented.
 
 ## Guest boundary
 
-The native Worker Loader receives JavaScript/Python/Wasm modules, explicit CPU/subrequest limits and `globalOutbound: null`. JavaScript and Python receive only a loopback `Guest` service and an output limit. Loopback props retain the trusted sandbox ID, expiration and permissions; props and host environment are inaccessible to the guest. Every tool call validates the action, checks expiry/permission and loads the current sandbox state.
+One ordinary Worker loads precompiled Rust/Wasm modules for its filesystem kernel, QuickJS, Oxc and Wasmi. JavaScript runs in a fresh QuickJS runtime with its own heap, stack ceiling, interrupt budget and microtask ceiling. TypeScript is transpiled by Oxc before entering that runtime. Guest Wasm is interpreted with Wasmi fuel and memory limits; it is never dynamically compiled using the platform WebAssembly API.
+
+Rust exposes a step/respond protocol for asynchronous capability calls. Effect validates each requested action and executes it using the original trusted sandbox identity, expiration and permission set. Guest JavaScript receives only JSON responses and no host JavaScript references. Capability functions resolve guest promises through native QuickJS handles; dropping an execution releases its pending handles and runtime. No native platform imports, Worker environment, R2 binding or direct network function exist inside QuickJS.
+
+`interruptBudget` measures interrupt callbacks, not CPU milliseconds. Wasmi uses 1,000 fuel units per budget unit. Memory limits are per guest; the Cloudflare Worker also retains its native aggregate CPU/memory limits. QuickJS has a 512 KiB stack ceiling, 10,000 microtasks and 256 capability requests. Serialized output is bounded. Python execution is explicitly unavailable until a bounded interpreter replaces the removed Dynamic Worker path.
 
 The tool contract excludes administration, process creation and lifecycle mutation. Network calls require both the `network` grant and an exact sandbox policy hostname. Only HTTPS GET is implemented. URL credentials, nonstandard ports and IP destinations are rejected. Redirects are returned without following them. Network bodies and request/guest responses are read through bounded native Effect streams.
 
 Standalone Wasm receives no imports or bindings. Its module must export `run()`. This boundary is tested with an actually compiled Rust guest. POSIX/WASI programs require an additional syscall execution layer and are not supported yet.
 
-The shell is a trusted bounded interpreter, not arbitrary native process execution. Rust owns parsing and text commands, while Effect orchestrates filesystem calls and commits. It is not a complete POSIX shell. Node/Python standard filesystem libraries use their platform runtime, not Cirro's R2 mount; durable access uses the scoped RPC API.
+The shell is a trusted bounded interpreter, not arbitrary native process execution. Rust owns parsing and text commands, while Effect orchestrates filesystem calls and commits. It is not a complete POSIX shell. Durable access uses the scoped capability API; Node filesystem compatibility and Python execution remain pending.
 
 ## Execution receipts
 
@@ -30,10 +34,10 @@ The shell is a trusted bounded interpreter, not arbitrary native process executi
 
 A failed transport does not authorize repeating the same execution or deleting its receipt. An interrupted host can leave a `running` receipt even if the guest has stopped. There is no crash recovery, durable spawn, signal handling or reliable cancellation contract yet. Results and filesystem writes are not one cross-object transaction.
 
-Disposal publishes a tombstone in the same head and invalidates future reads/writes/tool calls. It does not reclaim data or instantly terminate already-running guest CPU. Policy changes use the same root commit, require management permission and preserve files. CPU changes apply to subsequently created isolates; subsequent tool calls read the current network policy.
+Disposal publishes a tombstone in the same head and invalidates future reads/writes/tool calls. It does not reclaim data or instantly terminate already-running guest CPU. Policy changes use the same root commit, require management permission and preserve files. Execution-budget changes apply to subsequently created guest runtimes; subsequent tool calls read the current network policy.
 
 ## Infrastructure and production gate
 
-Alchemy declares one sandbox Worker, its R2 object bucket and the native Worker Loader. Runtime source imports provisioning types only as erased imports. Local integration tests use the installed Miniflare native configuration and actual workerd/R2. The tests also invoke the actual local HTTP server.
+Alchemy declares one sandbox Worker and its R2 object bucket. Its deployment action scans sandbox heads in bounded pages and conditionally migrates version 1 policies to version 2 immediately after Worker upload. The action runs on every deployment using its deployment timestamp input; the action depends on the deployed Worker URL. Version 2 runtime code accepts only the current schema. During the initial cutover, old heads reject runtime reads until the deployment migration converts them. The migration endpoint uses the native R2 binding because the installed Alchemy HTTP bucket client does not forward conditional PUT options. The migration preserves manifests, creation times and tombstones; a concurrent head change aborts migration instead of overwriting it. Runtime source imports provisioning types only as erased imports. Local integration tests use the installed Miniflare native configuration and actual workerd/R2. The tests also invoke the actual local HTTP server.
 
-Production plan/deploy is currently blocked by the selected `default` Alchemy profile requiring Cloudflare OAuth scopes. A noninteractive refresh returned `login failed`. No deployed endpoint, remote CPU enforcement, production latency or successful CI run is claimed by local test results.
+The user selected the `minutei` Alchemy profile for development and deployment. Local test results do not establish deployed behavior, remote CPU enforcement, production latency or a successful CI run; record those gates separately after executing them.

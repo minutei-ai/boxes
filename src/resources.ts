@@ -9,7 +9,8 @@ export const worker = Effect.gen(function* () {
     main: new URL("../dist/worker/index.js", import.meta.url).pathname,
     bundle: false,
     compatibility: { date: "2026-10-06", flags: ["nodejs_compat", "enable_request_signal"] },
-    env: { OBJECTS: objects, LOADER: Cloudflare.WorkerLoader("LOADER"), API_KEY: key },
+    limits: { cpuMs: 30_000 },
+    env: { OBJECTS: objects, API_KEY: key },
   });
 });
 export type Env = Cloudflare.InferEnv<Effect.Success<typeof worker>>;

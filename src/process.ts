@@ -9,23 +9,27 @@ import {
   RunResult,
   ProcessListAction,
 } from "./contracts";
-import { readBounded } from "./http";
+import { execute } from "./execution";
 import { open, StorageFailure } from "./storage";
 import type { Env } from "./resources";
 import { shell } from "./shell";
-import guestSource from "../dist/guest-source.json";
 
 export class ExecutionFailure extends Schema.TaggedError<ExecutionFailure>()("ExecutionFailure", {
   cause: Schema.Unknown,
 }) {}
 export const run = Effect.fn("process.run")(function* (
   env: Env,
-  ctx: ExecutionContext,
   capability: typeof Capability.Type,
   action: typeof RunAction.Type,
 ) {
   yield* requirePermission(capability, "execute");
   const session = yield* open(env, capability.sandboxId);
+  if (action.language === "python")
+    return yield* new Fault({
+      code: "UNSUPPORTED_RUNTIME",
+      status: 501,
+      message: "Python interpreter is not available in the standard Worker",
+    });
   const startedAt = yield* Clock.currentTimeMillis;
   const key = `sandboxes/${capability.sandboxId}/runs/${action.id}.json`;
   if (
@@ -75,66 +79,9 @@ export const run = Effect.fn("process.run")(function* (
       status: 409,
       message: "Execution ID already exists; use process.get to inspect its confirmed state",
     });
-  const guest = ctx.exports.Guest({ props: capability });
-  const code: WorkerLoaderWorkerCode = yield* Effect.sync((): WorkerLoaderWorkerCode => {
-    if (action.language === "wasm")
-      return {
-        compatibilityDate: "2026-10-06",
-        mainModule: "index.js",
-        modules: {
-          "index.js":
-            "import module from './program.wasm'; export default { fetch() { const instance = new WebAssembly.Instance(module, {}); const result = instance.exports.run(); return Response.json({stdout:'',stderr:'',result,exitCode:0}); } };",
-          "program.wasm": { wasm: source },
-        },
-        env: {},
-        globalOutbound: null,
-        limits: { cpuMs: session.head.policy.cpuMs, subRequests: 0 },
-      };
-    if (action.language === "python")
-      return {
-        compatibilityDate: "2026-10-06",
-        compatibilityFlags: ["python_workers"],
-        mainModule: "index.py",
-        modules: {
-          "index.py": {
-            py: `import json\nimport io\nimport contextlib\nfrom workers import Response, WorkerEntrypoint\nfrom program import main\n\nclass Default(WorkerEntrypoint):\n    async def fetch(self, request):\n        stdout = io.StringIO()\n        stderr = io.StringIO()\n        with contextlib.redirect_stdout(stdout), contextlib.redirect_stderr(stderr):\n            result = await main(self.env.TOOLS)\n        return Response(json.dumps({"stdout": stdout.getvalue(), "stderr": stderr.getvalue(), "result": result, "exitCode": 0}), headers={"content-type": "application/json"})\n`,
-          },
-          "program.py": { py: action.source },
-        },
-        env: { TOOLS: guest, MAX_OUTPUT: session.head.policy.maxOutputBytes },
-        globalOutbound: null,
-        limits: { cpuMs: session.head.policy.cpuMs, subRequests: 256 },
-      } satisfies WorkerLoaderWorkerCode;
-    return {
-      compatibilityDate: "2026-10-06",
-      compatibilityFlags: ["nodejs_compat"],
-      mainModule: "index.js",
-      modules: { "index.js": guestSource, "program.js": action.source },
-      env: { TOOLS: guest, MAX_OUTPUT: session.head.policy.maxOutputBytes },
-      globalOutbound: null,
-      limits: { cpuMs: session.head.policy.cpuMs, subRequests: 256 },
-    } satisfies WorkerLoaderWorkerCode;
-  });
   const output = yield* Effect.gen(function* () {
     if (action.language === "shell") return yield* shell(env, capability, action.source);
-    const stub = yield* Effect.try({
-      try: () => env.LOADER.load(code),
-      catch: (cause) => new ExecutionFailure({ cause }),
-    });
-    const response = yield* Effect.tryPromise({
-      try: () => stub.getEntrypoint().fetch("https://execution/"),
-      catch: (cause) => new ExecutionFailure({ cause }),
-    });
-    const data = yield* readBounded(response.body, session.head.policy.maxOutputBytes);
-    if (!response.ok)
-      return yield* new Fault({
-        code: "EXECUTION_FAILED",
-        status: 422,
-        message: "Guest execution failed",
-      });
-    return yield* Schema.decodeUnknownEffect(Schema.fromJsonString(RunResult))(
-      data.toString("utf8"),
-    );
+    return yield* execute(env, capability, action, session.head.policy);
   }).pipe(Effect.result);
   const finishedAt = yield* Clock.currentTimeMillis;
   const finished = yield* Effect.sync(() => {

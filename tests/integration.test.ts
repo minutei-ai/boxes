@@ -11,13 +11,20 @@ import {
   Status,
   TokenResponse,
   ProcessPage,
+  Head,
+  MigrationReceipt,
 } from "../src/contracts";
 import { runtime } from "../tooling/runtime";
 
 const directory = await mkdtemp(join(tmpdir(), "cirro-integration-"));
 const mf = runtime(directory);
 const admin = "cirro-local-test-credential";
-const policy = { cpuMs: 1000, maxOutputBytes: 1_048_576, networkHosts: [] };
+const policy = {
+  interruptBudget: 1000,
+  memoryBytes: 8_388_608,
+  maxOutputBytes: 1_048_576,
+  networkHosts: [],
+};
 const post = async (path: string, token: string, body: unknown) =>
   fetch(new URL(path, await mf.ready), {
     method: "POST",
@@ -174,7 +181,7 @@ test("concurrent writes publish a consistent filesystem or report a conflict", a
   expect(Schema.decodeUnknownSync(Status)(await status.json()).generation).toBe(entries.length);
 });
 
-test("dynamic JavaScript executes with scoped host filesystem and durable process result", async () => {
+test("Rust QuickJS executes with scoped host filesystem and durable process result", async () => {
   const token = await setup("js");
   const result = await act("js", token, {
     op: "process.run",
@@ -208,17 +215,88 @@ test("dynamic JavaScript executes with scoped host filesystem and durable proces
   ).toBe(409);
 });
 
+test("guest CPU and memory exhaustion preserve Worker health and isolation", async () => {
+  const token = await setup("limits");
+  const looping = Schema.decodeUnknownSync(RunRecord)(
+    await (
+      await act("limits", token, {
+        op: "process.run",
+        id: "loop",
+        language: "javascript",
+        source: "export default () => { while(true) {} };",
+      })
+    ).json(),
+  );
+  expect(looping.status).toBe("failed");
+  const allocation = Schema.decodeUnknownSync(RunRecord)(
+    await (
+      await act("limits", token, {
+        op: "process.run",
+        id: "memory",
+        language: "javascript",
+        source: "export default () => Array(10000000).fill('memory');",
+      })
+    ).json(),
+  );
+  expect(allocation.output?.exitCode).toBe(1);
+  expect(allocation.output?.stderr).toContain("out of memory");
+  const first = Schema.decodeUnknownSync(RunRecord)(
+    await (
+      await act("limits", token, {
+        op: "process.run",
+        id: "state-first",
+        language: "javascript",
+        source: "export default () => { globalThis.secret='private'; return 42; };",
+      })
+    ).json(),
+  );
+  expect(first.output?.result).toBe(42);
+  const second = Schema.decodeUnknownSync(RunRecord)(
+    await (
+      await act("limits", token, {
+        op: "process.run",
+        id: "state-second",
+        language: "javascript",
+        source: "export default () => typeof globalThis.secret;",
+      })
+    ).json(),
+  );
+  expect(second.output?.result).toBe("undefined");
+  expect((await act("limits", token, { op: "vm.status" })).status).toBe(200);
+});
+
+test("native platform imports fail inside QuickJS while the Worker remains available", async () => {
+  const token = await setup("imports");
+  const imported = Schema.decodeUnknownSync(RunRecord)(
+    await (
+      await act("imports", token, {
+        op: "process.run",
+        id: "cloudflare",
+        language: "javascript",
+        source: "import {env} from 'cloudflare:workers'; export default () => env;",
+      })
+    ).json(),
+  );
+  expect(imported.status).toBe("failed");
+  expect((await act("imports", token, { op: "vm.status" })).status).toBe(200);
+});
+
 test("guest cannot access network or host bindings", async () => {
   const token = await setup("escape");
   const result = await act("escape", token, {
     op: "process.run",
     id: "escape-1",
     language: "javascript",
-    source: `import { env } from 'cloudflare:workers'; export default async () => { const bindings = Object.keys(env).sort(); const network = await fetch('https://example.com').then(() => 'escaped', () => 'denied'); return {bindings, network}; };`,
+    source: `export default () => ({ process: typeof process, fetch: typeof fetch, env: typeof env, loader: typeof LOADER });`,
   });
   const record = Schema.decodeUnknownSync(RunRecord)(await result.json());
   expect(record.status).toBe("exited");
-  expect(record.output?.result).toEqual({ bindings: ["MAX_OUTPUT", "TOOLS"], network: "denied" });
+  expect(record.output?.result).toEqual({
+    process: "undefined",
+    fetch: "undefined",
+    env: "undefined",
+    loader: "undefined",
+  });
   expect(
     (await act("escape", token, { op: "network.fetch", url: "https://example.com" })).status,
   ).toBe(403);
@@ -271,7 +349,7 @@ test("shell pipelines, redirects, conditionals and files execute against the Rus
   ).toBe("hello cirro\n");
 });
 
-test("Python executes through the native Dynamic Worker runtime", async () => {
+test("Python is rejected explicitly without creating a run", async () => {
   const token = await setup("python");
   const result = await act("python", token, {
     op: "process.run",
@@ -279,11 +357,9 @@ test("Python executes through the native Dynamic Worker runtime", async () => {
     language: "python",
     source: "async def main(tools):\n    return 6 * 7\n",
   });
-  expect(result.status).toBe(200);
-  const record = Schema.decodeUnknownSync(RunRecord)(await result.json());
-  expect(record.status).toBe("exited");
-  expect(record.output?.result).toBe(42);
-}, 60_000);
+  expect(result.status).toBe(501);
+  expect((await act("python", token, { op: "process.get", id: "python-1" })).status).toBe(404);
+});
 
 test("append and truncate preserve binary sizes, permissions and empty files", async () => {
   const token = await setup("truncate");
@@ -330,25 +406,25 @@ test("append and truncate preserve binary sizes, permissions and empty files", a
   ).toBe(400);
 });
 
-test("Python can persist a file through its scoped RPC capability", async () => {
-  const token = await setup("python-files");
-  const result = await act("python-files", token, {
+test("TypeScript compiles in Rust and persists through scoped capabilities", async () => {
+  const token = await setup("typescript-files");
+  const result = await act("typescript-files", token, {
     op: "process.run",
     id: "write-1",
-    language: "python",
+    language: "typescript",
     source:
-      "from pyodide.ffi import to_js\nasync def main(tools):\n    await tools.call(to_js({'op': 'filesystem.writeFile', 'path': '/tmp/python', 'content': 'python persisted', 'encoding': 'utf8'}))\n    return 'ok'\n",
+      "interface Value { answer: number } enum Choice { First, Second } export default async ({tools}: { tools: { call(action: unknown): Promise<unknown> } }): Promise<Value> => { await tools.call({op:'filesystem.writeFile',path:'/tmp/ts',content:'typescript persisted',encoding:'utf8'}); return {answer:41+Choice.Second}; }",
   });
   const record = Schema.decodeUnknownSync(RunRecord)(await result.json());
   expect(record.status).toBe("exited");
-  expect(record.output?.result).toBe("ok");
+  expect(record.output?.result).toEqual({ answer: 42 });
   const file = Schema.decodeUnknownSync(FileContent)(
     await (
-      await act("python-files", token, { op: "filesystem.readFile", path: "/tmp/python" })
+      await act("typescript-files", token, { op: "filesystem.readFile", path: "/tmp/ts" })
     ).json(),
   );
-  expect(Buffer.from(file.content, "base64").toString()).toBe("python persisted");
-}, 60_000);
+  expect(Buffer.from(file.content, "base64").toString()).toBe("typescript persisted");
+});
 
 test("guest output limit persists a failed run and does not rerun uncertain side effects", async () => {
   expect(
@@ -412,13 +488,13 @@ test("configuration updates require management and preserve files", async () => 
       })
     ).status,
   ).toBe(200);
-  expect((await act("config", token, { op: "config.patch", policy: { cpuMs: 2000 } })).status).toBe(
-    200,
-  );
+  expect(
+    (await act("config", token, { op: "config.patch", policy: { interruptBudget: 2000 } })).status,
+  ).toBe(200);
   const status = Schema.decodeUnknownSync(Status)(
     await (await act("config", token, { op: "vm.status" })).json(),
   );
-  expect(status.policy.cpuMs).toBe(2000);
+  expect(status.policy.interruptBudget).toBe(2000);
   expect(status.policy.maxOutputBytes).toBe(policy.maxOutputBytes);
   const file = await act("config", token, { op: "filesystem.readFile", path: "/tmp/a" });
   expect(file.status).toBe(200);
@@ -429,9 +505,9 @@ test("configuration updates require management and preserve files", async () => 
   const restricted = Schema.decodeUnknownSync(TokenResponse)(await minted.json()).token;
   expect((await act("config", restricted, { op: "config.set", policy })).status).toBe(403);
   expect((await act("config", restricted, { op: "vm.dispose" })).status).toBe(403);
-  expect((await act("config", token, { op: "config.patch", policy: { cpuMs: 0 } })).status).toBe(
-    400,
-  );
+  expect(
+    (await act("config", token, { op: "config.patch", policy: { interruptBudget: 0 } })).status,
+  ).toBe(400);
 });
 
 test("existing file writes obey file mode instead of requiring a writable parent", async () => {
@@ -592,4 +668,56 @@ test("process pagination consumes native cursors and lists metadata without outp
   );
   expect(second.items.map((item) => item.id)).toEqual(["c"]);
   expect(second.cursor).toBeNull();
+});
+
+test("native R2 migration preserves files and tombstones and is idempotent", async () => {
+  const token = await setup("migration");
+  expect(
+    (
+      await act("migration", token, {
+        op: "filesystem.writeFile",
+        path: "/tmp/kept",
+        content: "preserved",
+        encoding: "utf8",
+      })
+    ).status,
+  ).toBe(200);
+  const bucket = await mf.getR2Bucket("OBJECTS");
+  const key = "sandboxes/migration/head.json";
+  const object = await bucket.get(key);
+  if (object === null) return expect(object).not.toBeNull();
+  const head = Schema.decodeUnknownSync(Schema.fromJsonString(Head))(await object.text());
+  const prior = {
+    manifest: head.manifest,
+    createdAt: head.createdAt,
+    deleted: head.deleted,
+    policy: {
+      networkHosts: head.policy.networkHosts,
+      cpuMs: 1000,
+      maxOutputBytes: head.policy.maxOutputBytes,
+    },
+  };
+  await bucket.put(key, JSON.stringify(prior));
+  await bucket.put(
+    "sandboxes/migration-deleted/head.json",
+    JSON.stringify({ ...prior, deleted: true }),
+  );
+  expect((await post("/v1/migrations/execution-policy-v2", token, {})).status).toBe(401);
+  const first = Schema.decodeUnknownSync(MigrationReceipt)(
+    await (await post("/v1/migrations/execution-policy-v2", admin, {})).json(),
+  );
+  expect(first.migrated).toBe(2);
+  const file = Schema.decodeUnknownSync(FileContent)(
+    await (await act("migration", token, { op: "filesystem.readFile", path: "/tmp/kept" })).json(),
+  );
+  expect(Buffer.from(file.content, "base64").toString()).toBe("preserved");
+  const tombstone = await bucket.get("sandboxes/migration-deleted/head.json");
+  if (tombstone === null) return expect(tombstone).not.toBeNull();
+  expect(
+    Schema.decodeUnknownSync(Schema.fromJsonString(Head))(await tombstone.text()).deleted,
+  ).toBe(true);
+  const second = Schema.decodeUnknownSync(MigrationReceipt)(
+    await (await post("/v1/migrations/execution-policy-v2", admin, {})).json(),
+  );
+  expect(second.migrated).toBe(0);
 });

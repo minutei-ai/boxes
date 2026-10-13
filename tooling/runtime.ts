@@ -19,20 +19,23 @@ export const runtime = (persist: string) =>
                 type: "esm",
                 contents: readFileSync(join(import.meta.dir, "../dist/worker/index.js"), "utf8"),
               },
-              "cirro_kernel_bg.wasm": {
-                type: "wasm",
-                contents: readFileSync(
-                  join(import.meta.dir, "../dist/worker/cirro_kernel_bg.wasm"),
-                ),
-              },
+              ...Object.fromEntries(
+                ["kernel", "guest", "compiler"].map((name) => [
+                  `cirro_${name}_bg.wasm`,
+                  {
+                    type: "wasm" as const,
+                    contents: readFileSync(
+                      join(import.meta.dir, `../dist/worker/cirro_${name}_bg.wasm`),
+                    ),
+                  },
+                ]),
+              ),
             },
           },
           env: {
             API_KEY: { type: "text", value: "cirro-local-test-credential" },
             OBJECTS: { type: "r2", name: "cirro-test" },
-            LOADER: { type: "worker-loader" },
           },
-          exports: { Guest: { type: "worker" } },
         },
       },
     ],

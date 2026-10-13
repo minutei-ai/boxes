@@ -7,18 +7,18 @@ Rust/Wasm agent sandboxes inside Cloudflare Workers. Effect owns validated reque
 ## What runs today
 
 - Rust filesystem kernel with directories, files, modes, relative symlinks, rename, append and truncate.
-- Native Dynamic Workers for JavaScript, Python and standalone Wasm.
+- Rust QuickJS for JavaScript, Oxc for TypeScript and Wasmi for standalone Wasm, inside one ordinary Worker.
 - A bounded shell with pipes, redirection, conditionals and initial commands.
 - Capability tokens scoped to one sandbox, permission set and expiration.
 - Guest RPC for authorized filesystem operations, process inspection and HTTPS GET to explicitly authorized hosts.
 - Persistent execution IDs, code digests, completed or failed results, and paginated process summaries.
 - Conditional R2 publication: concurrent filesystem changes either commit together or report a conflict.
 
-Cirro does not currently provide Linux compatibility, a complete POSIX shell, npm/pip installation, interactive terminals or reliable background processes. The standard Python/Node filesystem APIs are not mounted to R2: use the scoped `TOOLS` capability for durable files.
+Cirro does not currently provide Linux compatibility, a complete POSIX shell, npm/pip installation, interactive terminals or reliable background processes. Python is unavailable after the ordinary Worker cutover and returns `501 UNSUPPORTED_RUNTIME`. JavaScript uses QuickJS without Node modules; use `tools.call` for durable files.
 
 ## Install and verify
 
-Requires Bun, Rust with the `wasm32-unknown-unknown` target, and the matching wasm-bindgen CLI:
+Requires Bun, clang, llvm-ar, Rust with the `wasm32-unknown-unknown` target, and the matching wasm-bindgen CLI:
 
 ```sh
 bun install --frozen-lockfile
@@ -28,21 +28,23 @@ bun run check
 bun run bench
 ```
 
-`check` builds the actual Worker and Wasm, checks TypeScript, runs Rust Clippy/unit tests and executes integration tests against local workerd and real local R2. Tests include native Python and compiled Rust guest execution. They require network access for the Python runtime's initial download. No Cloudflare credentials are required for local verification.
+`check` builds the actual Worker and Wasm, checks TypeScript, runs Rust Clippy/unit tests and executes integration tests against local workerd and real local R2. Tests include QuickJS isolation, execution and memory exhaustion, TypeScript compilation, and interpreted Rust guest execution. No Cloudflare credentials are required for local verification.
 
 The benchmark records distributions and artifact sizes in [performance-local.json](docs/evidence/performance-local.json). These are local measurements, not production latency or upstream comparisons.
 
+The ordinary Worker cutover passed 14 Rust tests, 22 workerd integration tests and 17 production checks using the `minutei` profile. [Production evidence](docs/evidence/production.json) covers implemented operations, isolation and resource limits; it includes the explicit Python rejection and does not establish upstream parity. Repeat it with `CIRRO_URL=<deployed-url> bun run live` and the private administrator key in `.env`.
+
 ## Deploy
 
-Create a private `.env` file containing a strong `CIRRO_API_KEY`. It is ignored by Git. Configure the intended Cloudflare account through Alchemy's authentication profile, then:
+Create a private `.env` file containing a strong `CIRRO_API_KEY`. It is ignored by Git. Use the user-selected `minutei` Alchemy authentication profile, then:
 
 ```sh
 bun run build
-bunx alchemy plan alchemy.run.ts --stage prod --no-input
+bun run plan
 bun run deploy
 ```
 
-Alchemy provisions the Worker, R2 bucket and Worker Loader binding. The stack uses local state for development and Cloudflare state for deployed stages. Never pass R2 credentials or the administrator credential to guest code.
+Alchemy provisions one ordinary Worker and one private R2 bucket. There is no Worker Loader or Dynamic Worker execution. A deployment action migrates existing sandbox policies through an administrator endpoint immediately after Worker upload. The stack uses local state for development and Cloudflare state for deployed stages. Never pass R2 credentials or the administrator credential to guest code.
 
 ## API
 
@@ -54,7 +56,7 @@ Administrator operations:
 curl -X POST "$CIRRO_URL/v1/sandboxes" \
   -H "Authorization: Bearer $CIRRO_API_KEY" \
   -H 'Content-Type: application/json' \
-  --data '{"id":"research","policy":{"networkHosts":[],"cpuMs":1000,"maxOutputBytes":1048576}}'
+  --data '{"id":"research","policy":{"networkHosts":[],"interruptBudget":1000,"memoryBytes":8388608,"maxOutputBytes":1048576}}'
 
 curl -X POST "$CIRRO_URL/v1/sandboxes/research/capabilities" \
   -H "Authorization: Bearer $CIRRO_API_KEY" \
@@ -75,25 +77,9 @@ Example action:
 }
 ```
 
-The guest module exports a default function accepting `{ tools, console }`. `tools.call(action)` executes the allowed action inside the trusted Worker. The guest has no administrator credential, direct bucket reference or direct network access. JavaScript can use the Workers native Node compatibility subset; package resolution and full Node compatibility are not implemented.
+The guest module exports a default function accepting `{ tools, console }`. `tools.call(action)` executes the allowed action inside the trusted Worker. The guest has no administrator credential, direct bucket reference or direct network access. The guest cannot access Worker globals, platform imports, Node modules, bucket bindings or direct fetch. Each execution receives a fresh QuickJS runtime. TypeScript uses the same entry contract after Oxc removes its types and compiles runtime constructs; this is transpilation, not project type checking.
 
-Python modules export `async def main(tools)`. Convert Python dictionaries with native `pyodide.ffi.to_js` before sending RPC actions:
-
-```python
-from pyodide.ffi import to_js
-
-async def main(tools):
-    await tools.call(to_js({
-        "op": "filesystem.writeFile",
-        "path": "/tmp/result.txt",
-        "content": "42",
-        "encoding": "utf8",
-    }))
-    print("saved")
-    return 42
-```
-
-For `language: "shell"`, source is a shell script. For `language: "wasm"`, source is canonical base64 of a module exporting `run()` and requiring no imports. This is standalone Wasm execution, not WASI support.
+For `language: "shell"`, source is a shell script. For `language: "wasm"`, source is canonical base64 of a module exporting `run() -> i32` and requiring no imports. Wasmi interprets it with fuel and memory limits; arbitrary Wasm is never compiled through Worker JavaScript. WASI support is pending.
 
 Read files using `filesystem.readFile`; the result contains canonical base64 bytes and a byte size. `filesystem.writeFile` accepts `utf8` or canonical `base64`. Unknown fields and unsupported operations are rejected.
 
@@ -101,9 +87,9 @@ A `409 CONFLICT` means the filesystem changed during the operation. Read the cur
 
 ## Storage and limits
 
-[Architecture](docs/architecture.md) explains commit ordering, isolation and recovery. Files are split into 256 KiB SHA-256 blocks. Existing blocks of the same file are reused. Root publication uses an R2 ETag precondition. No tenant data is stored in D1, KV or Durable Object SQLite.
+[Architecture](docs/architecture.md) explains commit ordering, isolation and recovery. Files are split into 256 KiB SHA-256 blocks. Existing blocks of the same file are reused. Root publication uses an R2 ETag precondition. Head schema version 2 stores explicit execution budgets; the deploy action migrates version 1 policies to 1,000 interrupt callbacks and 8 MiB guest heaps, preserving files and disposal state. No tenant data is stored in D1, KV or Durable Object SQLite.
 
-Current limits: 16 MiB per file, 64 MiB logical filesystem bytes, 16,384 nodes, 4,096-byte paths, 64 path components, 40 symlink traversals, 256 commands per shell script, 2 MiB input per Rust text command, 1 MiB source and 1 MiB maximum execution output. Block I/O concurrency is four. CPU limits are passed to the native Worker Loader; production enforcement is not yet independently verified.
+Current limits: 16 MiB per file, 64 MiB logical filesystem bytes, 16,384 nodes, 4,096-byte paths, 64 path components, 40 symlink traversals, 256 commands per shell script, 2 MiB input per Rust text command, 1 MiB source and 1 MiB maximum execution output. Block I/O concurrency is four. `interruptBudget` bounds QuickJS interrupt callbacks, with a separate 10,000-microtask and 256-capability-call ceiling. It is a computation budget, not milliseconds. Wasmi receives 1,000 fuel units per budget unit. `memoryBytes` bounds each guest heap from 4 to 32 MiB. The ordinary Worker has a 30-second platform CPU limit; guest execution budgets are enforced by Rust. Output includes serialized result bytes in its limit.
 
 Unreferenced blocks and disposed sandboxes are retained. Safe garbage collection is pending. The filesystem currently loads its bounded metadata manifest for each operation; a paged metadata index is pending for large inventories.
 

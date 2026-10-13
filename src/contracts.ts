@@ -8,7 +8,8 @@ export const Policy = Schema.Struct({
   networkHosts: Schema.Array(Schema.String.check(Schema.isPattern(/^[a-z0-9.-]{1,253}$/))).check(
     Schema.isMaxLength(32),
   ),
-  cpuMs: Schema.Int.check(Schema.isBetween({ minimum: 1, maximum: 30_000 })),
+  interruptBudget: Schema.Int.check(Schema.isBetween({ minimum: 1, maximum: 100_000 })),
+  memoryBytes: Schema.Int.check(Schema.isBetween({ minimum: 4_194_304, maximum: 33_554_432 })),
   maxOutputBytes: Schema.Int.check(Schema.isBetween({ minimum: 1024, maximum: 1_048_576 })),
 });
 export const PolicyPatch = Policy.mapFields((fields) => Struct.map(fields, Schema.optionalKey));
@@ -23,6 +24,7 @@ export const MintCapability = Schema.Struct({
   permissions: Schema.Array(Permission).check(Schema.isMinLength(1), Schema.isMaxLength(5)),
 });
 export const Head = Schema.Struct({
+  version: Schema.Literal(2),
   manifest: Schema.String.check(Schema.isMaxLength(8_388_608)),
   policy: Policy,
   createdAt: Schema.Int,
@@ -74,7 +76,7 @@ export const GuestAction = Schema.Union([FilesystemAction, NetworkAction, Proces
 export const RunAction = Schema.Struct({
   op: Schema.Literal("process.run"),
   id: Id,
-  language: Schema.Literals(["javascript", "python", "shell", "wasm"]),
+  language: Schema.Literals(["javascript", "typescript", "python", "shell", "wasm"]),
   source: Schema.String.check(Schema.isMaxLength(1_048_576)),
 });
 export const Action = Schema.Union([
@@ -106,7 +108,7 @@ export const RunRecord = Schema.Struct({
   id: Id,
   status: Schema.Literals(["running", "exited", "failed"]),
   sourceHash: Schema.String.check(Schema.isPattern(/^[a-f0-9]{64}$/)),
-  language: Schema.Literals(["javascript", "python", "shell", "wasm"]),
+  language: Schema.Literals(["javascript", "typescript", "python", "shell", "wasm"]),
   startedAt: Schema.Int,
   finishedAt: Schema.NullOr(Schema.Int),
   output: Schema.NullOr(RunResult),
@@ -135,6 +137,19 @@ export const NetworkResult = Schema.Struct({
   content: Schema.String,
   encoding: Schema.Literal("base64"),
 });
+export const Exists = Schema.Struct({ exists: Schema.Boolean });
+export const Link = Schema.Struct({ target: Schema.String });
+export const GuestResponse = Schema.Union([
+  FileContent,
+  FileStat,
+  DirectoryEntries,
+  Success,
+  NetworkResult,
+  Exists,
+  Link,
+  RunRecord,
+  ProcessPage,
+]);
 export const ErrorResponse = Schema.Struct({ error: Schema.String, message: Schema.String });
 export class Fault extends Schema.TaggedError<Fault>()("Fault", {
   code: Schema.String,
@@ -158,3 +173,5 @@ export const CommandOutput = Schema.Struct({
   exitCode: Schema.Int,
 });
 export const CommandArguments = Schema.Array(Schema.String);
+
+export const MigrationReceipt = Schema.Struct({ migrated: Schema.Int });

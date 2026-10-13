@@ -8,7 +8,12 @@ class BuildFailure extends Schema.TaggedError<BuildFailure>()("BuildFailure", {
 }) {}
 const root = join(import.meta.dir, "..");
 const run = Effect.fn("build.command")(function* (args: string[]) {
-  const child = Bun.spawn(args, { cwd: root, stdout: "inherit", stderr: "inherit" });
+  const child = Bun.spawn(args, {
+    cwd: root,
+    stdout: "inherit",
+    stderr: "inherit",
+    env: { ...Bun.env, CC_wasm32_unknown_unknown: "clang", AR_wasm32_unknown_unknown: "llvm-ar" },
+  });
   const code = yield* Effect.promise(() => child.exited);
   if (code !== 0)
     return yield* new BuildFailure({ message: `${args[0]} exited ${code}`, cause: code });
@@ -18,21 +23,22 @@ await Effect.runPromise(
     yield* run([
       "cargo",
       "build",
-      "-p",
-      "cirro-kernel",
+      "--workspace",
       "--target",
       "wasm32-unknown-unknown",
       "--release",
       "--locked",
     ]);
-    yield* run([
-      join(homedir(), ".cargo/bin/wasm-bindgen"),
-      "target/wasm32-unknown-unknown/release/cirro_kernel.wasm",
-      "--target",
-      "web",
-      "--out-dir",
-      "dist/wasm",
-    ]);
+    yield* Effect.forEach(["kernel", "guest", "compiler"], (name) =>
+      run([
+        join(homedir(), ".cargo/bin/wasm-bindgen"),
+        `target/wasm32-unknown-unknown/release/cirro_${name}.wasm`,
+        "--target",
+        "web",
+        "--out-dir",
+        `dist/${name}`,
+      ]),
+    );
     yield* run([
       "rustc",
       "--crate-type",
@@ -48,31 +54,6 @@ await Effect.runPromise(
       "-o",
       "dist/guest-test.wasm",
     ]);
-    const guest = yield* Effect.promise(() =>
-      Bun.build({
-        entrypoints: [join(root, "src/guest.ts")],
-        target: "browser",
-        format: "esm",
-        minify: true,
-        plugins: [
-          {
-            name: "program",
-            setup(builder) {
-              builder.onResolve({ filter: /program\.js$/ }, () => ({
-                path: "./program.js",
-                external: true,
-              }));
-            },
-          },
-        ],
-      }),
-    );
-    if (!guest.success)
-      return yield* new BuildFailure({ message: "Guest bundle failed", cause: guest.logs });
-    const source = yield* Effect.promise(() => guest.outputs[0].text());
-    yield* Effect.promise(() =>
-      Bun.write(join(root, "dist/guest-source.json"), JSON.stringify(source)),
-    );
     const result = yield* Effect.promise(() =>
       Bun.build({
         entrypoints: [join(root, "src/index.ts")],
@@ -85,10 +66,12 @@ await Effect.runPromise(
           {
             name: "wasm-module",
             setup(builder) {
-              builder.onResolve({ filter: /^cirro:wasm$/ }, () => ({
-                path: "./cirro_kernel_bg.wasm",
-                external: true,
-              }));
+              builder.onResolve({ filter: /^cirro:(wasm|guest|compiler)$/ }, (args) => {
+                const name = args.path.slice(6);
+                if (name === "wasm") return { path: "./cirro_kernel_bg.wasm", external: true };
+                return { path: `./cirro_${name}_bg.wasm`, external: true };
+              });
+              builder.onResolve({ filter: /^env$/ }, () => ({ path: join(root, "src/clock.ts") }));
             },
           },
         ],
@@ -96,10 +79,12 @@ await Effect.runPromise(
     );
     if (!result.success)
       return yield* new BuildFailure({ message: "Worker bundle failed", cause: result.logs });
-    yield* Effect.promise(() =>
-      Bun.write(
-        join(root, "dist/worker/cirro_kernel_bg.wasm"),
-        Bun.file(join(root, "dist/wasm/cirro_kernel_bg.wasm")),
+    yield* Effect.forEach(["kernel", "guest", "compiler"], (name) =>
+      Effect.promise(() =>
+        Bun.write(
+          join(root, `dist/worker/cirro_${name}_bg.wasm`),
+          Bun.file(join(root, `dist/${name}/cirro_${name}_bg.wasm`)),
+        ),
       ),
     );
   }),

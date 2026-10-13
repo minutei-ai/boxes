@@ -8,11 +8,13 @@
     "typecheck": "tsc --noEmit",
     "test": "bun test",
     "check": "bun run build && bun run typecheck && cargo clippy --workspace --all-targets -- -D warnings && cargo test --workspace && bun test",
-    "dev": "bun run build && alchemy dev alchemy.run.ts --stage dev",
-    "deploy": "bun run build && alchemy deploy alchemy.run.ts --stage prod",
+    "dev": "bun run build && alchemy dev alchemy.run.ts --stage dev --profile minutei",
+    "deploy": "bun run build && alchemy deploy alchemy.run.ts --stage prod --profile minutei",
     "bench": "bun tooling/benchmark.ts",
+    "live": "bun tooling/live.ts",
     "format": "oxfmt . && cargo fmt --all",
-    "format:check": "oxfmt --check . && cargo fmt --all -- --check"
+    "format:check": "oxfmt --check . && cargo fmt --all -- --check",
+    "plan": "bun run build && alchemy plan alchemy.run.ts --stage prod --profile minutei --no-input"
   },
   "dependencies": {
     "alchemy": "2.0.0-beta.83",

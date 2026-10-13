@@ -1,0 +1,183 @@
+import { Config, Effect, Redacted, Schema } from "effect";
+import { join } from "node:path";
+import {
+  FileContent,
+  NetworkResult,
+  ProcessPage,
+  RunRecord,
+  Status,
+  TokenResponse,
+} from "../src/contracts";
+
+const configuration = await Effect.runPromise(
+  Effect.gen(function* () {
+    const key = yield* Config.Redacted("CIRRO_API_KEY");
+    const url = yield* Config.String("CIRRO_URL");
+    return { key, url };
+  }),
+);
+const id = `proof-${crypto.randomUUID()}`;
+const policy = {
+  networkHosts: ["example.com"],
+  interruptBudget: 1000,
+  memoryBytes: 8_388_608,
+  maxOutputBytes: 1_048_576,
+};
+const post = (path: string, credential: string, body: unknown) =>
+  fetch(new URL(path, configuration.url), {
+    method: "POST",
+    headers: { authorization: `Bearer ${credential}`, "content-type": "application/json" },
+    body: JSON.stringify(body),
+    signal: AbortSignal.timeout(60_000),
+  });
+const health = await fetch(new URL("/health", configuration.url));
+const created = await post("/v1/sandboxes", Redacted.value(configuration.key), { id, policy });
+const minted = await post(`/v1/sandboxes/${id}/capabilities`, Redacted.value(configuration.key), {
+  permissions: ["read", "write", "execute", "network", "manage"],
+  expiresInSeconds: 3600,
+});
+const token = Schema.decodeUnknownSync(TokenResponse)(await minted.json()).token;
+const action = (input: unknown) => post(`/v1/sandboxes/${id}/action`, token, input);
+const write = await action({
+  op: "filesystem.writeFile",
+  path: "/tmp/from-client",
+  content: "R2 native",
+  encoding: "utf8",
+});
+const read = Schema.decodeUnknownSync(FileContent)(
+  await (await action({ op: "filesystem.readFile", path: "/tmp/from-client" })).json(),
+);
+const js = Schema.decodeUnknownSync(RunRecord)(
+  await (
+    await action({
+      op: "process.run",
+      id: "js",
+      language: "javascript",
+      source:
+        "export default async ({tools, console}) => { await tools.call({op:'filesystem.writeFile',path:'/tmp/from-guest',content:'guest persisted',encoding:'utf8'}); console.log('native isolate'); return 42; };",
+    })
+  ).json(),
+);
+const guestFile = Schema.decodeUnknownSync(FileContent)(
+  await (await action({ op: "filesystem.readFile", path: "/tmp/from-guest" })).json(),
+);
+const shell = Schema.decodeUnknownSync(RunRecord)(
+  await (
+    await action({
+      op: "process.run",
+      id: "shell",
+      language: "shell",
+      source: "echo 'R2 shell' > /tmp/shell; cat /tmp/shell | grep '^R2'",
+    })
+  ).json(),
+);
+const typescript = Schema.decodeUnknownSync(RunRecord)(
+  await (
+    await action({
+      op: "process.run",
+      id: "typescript",
+      language: "typescript",
+      source:
+        "interface Answer { value: number }; enum Choice { First, Second }; export default (): Answer => ({value:41+Choice.Second});",
+    })
+  ).json(),
+);
+const python = await action({
+  op: "process.run",
+  id: "python",
+  language: "python",
+  source: "async def main(tools):\n    return 42\n",
+});
+const wasm = await Bun.file(join(import.meta.dir, "../dist/guest-test.wasm")).arrayBuffer();
+const rust = Schema.decodeUnknownSync(RunRecord)(
+  await (
+    await action({
+      op: "process.run",
+      id: "rust",
+      language: "wasm",
+      source: Buffer.from(wasm).toString("base64"),
+    })
+  ).json(),
+);
+const network = Schema.decodeUnknownSync(NetworkResult)(
+  await (await action({ op: "network.fetch", url: "https://example.com" })).json(),
+);
+const denied = await action({ op: "network.fetch", url: "https://developers.cloudflare.com" });
+const page = Schema.decodeUnknownSync(ProcessPage)(
+  await (await action({ op: "process.list", limit: 2, cursor: null })).json(),
+);
+const status = Schema.decodeUnknownSync(Status)(await (await action({ op: "vm.status" })).json());
+const cpu = Schema.decodeUnknownSync(RunRecord)(
+  await (
+    await action({
+      op: "process.run",
+      id: "cpu",
+      language: "javascript",
+      source: "export default () => { while (true) {} };",
+    })
+  ).json(),
+);
+const memory = Schema.decodeUnknownSync(RunRecord)(
+  await (
+    await action({
+      op: "process.run",
+      id: "memory",
+      language: "javascript",
+      source: "export default () => Array(10000000).fill('memory');",
+    })
+  ).json(),
+);
+const platformImport = Schema.decodeUnknownSync(RunRecord)(
+  await (
+    await action({
+      op: "process.run",
+      id: "platform-import",
+      language: "javascript",
+      source: "import {env} from 'cloudflare:workers'; export default () => env;",
+    })
+  ).json(),
+);
+const alive = await action({ op: "vm.status" });
+const disposed = await action({ op: "vm.dispose" });
+const afterDispose = await action({ op: "vm.status" });
+const checks = {
+  health: health.status === 200,
+  created: created.status === 201,
+  r2RoundTrip:
+    write.status === 200 && Buffer.from(read.content, "base64").toString() === "R2 native",
+  javascript:
+    js.status === "exited" && js.output?.result === 42 && js.output.stdout === "native isolate\n",
+  guestPersistence: Buffer.from(guestFile.content, "base64").toString() === "guest persisted",
+  shell: shell.status === "exited" && shell.output?.stdout === "R2 shell\n",
+  typescript:
+    typescript.status === "exited" &&
+    Schema.is(Schema.Struct({ value: Schema.Literal(42) }))(typescript.output?.result),
+  pythonExplicitlyUnavailable: python.status === 501,
+  rust: rust.status === "exited" && rust.output?.result === 42,
+  authorizedNetwork: network.status === 200,
+  deniedNetwork: denied.status === 403,
+  pagination: page.items.length === 2 && page.cursor !== null,
+  filesystemStatus: status.filesystemBytes > 0,
+  executionBudgetEnforcement: cpu.status === "failed" && alive.status === 200,
+  memoryEnforcement:
+    memory.output?.exitCode === 1 && memory.output.stderr.includes("out of memory"),
+  platformImportsDenied: platformImport.status === "failed",
+  disposal: disposed.status === 200 && afterDispose.status === 404,
+};
+const report = {
+  measuredAt: new Date().toISOString(),
+  url: configuration.url,
+  profile: "minutei",
+  runtime: "standard-worker-rust-quickjs-wasmi",
+  parityComplete: false,
+  scope: "Implemented operations and explicit Python rejection",
+  sandboxId: id,
+  checks,
+  allPassed: Object.values(checks).every(Boolean),
+};
+await Bun.write(
+  join(import.meta.dir, "../docs/evidence/production.json"),
+  JSON.stringify(report, null, 2) + "\n",
+);
+console.log(JSON.stringify(report, null, 2));
+if (!report.allPassed) process.exit(1);

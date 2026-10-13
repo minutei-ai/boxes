@@ -1,18 +1,16 @@
-import { WorkerEntrypoint } from "cloudflare:workers";
-import { Clock, Effect, Match, Schema } from "effect";
+import { Cause, Clock, Effect, Match, Schema } from "effect";
 import wasm from "cirro:wasm";
-import { initSync, Kernel } from "../dist/wasm/cirro_kernel";
+import { initSync, Kernel } from "../dist/kernel/cirro_kernel";
 import { administrator, authorize, mint, requirePermission } from "./auth";
 import {
   Action,
-  Capability,
+  MigrationReceipt,
   CreateSandbox,
   DirectoryEntries,
   ErrorResponse,
   Fault,
   FileContent,
   FileStat,
-  GuestAction,
   Head,
   Id,
   Policy,
@@ -24,85 +22,19 @@ import {
   Success,
   TokenResponse,
 } from "./contracts";
-import { filesystem } from "./filesystem";
-import { HttpFailure, readBounded } from "./http";
+import { guestAction } from "./capabilities";
+import { migrate } from "./migration";
+import { readBounded } from "./http";
 import { inspect, list, run } from "./process";
 import { kernelCall, open, publish, StorageFailure } from "./storage";
 import type { Env } from "./resources";
 
 initSync({ module: wasm });
 
-declare global {
-  namespace Cloudflare {
-    interface GlobalProps {
-      mainModule: typeof import("./index");
-    }
-  }
-}
-
 const Exists = Schema.Struct({ exists: Schema.Boolean });
 const Link = Schema.Struct({ target: Schema.String });
-const guestAction = Effect.fn("guest.action")(function* (
-  env: Env,
-  capability: typeof Capability.Type,
-  action: typeof GuestAction.Type,
-) {
-  const now = yield* Clock.currentTimeMillis;
-  if (capability.expiresAt <= now)
-    return yield* new Fault({ code: "UNAUTHORIZED", status: 401, message: "Capability expired" });
-  if (action.op === "process.get") return yield* inspect(env, capability, action.id);
-  if (action.op === "process.list") return yield* list(env, capability, action);
-  if (action.op === "network.fetch") {
-    yield* requirePermission(capability, "network");
-    const session = yield* open(env, capability.sandboxId);
-    const url = yield* Effect.try({
-      try: () => new URL(action.url),
-      catch: () => new Fault({ code: "EINVAL", status: 400, message: "Invalid network URL" }),
-    });
-    if (
-      url.protocol !== "https:" ||
-      url.username ||
-      url.password ||
-      (url.port && url.port !== "443") ||
-      /^\d+(\.|$)/.test(url.hostname) ||
-      !session.head.policy.networkHosts.includes(url.hostname)
-    ) {
-      return yield* new Fault({
-        code: "FORBIDDEN",
-        status: 403,
-        message: "Destination is not authorized by the sandbox policy",
-      });
-    }
-    const response = yield* Effect.tryPromise({
-      try: () => fetch(url, { redirect: "manual", signal: AbortSignal.timeout(10_000) }),
-      catch: (cause) => new HttpFailure({ cause }),
-    });
-    const data = yield* readBounded(response.body, session.head.policy.maxOutputBytes);
-    return {
-      status: response.status,
-      content: data.toString("base64"),
-      encoding: "base64" as const,
-    } satisfies typeof NetworkResult.Type;
-  }
-  return yield* filesystem(env, capability, action);
-});
 
-export class Guest extends WorkerEntrypoint<Env, typeof Capability.Type> {
-  call(input: unknown) {
-    return Effect.runPromise(
-      Effect.scoped(
-        Effect.gen({ self: this }, function* () {
-          const action = yield* Schema.decodeUnknownEffect(GuestAction, {
-            onExcessProperty: "error",
-          })(input);
-          return yield* guestAction(this.env, this.ctx.props, action);
-        }),
-      ),
-    );
-  }
-}
-
-const route = Effect.fn("api.route")(function* (request: Request, env: Env, ctx: ExecutionContext) {
+const route = Effect.fn("api.route")(function* (request: Request, env: Env) {
   const url = new URL(request.url);
   if (request.method === "GET" && url.pathname === "/v1/schema")
     return Response.json(Schema.toJsonSchemaDocument(Action), {
@@ -120,6 +52,13 @@ const route = Effect.fn("api.route")(function* (request: Request, env: Env, ctx:
       message: "Bearer credential required",
     });
   const token = authorization.slice(7);
+  if (url.pathname === "/v1/migrations/execution-policy-v2") {
+    yield* administrator(env, token);
+    const receipt = yield* migrate(env);
+    return new Response(Schema.encodeSync(Schema.fromJsonString(MigrationReceipt))(receipt), {
+      headers: { "content-type": "application/json", "cache-control": "no-store" },
+    });
+  }
   if (url.pathname === "/v1/sandboxes") {
     yield* administrator(env, token);
     const bytes = yield* readBounded(request.body, 16_384);
@@ -132,7 +71,13 @@ const route = Effect.fn("api.route")(function* (request: Request, env: Env, ctx:
       (kernel) => Effect.sync(() => kernel.free()),
     );
     const manifest = yield* kernelCall(() => kernel.manifest());
-    const record: typeof Head.Type = { manifest, policy: input.policy, createdAt, deleted: false };
+    const record: typeof Head.Type = {
+      version: 2,
+      manifest,
+      policy: input.policy,
+      createdAt,
+      deleted: false,
+    };
     const object = yield* Effect.tryPromise({
       try: () =>
         env.OBJECTS.put(
@@ -190,7 +135,7 @@ const route = Effect.fn("api.route")(function* (request: Request, env: Env, ctx:
   })(data.toString("utf8"));
   const value = yield* Match.value(action).pipe(
     Match.when({ op: "process.run" }, (action) =>
-      run(env, ctx, capability, action).pipe(
+      run(env, capability, action).pipe(
         Effect.map((result) => Schema.encodeSync(Schema.fromJsonString(RunRecord))(result)),
       ),
     ),
@@ -282,9 +227,9 @@ const route = Effect.fn("api.route")(function* (request: Request, env: Env, ctx:
 });
 
 export default {
-  fetch(request: Request, env: Env, ctx: ExecutionContext) {
+  fetch(request: Request, env: Env) {
     return Effect.runPromise(
-      Effect.scoped(route(request, env, ctx)).pipe(
+      Effect.scoped(route(request, env)).pipe(
         Effect.catchTag("Fault", (fault) =>
           Effect.succeed(
             new Response(
@@ -314,7 +259,7 @@ export default {
           ),
         ),
         Effect.catchCause((cause) => {
-          console.error("Cirro request failed", cause);
+          console.error(Cause.pretty(cause));
           return Effect.succeed(
             new Response(
               Schema.encodeSync(Schema.fromJsonString(ErrorResponse))({
