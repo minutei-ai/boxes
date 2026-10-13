@@ -26,9 +26,17 @@ The consumer has a 14-minute wall-time budget with the independent 30-second CPU
 
 The five-minute native cron and administrator maintenance endpoint share one repair owner. It lists bounded R2 pages, skips terminal receipts using native listing metadata, reads active records with concurrency four, and sends references in batches of at most 100. It repairs queued work after an interrupted send or lost notification and drives expired claim observation. A Queue failure after reservation can return an HTTP error while leaving a valid queued receipt; inspect the chosen ID instead of submitting a new one. Maintenance does not grant authority to the job.
 
-`process.wait` observes the same receipt using the native clock and exponentially spaced sleeps capped at one second. Each observation has its own scope and immediately releases its kernel, preventing manifest accumulation. It rechecks disposal and expiry. Caller timeout is an observation failure; only an actual guest exit returns retained output. Creation of guest descendants, resumable interpreter state, cancellation, incremental stdio and interactive terminals remain parity gates.
+`process.wait` observes the same receipt using the native clock and exponentially spaced sleeps capped at one second. Each observation has its own scope and immediately releases its kernel, preventing manifest accumulation. It rechecks disposal and expiry. Caller timeout is an observation failure; only an actual guest exit returns retained output. Creation of guest descendants, resumable interpreter state, POSIX signals, incremental stdio and interactive terminals remain parity gates.
 
 Deployment unconditionally migrates the old `sandboxes/<id>/runs` receipts after their Wasm source migration. It fences the old receipt under its ETag, copies its preserved public fields to the current namespace with null private authority/deadline, verifies a preexisting target before resuming a partial copy, and deletes the old key. A mismatched ID or conflicting target aborts. Runtime uses only the current stored shape and namespace. Historical completed receipts do not reenter execution.
+
+## Cancellation observation
+
+Cancellation owns the existing process receipt, not a second state document. Its conditional transition cancels queued work before entry or requests cancellation of active work. The runner races execution against a one-second native R2 metadata observation loop. An observed request interrupts the execution fiber, joins its resource scopes, and only then publishes terminal cancellation without an exit code. Successful native completion can win the race and publish its actual result. Terminal publication validates the original identity/source/start timestamp and may retry one known ETag conflict caused by the cancellation transition; it never reruns guest code or retries an uncertain write.
+
+The API requires `execute` and returns only the native summary, so it cannot reveal captured output without `read`. Full guest responses encode `RunRecord` before its summary variant to preserve process wait output. Queued grants clear on cancellation. The delivery/repair owner also observes `cancelling` leases; after the native consumer lifetime it records stopped cancellation without resuming guest state. Synchronous native calls cannot be preempted midway, and previously issued remote effects do not roll back.
+
+Metadata-only process operations use the shared head acquisition owner without creating a filesystem kernel. Actual execution and filesystem operations acquire the kernel through `open`. This avoids rebuilding and retaining manifest heaps merely to inspect authorization/disposal during polling.
 
 ## Guest boundary
 

@@ -11,11 +11,12 @@ import {
   RunRecord,
   ProcessListAction,
   ProcessWaitAction,
+  ProcessCancelAction,
 } from "./contracts";
 import { load } from "./modules";
 import { archive, restore } from "./code";
 import { execute } from "./execution";
-import { open, StorageFailure } from "./storage";
+import { head, open, StorageFailure } from "./storage";
 import type { Env } from "./resources";
 import { shell } from "./shell";
 
@@ -78,6 +79,8 @@ const reserve = Effect.fn("process.reserve")(function* (
   return { record, program: prepared, etag: receipt.etag };
 });
 
+class ProcessCancelled extends Schema.TaggedError<ProcessCancelled>()("ProcessCancelled", {}) {}
+
 const complete = Effect.fn("process.complete")(function* (
   env: Env,
   capability: typeof Capability.Type,
@@ -113,9 +116,29 @@ const complete = Effect.fn("process.complete")(function* (
       return yield* execute(env, capability, program, session);
     }),
   );
+  const cancellation = Effect.gen(function* () {
+    while (true) {
+      const current = yield* Effect.tryPromise({
+        try: () => env.OBJECTS.head(key),
+        catch: (cause) => new StorageFailure({ cause }),
+      });
+      if (current === null)
+        return yield* new StorageFailure({ cause: "Execution disappeared while active" });
+      const metadata = yield* Schema.decodeUnknownEffect(StoredRunMetadata)(current.customMetadata);
+      if (metadata.summary.status === "cancelling") return yield* new ProcessCancelled({});
+      if (metadata.summary.status !== "running")
+        return yield* new Fault({
+          code: "CONFLICT",
+          status: 409,
+          message: "Execution state changed while active",
+        });
+      yield* Effect.sleep(1000);
+    }
+  });
+  const supervised = Effect.raceFirst(execution, cancellation);
   const output = yield* Effect.gen(function* () {
-    if (timeoutMs === null) return yield* execution;
-    return yield* execution.pipe(Effect.timeout(timeoutMs));
+    if (timeoutMs === null) return yield* supervised;
+    return yield* supervised.pipe(Effect.timeout(timeoutMs));
   }).pipe(Effect.result);
   const snapshot = yield* Effect.gen(function* () {
     if (output._tag === "Success" && output.success.changed) {
@@ -126,6 +149,8 @@ const complete = Effect.fn("process.complete")(function* (
   });
   const finishedAt = yield* Clock.currentTimeMillis;
   const finished = yield* Effect.sync(() => {
+    if (output._tag === "Failure" && output.failure._tag === "ProcessCancelled")
+      return { ...snapshot, status: "cancelled" as const, finishedAt, output: null };
     if (output._tag === "Success") {
       if (output.success.outcome._tag === "Success")
         return {
@@ -136,34 +161,63 @@ const complete = Effect.fn("process.complete")(function* (
         };
       console.error("Cirro guest failed", output.success.outcome.failure);
     } else console.error("Cirro guest failed", output.failure);
+
     return { ...snapshot, status: "failed" as const, finishedAt, output: null };
   });
-  const completed = yield* Effect.tryPromise({
-    try: () =>
-      env.OBJECTS.put(
-        key,
-        Schema.encodeSync(Schema.fromJsonString(StoredRun))({
-          ...finished,
-          authority: null,
-          deadlineAt: null,
-        }),
-        {
-          onlyIf: { etagMatches: etag },
-          customMetadata: Schema.encodeSync(StoredRunMetadata)({
-            format: "run-v2",
-            summary: Struct.omit(finished, ["output"]),
-          }),
-        },
-      ),
-    catch: (cause) => new StorageFailure({ cause }),
-  });
-  if (completed === null)
-    return yield* new Fault({
-      code: "CONFLICT",
-      status: 409,
-      message: "Execution state changed; inspect process.get",
+  for (const attempt of [0, 1]) {
+    const current = yield* Effect.tryPromise({
+      try: () => env.OBJECTS.head(key),
+      catch: (cause) => new StorageFailure({ cause }),
     });
-  return finished;
+    if (current === null)
+      return yield* new StorageFailure({ cause: "Execution disappeared before settlement" });
+    const metadata = yield* Schema.decodeUnknownEffect(StoredRunMetadata)(current.customMetadata);
+    if (
+      current.etag !== etag &&
+      (metadata.summary.status !== "cancelling" ||
+        metadata.summary.id !== record.id ||
+        metadata.summary.sourceHash !== record.sourceHash ||
+        metadata.summary.startedAt !== record.startedAt ||
+        metadata.summary.language !== record.language ||
+        metadata.summary.finishedAt !== null)
+    )
+      return yield* new Fault({
+        code: "CONFLICT",
+        status: 409,
+        message: "Execution state changed; inspect process.get",
+      });
+    const completed = yield* Effect.tryPromise({
+      try: () =>
+        env.OBJECTS.put(
+          key,
+          Schema.encodeSync(Schema.fromJsonString(StoredRun))({
+            ...finished,
+            authority: null,
+            deadlineAt: null,
+          }),
+          {
+            onlyIf: { etagMatches: current.etag },
+            customMetadata: Schema.encodeSync(StoredRunMetadata)({
+              format: "run-v2",
+              summary: Struct.omit(finished, ["output"]),
+            }),
+          },
+        ),
+      catch: (cause) => new StorageFailure({ cause }),
+    });
+    if (completed !== null) return finished;
+    if (attempt === 1)
+      return yield* new Fault({
+        code: "CONFLICT",
+        status: 409,
+        message: "Execution state changed; inspect process.get",
+      });
+  }
+  return yield* new Fault({
+    code: "CONFLICT",
+    status: 409,
+    message: "Execution settlement was not confirmed",
+  });
 });
 
 export const run = Effect.fn("process.run")(function* (
@@ -181,7 +235,7 @@ export const inspect = Effect.fn("process.inspect")(function* (
   id: string,
 ) {
   yield* requirePermission(capability, "read");
-  yield* open(env, capability.sandboxId);
+  yield* head(env, capability.sandboxId);
   const object = yield* Effect.tryPromise({
     try: () => env.OBJECTS.get(`processes/${capability.sandboxId}/${id}.json`),
     catch: (cause) => new StorageFailure({ cause }),
@@ -204,7 +258,7 @@ export const list = Effect.fn("process.list")(function* (
   action: typeof ProcessListAction.Type,
 ) {
   yield* requirePermission(capability, "read");
-  yield* open(env, capability.sandboxId);
+  yield* head(env, capability.sandboxId);
   const page = yield* Effect.tryPromise({
     try: () => {
       const options: R2ListOptions = {
@@ -244,6 +298,12 @@ export const wait = Effect.fn("process.wait")(function* (
     if (capability.expiresAt <= observedAt)
       return yield* new Fault({ code: "UNAUTHORIZED", status: 401, message: "Capability expired" });
     if (record.status === "exited") return record;
+    if (record.status === "cancelled")
+      return yield* new Fault({
+        code: "ECANCELED",
+        status: 409,
+        message: "Execution was cancelled without a guest exit; inspect process.get",
+      });
     if (record.status === "failed")
       return yield* new Fault({
         code: "EXECUTION_FAILED",
@@ -289,14 +349,21 @@ export const dispatch = Effect.fn("process.dispatch")(function* (env: Env, body:
   if (stored.id !== identity.id)
     return yield* new StorageFailure({ cause: "Process identity mismatch" });
   const now = yield* Clock.currentTimeMillis;
-  if (stored.status === "running" && stored.deadlineAt !== null) {
+  if (
+    (stored.status === "running" || stored.status === "cancelling") &&
+    stored.deadlineAt !== null
+  ) {
     if (now < stored.deadlineAt)
       return yield* new ExecutionPending({
         retryAfterSeconds: Math.min(300, Math.max(1, Math.ceil((stored.deadlineAt - now) / 1000))),
       });
+    const terminal = yield* Effect.sync(() => {
+      if (stored.status === "cancelling") return "cancelled" as const;
+      return "failed" as const;
+    });
     const failed = {
       ...stored,
-      status: "failed" as const,
+      status: terminal,
       authority: null,
       deadlineAt: null,
       finishedAt: now,
@@ -392,7 +459,11 @@ export const reconcile = Effect.fn("process.reconcile")(function* (env: Env) {
           const metadata = yield* Schema.decodeUnknownEffect(StoredRunMetadata)(
             object.customMetadata,
           );
-          if (metadata.summary.status !== "queued" && metadata.summary.status !== "running")
+          if (
+            metadata.summary.status !== "queued" &&
+            metadata.summary.status !== "running" &&
+            metadata.summary.status !== "cancelling"
+          )
             return null;
           const stored = yield* Effect.tryPromise({
             try: () => env.OBJECTS.get(object.key),
@@ -409,7 +480,9 @@ export const reconcile = Effect.fn("process.reconcile")(function* (env: Env) {
           const now = yield* Clock.currentTimeMillis;
           if (
             record.status === "queued" ||
-            (record.status === "running" && record.deadlineAt !== null && record.deadlineAt <= now)
+            ((record.status === "running" || record.status === "cancelling") &&
+              record.deadlineAt !== null &&
+              record.deadlineAt <= now)
           )
             return Schema.encodeSync(ProcessDelivery)({ key: object.key, eTag: stored.etag });
           return null;
@@ -433,4 +506,62 @@ export const reconcile = Effect.fn("process.reconcile")(function* (env: Env) {
     if (page.truncated) cursors.push(page.cursor);
   }
   return { notifications: sent.count };
+});
+
+export const cancel = Effect.fn("process.cancel")(function* (
+  env: Env,
+  capability: typeof Capability.Type,
+  action: typeof ProcessCancelAction.Type,
+) {
+  yield* requirePermission(capability, "execute");
+  yield* head(env, capability.sandboxId);
+  const key = `processes/${capability.sandboxId}/${action.id}.json`;
+  const object = yield* Effect.tryPromise({
+    try: () => env.OBJECTS.get(key),
+    catch: (cause) => new StorageFailure({ cause }),
+  });
+  if (object === null)
+    return yield* new Fault({ code: "ENOENT", status: 404, message: "Execution does not exist" });
+  if (object.size > 8_388_608)
+    return yield* new StorageFailure({ cause: "Oversized process receipt" });
+  const text = yield* Effect.tryPromise({
+    try: () => object.text(),
+    catch: (cause) => new StorageFailure({ cause }),
+  });
+  const stored = yield* Schema.decodeUnknownEffect(Schema.fromJsonString(StoredRun))(text);
+  if (stored.status !== "queued" && stored.status !== "running")
+    return Struct.omit(stored, ["authority", "deadlineAt", "output"]);
+  const now = yield* Clock.currentTimeMillis;
+  if (capability.expiresAt <= now)
+    return yield* new Fault({ code: "UNAUTHORIZED", status: 401, message: "Capability expired" });
+  const updated = yield* Effect.sync(() => {
+    if (stored.status === "queued")
+      return {
+        ...stored,
+        status: "cancelled" as const,
+        authority: null,
+        deadlineAt: null,
+        finishedAt: now,
+        output: null,
+      };
+    return { ...stored, status: "cancelling" as const };
+  });
+  const receipt = yield* Effect.tryPromise({
+    try: () =>
+      env.OBJECTS.put(key, Schema.encodeSync(Schema.fromJsonString(StoredRun))(updated), {
+        onlyIf: { etagMatches: object.etag },
+        customMetadata: Schema.encodeSync(StoredRunMetadata)({
+          format: "run-v2",
+          summary: Struct.omit(updated, ["output", "authority", "deadlineAt"]),
+        }),
+      }),
+    catch: (cause) => new StorageFailure({ cause }),
+  });
+  if (receipt === null)
+    return yield* new Fault({
+      code: "CONFLICT",
+      status: 409,
+      message: "Execution changed during cancellation; inspect process.get",
+    });
+  return Struct.omit(updated, ["authority", "deadlineAt", "output"]);
 });

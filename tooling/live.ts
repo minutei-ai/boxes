@@ -13,6 +13,8 @@ import {
   NetworkResult,
   ProcessPage,
   RunRecord,
+  RunSummary,
+  ErrorResponse,
   Status,
   TokenResponse,
 } from "../src/contracts";
@@ -197,6 +199,48 @@ const repaired = await post(
   "/v1/maintenance/process-dispatch",
   Redacted.value(configuration.key),
   {},
+);
+
+const cancelledStarted = Schema.decodeUnknownSync(RunRecord)(
+  await (
+    await action({
+      op: "process.spawn",
+      execution: {
+        op: "process.run",
+        id: "cancel-background",
+        language: "wasm",
+        source: Buffer.from(
+          await Bun.file(join(import.meta.dir, "../dist/wasi-background.wasm")).arrayBuffer(),
+        ).toString("base64"),
+      },
+    })
+  ).json(),
+);
+const observedCancellation: (typeof RunRecord.Type)[] = [];
+for (const attempt of Array.from({ length: 20 }, (_, index) => index)) {
+  const current = Schema.decodeUnknownSync(RunRecord)(
+    await (await action({ op: "process.get", id: "cancel-background" })).json(),
+  );
+  if (current.status === "running") {
+    observedCancellation.push(current);
+    break;
+  }
+  await Bun.sleep(200);
+}
+const cancellationRequested = Schema.decodeUnknownSync(RunSummary)(
+  await (await action({ op: "process.cancel", id: "cancel-background" })).json(),
+);
+const cancellationWait = await action({
+  op: "process.wait",
+  id: "cancel-background",
+  timeoutMs: 10_000,
+});
+const cancellationError = Schema.decodeUnknownSync(ErrorResponse)(await cancellationWait.json());
+const cancellationFinal = Schema.decodeUnknownSync(RunRecord)(
+  await (await action({ op: "process.get", id: "cancel-background" })).json(),
+);
+const cancellationRepeated = Schema.decodeUnknownSync(RunSummary)(
+  await (await action({ op: "process.cancel", id: "cancel-background" })).json(),
 );
 
 const page = Schema.decodeUnknownSync(ProcessPage)(
@@ -603,6 +647,18 @@ const hostFs = Schema.decodeUnknownSync(RunRecord)(
 const disposed = await action({ op: "vm.dispose" });
 const afterDispose = await action({ op: "vm.status" });
 const checks = {
+  processCancellation:
+    cancelledStarted.status === "queued" &&
+    observedCancellation.length === 1 &&
+    cancellationRequested.status === "cancelling" &&
+    cancellationWait.status === 409 &&
+    cancellationError.error === "ECANCELED" &&
+    cancellationFinal.status === "cancelled" &&
+    cancellationFinal.output === null,
+  cancellationIdempotency:
+    cancellationRepeated.status === "cancelled" &&
+    cancellationRepeated.finishedAt === cancellationFinal.finishedAt,
+
   durableBackground:
     longStarted.status === "queued" &&
     earlyLong.status === 408 &&

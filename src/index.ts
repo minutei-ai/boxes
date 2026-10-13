@@ -24,6 +24,7 @@ import {
   MintCapability,
   NetworkResult,
   RunRecord,
+  RunSummary,
   ProcessPage,
   Status,
   Success,
@@ -35,7 +36,7 @@ import { migrateFilesystem } from "./filesystem-migration";
 import { migrateProcesses } from "./process-migration";
 import { migrateWasm } from "./wasm-migration";
 import { readBounded } from "./http";
-import { inspect, list, run, spawn, dispatch, reconcile, wait } from "./process";
+import { inspect, list, run, spawn, dispatch, reconcile, wait, cancel } from "./process";
 import { kernelCall, open, publish, StorageFailure } from "./storage";
 import type { Env } from "./resources";
 
@@ -198,6 +199,11 @@ const route = Effect.fn("api.route")(function* (request: Request, env: Env) {
     Match.when({ op: "process.spawn" }, (action) =>
       spawn(env, capability, action.execution).pipe(
         Effect.map((record) => Schema.encodeSync(Schema.fromJsonString(RunRecord))(record)),
+      ),
+    ),
+    Match.when({ op: "process.cancel" }, (action) =>
+      cancel(env, capability, action).pipe(
+        Effect.map((record) => Schema.encodeSync(Schema.fromJsonString(RunSummary))(record)),
       ),
     ),
     Match.when({ op: "process.wait" }, (action) =>

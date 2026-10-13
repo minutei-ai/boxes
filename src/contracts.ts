@@ -128,6 +128,7 @@ export const ProcessWaitAction = Schema.Struct({
   id: Id,
   timeoutMs: Schema.Int.check(Schema.isBetween({ minimum: 0, maximum: 25_000 })),
 });
+export const ProcessCancelAction = Schema.Struct({ op: Schema.Literal("process.cancel"), id: Id });
 export const ProcessReadAction = Schema.Union([
   ProcessWaitAction,
   Schema.Struct({ op: Schema.Literal("process.get"), id: Id }),
@@ -161,6 +162,7 @@ export const GuestAction = Schema.Union([
   FilesystemAction,
   NetworkAction,
   ProcessReadAction,
+  ProcessCancelAction,
   SoftwareAction,
 ]);
 const InlineRun = Schema.Struct({
@@ -441,7 +443,7 @@ export const WasmStep = Schema.Union([
 ]);
 export const RunRecord = Schema.Struct({
   id: Id,
-  status: Schema.Literals(["queued", "running", "exited", "failed"]),
+  status: Schema.Literals(["queued", "running", "cancelling", "cancelled", "exited", "failed"]),
   sourceHash: Schema.String.check(Schema.isPattern(/^[a-f0-9]{64}$/)),
   language: Schema.Literals(["javascript", "typescript", "python", "shell", "wasm"]),
   startedAt: Schema.Int,
@@ -579,6 +581,7 @@ export const GuestResponse = Schema.Union([
   Exists,
   Link,
   RunRecord,
+  RunSummary,
   ProcessPage,
 ]);
 export const ErrorResponse = Schema.Struct({ error: Schema.String, message: Schema.String });

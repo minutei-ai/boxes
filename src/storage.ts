@@ -6,7 +6,7 @@ import type { Env } from "./resources";
 export class StorageFailure extends Schema.TaggedError<StorageFailure>()("StorageFailure", {
   cause: Schema.Unknown,
 }) {}
-export const open = Effect.fn("filesystem.open")(function* (env: Env, id: string) {
+export const head = Effect.fn("sandbox.head")(function* (env: Env, id: string) {
   const object = yield* Effect.tryPromise({
     try: () => env.OBJECTS.get(`sandboxes/${id}/head.json`),
     catch: (cause) => new StorageFailure({ cause }),
@@ -22,13 +22,17 @@ export const open = Effect.fn("filesystem.open")(function* (env: Env, id: string
   );
   if (head.deleted)
     return yield* new Fault({ code: "ENOENT", status: 404, message: "Sandbox has been disposed" });
+  return { head, etag: object.etag };
+});
+export const open = Effect.fn("filesystem.open")(function* (env: Env, id: string) {
+  const snapshot = yield* head(env, id);
   const kernel = yield* Effect.acquireRelease(
-    kernelCall(() => new Kernel(head.manifest)).pipe(
+    kernelCall(() => new Kernel(snapshot.head.manifest)).pipe(
       Effect.mapError((cause) => new StorageFailure({ cause })),
     ),
     (kernel) => Effect.sync(() => kernel.free()),
   );
-  return { head, kernel, etag: object.etag };
+  return { ...snapshot, kernel };
 });
 
 export const kernelCall = <A>(call: () => A) =>
