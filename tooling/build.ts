@@ -29,6 +29,8 @@ await Effect.runPromise(
       "cirro-guest",
       "-p",
       "cirro-wasi",
+      "-p",
+      "cirro-python",
       "--target",
       "wasm32-unknown-unknown",
       "--release",
@@ -52,8 +54,16 @@ await Effect.runPromise(
       guest: ["--target", "web"],
       compiler: ["--target", "no-modules"],
       wasi: ["--target", "no-modules", "--no-modules-global", "cirroWasi"],
+      python: [
+        "--target",
+        "no-modules",
+        "--no-modules-global",
+        "cirroPython",
+        "--remove-name-section",
+        "--remove-producers-section",
+      ],
     } as const;
-    yield* Effect.forEach(["kernel", "guest", "compiler", "wasi"] as const, (name) =>
+    yield* Effect.forEach(["kernel", "guest", "compiler", "wasi", "python"] as const, (name) =>
       run([
         join(homedir(), ".cargo/bin/wasm-bindgen"),
         `target/wasm32-unknown-unknown/release/cirro_${name}.wasm`,
@@ -61,6 +71,61 @@ await Effect.runPromise(
         "--out-dir",
         `dist/${name}`,
       ]),
+    );
+    yield* run([
+      "cargo",
+      "run",
+      "-p",
+      "cirro-wasm-meter",
+      "--release",
+      "--locked",
+      "--",
+      "dist/python/cirro_python_bg.wasm",
+      "dist/python/metered.wasm",
+    ]);
+    yield* Effect.promise(() =>
+      Bun.write(
+        join(root, "dist/python/cirro_python_bg.wasm"),
+        Bun.file(join(root, "dist/python/metered.wasm")),
+      ),
+    );
+    const pythonGenerated = yield* Effect.promise(() =>
+      Bun.file(join(root, "dist/python/cirro_python.js")).text(),
+    );
+    const destructor = "            wasm.__wbg_pythonguest_free(ptr, 0);";
+    if (!pythonGenerated.includes(destructor))
+      return yield* new BuildFailure({
+        message: "Python binding destructor changed",
+        cause: pythonGenerated.slice(0, 100),
+      });
+    const python = pythonGenerated.replace(destructor, "            void ptr;");
+    const pythonTypes = yield* Effect.promise(() =>
+      Bun.file(join(root, "dist/python/cirro_python.d.ts")).text(),
+    );
+    yield* Effect.promise(() =>
+      Bun.write(
+        join(root, "dist/python/cirro_python.d.ts"),
+        "export {};\n" +
+          pythonTypes
+            .replace(
+              "declare interface InitOutput {",
+              "declare interface InitOutput {\n    readonly __cirro_limits: (fuel: bigint, pages: number) => void;\n    readonly __cirro_fuel: WebAssembly.Global;",
+            )
+            .replaceAll("declare namespace cirroPython", "export declare namespace cirroPython")
+            .replaceAll("declare function cirroPython", "export declare function cirroPython"),
+      ),
+    );
+    yield* Effect.promise(() =>
+      Bun.write(
+        join(root, "dist/python/bindings.js"),
+        `export const createBindings = () => {\n${python}\nreturn cirroPython;\n};\n`,
+      ),
+    );
+    yield* Effect.promise(() =>
+      Bun.write(
+        join(root, "dist/python/bindings.d.ts"),
+        'import { cirroPython } from "./cirro_python";\nexport declare const createBindings: () => typeof cirroPython;\n',
+      ),
     );
     const compiler = yield* Effect.promise(() =>
       Bun.file(join(root, "dist/compiler/cirro_compiler.js")).text(),
@@ -259,7 +324,7 @@ await Effect.runPromise(
           {
             name: "wasm-module",
             setup(builder) {
-              builder.onResolve({ filter: /^cirro:(wasm|guest|compiler|wasi)$/ }, (args) => {
+              builder.onResolve({ filter: /^cirro:(wasm|guest|compiler|wasi|python)$/ }, (args) => {
                 const name = args.path.slice(6);
                 if (name === "wasm") return { path: "./cirro_kernel_bg.wasm", external: true };
                 return { path: `./cirro_${name}_bg.wasm`, external: true };
@@ -272,7 +337,7 @@ await Effect.runPromise(
     );
     if (!result.success)
       return yield* new BuildFailure({ message: "Worker bundle failed", cause: result.logs });
-    yield* Effect.forEach(["kernel", "guest", "compiler", "wasi"], (name) =>
+    yield* Effect.forEach(["kernel", "guest", "compiler", "wasi", "python"], (name) =>
       Effect.promise(() =>
         Bun.write(
           join(root, `dist/worker/cirro_${name}_bg.wasm`),

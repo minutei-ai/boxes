@@ -19,3 +19,8 @@ declare module "cirro:wasi" {
   const module: WebAssembly.Module;
   export default module;
 }
+
+declare module "cirro:python" {
+  const module: WebAssembly.Module;
+  export default module;
+}

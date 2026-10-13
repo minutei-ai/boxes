@@ -26,12 +26,6 @@ export const run = Effect.fn("process.run")(function* (
 ) {
   yield* requirePermission(capability, "execute");
   const session = yield* open(env, capability.sandboxId);
-  if (action.op === "process.run" && action.language === "python")
-    return yield* new Fault({
-      code: "UNSUPPORTED_RUNTIME",
-      status: 501,
-      message: "Python interpreter is not available in the standard Worker",
-    });
   const program = yield* load(env, capability, session.kernel, action);
   const startedAt = yield* Clock.currentTimeMillis;
   const key = `sandboxes/${capability.sandboxId}/runs/${action.id}.json`;

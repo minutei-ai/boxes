@@ -11,6 +11,7 @@ import {
   Path,
   ModuleSource,
   RunAction,
+  PythonAction,
   ScriptProgram,
   WasmProgram,
   WasmConfiguration,
@@ -132,12 +133,52 @@ export const load = Effect.fn("modules.load")(function* (
       });
     return program;
   }
-  if (
-    action.op === "process.run" &&
-    action.language !== "javascript" &&
-    action.language !== "typescript"
-  )
-    return { language: action.language, source: action.source };
+  if (action.op === "process.run" && action.language === "python")
+    return {
+      language: "python" as const,
+      source: action.source,
+      filePath: "/tmp/__cirro_inline__.py",
+      mode: "execute" as const,
+    };
+  if (Schema.is(PythonAction)(action)) {
+    if (action.op === "python.execute")
+      return {
+        language: "python" as const,
+        source: action.source,
+        filePath: yield* kernelCall(() =>
+          kernel.canonical(action.filePath ?? "/tmp/__cirro_inline__.py", "/home/cirro"),
+        ),
+        mode: "execute" as const,
+      };
+    if (action.op === "python.evaluate")
+      return {
+        language: "python" as const,
+        source: action.expression,
+        filePath: yield* kernelCall(() =>
+          kernel.canonical(action.filePath ?? "/tmp/__cirro_inline__.py", "/home/cirro"),
+        ),
+        mode: "evaluate" as const,
+      };
+    yield* requirePermission(capability, "read");
+    const stat = yield* kernelCall(() => kernel.stat(action.path, true)).pipe(
+      Effect.flatMap(Schema.decodeUnknownEffect(Schema.fromJsonString(FileStat))),
+    );
+    if (stat.kind !== "file" || stat.size > 1_048_576)
+      return yield* new Fault({
+        code: "EINVAL",
+        status: 400,
+        message: "Python entry must be a file up to 1 MiB",
+      });
+    const data = yield* read(env, capability.sandboxId, kernel, stat.path);
+    const source = yield* Effect.try({
+      try: () => new TextDecoder("utf-8", { fatal: true }).decode(data),
+      catch: () =>
+        new Fault({ code: "EILSEQ", status: 422, message: "Python source must be UTF-8" }),
+    });
+    return { language: "python" as const, source, filePath: stat.path, mode: "execute" as const };
+  }
+  if (action.op === "process.run" && action.language === "shell")
+    return { language: "shell" as const, source: action.source };
   const root = yield* Match.value(action).pipe(
     Match.when({ op: "process.run" }, (action) =>
       Effect.succeed({

@@ -131,6 +131,15 @@ const shell = await sample(25, async (i) => {
   const record = Schema.decodeUnknownSync(RunRecord)(await response.json());
   if (record.output?.stdout !== "6\n") process.exit(1);
 });
+const python = await sample(25, async (index) => {
+  const response = await call({
+    op: "python.evaluate",
+    id: `python-${index}`,
+    expression: "sum(n*n for n in range(100))",
+  });
+  const record = Schema.decodeUnknownSync(RunRecord)(await response.json());
+  if (record.output?.exitCode !== 0 || record.output.result !== 328350) process.exit(1);
+});
 const report = {
   measuredAt: new Date().toISOString(),
   environment: {
@@ -144,10 +153,12 @@ const report = {
     javascript: (await stat(join(import.meta.dir, "../dist/worker/index.js"))).size,
     kernelWasm: (await stat(join(import.meta.dir, "../dist/worker/cirro_kernel_bg.wasm"))).size,
     wasiWasm: (await stat(join(import.meta.dir, "../dist/worker/cirro_wasi_bg.wasm"))).size,
+    pythonWasm: (await stat(join(import.meta.dir, "../dist/worker/cirro_python_bg.wasm"))).size,
     guestWasm: (await stat(join(import.meta.dir, "../dist/worker/cirro_guest_bg.wasm"))).size,
     compilerWasm: (await stat(join(import.meta.dir, "../dist/worker/cirro_compiler_bg.wasm"))).size,
   },
   measurements: {
+    python,
     sequentialEightFiles,
     batchEightFiles,
     status,

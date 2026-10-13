@@ -756,16 +756,28 @@ test("shell pipelines, redirects, conditionals and files execute against the Rus
   ).toBe("hello cirro\n");
 });
 
-test("Python is rejected explicitly without creating a run", async () => {
+test("native Python executes, captures output and resumes multiple authorized R2 tool requests", async () => {
   const token = await setup("python");
-  const result = await act("python", token, {
+  const response = await act("python", token, {
     op: "process.run",
     id: "python-1",
     language: "python",
-    source: "async def main(tools):\n    return 6 * 7\n",
+    source:
+      "print('native Python')\nawait tools.call({'op':'filesystem.writeFile','path':'/tmp/python','content':'from Python','encoding':'utf8'})\ndata = await tools.call({'op':'filesystem.readFile','path':'/tmp/python'})\n{'answer': 6 * 7, 'content': data['content']}",
   });
-  expect(result.status).toBe(501);
-  expect((await act("python", token, { op: "process.get", id: "python-1" })).status).toBe(404);
+  expect(response.status).toBe(200);
+  const record = Schema.decodeUnknownSync(RunRecord)(await response.json());
+  expect(record.status).toBe("exited");
+  expect(record.output?.exitCode).toBe(0);
+  expect(record.output?.stdout).toBe("native Python\n");
+  expect(record.output?.result).toEqual({
+    answer: 42,
+    content: Buffer.from("from Python").toString("base64"),
+  });
+  const persisted = Schema.decodeUnknownSync(FileContent)(
+    await (await act("python", token, { op: "filesystem.readFile", path: "/tmp/python" })).json(),
+  );
+  expect(Buffer.from(persisted.content, "base64").toString()).toBe("from Python");
 });
 
 test("append and truncate preserve binary sizes, permissions and empty files", async () => {
@@ -3280,4 +3292,225 @@ test("published libc host filesystem imports preserve modes, detached files and 
   );
   expect(denied.output?.exitCode).toBe(0);
   expect(denied.output?.stdout).toBe("temporary file denied\n");
+});
+
+test("Python evaluate and file execution preserve source identity, diagnostics and per-run globals", async () => {
+  const token = await setup("python-entry");
+  const value = Schema.decodeUnknownSync(RunRecord)(
+    await (
+      await act("python-entry", token, {
+        op: "python.evaluate",
+        id: "evaluate",
+        expression: "{'unicode':'nuvem ☁', 'values':[n*n for n in range(4)]}",
+        filePath: "relative.py",
+      })
+    ).json(),
+  );
+  expect(value.output?.exitCode).toBe(0);
+  expect(value.output?.result).toEqual({ unicode: "nuvem ☁", values: [0, 1, 4, 9] });
+  expect(
+    (
+      await act("python-entry", token, {
+        op: "filesystem.writeFile",
+        path: "/tmp/code.py",
+        content: "marker = 'private'\nprint('file executed')\nmarker",
+        encoding: "utf8",
+      })
+    ).status,
+  ).toBe(200);
+  const file = Schema.decodeUnknownSync(RunRecord)(
+    await (
+      await act("python-entry", token, {
+        op: "python.executeFile",
+        id: "file",
+        path: "/tmp/code.py",
+      })
+    ).json(),
+  );
+  expect(file.output?.stdout).toBe("file executed\n");
+  expect(file.output?.result).toBe("private");
+  const empty = Schema.decodeUnknownSync(RunRecord)(
+    await (
+      await act("python-entry", token, {
+        op: "python.evaluate",
+        id: "fresh",
+        expression: "'marker' in globals()",
+      })
+    ).json(),
+  );
+  expect(empty.output?.result).toBe(false);
+  const bad = Schema.decodeUnknownSync(RunRecord)(
+    await (
+      await act("python-entry", token, {
+        op: "python.execute",
+        id: "syntax",
+        source: "if True\n pass",
+        filePath: "/tmp/syntax.py",
+      })
+    ).json(),
+  );
+  expect(bad.output?.exitCode).toBe(1);
+  expect(bad.output?.stderr).toContain("SyntaxError");
+  expect(bad.output?.stderr).toContain("/tmp/syntax.py");
+  const exception = Schema.decodeUnknownSync(RunRecord)(
+    await (
+      await act("python-entry", token, {
+        op: "python.execute",
+        id: "exception",
+        source: "print('before exception')\n1/0",
+      })
+    ).json(),
+  );
+  expect(exception.output?.exitCode).toBe(1);
+  expect(exception.output?.stdout).toBe("before exception\n");
+  expect(exception.output?.stderr).toContain("ZeroDivisionError");
+});
+
+test("Python tool failures retain codes, sandbox scope and entry read grants", async () => {
+  const owner = await setup("python-grants");
+  expect(
+    (
+      await act("python-grants", owner, {
+        op: "filesystem.writeFile",
+        path: "/tmp/read.py",
+        content: "6 * 7",
+        encoding: "utf8",
+      })
+    ).status,
+  ).toBe(200);
+  const minted = await post("/v1/sandboxes/python-grants/capabilities", admin, {
+    permissions: ["read", "execute"],
+    expiresInSeconds: 3600,
+  });
+  const readonly = Schema.decodeUnknownSync(TokenResponse)(await minted.json()).token;
+  const denied = Schema.decodeUnknownSync(RunRecord)(
+    await (
+      await act("python-grants", readonly, {
+        op: "python.execute",
+        id: "denied",
+        source:
+          "try:\n await tools.call({'op':'filesystem.writeFile','path':'/tmp/denied','content':'bad','encoding':'utf8'})\nexcept RuntimeError as error:\n print(error.error)\n17",
+      })
+    ).json(),
+  );
+  expect(denied.output?.exitCode).toBe(0);
+  expect(denied.output?.stdout).toBe("FORBIDDEN\n");
+  expect(denied.output?.result).toBe(17);
+  expect(
+    (
+      await act("python-grants", owner, {
+        op: "filesystem.stat",
+        path: "/tmp/denied",
+        follow: true,
+      })
+    ).status,
+  ).toBe(404);
+  const executeOnly = Schema.decodeUnknownSync(TokenResponse)(
+    await (
+      await post("/v1/sandboxes/python-grants/capabilities", admin, {
+        permissions: ["execute"],
+        expiresInSeconds: 3600,
+      })
+    ).json(),
+  ).token;
+  expect(
+    (
+      await act("python-grants", executeOnly, {
+        op: "python.executeFile",
+        id: "no-read",
+        path: "/tmp/read.py",
+      })
+    ).status,
+  ).toBe(403);
+  expect((await act("python-grants", owner, { op: "process.get", id: "no-read" })).status).toBe(
+    404,
+  );
+  const foreign = await setup("python-foreign");
+  const isolated = Schema.decodeUnknownSync(RunRecord)(
+    await (
+      await act("python-foreign", foreign, {
+        op: "python.execute",
+        id: "isolation",
+        source:
+          "try:\n await tools.call({'op':'filesystem.readFile','path':'/tmp/read.py'})\nexcept RuntimeError as error:\n print(error.error)\n'isolated'",
+      })
+    ).json(),
+  );
+  expect(isolated.output?.stdout).toBe("ENOENT\n");
+  expect(isolated.output?.result).toBe("isolated");
+});
+
+test("Python instruction and memory limits survive disabled tracing and keep the Worker healthy", async () => {
+  const token = await setup("python-budgets");
+  for (const [id, source] of [
+    ["loop", "while True:\n pass"],
+    ["tracing", "import sys\nsys.settrace(None)\nwhile True:\n pass"],
+    ["memory", "[0] * 100000000"],
+  ] as const) {
+    const record = Schema.decodeUnknownSync(RunRecord)(
+      await (await act("python-budgets", token, { op: "python.execute", id, source })).json(),
+    );
+    expect(record.status).toBe("failed");
+    expect(record.output).toBeNull();
+    const healthy = Schema.decodeUnknownSync(RunRecord)(
+      await (
+        await act("python-budgets", token, {
+          op: "python.evaluate",
+          id: `after-${id}`,
+          expression: "6 * 7",
+        })
+      ).json(),
+    );
+    expect(healthy.output?.result).toBe(42);
+  }
+});
+
+test("Python output and host-call budgets fail without undoing acknowledged R2 writes", async () => {
+  const token = await setup("python-output");
+  expect(
+    (await act("python-output", token, { op: "config.patch", policy: { maxOutputBytes: 1024 } }))
+      .status,
+  ).toBe(200);
+  const output = Schema.decodeUnknownSync(RunRecord)(
+    await (
+      await act("python-output", token, {
+        op: "python.execute",
+        id: "large-output",
+        source:
+          "await tools.call({'op':'filesystem.writeFile','path':'/tmp/ack','content':'committed','encoding':'utf8'})\nprint('x' * 4096)",
+      })
+    ).json(),
+  );
+  expect(output.status).toBe("failed");
+  const acknowledged = Schema.decodeUnknownSync(FileContent)(
+    await (
+      await act("python-output", token, { op: "filesystem.readFile", path: "/tmp/ack" })
+    ).json(),
+  );
+  expect(Buffer.from(acknowledged.content, "base64").toString()).toBe("committed");
+  expect(
+    (
+      await act("python-output", token, {
+        op: "config.patch",
+        policy: { maxOutputBytes: 1_048_576, interruptBudget: 100_000 },
+      })
+    ).status,
+  ).toBe(200);
+  const calls = Schema.decodeUnknownSync(RunRecord)(
+    await (
+      await act("python-output", token, {
+        op: "python.execute",
+        id: "calls",
+        source:
+          "for n in range(257):\n await tools.call({'op':'filesystem.exists','path':'/tmp/ack'})",
+      })
+    ).json(),
+  );
+  expect(calls.status).toBe("failed");
+  const healthy = Schema.decodeUnknownSync(RunRecord)(
+    await (
+      await act("python-output", token, { op: "python.evaluate", id: "healthy", expression: "42" })
+    ).json(),
+  );
+  expect(healthy.output?.result).toBe(42);
 });

@@ -3,8 +3,6 @@ import guestWasm from "cirro:guest";
 import { initSync, Guest } from "../dist/guest/cirro_guest";
 import {
   Capability,
-  Fault,
-  GuestAction,
   GuestResponse,
   Program,
   ScriptProgram,
@@ -12,10 +10,12 @@ import {
   RunResult,
   ModuleRequest,
   ModuleBatch,
+  ToolStep,
 } from "./contracts";
 import { guestAction } from "./capabilities";
 import { dynamic } from "./modules";
 import { wasi } from "./wasi";
+import { python } from "./python";
 import type { open } from "./storage";
 import type { Env } from "./resources";
 
@@ -25,8 +25,7 @@ class InterpreterFailure extends Schema.TaggedError<InterpreterFailure>()("Inter
   cause: Schema.Unknown,
 }) {}
 const Step = Schema.Union([
-  Schema.Struct({ kind: Schema.Literal("request"), action: Schema.fromJsonString(GuestAction) }),
-  Schema.Struct({ kind: Schema.Literal("done"), output: Schema.fromJsonString(RunResult) }),
+  ToolStep,
   ModuleRequest.mapFields((fields) => ({ kind: Schema.Literal("module"), ...fields })),
 ]);
 
@@ -38,12 +37,11 @@ export const execute = Effect.fn("execution.run")(function* (
 ) {
   const policy = session.head.policy;
   if (program.language === "python")
-    return yield* new Fault({
-      code: "UNSUPPORTED_RUNTIME",
-      status: 501,
-      message:
-        "Python requires a bounded interpreter inside the standard Worker; Dynamic Workers are disabled",
-    });
+    return {
+      outcome: yield* python(env, capability, program, session).pipe(Effect.result),
+      program,
+      changed: false,
+    };
   if (program.language === "wasm") {
     const outcome = yield* wasi(env, capability, program, session).pipe(Effect.result);
     return { outcome, program, changed: false };

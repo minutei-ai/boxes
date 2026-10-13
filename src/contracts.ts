@@ -162,8 +162,30 @@ export const WasmProgram = Schema.Struct({
   source: ScriptSource,
   ...WasmConfiguration.fields,
 });
+export const PythonAction = Schema.Union([
+  Schema.Struct({
+    op: Schema.Literal("python.execute"),
+    id: Id,
+    source: ScriptSource,
+    filePath: Schema.optionalKey(Path),
+  }),
+  Schema.Struct({
+    op: Schema.Literal("python.evaluate"),
+    id: Id,
+    expression: ScriptSource,
+    filePath: Schema.optionalKey(Path),
+  }),
+  Schema.Struct({ op: Schema.Literal("python.executeFile"), id: Id, path: Path }),
+]);
+export const PythonProgram = Schema.Struct({
+  language: Schema.Literal("python"),
+  source: ScriptSource,
+  filePath: Path,
+  mode: Schema.Literals(["execute", "evaluate"]),
+});
 export const RunAction = Schema.Union([
   InlineRun,
+  PythonAction,
   Schema.Struct({
     op: Schema.Literal("process.run"),
     id: Id,
@@ -220,7 +242,8 @@ export const ModuleBatch = Schema.Struct({
 export const Program = Schema.Union([
   ScriptProgram,
   WasmProgram,
-  Schema.Struct({ language: Schema.Literals(["python", "shell"]), source: ScriptSource }),
+  PythonProgram,
+  Schema.Struct({ language: Schema.Literal("shell"), source: ScriptSource }),
 ]);
 export const Action = Schema.Union([
   GuestAction,
@@ -258,6 +281,10 @@ export const RunResult = Schema.Struct({
   result: Schema.Unknown,
   exitCode: Schema.Int,
 });
+export const ToolStep = Schema.Union([
+  Schema.Struct({ kind: Schema.Literal("request"), action: Schema.fromJsonString(GuestAction) }),
+  Schema.Struct({ kind: Schema.Literal("done"), output: Schema.fromJsonString(RunResult) }),
+]);
 
 export const WasmStep = Schema.Union([
   Schema.Struct({

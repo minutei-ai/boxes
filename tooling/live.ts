@@ -90,12 +90,28 @@ const typescript = Schema.decodeUnknownSync(RunRecord)(
     })
   ).json(),
 );
-const python = await action({
-  op: "process.run",
-  id: "python",
-  language: "python",
-  source: "async def main(tools):\n    return 42\n",
-});
+const python = Schema.decodeUnknownSync(RunRecord)(
+  await (
+    await action({
+      op: "python.execute",
+      id: "python",
+      source:
+        "print('native Python')\nawait tools.call({'op':'filesystem.writeFile','path':'/tmp/python-live','content':'Python on R2','encoding':'utf8'})\n(await tools.call({'op':'filesystem.readFile','path':'/tmp/python-live'}))['content']",
+    })
+  ).json(),
+);
+const pythonLimited = Schema.decodeUnknownSync(RunRecord)(
+  await (
+    await action({
+      op: "python.execute",
+      id: "python-limited",
+      source: "import sys\nsys.settrace(None)\nwhile True:\n pass",
+    })
+  ).json(),
+);
+const pythonHealthy = Schema.decodeUnknownSync(RunRecord)(
+  await (await action({ op: "python.evaluate", id: "python-healthy", expression: "6 * 7" })).json(),
+);
 const wasm = await Bun.file(join(import.meta.dir, "../dist/guest-test.wasm")).arrayBuffer();
 const rust = Schema.decodeUnknownSync(RunRecord)(
   await (
@@ -561,7 +577,11 @@ const checks = {
   typescript:
     typescript.status === "exited" &&
     Schema.is(Schema.Struct({ value: Schema.Literal(42) }))(typescript.output?.result),
-  pythonExplicitlyUnavailable: python.status === 501,
+  python:
+    python.output?.exitCode === 0 &&
+    python.output.stdout === "native Python\n" &&
+    python.output.result === Buffer.from("Python on R2").toString("base64"),
+  pythonLimits: pythonLimited.status === "failed" && pythonHealthy.output?.result === 42,
   rust: rust.status === "exited" && rust.output?.result === 42,
   authorizedNetwork: network.status === 200,
   deniedNetwork: denied.status === 403,
@@ -594,9 +614,9 @@ const report = {
   measuredAt: new Date().toISOString(),
   url: configuration.url,
   profile: "minutei",
-  runtime: "standard-worker-rust-quickjs-wasmi",
+  runtime: "standard-worker-rust-quickjs-wasmi-rustpython",
   parityComplete: false,
-  scope: "Implemented operations and explicit Python rejection",
+  scope: "Implemented operations, native Python, isolation and resource limits",
   sandboxId: id,
   checks,
   allPassed: Object.values(checks).every(Boolean),

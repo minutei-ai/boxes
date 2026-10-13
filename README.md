@@ -15,7 +15,7 @@ Rust/Wasm agent sandboxes inside Cloudflare Workers. Effect owns validated reque
 - Persistent execution IDs, code digests, completed or failed results, and paginated process summaries.
 - Conditional R2 publication: concurrent filesystem changes either commit together or report a conflict.
 
-Cirro does not currently provide Linux compatibility, a complete POSIX shell, npm/pip installation, interactive terminals or reliable background processes. Python is unavailable after the ordinary Worker cutover and returns `501 UNSUPPORTED_RUNTIME`. JavaScript uses QuickJS without Node modules; use `tools.call` for durable files.
+Cirro does not currently provide Linux compatibility, a complete POSIX shell, npm/pip installation, interactive terminals or reliable background processes. Python runs in a fresh RustPython Wasm instance with native instruction and memory limits. JavaScript uses QuickJS without Node modules; use `tools.call` for durable files. Python uses `await tools.call(...)`; synchronous filesystem imports and pip remain pending.
 
 ## Install and verify
 
@@ -33,7 +33,7 @@ bun run bench
 
 The benchmark records distributions and artifact sizes in [performance-local.json](docs/evidence/performance-local.json). These are local measurements, not production latency or upstream comparisons.
 
-Validation passed 28 Rust tests, 74 workerd integration tests, five compiled wasm32 SDK tests and 44 production checks. Deployment uses the `minutei` profile. [Production evidence](docs/evidence/production.json) covers implemented operations, isolation and resource limits; it includes the explicit Python rejection and does not establish upstream parity. Repeat it with `CIRRO_URL=<deployed-url> bun run live` and the private administrator key in `.env`.
+Run `bun run check` for the native Rust suites, compiled SDK checks and workerd integration tests. Deployment uses the `minutei` profile. [Production evidence](docs/evidence/production.json) records implemented operations and does not establish upstream parity. Repeat it with `CIRRO_URL=<deployed-url> bun run live` and the private administrator key in `.env`.
 
 ## Deploy
 
@@ -133,3 +133,11 @@ Install an upstream v2 `.aospkg` file from a sandbox path or an authorized HTTPS
 ```
 
 Installed command execution currently supports WASI. It accepts the same argv/environment/stdin options as file execution; explicit environment values override package defaults. The shell executes installed WASI commands through PATH with pipes and redirections. Qualified executable paths resolve relative to the shell directory; the guest libc working directory still defaults to root. The published `jq` package is verified with its pinned SHA-256 using `CIRRO_URL=... bun run software:proof`; this checks version, stdin filters, file input and a shell pipeline. Host filesystem imports support one-shot creation modes, hidden pathname preopens and anonymous temporary files; direct I/O fails with NOTSUP, and network send/recv on ordinary descriptors reports NOTSOCK. Default release bundles, child working-directory semantics and other command runtimes are still pending. Filesystem deployment migrates existing manifests to version 3, preserving data and timestamps and initializing the package catalog.
+
+Python accepts `python.execute` (`source`), `python.evaluate` (`expression`) and `python.executeFile` (`path`), with a unique execution `id`. Direct source actions accept an optional diagnostic `filePath`; file execution requires `read` as well as `execute`. Scripts support top-level await and return their final expression. Each run has fresh globals, captured stdout/stderr and JSON results. Tool errors raise `RuntimeError` with the server's `error` and `message` attributes. Native code, package installation, persistent contexts and imports from the sandbox filesystem are not implemented yet.
+
+```python
+print("running inside the Worker")
+await tools.call({"op": "filesystem.writeFile", "path": "/tmp/result", "content": "42", "encoding": "utf8"})
+(await tools.call({"op": "filesystem.readFile", "path": "/tmp/result"}))["content"]
+```

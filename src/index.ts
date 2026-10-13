@@ -167,6 +167,9 @@ const route = Effect.fn("api.route")(function* (request: Request, env: Env) {
       { op: "typescript.execute" },
       { op: "typescript.evaluate" },
       { op: "typescript.executeFile" },
+      { op: "python.execute" },
+      { op: "python.evaluate" },
+      { op: "python.executeFile" },
       (action) =>
         run(env, capability, action).pipe(
           Effect.map((result) => Schema.encodeSync(Schema.fromJsonString(RunRecord))(result)),
