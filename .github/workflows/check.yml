@@ -1,0 +1,23 @@
+name: Check
+on:
+  push:
+  pull_request:
+permissions:
+  contents: read
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: 1.4.3
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: wasm32-unknown-unknown
+          components: clippy,rustfmt
+      - run: bun install --frozen-lockfile
+      - run: cargo install wasm-bindgen-cli --version 0.2.129 --locked
+      - run: bun run format:check
+      - run: bun run check

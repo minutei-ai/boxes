@@ -1,0 +1,7 @@
+# Cirro agent guide
+
+Cirro's target is behavioral parity with the upstream operations recorded in `docs/parity.md`, implemented inside Cloudflare Workers. Rust owns kernel semantics, Effect owns request contracts/operation lifetimes, Alchemy owns infrastructure, and R2 owns application persistence. Resolve installed APIs before coding. Keep guest capabilities scoped; never expose bucket bindings or administrator credentials.
+
+Inspect the current diff and preserve unrelated work. Every supported operation must consume its contract, including pagination, cancellation and audit inputs when introduced. Reject unsupported behavior explicitly. Keep one authority for each datum and lifetime; no emulated green results or stub endpoints. Authored TypeScript uses Effect Schema contracts, named domain Effects and explicit branches; no casts, non-null assertions, comments, ternaries or statement try/catch. Rust uses native fallible types and bounded algorithms.
+
+Use `CONTRIBUTING.md` for verification and `docs/architecture.md` for commit/recovery invariants. `bun run check` exercises the actual Worker and Wasm. Local proof, remote CI, deployment and production/model behavior are distinct gates. Do not call the project complete while parity gates remain open. Keep credentials, private workloads and temporary research outside Git. Refresh only the explicitly selected authentication profile; do not switch accounts to bypass a blocked capability.

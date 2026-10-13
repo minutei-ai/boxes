@@ -1,0 +1,57 @@
+{
+  "measuredAt": "2026-10-13T10:02:49.600Z",
+  "environment": {
+    "runtime": "local workerd via Miniflare",
+    "miniflare": "5.20261006.1-alpha",
+    "production": false,
+    "platform": "linux",
+    "arch": "x64"
+  },
+  "artifactBytes": {
+    "javascript": 158387,
+    "wasm": 776725
+  },
+  "measurements": {
+    "status": {
+      "count": 100,
+      "p50Ms": 3.276066999999898,
+      "p95Ms": 4.8739009999999325,
+      "minMs": 2.755390000000034,
+      "maxMs": 6.72662600000001
+    },
+    "write256KiB": {
+      "count": 25,
+      "p50Ms": 10.59975499999996,
+      "p95Ms": 12.721022000000175,
+      "minMs": 9.270575000000008,
+      "maxMs": 25.945584000000053
+    },
+    "read256KiB": {
+      "count": 25,
+      "p50Ms": 7.353425000000016,
+      "p95Ms": 9.027545000000146,
+      "minMs": 6.681190000000015,
+      "maxMs": 10.623209999999972
+    },
+    "isolatedJavascript": {
+      "count": 25,
+      "p50Ms": 16.692455999999993,
+      "p95Ms": 22.017939999999953,
+      "minMs": 16.234852000000046,
+      "maxMs": 22.49704900000006
+    },
+    "shellPipeline": {
+      "count": 25,
+      "p50Ms": 9.482782000000043,
+      "p95Ms": 11.534336000000167,
+      "minMs": 8.919848999999886,
+      "maxMs": 16.314253000000008
+    }
+  },
+  "contentDeduplication": {
+    "writes": 25,
+    "uniqueBlocks": 1,
+    "logicalBytesWritten": 6553600,
+    "storedBlockBytes": 262144
+  }
+}
