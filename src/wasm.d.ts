@@ -14,3 +14,8 @@ declare module "cirro:compiler" {
   const module: WebAssembly.Module;
   export default module;
 }
+
+declare module "cirro:wasi" {
+  const module: WebAssembly.Module;
+  export default module;
+}

@@ -1,12 +1,11 @@
 import { Effect, Result, Schema } from "effect";
 import guestWasm from "cirro:guest";
-import { initSync, Guest, run_wasm } from "../dist/guest/cirro_guest";
+import { initSync, Guest } from "../dist/guest/cirro_guest";
 import {
   Capability,
   Fault,
   GuestAction,
   GuestResponse,
-  Policy,
   Program,
   ScriptProgram,
   ErrorResponse,
@@ -16,6 +15,8 @@ import {
 } from "./contracts";
 import { guestAction } from "./capabilities";
 import { dynamic } from "./modules";
+import { wasi } from "./wasi";
+import type { open } from "./storage";
 import type { Env } from "./resources";
 
 initSync({ module: guestWasm });
@@ -33,8 +34,9 @@ export const execute = Effect.fn("execution.run")(function* (
   env: Env,
   capability: typeof Capability.Type,
   program: typeof Program.Type,
-  policy: typeof Policy.Type,
+  session: Effect.Success<ReturnType<typeof open>>,
 ) {
+  const policy = session.head.policy;
   if (program.language === "python")
     return yield* new Fault({
       code: "UNSUPPORTED_RUNTIME",
@@ -43,20 +45,8 @@ export const execute = Effect.fn("execution.run")(function* (
         "Python requires a bounded interpreter inside the standard Worker; Dynamic Workers are disabled",
     });
   if (program.language === "wasm") {
-    const result = yield* Effect.try({
-      try: () =>
-        run_wasm(
-          Buffer.from(program.source, "base64"),
-          policy.memoryBytes,
-          BigInt(policy.interruptBudget) * 1000n,
-        ),
-      catch: (cause) => new InterpreterFailure({ cause }),
-    });
-    return {
-      outcome: Result.succeed({ stdout: "", stderr: "", result, exitCode: 0 }),
-      program,
-      changed: false,
-    };
+    const outcome = yield* wasi(env, capability, program.source, session).pipe(Effect.result);
+    return { outcome, program, changed: false };
   }
   if (!("modules" in program))
     return yield* new InterpreterFailure({ cause: "This program belongs to another runtime" });

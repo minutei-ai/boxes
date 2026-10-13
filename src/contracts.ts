@@ -180,6 +180,29 @@ export const RunResult = Schema.Struct({
   result: Schema.Unknown,
   exitCode: Schema.Int,
 });
+
+export const WasmStep = Schema.Union([
+  Schema.Struct({
+    kind: Schema.Literal("open"),
+    path: Path,
+    base: Path,
+    read: Schema.Boolean,
+    write: Schema.Boolean,
+    create: Schema.Boolean,
+    truncate: Schema.Boolean,
+    exclusive: Schema.Boolean,
+    directory: Schema.Boolean,
+    follow: Schema.Boolean,
+  }),
+  Schema.Struct({ kind: Schema.Literal("flush"), path: Path, fd: Schema.Int }),
+  Schema.Struct({ kind: Schema.Literal("sync") }),
+  Schema.Struct({
+    kind: Schema.Literal("random"),
+    length: Schema.Int.check(Schema.isBetween({ minimum: 0, maximum: 65536 })),
+  }),
+  Schema.Struct({ kind: Schema.Literal("clock"), clock: Schema.Literals([0, 1]) }),
+  Schema.Struct({ kind: Schema.Literal("done"), output: RunResult }),
+]);
 export const RunRecord = Schema.Struct({
   id: Id,
   status: Schema.Literals(["running", "exited", "failed"]),

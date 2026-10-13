@@ -44,6 +44,8 @@ export const kernelCall = <A>(call: () => A) =>
           return new Fault({ code, status: 409, message: cause });
         if (code === "ENOSPC" || code === "EFBIG")
           return new Fault({ code, status: 413, message: cause });
+        if (["ENOTDIR", "EISDIR", "ELOOP"].includes(code))
+          return new Fault({ code, status: 400, message: cause });
         return new Fault({ code: "EINVAL", status: 400, message: cause });
       }
       return new StorageFailure({ cause });
@@ -80,8 +82,9 @@ export const read = Effect.fn("filesystem.read")(function* (
   id: string,
   kernel: Kernel,
   path: string,
+  forWrite = false,
 ) {
-  const refs = yield* kernelCall(() => kernel.chunks(path));
+  const refs = yield* kernelCall(() => kernel.chunks(path, forWrite));
   const hashes = yield* Schema.decodeUnknownEffect(Schema.fromJsonString(Chunks))(refs);
   const metadata = yield* kernelCall(() => kernel.stat(path, true)).pipe(
     Effect.flatMap(Schema.decodeUnknownEffect(Schema.fromJsonString(FileStat))),

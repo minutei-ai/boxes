@@ -6,7 +6,6 @@ use std::collections::VecDeque;
 use std::rc::Rc;
 use wasm_bindgen::prelude::*;
 
-mod binary;
 mod modules;
 
 #[derive(Deserialize)]

@@ -7,7 +7,7 @@ Rust/Wasm agent sandboxes inside Cloudflare Workers. Effect owns validated reque
 ## What runs today
 
 - Rust filesystem kernel with directories, files, modes, relative symlinks, rename, append and truncate.
-- Rust QuickJS for JavaScript, Oxc for TypeScript and Wasmi for standalone Wasm, inside one ordinary Worker.
+- Rust QuickJS for JavaScript, Oxc for TypeScript and Wasmi for Wasm/WASI, inside one ordinary Worker.
 - JavaScript/TypeScript script execution, expression evaluation and execution of files with sandbox imports, reexports, cycles and symlinks.
 - A bounded shell with pipes, redirection, conditionals and initial commands.
 - Capability tokens scoped to one sandbox, permission set and expiration.
@@ -33,7 +33,7 @@ bun run bench
 
 The benchmark records distributions and artifact sizes in [performance-local.json](docs/evidence/performance-local.json). These are local measurements, not production latency or upstream comparisons.
 
-Validation passed 19 Rust tests, 37 workerd integration tests and 28 production checks. Deployment uses the `minutei` profile. [Production evidence](docs/evidence/production.json) covers implemented operations, isolation and resource limits; it includes the explicit Python rejection and does not establish upstream parity. Repeat it with `CIRRO_URL=<deployed-url> bun run live` and the private administrator key in `.env`.
+Validation passed 20 Rust tests, 48 workerd integration tests and 33 production checks. Deployment uses the `minutei` profile. [Production evidence](docs/evidence/production.json) covers implemented operations, isolation and resource limits; it includes the explicit Python rejection and does not establish upstream parity. Repeat it with `CIRRO_URL=<deployed-url> bun run live` and the private administrator key in `.env`.
 
 ## Deploy
 
@@ -92,7 +92,7 @@ File execution and imports require `read` in addition to `execute`. Rust parses 
 
 The parser/compiler uses a fresh Wasm instance per module, with 64 MiB maximum linear memory. Stack exhaustion in one compilation cannot poison later requests. Graphs allow at most 128 modules, 128 imports per module and 8 MiB serialized data. Source compilation is not TypeScript project type checking.
 
-For `language: "shell"`, source is a shell script. For `language: "wasm"`, source is canonical base64 of a module exporting `run() -> i32` and requiring no imports. Wasmi interprets it with fuel and memory limits; arbitrary Wasm is never compiled through Worker JavaScript. WASI support is pending.
+For `language: "shell"`, source is a shell script. For `language: "wasm"`, source is canonical base64 of a module exporting `_start()` for a WASI Preview 1 command or `run() -> i32` for a standalone guest. Wasmi interprets it with fuel and memory limits inside a fresh Rust host instance; arbitrary Wasm is never compiled through Worker JavaScript. WASI file descriptors support R2-backed open/read/write, positional I/O, seek, close and sync, plus captured stdio, clock and entropy. Files publish together at completion; explicit sync creates a durable checkpoint. Unsynced changes disappear after a trap; earlier checkpoints remain. Args/environment are empty and stdin is EOF until process options ship. Unsupported syscalls fail explicitly; this is not full WASI or software-package parity.
 
 Read files using `filesystem.readFile`; the result contains canonical base64 bytes and a byte size. `filesystem.writeFile` accepts `utf8` or canonical `base64`. Unknown fields and unsupported operations are rejected. `filesystem.writeFiles` accepts up to 128 `{path,content,encoding}` entries, creates parent directories and returns per-file success/error results with one final root publication. `filesystem.readFiles` accepts `paths` and returns base64 content or an error per path from one snapshot. Batches allow at most 16 MiB total decoded content. `filesystem.readdirRecursive` accepts `path` with optional `maxDepth` (default 64; 0 lists immediate children) and `exclude` names; it does not descend through child symlinks. `filesystem.realpath` returns the canonical target path.
 

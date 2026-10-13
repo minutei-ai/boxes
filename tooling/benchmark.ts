@@ -93,6 +93,8 @@ const batchEightFiles = await sample(25, async () => {
   await response.text();
 });
 const afterBatch = Schema.decodeUnknownSync(Status)(await (await call({ op: "vm.status" })).json());
+const bucket = await mf.getR2Bucket("OBJECTS");
+const blocks = await bucket.list({ prefix: "sandboxes/bench/blobs/" });
 const javascript = await sample(25, async (i) => {
   const response = await call({
     op: "process.run",
@@ -103,6 +105,22 @@ const javascript = await sample(25, async (i) => {
   const record = Schema.decodeUnknownSync(RunRecord)(await response.json());
   if (record.output?.result !== 42) process.exit(1);
 });
+const wasiSource = Buffer.from(
+  await Bun.file(join(import.meta.dir, "../dist/wasi-test.wasm")).arrayBuffer(),
+).toString("base64");
+const beforeWasi = Schema.decodeUnknownSync(Status)(await (await call({ op: "vm.status" })).json());
+const wasiFileAndSync = await sample(25, async (index) => {
+  const response = await call({
+    op: "process.run",
+    id: `wasi-${index}`,
+    language: "wasm",
+    source: wasiSource,
+  });
+  const record = Schema.decodeUnknownSync(RunRecord)(await response.json());
+  if (record.output?.exitCode !== 0 || record.output.stdout !== "persistent WASI\n")
+    process.exit(1);
+});
+const afterWasi = Schema.decodeUnknownSync(Status)(await (await call({ op: "vm.status" })).json());
 const shell = await sample(25, async (i) => {
   const response = await call({
     op: "process.run",
@@ -113,8 +131,6 @@ const shell = await sample(25, async (i) => {
   const record = Schema.decodeUnknownSync(RunRecord)(await response.json());
   if (record.output?.stdout !== "6\n") process.exit(1);
 });
-const bucket = await mf.getR2Bucket("OBJECTS");
-const blocks = await bucket.list({ prefix: "sandboxes/bench/blobs/" });
 const report = {
   measuredAt: new Date().toISOString(),
   environment: {
@@ -127,6 +143,7 @@ const report = {
   artifactBytes: {
     javascript: (await stat(join(import.meta.dir, "../dist/worker/index.js"))).size,
     kernelWasm: (await stat(join(import.meta.dir, "../dist/worker/cirro_kernel_bg.wasm"))).size,
+    wasiWasm: (await stat(join(import.meta.dir, "../dist/worker/cirro_wasi_bg.wasm"))).size,
     guestWasm: (await stat(join(import.meta.dir, "../dist/worker/cirro_guest_bg.wasm"))).size,
     compilerWasm: (await stat(join(import.meta.dir, "../dist/worker/cirro_compiler_bg.wasm"))).size,
   },
@@ -137,8 +154,10 @@ const report = {
     write256KiB: writes,
     read256KiB: reads,
     isolatedJavascript: javascript,
+    wasiFileAndSync,
     shellPipeline: shell,
   },
+  wasiPublication: { samples: 25, rootPublications: afterWasi.generation - beforeWasi.generation },
   batchPublication: {
     filesPerSample: 8,
     samples: 25,
@@ -146,9 +165,9 @@ const report = {
     batchPublications: afterBatch.generation - afterSequential.generation,
   },
   contentDeduplication: {
-    writes: 25,
+    singleFileWrites: 25,
     uniqueBlocks: blocks.objects.length,
-    logicalBytesWritten: 25 * content.length,
+    singleFileLogicalBytesWritten: 25 * content.length,
     storedBlockBytes: blocks.objects.reduce((size, block) => size + block.size, 0),
   },
 };

@@ -15,7 +15,7 @@ jobs:
           bun-version: 1.4.3
       - uses: dtolnay/rust-toolchain@stable
         with:
-          targets: wasm32-unknown-unknown
+          targets: wasm32-unknown-unknown,wasm32-wasip1
           components: clippy,rustfmt
       - run: bun install --frozen-lockfile
       - run: sudo apt-get update && sudo apt-get install -y clang llvm

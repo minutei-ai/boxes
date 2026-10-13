@@ -27,6 +27,8 @@ await Effect.runPromise(
       "cirro-kernel",
       "-p",
       "cirro-guest",
+      "-p",
+      "cirro-wasi",
       "--target",
       "wasm32-unknown-unknown",
       "--release",
@@ -45,13 +47,17 @@ await Effect.runPromise(
       "-C",
       "link-arg=--max-memory=67108864",
     ]);
-    const targets = { kernel: "web", guest: "web", compiler: "no-modules" } as const;
-    yield* Effect.forEach(["kernel", "guest", "compiler"] as const, (name) =>
+    const targets = {
+      kernel: ["--target", "web"],
+      guest: ["--target", "web"],
+      compiler: ["--target", "no-modules"],
+      wasi: ["--target", "no-modules", "--no-modules-global", "cirroWasi"],
+    } as const;
+    yield* Effect.forEach(["kernel", "guest", "compiler", "wasi"] as const, (name) =>
       run([
         join(homedir(), ".cargo/bin/wasm-bindgen"),
         `target/wasm32-unknown-unknown/release/cirro_${name}.wasm`,
-        "--target",
-        targets[name],
+        ...targets[name],
         "--out-dir",
         `dist/${name}`,
       ]),
@@ -71,6 +77,33 @@ await Effect.runPromise(
         'import "./cirro_compiler";\nexport declare const createBindings: () => typeof wasm_bindgen;\n',
       ),
     );
+    const wasi = yield* Effect.promise(() =>
+      Bun.file(join(root, "dist/wasi/cirro_wasi.js")).text(),
+    );
+    const wasiTypes = yield* Effect.promise(() =>
+      Bun.file(join(root, "dist/wasi/cirro_wasi.d.ts")).text(),
+    );
+    yield* Effect.promise(() =>
+      Bun.write(
+        join(root, "dist/wasi/cirro_wasi.d.ts"),
+        "export {};\n" +
+          wasiTypes
+            .replaceAll("declare namespace cirroWasi", "export declare namespace cirroWasi")
+            .replaceAll("declare function cirroWasi", "export declare function cirroWasi"),
+      ),
+    );
+    yield* Effect.promise(() =>
+      Bun.write(
+        join(root, "dist/wasi/bindings.js"),
+        `export const createBindings = () => {\n${wasi}\nreturn cirroWasi;\n};\n`,
+      ),
+    );
+    yield* Effect.promise(() =>
+      Bun.write(
+        join(root, "dist/wasi/bindings.d.ts"),
+        'import { cirroWasi } from "./cirro_wasi";\nexport declare const createBindings: () => typeof cirroWasi;\n',
+      ),
+    );
     yield* run([
       "rustc",
       "--crate-type",
@@ -86,6 +119,60 @@ await Effect.runPromise(
       "-o",
       "dist/guest-test.wasm",
     ]);
+    yield* run([
+      "rustc",
+      "--target",
+      "wasm32-wasip1",
+      "-O",
+      "-C",
+      "strip=symbols",
+      "tests/fixtures/wasi.rs",
+      "-o",
+      "dist/wasi-test.wasm",
+    ]);
+    yield* Effect.forEach(
+      [
+        "bad-pointer",
+        "buffers",
+        "race-a",
+        "race-b",
+        "rights",
+        "positioned",
+        "aliases",
+        "budget",
+        "writeonly",
+        "writeonly-write",
+        "escape",
+        "nofollow",
+        "symlink-escape",
+        "descriptors",
+        "closed-stdio",
+        "clock-random",
+        "fuel",
+        "memory",
+        "exit",
+        "output",
+        "trap",
+        "synced-trap",
+        "create-denied",
+      ],
+      (name) =>
+        run([
+          "rustc",
+          "--crate-type",
+          "cdylib",
+          "--target",
+          "wasm32-unknown-unknown",
+          "-O",
+          "-C",
+          "strip=symbols",
+          "--cfg",
+          `case="${name}"`,
+          "tests/fixtures/wasi-abi.rs",
+          "-o",
+          `dist/wasi-${name}.wasm`,
+        ]),
+    );
     const result = yield* Effect.promise(() =>
       Bun.build({
         entrypoints: [join(root, "src/index.ts")],
@@ -98,7 +185,7 @@ await Effect.runPromise(
           {
             name: "wasm-module",
             setup(builder) {
-              builder.onResolve({ filter: /^cirro:(wasm|guest|compiler)$/ }, (args) => {
+              builder.onResolve({ filter: /^cirro:(wasm|guest|compiler|wasi)$/ }, (args) => {
                 const name = args.path.slice(6);
                 if (name === "wasm") return { path: "./cirro_kernel_bg.wasm", external: true };
                 return { path: `./cirro_${name}_bg.wasm`, external: true };
@@ -111,7 +198,7 @@ await Effect.runPromise(
     );
     if (!result.success)
       return yield* new BuildFailure({ message: "Worker bundle failed", cause: result.logs });
-    yield* Effect.forEach(["kernel", "guest", "compiler"], (name) =>
+    yield* Effect.forEach(["kernel", "guest", "compiler", "wasi"], (name) =>
       Effect.promise(() =>
         Bun.write(
           join(root, `dist/worker/cirro_${name}_bg.wasm`),

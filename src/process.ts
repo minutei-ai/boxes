@@ -77,7 +77,7 @@ export const run = Effect.fn("process.run")(function* (
         changed: false,
         outcome: yield* shell(env, capability, program.source).pipe(Effect.result),
       };
-    return yield* execute(env, capability, program, session.head.policy);
+    return yield* execute(env, capability, program, session);
   }).pipe(Effect.result);
   const snapshot = yield* Effect.gen(function* () {
     if (output._tag === "Success" && output.success.changed) {

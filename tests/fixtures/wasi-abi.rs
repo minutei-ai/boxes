@@ -1,0 +1,286 @@
+#![no_std]
+
+#[repr(C)]
+struct Iovec {
+    pointer: *const u8,
+    length: usize,
+}
+
+#[link(wasm_import_module = "wasi_snapshot_preview1")]
+unsafe extern "C" {
+    fn path_open(
+        fd: u32,
+        follow: u32,
+        path: *const u8,
+        length: usize,
+        flags: u32,
+        rights: u64,
+        inheriting: u64,
+        fdflags: u32,
+        result: *mut u32,
+    ) -> i32;
+    fn fd_write(fd: u32, vectors: *const Iovec, count: usize, written: *mut u32) -> i32;
+    fn fd_read(fd: u32, vectors: *const Iovec, count: usize, read: *mut u32) -> i32;
+    fn fd_pread(fd: u32, vectors: *const Iovec, count: usize, offset: u64, read: *mut u32) -> i32;
+    fn fd_pwrite(
+        fd: u32,
+        vectors: *const Iovec,
+        count: usize,
+        offset: u64,
+        written: *mut u32,
+    ) -> i32;
+    fn fd_sync(fd: u32) -> i32;
+    fn fd_close(fd: u32) -> i32;
+    fn random_get(bytes: *mut u8, length: usize) -> i32;
+    fn clock_time_get(clock: u32, precision: u64, time: *mut u64) -> i32;
+    fn proc_exit(code: u32) -> !;
+}
+
+fn open(
+    base: u32,
+    path: &[u8],
+    flags: u32,
+    rights: u64,
+    inheriting: u64,
+    follow: u32,
+) -> Result<u32, i32> {
+    let mut fd = 0;
+    let errno = unsafe {
+        path_open(
+            base,
+            follow,
+            path.as_ptr(),
+            path.len(),
+            flags,
+            rights,
+            inheriting,
+            0,
+            &mut fd,
+        )
+    };
+    if errno != 0 {
+        return Err(errno);
+    }
+    Ok(fd)
+}
+
+fn write(fd: u32, data: &[u8]) -> i32 {
+    let mut written = 0;
+    let vector = Iovec {
+        pointer: data.as_ptr(),
+        length: data.len(),
+    };
+    unsafe { fd_write(fd, &vector, 1, &mut written) }
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn run() -> i32 {
+    if cfg!(case = "buffers") {
+        let first = match open(3, b"tmp/large", 0, 2, 0, 1) {
+            Ok(fd) => fd,
+            Err(errno) => return errno,
+        };
+        if !matches!(open(3, b"tmp/small", 0, 2, 0, 1), Err(48)) {
+            return -1;
+        }
+        if unsafe { fd_close(first) } != 0 {
+            return -1;
+        }
+        if open(3, b"tmp/small", 0, 2, 0, 1).is_err() {
+            return -1;
+        }
+        return 42;
+    }
+    if cfg!(case = "race-a") || cfg!(case = "race-b") {
+        let data = if cfg!(case = "race-a") { b"A" } else { b"B" };
+        for path in [b"tmp/race-one", b"tmp/race-two"] {
+            let fd = match open(3, path, 9, 64, 0, 1) {
+                Ok(fd) => fd,
+                Err(errno) => return errno,
+            };
+            let errno = write(fd, data);
+            if errno != 0 {
+                return errno;
+            }
+        }
+        return 42;
+    }
+    if cfg!(case = "bad-pointer") {
+        let mut written = 0;
+        return unsafe { fd_write(1, 0xfffffff0usize as *const Iovec, 1, &mut written) };
+    }
+    if cfg!(case = "rights") || cfg!(case = "writeonly") || cfg!(case = "writeonly-write") {
+        let rights = if cfg!(case = "rights") { 2 } else { 64 };
+        let fd = match open(3, b"tmp/existing", 0, rights, 0, 1) {
+            Ok(fd) => fd,
+            Err(errno) => return errno,
+        };
+        if cfg!(case = "rights") || cfg!(case = "writeonly-write") {
+            return write(fd, b"changed");
+        }
+        let mut data = [0u8; 32];
+        let vector = Iovec {
+            pointer: data.as_mut_ptr(),
+            length: data.len(),
+        };
+        let mut read = 0;
+        return unsafe { fd_read(fd, &vector, 1, &mut read) };
+    }
+    if cfg!(case = "positioned") || cfg!(case = "aliases") {
+        let fd = match open(3, b"tmp/existing", 0, 2 | 4 | 64, 0, 1) {
+            Ok(fd) => fd,
+            Err(errno) => return errno,
+        };
+        let mut count = 0;
+        let mut data = [0u8; 2];
+        if cfg!(case = "positioned") {
+            let source = Iovec {
+                pointer: b"AB".as_ptr(),
+                length: 2,
+            };
+            let errno = unsafe { fd_pwrite(fd, &source, 1, 2, &mut count) };
+            if errno != 0 {
+                return errno;
+            }
+            let output = Iovec {
+                pointer: data.as_mut_ptr(),
+                length: 2,
+            };
+            let errno = unsafe { fd_pread(fd, &output, 1, 2, &mut count) };
+            if errno != 0 || &data != b"AB" {
+                return -1;
+            }
+            let errno = unsafe { fd_read(fd, &output, 1, &mut count) };
+            if errno != 0 || &data != b"or" {
+                return -1;
+            }
+        } else {
+            let other = match open(3, b"tmp/existing", 0, 2, 0, 1) {
+                Ok(fd) => fd,
+                Err(errno) => return errno,
+            };
+            if write(fd, b"CH") != 0 {
+                return -1;
+            }
+            let output = Iovec {
+                pointer: data.as_mut_ptr(),
+                length: 2,
+            };
+            if unsafe { fd_read(other, &output, 1, &mut count) } != 0 || &data != b"CH" {
+                return -1;
+            }
+        }
+        return 42;
+    }
+    if cfg!(case = "budget") {
+        let mut byte = 0u8;
+        for _ in 0..257 {
+            if unsafe { random_get(&mut byte, 1) } != 0 {
+                return -1;
+            }
+        }
+        return 42;
+    }
+    if cfg!(case = "escape") {
+        return match open(3, b"../escape", 1, 64, 0, 1) {
+            Ok(_) => -1,
+            Err(errno) => errno,
+        };
+    }
+    if cfg!(case = "nofollow") {
+        return match open(3, b"tmp/link", 0, 2, 0, 0) {
+            Ok(_) => -1,
+            Err(errno) => errno,
+        };
+    }
+    if cfg!(case = "symlink-escape") {
+        let fd = match open(3, b"tmp/scoped", 2, 1 << 13, 2, 1) {
+            Ok(fd) => fd,
+            Err(errno) => return errno,
+        };
+        return match open(fd, b"outside", 0, 2, 0, 1) {
+            Ok(_) => -1,
+            Err(errno) => errno,
+        };
+    }
+    if cfg!(case = "descriptors") {
+        for _ in 0..129 {
+            if let Err(errno) = open(3, b"tmp/existing", 0, 2, 0, 1) {
+                return errno;
+            }
+        }
+        return -1;
+    }
+    if cfg!(case = "closed-stdio") {
+        let errno = unsafe { fd_close(1) };
+        if errno != 0 {
+            return errno;
+        }
+        return write(1, b"closed");
+    }
+    if cfg!(case = "clock-random") {
+        let mut data = [0u8; 64];
+        let mut time = 0u64;
+        let errno = unsafe { random_get(data.as_mut_ptr(), data.len()) };
+        if errno != 0 {
+            return errno;
+        }
+        let errno = unsafe { clock_time_get(0, 0, &mut time) };
+        if errno != 0 || time == 0 || data.iter().all(|byte| *byte == 0) {
+            return -1;
+        }
+        let mut first = 0;
+        let mut second = 0;
+        if unsafe { clock_time_get(1, 0, &mut first) } != 0
+            || unsafe { clock_time_get(1, 0, &mut second) } != 0
+            || second < first
+        {
+            return -1;
+        }
+        return 42;
+    }
+    if cfg!(case = "fuel") {
+        loop {
+            core::hint::spin_loop();
+        }
+    }
+    if cfg!(case = "memory") {
+        return core::arch::wasm32::memory_grow::<0>(4096) as i32;
+    }
+    if cfg!(case = "exit") {
+        unsafe { proc_exit(7) };
+    }
+    if cfg!(case = "output") {
+        let data = [b'"'; 4096];
+        for _ in 0..256 {
+            let _ = write(1, &data);
+        }
+        return 42;
+    }
+    if cfg!(case = "trap") || cfg!(case = "synced-trap") || cfg!(case = "create-denied") {
+        let fd = match open(3, b"tmp/from-abi", 9, 64 | 16, 0, 1) {
+            Ok(fd) => fd,
+            Err(errno) => return errno,
+        };
+        let errno = write(fd, b"before trap");
+        if errno != 0 {
+            return errno;
+        }
+        if cfg!(case = "create-denied") {
+            return -1;
+        }
+        if cfg!(case = "synced-trap") {
+            let errno = unsafe { fd_sync(fd) };
+            if errno != 0 {
+                return errno;
+            }
+        }
+        core::arch::wasm32::unreachable();
+    }
+    -1
+}
+
+#[panic_handler]
+fn panic(_: &core::panic::PanicInfo<'_>) -> ! {
+    core::arch::wasm32::unreachable()
+}

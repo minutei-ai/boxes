@@ -20,7 +20,7 @@ export const runtime = (persist: string) =>
                 contents: readFileSync(join(import.meta.dir, "../dist/worker/index.js"), "utf8"),
               },
               ...Object.fromEntries(
-                ["kernel", "guest", "compiler"].map((name) => [
+                ["kernel", "guest", "compiler", "wasi"].map((name) => [
                   `cirro_${name}_bg.wasm`,
                   {
                     type: "wasm" as const,

@@ -244,6 +244,69 @@ const batchLink = await action({
 const batchPath = Schema.decodeUnknownSync(CanonicalPath)(
   await (await action({ op: "filesystem.realpath", path: "/tmp/batch-alias" })).json(),
 );
+const wasiSource = Buffer.from(
+  await Bun.file(join(import.meta.dir, "../dist/wasi-test.wasm")).arrayBuffer(),
+).toString("base64");
+const wasiRun = Schema.decodeUnknownSync(RunRecord)(
+  await (
+    await action({ op: "process.run", id: "wasi", language: "wasm", source: wasiSource })
+  ).json(),
+);
+const wasiFile = Schema.decodeUnknownSync(FileContent)(
+  await (await action({ op: "filesystem.readFile", path: "/tmp/wasi-file" })).json(),
+);
+const wasiInvalidPointer = Schema.decodeUnknownSync(RunRecord)(
+  await (
+    await action({
+      op: "process.run",
+      id: "wasi-pointer",
+      language: "wasm",
+      source: Buffer.from(
+        await Bun.file(join(import.meta.dir, "../dist/wasi-bad-pointer.wasm")).arrayBuffer(),
+      ).toString("base64"),
+    })
+  ).json(),
+);
+const wasiRandom = Schema.decodeUnknownSync(RunRecord)(
+  await (
+    await action({
+      op: "process.run",
+      id: "wasi-random",
+      language: "wasm",
+      source: Buffer.from(
+        await Bun.file(join(import.meta.dir, "../dist/wasi-clock-random.wasm")).arrayBuffer(),
+      ).toString("base64"),
+    })
+  ).json(),
+);
+const wasiTrap = Schema.decodeUnknownSync(RunRecord)(
+  await (
+    await action({
+      op: "process.run",
+      id: "wasi-trap",
+      language: "wasm",
+      source: Buffer.from(
+        await Bun.file(join(import.meta.dir, "../dist/wasi-trap.wasm")).arrayBuffer(),
+      ).toString("base64"),
+    })
+  ).json(),
+);
+const wasiUncommitted = await action({ op: "filesystem.readFile", path: "/tmp/from-abi" });
+const wasiSyncedTrap = Schema.decodeUnknownSync(RunRecord)(
+  await (
+    await action({
+      op: "process.run",
+      id: "wasi-synced-trap",
+      language: "wasm",
+      source: Buffer.from(
+        await Bun.file(join(import.meta.dir, "../dist/wasi-synced-trap.wasm")).arrayBuffer(),
+      ).toString("base64"),
+    })
+  ).json(),
+);
+const wasiCheckpoint = Schema.decodeUnknownSync(FileContent)(
+  await (await action({ op: "filesystem.readFile", path: "/tmp/from-abi" })).json(),
+);
 const alive = await action({ op: "vm.status" });
 const disposed = await action({ op: "vm.dispose" });
 const afterDispose = await action({ op: "vm.status" });
@@ -259,6 +322,16 @@ const checks = {
   recursiveListing:
     batchTree.map((entry) => entry.path).join(",") === "/tmp/batch/deep,/tmp/batch/deep/a",
   canonicalPath: batchLink.status === 200 && batchPath.path === "/tmp/batch/deep/a",
+  wasiFileAndSync:
+    wasiRun.output?.exitCode === 0 &&
+    wasiRun.output.stdout === "persistent WASI\n" &&
+    Buffer.from(wasiFile.content, "base64").toString() === "persistent WASI",
+  wasiInvalidPointer: wasiInvalidPointer.output?.result === 21,
+  wasiClockAndRandom: wasiRandom.output?.result === 42,
+  wasiUncommittedTrap: wasiTrap.status === "failed" && wasiUncommitted.status === 404,
+  wasiCheckpoint:
+    wasiSyncedTrap.status === "failed" &&
+    Buffer.from(wasiCheckpoint.content, "base64").toString() === "before trap",
   health: health.status === 200,
   created: created.status === 201,
   r2RoundTrip:

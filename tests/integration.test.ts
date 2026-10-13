@@ -52,6 +52,28 @@ const setup = async (
 const act = (id: string, token: string, action: unknown) =>
   post(`/v1/sandboxes/${id}/action`, token, action);
 
+test("compiled Rust WASI reads, writes, seeks and syncs through native R2", async () => {
+  const token = await setup("wasi");
+  const source = Buffer.from(
+    await Bun.file(join(import.meta.dir, "../dist/wasi-test.wasm")).arrayBuffer(),
+  ).toString("base64");
+  const response = await act("wasi", token, {
+    op: "process.run",
+    id: "wasi",
+    language: "wasm",
+    source,
+  });
+  expect(response.status).toBe(200);
+  const record = Schema.decodeUnknownSync(RunRecord)(await response.json());
+  expect(record.status).toBe("exited");
+  expect(record.output?.exitCode).toBe(0);
+  expect(record.output?.stdout).toBe("persistent WASI\n");
+  const file = Schema.decodeUnknownSync(FileContent)(
+    await (await act("wasi", token, { op: "filesystem.readFile", path: "/tmp/wasi-file" })).json(),
+  );
+  expect(Buffer.from(file.content, "base64").toString()).toBe("persistent WASI");
+});
+
 beforeAll(async () => {
   await mf.ready;
 });
@@ -1333,4 +1355,395 @@ test("aggregate read and write batch quotas reject without a new generation", as
     await (await act("batch-quota", token, { op: "vm.status" })).json(),
   );
   expect(after.generation).toBe(before.generation);
+});
+
+const wasmFixture = async (name: string) =>
+  Buffer.from(
+    await Bun.file(join(import.meta.dir, `../dist/wasi-${name}.wasm`)).arrayBuffer(),
+  ).toString("base64");
+
+test("WASI ABI rejects invalid pointers, directory escape and closed stdio and bounds descriptors", async () => {
+  const token = await setup("wasi-abi");
+  expect(
+    (
+      await act("wasi-abi", token, {
+        op: "filesystem.writeFile",
+        path: "/tmp/existing",
+        content: "original",
+        encoding: "utf8",
+      })
+    ).status,
+  ).toBe(200);
+  for (const [name, expected] of [
+    ["bad-pointer", 21],
+    ["escape", 76],
+    ["closed-stdio", 8],
+    ["descriptors", 33],
+  ] as const) {
+    const record = Schema.decodeUnknownSync(RunRecord)(
+      await (
+        await act("wasi-abi", token, {
+          op: "process.run",
+          id: name,
+          language: "wasm",
+          source: await wasmFixture(name),
+        })
+      ).json(),
+    );
+    expect(record.status).toBe("exited");
+    expect(record.output?.result).toBe(expected);
+  }
+});
+
+test("WASI descriptor rights and write-only capabilities cannot expose preserved file bytes", async () => {
+  const token = await setup("wasi-rights");
+  expect(
+    (
+      await act("wasi-rights", token, {
+        op: "filesystem.writeFile",
+        path: "/tmp/existing",
+        content: "original",
+        encoding: "utf8",
+      })
+    ).status,
+  ).toBe(200);
+  const readonly = Schema.decodeUnknownSync(RunRecord)(
+    await (
+      await act("wasi-rights", token, {
+        op: "process.run",
+        id: "rights",
+        language: "wasm",
+        source: await wasmFixture("rights"),
+      })
+    ).json(),
+  );
+  expect(readonly.output?.result).toBe(76);
+  const writeonly = Schema.decodeUnknownSync(TokenResponse)(
+    await (
+      await post("/v1/sandboxes/wasi-rights/capabilities", admin, {
+        permissions: ["write", "execute"],
+        expiresInSeconds: 3600,
+      })
+    ).json(),
+  ).token;
+  expect(
+    (
+      await act("wasi-rights", token, {
+        op: "filesystem.chmod",
+        path: "/tmp/existing",
+        mode: 0o200,
+      })
+    ).status,
+  ).toBe(200);
+  const denied = Schema.decodeUnknownSync(RunRecord)(
+    await (
+      await act("wasi-rights", writeonly, {
+        op: "process.run",
+        id: "writeonly",
+        language: "wasm",
+        source: await wasmFixture("writeonly"),
+      })
+    ).json(),
+  );
+  expect(denied.output?.result).toBe(76);
+  const written = Schema.decodeUnknownSync(RunRecord)(
+    await (
+      await act("wasi-rights", writeonly, {
+        op: "process.run",
+        id: "write",
+        language: "wasm",
+        source: await wasmFixture("writeonly-write"),
+      })
+    ).json(),
+  );
+  expect(written.output?.result).toBe(0);
+  expect(
+    (await act("wasi-rights", writeonly, { op: "filesystem.readFile", path: "/tmp/existing" }))
+      .status,
+  ).toBe(403);
+  expect(
+    (
+      await act("wasi-rights", token, {
+        op: "filesystem.chmod",
+        path: "/tmp/existing",
+        mode: 0o600,
+      })
+    ).status,
+  ).toBe(200);
+  const file = Schema.decodeUnknownSync(FileContent)(
+    await (
+      await act("wasi-rights", token, { op: "filesystem.readFile", path: "/tmp/existing" })
+    ).json(),
+  );
+  expect(Buffer.from(file.content, "base64").toString()).toBe("changedl");
+});
+
+test("WASI symlinks respect no-follow and directory descriptor confinement", async () => {
+  const token = await setup("wasi-symlinks");
+  expect(
+    (
+      await act("wasi-symlinks", token, {
+        op: "filesystem.writeFiles",
+        entries: [
+          { path: "/home/cirro/private", content: "secret", encoding: "utf8" },
+          { path: "/tmp/scoped/inside", content: "inside", encoding: "utf8" },
+        ],
+      })
+    ).status,
+  ).toBe(200);
+  expect(
+    (
+      await act("wasi-symlinks", token, {
+        op: "filesystem.symlink",
+        path: "/tmp/link",
+        target: "/home/cirro/private",
+      })
+    ).status,
+  ).toBe(200);
+  expect(
+    (
+      await act("wasi-symlinks", token, {
+        op: "filesystem.symlink",
+        path: "/tmp/scoped/outside",
+        target: "/home/cirro/private",
+      })
+    ).status,
+  ).toBe(200);
+  for (const [name, expected] of [
+    ["nofollow", 32],
+    ["symlink-escape", 76],
+  ] as const) {
+    const record = Schema.decodeUnknownSync(RunRecord)(
+      await (
+        await act("wasi-symlinks", token, {
+          op: "process.run",
+          id: name,
+          language: "wasm",
+          source: await wasmFixture(name),
+        })
+      ).json(),
+    );
+    expect(record.output?.result).toBe(expected);
+    expect(record.output?.stdout).toBe("");
+  }
+});
+
+test("WASI creation requires write permission while clocks and entropy need only execution", async () => {
+  const token = await setup("wasi-grants", ["execute"]);
+  const denied = Schema.decodeUnknownSync(RunRecord)(
+    await (
+      await act("wasi-grants", token, {
+        op: "process.run",
+        id: "denied",
+        language: "wasm",
+        source: await wasmFixture("create-denied"),
+      })
+    ).json(),
+  );
+  expect(denied.output?.result).toBe(2);
+  const random = Schema.decodeUnknownSync(RunRecord)(
+    await (
+      await act("wasi-grants", token, {
+        op: "process.run",
+        id: "random",
+        language: "wasm",
+        source: await wasmFixture("clock-random"),
+      })
+    ).json(),
+  );
+  expect(random.output?.result).toBe(42);
+  const exit = Schema.decodeUnknownSync(RunRecord)(
+    await (
+      await act("wasi-grants", token, {
+        op: "process.run",
+        id: "exit",
+        language: "wasm",
+        source: await wasmFixture("exit"),
+      })
+    ).json(),
+  );
+  expect(exit.output?.exitCode).toBe(7);
+  expect(exit.output?.result).toBeNull();
+});
+
+test("WASI traps discard uncommitted changes while explicit sync preserves its checkpoint", async () => {
+  const token = await setup("wasi-checkpoint");
+  const trap = Schema.decodeUnknownSync(RunRecord)(
+    await (
+      await act("wasi-checkpoint", token, {
+        op: "process.run",
+        id: "trap",
+        language: "wasm",
+        source: await wasmFixture("trap"),
+      })
+    ).json(),
+  );
+  expect(trap.status).toBe("failed");
+  expect(
+    (await act("wasi-checkpoint", token, { op: "filesystem.readFile", path: "/tmp/from-abi" }))
+      .status,
+  ).toBe(404);
+  const synced = Schema.decodeUnknownSync(RunRecord)(
+    await (
+      await act("wasi-checkpoint", token, {
+        op: "process.run",
+        id: "synced",
+        language: "wasm",
+        source: await wasmFixture("synced-trap"),
+      })
+    ).json(),
+  );
+  expect(synced.status).toBe("failed");
+  const file = Schema.decodeUnknownSync(FileContent)(
+    await (
+      await act("wasi-checkpoint", token, { op: "filesystem.readFile", path: "/tmp/from-abi" })
+    ).json(),
+  );
+  expect(Buffer.from(file.content, "base64").toString()).toBe("before trap");
+});
+
+test("WASI fuel, memory and serialized output limits cannot poison the Worker", async () => {
+  const token = await setup("wasi-limits");
+  for (const name of ["fuel", "memory", "output", "budget"]) {
+    const record = Schema.decodeUnknownSync(RunRecord)(
+      await (
+        await act("wasi-limits", token, {
+          op: "process.run",
+          id: name,
+          language: "wasm",
+          source: await wasmFixture(name),
+        })
+      ).json(),
+    );
+    expect(record.status).toBe("failed");
+    expect(record.output).toBeNull();
+    expect((await act("wasi-limits", token, { op: "vm.status" })).status).toBe(200);
+  }
+});
+
+test("WASI positional I/O preserves offsets and simultaneous descriptors share file contents", async () => {
+  const token = await setup("wasi-offsets");
+  for (const name of ["positioned", "aliases"]) {
+    expect(
+      (
+        await act("wasi-offsets", token, {
+          op: "filesystem.writeFile",
+          path: "/tmp/existing",
+          content: "original",
+          encoding: "utf8",
+        })
+      ).status,
+    ).toBe(200);
+    const record = Schema.decodeUnknownSync(RunRecord)(
+      await (
+        await act("wasi-offsets", token, {
+          op: "process.run",
+          id: name,
+          language: "wasm",
+          source: await wasmFixture(name),
+        })
+      ).json(),
+    );
+    expect(record.output?.result).toBe(42);
+  }
+});
+
+test("WASI writes surface real filesystem quota failures before reporting success", async () => {
+  const token = await setup("wasi-quota");
+  for (const index of [0, 1, 2, 3])
+    expect(
+      (
+        await act("wasi-quota", token, {
+          op: "filesystem.writeFile",
+          path: `/tmp/full-${index}`,
+          content: "x".repeat(16_777_216),
+          encoding: "utf8",
+        })
+      ).status,
+    ).toBe(200);
+  const record = Schema.decodeUnknownSync(RunRecord)(
+    await (
+      await act("wasi-quota", token, {
+        op: "process.run",
+        id: "quota",
+        language: "wasm",
+        source: await wasmFixture("create-denied"),
+      })
+    ).json(),
+  );
+  expect(record.output?.result).toBe(51);
+  const file = Schema.decodeUnknownSync(FileContent)(
+    await (
+      await act("wasi-quota", token, { op: "filesystem.readFile", path: "/tmp/from-abi" })
+    ).json(),
+  );
+  expect(file.size).toBe(0);
+});
+
+test("WASI open buffers reject allocation beyond 16 MiB and closing the last descriptor frees capacity", async () => {
+  const token = await setup("wasi-buffers");
+  expect(
+    (
+      await act("wasi-buffers", token, {
+        op: "filesystem.writeFile",
+        path: "/tmp/large",
+        content: "x".repeat(16_777_216),
+        encoding: "utf8",
+      })
+    ).status,
+  ).toBe(200);
+  expect(
+    (
+      await act("wasi-buffers", token, {
+        op: "filesystem.writeFile",
+        path: "/tmp/small",
+        content: "y",
+        encoding: "utf8",
+      })
+    ).status,
+  ).toBe(200);
+  const record = Schema.decodeUnknownSync(RunRecord)(
+    await (
+      await act("wasi-buffers", token, {
+        op: "process.run",
+        id: "buffers",
+        language: "wasm",
+        source: await wasmFixture("buffers"),
+      })
+    ).json(),
+  );
+  expect(record.output?.result).toBe(42);
+  expect((await act("wasi-buffers", token, { op: "vm.status" })).status).toBe(200);
+});
+
+test("concurrent WASI executions publish complete file sets and never combine different roots", async () => {
+  const token = await setup("wasi-race");
+  const sources = await Promise.all(["race-a", "race-b"].map((name) => wasmFixture(name)));
+  const receipts = await Promise.all(
+    sources.map(async (source, index) =>
+      Schema.decodeUnknownSync(RunRecord)(
+        await (
+          await act("wasi-race", token, {
+            op: "process.run",
+            id: `race-${index}`,
+            language: "wasm",
+            source,
+          })
+        ).json(),
+      ),
+    ),
+  );
+  expect(
+    receipts.some((record) => record.status === "exited" && record.output?.result === 42),
+  ).toBe(true);
+  const files = Schema.decodeUnknownSync(BatchReadResults)(
+    await (
+      await act("wasi-race", token, {
+        op: "filesystem.readFiles",
+        paths: ["/tmp/race-one", "/tmp/race-two"],
+      })
+    ).json(),
+  );
+  expect(files[0]?.content).toBe(files[1]?.content);
+  expect(["QQ==", "Qg=="].includes(files[0]?.content ?? "")).toBe(true);
 });

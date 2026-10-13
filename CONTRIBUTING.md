@@ -1,6 +1,6 @@
 # Contributing
 
-Install the pinned Bun dependencies and wasm-bindgen CLI, add the Rust Wasm target, and run `bun run check`. Formatting is checked with `bun run format:check`. Update the applicable parity row only after a real runtime test demonstrates behavior. New guest operations must test authorization, isolation, failure/interruption and persisted state. Tests must not replace native R2 or execution with mocks.
+Install the pinned Bun dependencies and wasm-bindgen CLI, add both `wasm32-unknown-unknown` and `wasm32-wasip1` Rust targets, and run `bun run check`. Formatting is checked with `bun run format:check`. Update the applicable parity row only after a real runtime test demonstrates behavior. New guest operations must test authorization, isolation, failure/interruption and persisted state. Tests must not replace native R2 or execution with mocks.
 
 Run `bun run bench` for performance changes. Record artifact size, workload, distributions and environment. A local workerd benchmark does not establish Cloudflare production latency. Keep fixtures synthetic; private HTML, source code and credentials stay outside the repository.
 

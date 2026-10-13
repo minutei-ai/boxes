@@ -450,13 +450,14 @@ impl Kernel {
         .map_err(|_| fail("EIO: serialization failed"))
     }
 
-    pub fn chunks(&self, path: &str) -> Result<String, JsValue> {
+    pub fn chunks(&self, path: &str, for_write: bool) -> Result<String, JsValue> {
         let path = self.resolve(path, true).map_err(|e| fail(&e))?;
+        let required = if for_write { 0o200 } else { 0o400 };
         match self.state.nodes.get(&path) {
-            Some(Node::File { chunks, mode, .. }) if mode & 0o400 != 0 => {
+            Some(Node::File { chunks, mode, .. }) if mode & required != 0 => {
                 serde_json::to_string(chunks).map_err(|_| fail("EIO: serialization failed"))
             }
-            Some(Node::File { .. }) => Err(fail("EACCES: file is not readable")),
+            Some(Node::File { .. }) => Err(fail("EACCES: file content access is denied")),
             Some(_) => Err(fail("EISDIR: not a regular file")),
             None => Err(fail("ENOENT: file does not exist")),
         }
