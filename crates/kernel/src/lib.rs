@@ -34,6 +34,13 @@ struct Manifest {
     nodes: BTreeMap<String, Node>,
 }
 
+struct WritePlan {
+    path: String,
+    mode: u32,
+    chunks: Vec<String>,
+    uploads: BTreeSet<String>,
+}
+
 #[derive(Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
 struct Stat<'a> {
@@ -47,6 +54,14 @@ struct Stat<'a> {
 struct Entry<'a> {
     name: &'a str,
     kind: &'static str,
+}
+
+#[derive(Serialize)]
+struct TreeEntry {
+    path: String,
+    #[serde(rename = "type")]
+    kind: &'static str,
+    size: u64,
 }
 
 #[wasm_bindgen]
@@ -121,6 +136,66 @@ impl Node {
 }
 
 impl Kernel {
+    fn walk(&self, path: &str, max_depth: usize, exclude: &str) -> Result<Vec<TreeEntry>, String> {
+        if max_depth > MAX_DEPTH {
+            return Err("EINVAL: recursive depth exceeds its limit".into());
+        }
+        let excluded: BTreeSet<String> =
+            serde_json::from_str(exclude).map_err(|_| "EINVAL: invalid exclusions".to_string())?;
+        if excluded.len() > 128
+            || excluded.iter().any(|name| {
+                name.is_empty() || name.contains('/') || name.contains('\0') || name.len() > 255
+            })
+        {
+            return Err("EINVAL: invalid excluded names".into());
+        }
+        let logical = normalize(path, "/")?;
+        let root = self.resolve(&logical, true)?;
+        match self.state.nodes.get(&root) {
+            Some(Node::Directory { mode }) if mode & 0o500 == 0o500 => {}
+            Some(Node::Directory { .. }) => return Err("EACCES: directory is not readable".into()),
+            Some(_) => return Err("ENOTDIR: not a directory".into()),
+            None => return Err("ENOENT: directory does not exist".into()),
+        }
+        let prefix = if root == "/" {
+            "/".to_string()
+        } else {
+            format!("{root}/")
+        };
+        let mut result = Vec::new();
+        for (key, node) in self.state.nodes.range(prefix.clone()..) {
+            let Some(relative) = key.strip_prefix(&prefix) else {
+                break;
+            };
+            if relative.is_empty() {
+                continue;
+            }
+            let components: Vec<_> = relative.split('/').collect();
+            let depth = components.len() - 1;
+            if depth > max_depth || components.iter().any(|name| excluded.contains(*name)) {
+                continue;
+            }
+            self.resolve(key, false)?;
+            if let Node::Directory { mode } = node
+                && depth < max_depth
+                && mode & 0o500 != 0o500
+            {
+                return Err("EACCES: child directory is not readable".into());
+            }
+            let path = if logical == "/" {
+                format!("/{relative}")
+            } else {
+                format!("{logical}/{relative}")
+            };
+            result.push(TreeEntry {
+                path,
+                kind: node.kind(),
+                size: node.size(),
+            });
+        }
+        Ok(result)
+    }
+
     fn fresh() -> Self {
         Self {
             state: Manifest {
@@ -240,6 +315,56 @@ impl Kernel {
             .sum()
     }
 
+    fn write_plan(&self, path: &str, size: u64, chunks: &str) -> Result<WritePlan, String> {
+        let path = self.resolve(path, true)?;
+        let hashes: Vec<String> = serde_json::from_str(chunks)
+            .map_err(|_| "EINVAL: invalid chunk references".to_string())?;
+        if size > MAX_FILE
+            || hashes.len() != usize::try_from(size.div_ceil(262_144)).unwrap_or(usize::MAX)
+        {
+            return Err("EFBIG: file limit or chunk count exceeded".into());
+        }
+        if hashes.iter().any(|hash| {
+            hash.len() != 64
+                || !hash
+                    .bytes()
+                    .all(|c| c.is_ascii_hexdigit() && !c.is_ascii_uppercase())
+        }) {
+            return Err("EINVAL: invalid content digest".into());
+        }
+        let mode = match self.state.nodes.get(&path) {
+            Some(Node::File { mode, .. }) if mode & 0o200 != 0 => *mode,
+            Some(Node::File { .. }) => return Err("EACCES: file is not writable".into()),
+            Some(_) => return Err("EISDIR: not a regular file".into()),
+            None => {
+                self.writable_parent(&path)?;
+                0o644
+            }
+        };
+        let existing: BTreeSet<_> = match self.state.nodes.get(&path) {
+            Some(Node::File { chunks, .. }) => chunks.iter().cloned().collect(),
+            _ => BTreeSet::new(),
+        };
+        let uploads: BTreeSet<_> = hashes
+            .iter()
+            .filter(|hash| !existing.contains(*hash))
+            .cloned()
+            .collect();
+        let old = self.state.nodes.get(&path).map_or(0, Node::size);
+        if self.used_bytes().saturating_sub(old).saturating_add(size) > MAX_TOTAL {
+            return Err("ENOSPC: filesystem byte quota exceeded".into());
+        }
+        if !self.state.nodes.contains_key(&path) && self.state.nodes.len() >= MAX_NODES {
+            return Err("ENOSPC: inode quota exceeded".into());
+        }
+        Ok(WritePlan {
+            path,
+            mode,
+            chunks: hashes,
+            uploads,
+        })
+    }
+
     fn insert(&mut self, path: String, node: Node) -> Result<(), String> {
         if !self.state.nodes.contains_key(&path) && self.state.nodes.len() >= MAX_NODES {
             return Err("ENOSPC: inode quota exceeded".into());
@@ -337,55 +462,39 @@ impl Kernel {
         }
     }
 
+    pub fn prepare_write(&self, path: &str, size: u64, chunks: &str) -> Result<String, JsValue> {
+        let plan = self
+            .write_plan(path, size, chunks)
+            .map_err(|error| fail(&error))?;
+        serde_json::to_string(&plan.uploads).map_err(|_| fail("EIO: serialization failed"))
+    }
+
     pub fn write(&mut self, path: &str, size: u64, chunks: &str) -> Result<String, JsValue> {
-        let path = self.resolve(path, true).map_err(|e| fail(&e))?;
-        let hashes: Vec<String> =
-            serde_json::from_str(chunks).map_err(|_| fail("EINVAL: invalid chunk references"))?;
-        if size > MAX_FILE
-            || hashes.len() != usize::try_from(size.div_ceil(262_144)).unwrap_or(usize::MAX)
-        {
-            return Err(fail("EFBIG: file limit or chunk count exceeded"));
-        }
-        if hashes.iter().any(|hash| {
-            hash.len() != 64
-                || !hash
-                    .bytes()
-                    .all(|c| c.is_ascii_hexdigit() && !c.is_ascii_uppercase())
-        }) {
-            return Err(fail("EINVAL: invalid content digest"));
-        }
-        let mode = match self.state.nodes.get(&path) {
-            Some(Node::File { mode, .. }) if mode & 0o200 != 0 => *mode,
-            Some(Node::File { .. }) => return Err(fail("EACCES: file is not writable")),
-            Some(_) => return Err(fail("EISDIR: not a regular file")),
-            None => {
-                self.writable_parent(&path).map_err(|e| fail(&e))?;
-                0o644
-            }
-        };
-        let existing: BTreeSet<_> = match self.state.nodes.get(&path) {
-            Some(Node::File { chunks, .. }) => chunks.iter().cloned().collect(),
-            _ => BTreeSet::new(),
-        };
-        let uploads: BTreeSet<_> = hashes
-            .iter()
-            .filter(|hash| !existing.contains(*hash))
-            .cloned()
-            .collect();
-        let old = self.state.nodes.get(&path).map_or(0, Node::size);
-        if self.used_bytes().saturating_sub(old).saturating_add(size) > MAX_TOTAL {
-            return Err(fail("ENOSPC: filesystem byte quota exceeded"));
-        }
+        let plan = self
+            .write_plan(path, size, chunks)
+            .map_err(|error| fail(&error))?;
         self.insert(
-            path,
+            plan.path,
             Node::File {
-                mode,
+                mode: plan.mode,
                 size,
-                chunks: hashes,
+                chunks: plan.chunks,
             },
         )
-        .map_err(|e| fail(&e))?;
-        serde_json::to_string(&uploads).map_err(|_| fail("EIO: serialization failed"))
+        .map_err(|error| fail(&error))?;
+        serde_json::to_string(&plan.uploads).map_err(|_| fail("EIO: serialization failed"))
+    }
+
+    pub fn node_count(&self) -> usize {
+        self.state.nodes.len()
+    }
+
+    pub fn realpath(&self, path: &str) -> Result<String, JsValue> {
+        let resolved = self.resolve(path, true).map_err(|error| fail(&error))?;
+        if !self.state.nodes.contains_key(&resolved) {
+            return Err(fail("ENOENT: file does not exist"));
+        }
+        Ok(resolved)
     }
 
     pub fn mkdir(&mut self, path: &str, recursive: bool) -> Result<(), JsValue> {
@@ -436,6 +545,18 @@ impl Kernel {
                 kind: value.kind(),
             })
             .collect();
+        serde_json::to_string(&entries).map_err(|_| fail("EIO: serialization failed"))
+    }
+
+    pub fn readdir_recursive(
+        &self,
+        path: &str,
+        max_depth: usize,
+        exclude: &str,
+    ) -> Result<String, JsValue> {
+        let entries = self
+            .walk(path, max_depth, exclude)
+            .map_err(|error| fail(&error))?;
         serde_json::to_string(&entries).map_err(|_| fail("EIO: serialization failed"))
     }
 
@@ -554,6 +675,21 @@ impl Kernel {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn write_preparation_is_pure_and_rejects_before_mutation() -> Result<(), String> {
+        let kernel = Kernel::fresh();
+        let before = kernel.state.nodes.clone();
+        let chunks =
+            serde_json::to_string(&vec!["a".repeat(64)]).map_err(|error| error.to_string())?;
+        let plan = kernel.write_plan("/tmp/file", 1, &chunks)?;
+        assert_eq!(plan.path, "/tmp/file");
+        assert_eq!(plan.uploads.len(), 1);
+        assert_eq!(kernel.state.nodes, before);
+        assert!(kernel.write_plan("/tmp/file", 1, "[]").is_err());
+        assert_eq!(kernel.state.nodes, before);
+        Ok(())
+    }
 
     #[test]
     fn paths_are_rooted_and_bounded() -> Result<(), String> {

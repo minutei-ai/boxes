@@ -5,6 +5,10 @@ import { join } from "node:path";
 import { Schema } from "effect";
 import {
   DirectoryEntries,
+  BatchReadResults,
+  BatchWriteResults,
+  DirectoryTree,
+  CanonicalPath,
   FileContent,
   FileStat,
   RunRecord,
@@ -1094,4 +1098,239 @@ test("native R2 migration preserves files and tombstones and is idempotent", asy
     await (await post("/v1/migrations/execution-policy-v2", admin, {})).json(),
   );
   expect(second.migrated).toBe(0);
+});
+
+test("batch writes publish once, retain ordered successes and report per-file failures", async () => {
+  const token = await setup("batch");
+  const before = Schema.decodeUnknownSync(Status)(
+    await (await act("batch", token, { op: "vm.status" })).json(),
+  );
+  const response = await act("batch", token, {
+    op: "filesystem.writeFiles",
+    entries: [
+      { path: "/tmp/nested/a", content: "first", encoding: "utf8" },
+      { path: "/tmp/nested/a", content: "%%%", encoding: "base64" },
+      { path: "/tmp/nested/a", content: "last", encoding: "utf8" },
+      { path: "/tmp/nested/a/child", content: "blocked", encoding: "utf8" },
+      { path: "/tmp/binary", content: "AP8=", encoding: "base64" },
+    ],
+  });
+  expect(response.status).toBe(200);
+  const writes = Schema.decodeUnknownSync(BatchWriteResults)(await response.json());
+  expect(writes.map((item) => item.success)).toEqual([true, false, true, false, true]);
+  const after = Schema.decodeUnknownSync(Status)(
+    await (await act("batch", token, { op: "vm.status" })).json(),
+  );
+  expect(after.generation).toBe(before.generation + 1);
+  const reads = Schema.decodeUnknownSync(BatchReadResults)(
+    await (
+      await act("batch", token, {
+        op: "filesystem.readFiles",
+        paths: ["/tmp/nested/a", "/tmp/missing", "/tmp/binary", "/tmp"],
+      })
+    ).json(),
+  );
+  expect(reads.map((item) => item.content)).toEqual([
+    Buffer.from("last").toString("base64"),
+    null,
+    "AP8=",
+    null,
+  ]);
+  expect((await act("batch", token, { op: "filesystem.writeFiles", entries: [] })).status).toBe(
+    200,
+  );
+  const empty = Schema.decodeUnknownSync(Status)(
+    await (await act("batch", token, { op: "vm.status" })).json(),
+  );
+  expect(empty.generation).toBe(after.generation);
+});
+
+test("recursive listing honors depth, exclusion, root aliases and non-recursive symlinks", async () => {
+  const token = await setup("tree");
+  expect(
+    (
+      await act("tree", token, {
+        op: "filesystem.writeFiles",
+        entries: [
+          { path: "/tmp/tree/deep/a", content: "a", encoding: "utf8" },
+          { path: "/tmp/tree/excluded/b", content: "b", encoding: "utf8" },
+          { path: "/tmp/tree/z", content: "z", encoding: "utf8" },
+        ],
+      })
+    ).status,
+  ).toBe(200);
+  expect(
+    (await act("tree", token, { op: "filesystem.symlink", path: "/tmp/alias", target: "tree" }))
+      .status,
+  ).toBe(200);
+  expect(
+    (await act("tree", token, { op: "filesystem.symlink", path: "/tmp/tree/link", target: "deep" }))
+      .status,
+  ).toBe(200);
+  const tree = Schema.decodeUnknownSync(DirectoryTree)(
+    await (
+      await act("tree", token, {
+        op: "filesystem.readdirRecursive",
+        path: "/tmp/alias",
+        exclude: ["excluded"],
+      })
+    ).json(),
+  );
+  expect(tree.map((entry) => entry.path)).toEqual([
+    "/tmp/alias/deep",
+    "/tmp/alias/deep/a",
+    "/tmp/alias/link",
+    "/tmp/alias/z",
+  ]);
+  const shallow = Schema.decodeUnknownSync(DirectoryTree)(
+    await (
+      await act("tree", token, {
+        op: "filesystem.readdirRecursive",
+        path: "/tmp/tree",
+        maxDepth: 0,
+      })
+    ).json(),
+  );
+  expect(shallow.map((entry) => entry.path)).toEqual([
+    "/tmp/tree/deep",
+    "/tmp/tree/excluded",
+    "/tmp/tree/link",
+    "/tmp/tree/z",
+  ]);
+  const path = Schema.decodeUnknownSync(CanonicalPath)(
+    await (
+      await act("tree", token, { op: "filesystem.realpath", path: "/tmp/alias/link/a" })
+    ).json(),
+  );
+  expect(path.path).toBe("/tmp/tree/deep/a");
+  expect(
+    (await act("tree", token, { op: "filesystem.chmod", path: "/tmp/tree/deep", mode: 0 })).status,
+  ).toBe(200);
+  expect(
+    (await act("tree", token, { op: "filesystem.readdirRecursive", path: "/tmp/tree" })).status,
+  ).toBe(403);
+  expect(
+    (
+      await act("tree", token, {
+        op: "filesystem.readdirRecursive",
+        path: "/tmp/tree",
+        exclude: ["deep"],
+      })
+    ).status,
+  ).toBe(200);
+});
+
+test("batch contracts enforce grants and bounds before mutation", async () => {
+  const token = await setup("batch-permissions", ["write"]);
+  expect(
+    (await act("batch-permissions", token, { op: "filesystem.readFiles", paths: [] })).status,
+  ).toBe(403);
+  expect(
+    (await act("batch-permissions", token, { op: "filesystem.realpath", path: "/" })).status,
+  ).toBe(403);
+  expect(
+    (
+      await act("batch-permissions", token, {
+        op: "filesystem.writeFiles",
+        entries: [],
+        ignored: true,
+      })
+    ).status,
+  ).toBe(400);
+  expect(
+    (
+      await act("batch-permissions", token, {
+        op: "filesystem.writeFiles",
+        entries: Array.from({ length: 129 }, () => ({
+          path: "/tmp/a",
+          content: "x",
+          encoding: "utf8",
+        })),
+      })
+    ).status,
+  ).toBe(400);
+});
+
+test("guest batch tools preserve response contracts and concurrent roots cannot mix files", async () => {
+  const token = await setup("batch-race");
+  const run = Schema.decodeUnknownSync(RunRecord)(
+    await (
+      await act("batch-race", token, {
+        op: "javascript.evaluate",
+        id: "guest-batch",
+        expression:
+          "(async () => { const writes=await tools.call({op:'filesystem.writeFiles',entries:[{path:'/tmp/guest/a',content:'guest',encoding:'utf8'}]}); const reads=await tools.call({op:'filesystem.readFiles',paths:['/tmp/guest/a','/missing']}); const tree=await tools.call({op:'filesystem.readdirRecursive',path:'/tmp/guest'}); return [writes[0].success,reads[0].content,reads[1].code,tree[0].path]; })()",
+      })
+    ).json(),
+  );
+  expect(run.output?.result).toEqual([
+    true,
+    Buffer.from("guest").toString("base64"),
+    "ENOENT",
+    "/tmp/guest/a",
+  ]);
+  const results = await Promise.all(
+    ["first", "second"].map((content) =>
+      act("batch-race", token, {
+        op: "filesystem.writeFiles",
+        entries: ["a", "b"].map((name) => ({
+          path: `/tmp/race/${name}`,
+          content,
+          encoding: "utf8",
+        })),
+      }),
+    ),
+  );
+  expect(results.every((response) => [200, 409].includes(response.status))).toBe(true);
+  expect(results.some((response) => response.status === 200)).toBe(true);
+  const final = Schema.decodeUnknownSync(BatchReadResults)(
+    await (
+      await act("batch-race", token, {
+        op: "filesystem.readFiles",
+        paths: ["/tmp/race/a", "/tmp/race/b"],
+      })
+    ).json(),
+  );
+  expect(final[0]?.content).toBe(final[1]?.content);
+});
+
+test("aggregate read and write batch quotas reject without a new generation", async () => {
+  const token = await setup("batch-quota");
+  expect(
+    (
+      await act("batch-quota", token, {
+        op: "filesystem.writeFile",
+        path: "/tmp/large",
+        content: "x".repeat(8_388_609),
+        encoding: "utf8",
+      })
+    ).status,
+  ).toBe(200);
+  const before = Schema.decodeUnknownSync(Status)(
+    await (await act("batch-quota", token, { op: "vm.status" })).json(),
+  );
+  expect(
+    (
+      await act("batch-quota", token, {
+        op: "filesystem.readFiles",
+        paths: ["/tmp/large", "/tmp/large"],
+      })
+    ).status,
+  ).toBe(413);
+  expect(
+    (
+      await act("batch-quota", token, {
+        op: "filesystem.writeFiles",
+        entries: ["a", "b"].map((name) => ({
+          path: `/tmp/${name}`,
+          content: "x".repeat(8_388_609),
+          encoding: "utf8",
+        })),
+      })
+    ).status,
+  ).toBe(413);
+  const after = Schema.decodeUnknownSync(Status)(
+    await (await act("batch-quota", token, { op: "vm.status" })).json(),
+  );
+  expect(after.generation).toBe(before.generation);
 });

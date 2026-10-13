@@ -2,6 +2,10 @@ import { Config, Effect, Redacted, Schema } from "effect";
 import { join } from "node:path";
 import {
   FileContent,
+  BatchReadResults,
+  BatchWriteResults,
+  DirectoryTree,
+  CanonicalPath,
   NetworkResult,
   ProcessPage,
   RunRecord,
@@ -210,10 +214,51 @@ const lazyFailure = Schema.decodeUnknownSync(RunRecord)(
     })
   ).json(),
 );
+const batchWrite = Schema.decodeUnknownSync(BatchWriteResults)(
+  await (
+    await action({
+      op: "filesystem.writeFiles",
+      entries: [
+        { path: "/tmp/batch/deep/a", content: "batch", encoding: "utf8" },
+        { path: "/tmp/batch/deep/a", content: "%%%", encoding: "base64" },
+        { path: "/tmp/batch/skip/b", content: "excluded", encoding: "utf8" },
+      ],
+    })
+  ).json(),
+);
+const batchRead = Schema.decodeUnknownSync(BatchReadResults)(
+  await (
+    await action({ op: "filesystem.readFiles", paths: ["/tmp/batch/deep/a", "/missing"] })
+  ).json(),
+);
+const batchTree = Schema.decodeUnknownSync(DirectoryTree)(
+  await (
+    await action({ op: "filesystem.readdirRecursive", path: "/tmp/batch", exclude: ["skip"] })
+  ).json(),
+);
+const batchLink = await action({
+  op: "filesystem.symlink",
+  path: "/tmp/batch-alias",
+  target: "batch/deep/a",
+});
+const batchPath = Schema.decodeUnknownSync(CanonicalPath)(
+  await (await action({ op: "filesystem.realpath", path: "/tmp/batch-alias" })).json(),
+);
 const alive = await action({ op: "vm.status" });
 const disposed = await action({ op: "vm.dispose" });
 const afterDispose = await action({ op: "vm.status" });
 const checks = {
+  batchPartialSuccess:
+    batchWrite.length === 3 &&
+    batchWrite[0]?.success === true &&
+    batchWrite[1]?.success === false &&
+    batchWrite[2]?.success === true,
+  batchRead:
+    batchRead[0]?.content === Buffer.from("batch").toString("base64") &&
+    batchRead[1]?.content === null,
+  recursiveListing:
+    batchTree.map((entry) => entry.path).join(",") === "/tmp/batch/deep,/tmp/batch/deep/a",
+  canonicalPath: batchLink.status === 200 && batchPath.path === "/tmp/batch/deep/a",
   health: health.status === 200,
   created: created.status === 201,
   r2RoundTrip:

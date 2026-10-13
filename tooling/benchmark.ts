@@ -7,9 +7,9 @@ import { runtime } from "./runtime";
 
 const directory = await mkdtemp(join(tmpdir(), "cirro-benchmark-"));
 const mf = runtime(directory);
-const service = await mf.getWorker("cirro");
+const origin = await mf.ready;
 const post = (path: string, token: string, body: unknown) =>
-  service.fetch(`https://cirro.test${path}`, {
+  fetch(new URL(path, origin), {
     method: "POST",
     headers: { authorization: `Bearer ${token}` },
     body: JSON.stringify(body),
@@ -67,6 +67,32 @@ const reads = await sample(25, async () => {
   if (response.status !== 200) process.exit(1);
   await response.text();
 });
+const entries = Array.from({ length: 8 }, (_, index) => ({
+  path: `/tmp/batch-${index}`,
+  content,
+  encoding: "utf8" as const,
+}));
+const initialized = await call({ op: "filesystem.writeFiles", entries });
+if (initialized.status !== 200) process.exit(1);
+const beforeSequential = Schema.decodeUnknownSync(Status)(
+  await (await call({ op: "vm.status" })).json(),
+);
+const sequentialEightFiles = await sample(25, async () => {
+  for (const entry of entries) {
+    const response = await call({ op: "filesystem.writeFile", ...entry });
+    if (response.status !== 200) process.exit(1);
+    await response.text();
+  }
+});
+const afterSequential = Schema.decodeUnknownSync(Status)(
+  await (await call({ op: "vm.status" })).json(),
+);
+const batchEightFiles = await sample(25, async () => {
+  const response = await call({ op: "filesystem.writeFiles", entries });
+  if (response.status !== 200) process.exit(1);
+  await response.text();
+});
+const afterBatch = Schema.decodeUnknownSync(Status)(await (await call({ op: "vm.status" })).json());
 const javascript = await sample(25, async (i) => {
   const response = await call({
     op: "process.run",
@@ -105,11 +131,19 @@ const report = {
     compilerWasm: (await stat(join(import.meta.dir, "../dist/worker/cirro_compiler_bg.wasm"))).size,
   },
   measurements: {
+    sequentialEightFiles,
+    batchEightFiles,
     status,
     write256KiB: writes,
     read256KiB: reads,
     isolatedJavascript: javascript,
     shellPipeline: shell,
+  },
+  batchPublication: {
+    filesPerSample: 8,
+    samples: 25,
+    sequentialPublications: afterSequential.generation - beforeSequential.generation,
+    batchPublications: afterBatch.generation - afterSequential.generation,
   },
   contentDeduplication: {
     writes: 25,

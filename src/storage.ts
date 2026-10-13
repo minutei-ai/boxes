@@ -147,7 +147,7 @@ export const write = Effect.fn("filesystem.write")(function* (
     { concurrency: 4 },
   );
   const needed = yield* kernelCall(() =>
-    kernel.write(
+    kernel.prepare_write(
       path,
       BigInt(data.byteLength),
       Schema.encodeSync(Schema.fromJsonString(Chunks))(hashes),
@@ -164,5 +164,12 @@ export const write = Effect.fn("filesystem.write")(function* (
         catch: (cause) => new StorageFailure({ cause }),
       }),
     { concurrency: 4 },
+  );
+  yield* kernelCall(() =>
+    kernel.write(
+      path,
+      BigInt(data.byteLength),
+      Schema.encodeSync(Schema.fromJsonString(Chunks))(hashes),
+    ),
   );
 });

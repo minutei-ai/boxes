@@ -1,12 +1,16 @@
 {
-  "measuredAt": "2026-10-13T12:51:07.725Z",
+  "measuredAt": "2026-10-13T13:23:47.639Z",
   "url": "https://cirro-sandbox-prod-rs7wexxow56rmsoz.manoel-carvalhoneto.workers.dev",
   "profile": "minutei",
   "runtime": "standard-worker-rust-quickjs-wasmi",
   "parityComplete": false,
   "scope": "Implemented operations and explicit Python rejection",
-  "sandboxId": "proof-c8572d6f-6891-4e84-8fe9-9567dc13a220",
+  "sandboxId": "proof-d3b0d776-2470-4691-be26-b5d1c13f931f",
   "checks": {
+    "batchPartialSuccess": true,
+    "batchRead": true,
+    "recursiveListing": true,
+    "canonicalPath": true,
     "health": true,
     "created": true,
     "r2RoundTrip": true,

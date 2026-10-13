@@ -4,6 +4,10 @@ import { initSync, Kernel } from "../dist/kernel/cirro_kernel";
 import { administrator, authorize, mint, requirePermission } from "./auth";
 import {
   Action,
+  BatchReadResults,
+  BatchWriteResults,
+  DirectoryTree,
+  CanonicalPath,
   MigrationReceipt,
   CreateSandbox,
   DirectoryEntries,
@@ -208,6 +212,18 @@ const route = Effect.fn("api.route")(function* (request: Request, env: Env) {
           if (action.op === "network.fetch")
             return Schema.encodeUnknownSync(Schema.fromJsonString(NetworkResult))(result);
           return Match.value(action).pipe(
+            Match.when({ op: "filesystem.readFiles" }, () =>
+              Schema.encodeUnknownSync(Schema.fromJsonString(BatchReadResults))(result),
+            ),
+            Match.when({ op: "filesystem.writeFiles" }, () =>
+              Schema.encodeUnknownSync(Schema.fromJsonString(BatchWriteResults))(result),
+            ),
+            Match.when({ op: "filesystem.readdirRecursive" }, () =>
+              Schema.encodeUnknownSync(Schema.fromJsonString(DirectoryTree))(result),
+            ),
+            Match.when({ op: "filesystem.realpath" }, () =>
+              Schema.encodeUnknownSync(Schema.fromJsonString(CanonicalPath))(result),
+            ),
             Match.when({ op: "filesystem.readFile" }, () =>
               Schema.encodeUnknownSync(Schema.fromJsonString(FileContent))(result),
             ),

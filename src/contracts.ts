@@ -31,7 +31,32 @@ export const Head = Schema.Struct({
   deleted: Schema.Boolean,
 });
 
+export const DirectoryExclusions = Schema.Array(
+  Schema.String.check(Schema.isPattern(/^[^/\0]{1,255}$/)),
+).check(Schema.isMaxLength(128));
+
 export const FilesystemAction = Schema.Union([
+  Schema.Struct({
+    op: Schema.Literal("filesystem.readFiles"),
+    paths: Schema.Array(Path).check(Schema.isMaxLength(128)),
+  }),
+  Schema.Struct({
+    op: Schema.Literal("filesystem.writeFiles"),
+    entries: Schema.Array(
+      Schema.Struct({
+        path: Path,
+        content: Content,
+        encoding: Schema.Literals(["utf8", "base64"]),
+      }),
+    ).check(Schema.isMaxLength(128)),
+  }),
+  Schema.Struct({
+    op: Schema.Literal("filesystem.readdirRecursive"),
+    path: Path,
+    maxDepth: Schema.optionalKey(Schema.Int.check(Schema.isBetween({ minimum: 0, maximum: 64 }))),
+    exclude: Schema.optionalKey(DirectoryExclusions),
+  }),
+  Schema.Struct({ op: Schema.Literal("filesystem.realpath"), path: Path }),
   Schema.Struct({ op: Schema.Literal("filesystem.readFile"), path: Path }),
   Schema.Struct({
     op: Schema.Literal("filesystem.writeFile"),
@@ -175,6 +200,37 @@ export const FileContent = Schema.Struct({
   encoding: Schema.Literal("base64"),
   size: Schema.Int,
 });
+export const BatchReadResults = Schema.Array(
+  Schema.Union([
+    Schema.Struct({ path: Path, content: Content, encoding: Schema.Literal("base64") }),
+    Schema.Struct({
+      path: Path,
+      content: Schema.Null,
+      encoding: Schema.Literal("base64"),
+      error: Schema.String,
+      code: Schema.String,
+    }),
+  ]),
+);
+export const BatchWriteResults = Schema.Array(
+  Schema.Union([
+    Schema.Struct({ path: Path, success: Schema.Literal(true) }),
+    Schema.Struct({
+      path: Path,
+      success: Schema.Literal(false),
+      error: Schema.String,
+      code: Schema.String,
+    }),
+  ]),
+);
+export const DirectoryTree = Schema.Array(
+  Schema.Struct({
+    path: Path,
+    type: Schema.Literals(["file", "directory", "symlink"]),
+    size: Schema.Int,
+  }),
+);
+export const CanonicalPath = Schema.Struct({ path: Path });
 export const Success = Schema.Struct({ ok: Schema.Literal(true) });
 export const TokenResponse = Schema.Struct({ token: Schema.String, expiresAt: Schema.Int });
 export const Status = Schema.Struct({
@@ -191,6 +247,10 @@ export const NetworkResult = Schema.Struct({
 export const Exists = Schema.Struct({ exists: Schema.Boolean });
 export const Link = Schema.Struct({ target: Schema.String });
 export const GuestResponse = Schema.Union([
+  BatchReadResults,
+  BatchWriteResults,
+  DirectoryTree,
+  CanonicalPath,
   FileContent,
   FileStat,
   DirectoryEntries,

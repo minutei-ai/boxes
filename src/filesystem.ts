@@ -8,6 +8,10 @@ import {
   FileStat,
   FilesystemAction,
   Success,
+  BatchReadResults,
+  BatchWriteResults,
+  DirectoryTree,
+  DirectoryExclusions,
 } from "./contracts";
 import { kernelCall, open, publish, read, write } from "./storage";
 import type { Env } from "./resources";
@@ -20,6 +24,9 @@ export const filesystem = Effect.fn("filesystem.action")(function* (
   const id = capability.sandboxId;
   const reads = [
     "filesystem.readFile",
+    "filesystem.readFiles",
+    "filesystem.readdirRecursive",
+    "filesystem.realpath",
     "filesystem.stat",
     "filesystem.readdir",
     "filesystem.exists",
@@ -33,6 +40,111 @@ export const filesystem = Effect.fn("filesystem.action")(function* (
   const session = yield* open(env, id);
   const kernel = session.kernel;
   return yield* Match.value(action).pipe(
+    Match.when({ op: "filesystem.readFiles" }, (input) =>
+      Effect.gen(function* () {
+        const metadata = yield* Effect.forEach(input.paths, (path) =>
+          kernelCall(() => kernel.stat(path, true)).pipe(
+            Effect.flatMap(Schema.decodeUnknownEffect(Schema.fromJsonString(FileStat))),
+            Effect.result,
+          ),
+        );
+        const total = metadata.reduce((sum, result) => {
+          if (result._tag === "Success" && result.success.kind === "file")
+            return sum + result.success.size;
+          return sum;
+        }, 0);
+        if (total > 16_777_216)
+          return yield* new Fault({
+            code: "EFBIG",
+            status: 413,
+            message: "Batch reads are limited to 16 MiB total content",
+          });
+        const results = yield* Effect.forEach(
+          input.paths,
+          (path) =>
+            Effect.gen(function* () {
+              const result = yield* read(env, id, kernel, path).pipe(Effect.result);
+              if (result._tag === "Success")
+                return {
+                  path,
+                  content: result.success.toString("base64"),
+                  encoding: "base64" as const,
+                };
+              if (result.failure._tag === "Fault")
+                return {
+                  path,
+                  content: null,
+                  encoding: "base64" as const,
+                  error: result.failure.message,
+                  code: result.failure.code,
+                };
+              return yield* result.failure;
+            }),
+          { concurrency: 1 },
+        );
+        return results satisfies typeof BatchReadResults.Type;
+      }),
+    ),
+    Match.when({ op: "filesystem.writeFiles" }, (input) =>
+      Effect.gen(function* () {
+        const contentBytes = input.entries.reduce((sum, entry) => {
+          if (entry.encoding === "base64") return sum + Buffer.byteLength(entry.content, "base64");
+          return sum + Buffer.byteLength(entry.content, "utf8");
+        }, 0);
+        if (contentBytes > 16_777_216)
+          return yield* new Fault({
+            code: "EFBIG",
+            status: 413,
+            message: "Batch writes are limited to 16 MiB total content",
+          });
+        const beforeNodes = kernel.node_count();
+        const results = yield* Effect.forEach(input.entries, (entry) =>
+          Effect.gen(function* () {
+            const result = yield* Effect.gen(function* () {
+              if (
+                entry.encoding === "base64" &&
+                !/^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$/.test(
+                  entry.content,
+                )
+              )
+                return yield* new Fault({
+                  code: "EINVAL",
+                  status: 400,
+                  message: "Invalid canonical base64",
+                });
+              const target = yield* kernelCall(() => kernel.canonical(entry.path, "/"));
+              const parent = target.slice(0, target.lastIndexOf("/"));
+              if (parent.length > 0) yield* kernelCall(() => kernel.mkdir(parent, true));
+              yield* write(env, id, kernel, target, Buffer.from(entry.content, entry.encoding));
+            }).pipe(Effect.result);
+            if (result._tag === "Success") return { path: entry.path, success: true as const };
+            if (result.failure._tag === "Fault")
+              return {
+                path: entry.path,
+                success: false as const,
+                error: result.failure.message,
+                code: result.failure.code,
+              };
+            return yield* result.failure;
+          }),
+        );
+        if (results.some((result) => result.success) || kernel.node_count() !== beforeNodes)
+          yield* publish(env, id, session);
+        return results satisfies typeof BatchWriteResults.Type;
+      }),
+    ),
+    Match.when({ op: "filesystem.readdirRecursive" }, (input) =>
+      kernelCall(() =>
+        kernel.readdir_recursive(
+          input.path,
+          input.maxDepth ?? 64,
+          Schema.encodeSync(Schema.fromJsonString(DirectoryExclusions))(input.exclude ?? []),
+        ),
+      ).pipe(Effect.flatMap(Schema.decodeUnknownEffect(Schema.fromJsonString(DirectoryTree)))),
+    ),
+    Match.when({ op: "filesystem.realpath" }, (input) =>
+      kernelCall(() => kernel.realpath(input.path)).pipe(Effect.map((path) => ({ path }))),
+    ),
     Match.when({ op: "filesystem.readFile" }, (input) =>
       Effect.gen(function* () {
         const data = yield* read(env, id, kernel, input.path);
