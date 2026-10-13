@@ -1,4 +1,3 @@
-use rquickjs::loader::{BuiltinLoader, BuiltinResolver};
 use rquickjs::{Context, Ctx, Exception, Function, Module, Persistent, Runtime};
 use serde::Serialize;
 use std::cell::{Cell, RefCell};
@@ -7,6 +6,7 @@ use std::rc::Rc;
 use wasm_bindgen::prelude::*;
 
 mod binary;
+mod modules;
 
 struct Request {
     action: String,
@@ -41,25 +41,25 @@ fn failure(ctx: &Ctx<'_>, error: rquickjs::Error) -> String {
 
 impl Guest {
     fn create(
-        source: &str,
+        program: &str,
         memory: usize,
         ticks: usize,
         max_output: usize,
     ) -> Result<Self, String> {
-        if source.len() > 1_048_576
+        if program.len() > 18_000_000
             || !(4_194_304..=33_554_432).contains(&memory)
             || ticks == 0
             || ticks > 100_000
         {
             return Err("Invalid execution limits".into());
         }
+        let program: modules::Program =
+            serde_json::from_str(program).map_err(|error| error.to_string())?;
+        let (resolver, loader) = program.loaders()?;
         let runtime = Runtime::new().map_err(|error| error.to_string())?;
         runtime.set_memory_limit(memory);
         runtime.set_max_stack_size(512 * 1024);
-        runtime.set_loader(
-            BuiltinResolver::default().with_module("program"),
-            BuiltinLoader::default().with_module("program", source),
-        );
+        runtime.set_loader(resolver, loader);
         let fuel = Rc::new(Cell::new(ticks));
         let counter = Rc::clone(&fuel);
         runtime.set_interrupt_handler(Some(Box::new(move || match counter.get().checked_sub(1) {
@@ -118,6 +118,9 @@ impl Guest {
                 .map_err(|error| failure(&ctx, error))?;
             ctx.globals()
                 .set("__maxOutput", max_output)
+                .map_err(|error| failure(&ctx, error))?;
+            ctx.globals()
+                .set("__mode", program.mode.name())
                 .map_err(|error| failure(&ctx, error))?;
             Module::evaluate(ctx.clone(), "entry", include_str!("bootstrap.js"))
                 .map_err(|error| failure(&ctx, error))?;
@@ -217,10 +220,14 @@ impl Guest {
 mod tests {
     use super::*;
 
+    fn fixture(source: &str) -> String {
+        serde_json::json!({"language":"javascript","entry":"/main.js","mode":"function","modules":[{"name":"/main.js","source":source,"imports":[]}]}).to_string()
+    }
+
     #[test]
     fn computes_and_captures_output() {
         let mut guest = Guest::create(
-            "export default ({console}) => {console.log('ok'); return 42;}",
+            &fixture("export default ({console}) => {console.log('ok'); return 42;}"),
             8_388_608,
             1000,
             4096,
@@ -231,7 +238,7 @@ mod tests {
 
     #[test]
     fn bridges_promises_without_host_globals() {
-        let mut guest = Guest::create("export default async ({tools}) => { const value = await tools.call({op:'filesystem.exists',path:'/'}); return [value.exists,typeof process,typeof fetch]; }", 8_388_608, 1000, 4096).unwrap();
+        let mut guest = Guest::create(&fixture("export default async ({tools}) => { const value = await tools.call({op:'filesystem.exists',path:'/'}); return [value.exists,typeof process,typeof fetch]; }"), 8_388_608, 1000, 4096).unwrap();
         assert!(guest.advance().unwrap().contains("filesystem.exists"));
         guest.settle("{\"exists\":true}", false).unwrap();
         assert!(guest.advance().unwrap().contains("undefined"));
@@ -239,21 +246,25 @@ mod tests {
 
     #[test]
     fn interrupts_unbounded_computation() {
-        let mut guest =
-            Guest::create("export default () => {while(true){}}", 8_388_608, 2, 4096).unwrap();
+        let mut guest = Guest::create(
+            &fixture("export default () => {while(true){}}"),
+            8_388_608,
+            2,
+            4096,
+        )
+        .unwrap();
         assert!(guest.advance().is_err());
     }
 
     #[test]
     fn denies_platform_imports() {
-        assert!(
-            Guest::create(
-                "import {env} from 'cloudflare:workers'; export default () => env",
-                8_388_608,
-                1000,
-                4096
-            )
-            .is_err()
-        );
+        let mut guest = Guest::create(
+            &fixture("import {env} from 'cloudflare:workers'; export default () => env"),
+            8_388_608,
+            1000,
+            4096,
+        )
+        .unwrap();
+        assert!(guest.advance().unwrap().contains("cloudflare:workers"));
     }
 }

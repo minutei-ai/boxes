@@ -7,6 +7,8 @@ use oxc_transformer::{TransformOptions, Transformer};
 use std::path::Path;
 use wasm_bindgen::prelude::*;
 
+mod imports;
+
 fn compile(source: &str) -> Result<String, String> {
     if source.len() > 1_048_576 {
         return Err("TypeScript source exceeds its byte budget".into());

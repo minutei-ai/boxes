@@ -1,11 +1,11 @@
 {
-  "measuredAt": "2026-10-13T11:01:02.726Z",
+  "measuredAt": "2026-10-13T12:04:50.299Z",
   "url": "https://cirro-sandbox-prod-rs7wexxow56rmsoz.manoel-carvalhoneto.workers.dev",
   "profile": "minutei",
   "runtime": "standard-worker-rust-quickjs-wasmi",
   "parityComplete": false,
   "scope": "Implemented operations and explicit Python rejection",
-  "sandboxId": "proof-91b39324-6b8e-4fa2-9f38-0b95b4495128",
+  "sandboxId": "proof-c92231ed-15c1-4ac1-902e-866696d3f414",
   "checks": {
     "health": true,
     "created": true,
@@ -23,6 +23,11 @@
     "executionBudgetEnforcement": true,
     "memoryEnforcement": true,
     "platformImportsDenied": true,
+    "sandboxModuleExecution": true,
+    "expressionEvaluation": true,
+    "scriptExecution": true,
+    "guestFaultCodes": true,
+    "compilerRecovery": true,
     "disposal": true
   },
   "allPassed": true

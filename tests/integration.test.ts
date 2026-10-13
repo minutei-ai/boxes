@@ -13,6 +13,7 @@ import {
   ProcessPage,
   Head,
   MigrationReceipt,
+  ScriptProgram,
 } from "../src/contracts";
 import { runtime } from "../tooling/runtime";
 
@@ -267,18 +268,261 @@ test("guest CPU and memory exhaustion preserve Worker health and isolation", asy
 
 test("native platform imports fail inside QuickJS while the Worker remains available", async () => {
   const token = await setup("imports");
-  const imported = Schema.decodeUnknownSync(RunRecord)(
+  const imported = await act("imports", token, {
+    op: "process.run",
+    id: "cloudflare",
+    language: "javascript",
+    source: "import {env} from 'cloudflare:workers'; export default () => env;",
+  });
+  expect(imported.status).toBe(422);
+  expect((await act("imports", token, { op: "process.get", id: "cloudflare" })).status).toBe(404);
+  expect((await act("imports", token, { op: "vm.status" })).status).toBe(200);
+});
+
+test("script execution and evaluation expose scoped globals without requiring a default export", async () => {
+  const token = await setup("scripts");
+  const executed = Schema.decodeUnknownSync(RunRecord)(
     await (
-      await act("imports", token, {
-        op: "process.run",
-        id: "cloudflare",
-        language: "javascript",
-        source: "import {env} from 'cloudflare:workers'; export default () => env;",
+      await act("scripts", token, {
+        op: "javascript.execute",
+        id: "execute",
+        source:
+          "console.log('script started'); await tools.call({op:'filesystem.writeFile',path:'/tmp/started',content:'42',encoding:'utf8'});",
       })
     ).json(),
   );
-  expect(imported.status).toBe("failed");
-  expect((await act("imports", token, { op: "vm.status" })).status).toBe(200);
+  expect(executed.output?.stdout).toBe("script started\n");
+  expect(executed.output?.result).toBeNull();
+  const evaluated = Schema.decodeUnknownSync(RunRecord)(
+    await (
+      await act("scripts", token, {
+        op: "typescript.evaluate",
+        id: "evaluate",
+        expression: "(40 as number)+2",
+      })
+    ).json(),
+  );
+  expect(evaluated.output?.result).toBe(42);
+  const fault = Schema.decodeUnknownSync(RunRecord)(
+    await (
+      await act("scripts", token, {
+        op: "javascript.evaluate",
+        id: "fault",
+        expression:
+          "tools.call({op:'filesystem.readFile',path:'/missing'}).catch(error => ({code:error.code,message:error.message}))",
+      })
+    ).json(),
+  );
+  expect(
+    Schema.is(Schema.Struct({ code: Schema.Literal("ENOENT"), message: Schema.String }))(
+      fault.output?.result,
+    ),
+  ).toBe(true);
+});
+
+test("sandbox module graphs resolve TypeScript, reexports, cycles, symlinks and literal dynamic imports", async () => {
+  const token = await setup("module-graph");
+  const files = [
+    ["/tmp/value.ts", "export const answer: number = 42;"],
+    ["/tmp/bridge.mjs", "export {answer} from './value.ts';"],
+    ["/tmp/a.mjs", "import {b} from './b.mjs'; export function a(){return b();}"],
+    ["/tmp/b.mjs", "import {a} from './a.mjs'; export function b(){return a.name.length+41;}"],
+    [
+      "/tmp/main.mjs",
+      "import {answer} from './bridge.mjs'; import {a} from './a.mjs'; import {answer as linked} from './linked.ts'; const dynamic = await import('./value.ts'); console.log(answer,a(),linked,dynamic.answer);",
+    ],
+  ];
+  for (const [path, content] of files)
+    expect(
+      (
+        await act("module-graph", token, {
+          op: "filesystem.writeFile",
+          path,
+          content,
+          encoding: "utf8",
+        })
+      ).status,
+    ).toBe(200);
+  expect(
+    (
+      await act("module-graph", token, {
+        op: "filesystem.symlink",
+        path: "/tmp/linked.ts",
+        target: "value.ts",
+      })
+    ).status,
+  ).toBe(200);
+  const executed = Schema.decodeUnknownSync(RunRecord)(
+    await (
+      await act("module-graph", token, {
+        op: "javascript.executeFile",
+        id: "graph",
+        path: "/tmp/main.mjs",
+      })
+    ).json(),
+  );
+  expect(executed.output?.stdout).toBe("42 42 42 42\n");
+  const bucket = await mf.getR2Bucket("OBJECTS");
+  const artifact = await bucket.get(`sandboxes/module-graph/code/${executed.sourceHash}`);
+  if (artifact === null) return expect(artifact).not.toBeNull();
+  const graph = Schema.decodeUnknownSync(Schema.fromJsonString(ScriptProgram))(
+    await artifact.text(),
+  );
+  expect(graph.modules.length).toBe(5);
+  expect(graph.modules.filter((module) => module.name === "/tmp/value.ts").length).toBe(1);
+});
+
+test("module source snapshots survive guest writes and a subsequent execution loads the new revision", async () => {
+  const token = await setup("module-reload");
+  expect(
+    (
+      await act("module-reload", token, {
+        op: "filesystem.writeFile",
+        path: "/tmp/value.ts",
+        content: "export const answer: number = 42;",
+        encoding: "utf8",
+      })
+    ).status,
+  ).toBe(200);
+  expect(
+    (
+      await act("module-reload", token, {
+        op: "filesystem.writeFile",
+        path: "/tmp/main.ts",
+        content:
+          "import {answer} from './value.ts'; console.log(answer); await tools.call({op:'filesystem.writeFile',path:'/tmp/value.ts',content:'export const answer: number = 99;',encoding:'utf8'});",
+        encoding: "utf8",
+      })
+    ).status,
+  ).toBe(200);
+  const first = Schema.decodeUnknownSync(RunRecord)(
+    await (
+      await act("module-reload", token, {
+        op: "typescript.executeFile",
+        id: "first",
+        path: "/tmp/main.ts",
+      })
+    ).json(),
+  );
+  expect(first.output?.stdout).toBe("42\n");
+  const second = Schema.decodeUnknownSync(RunRecord)(
+    await (
+      await act("module-reload", token, {
+        op: "typescript.executeFile",
+        id: "second",
+        path: "/tmp/main.ts",
+      })
+    ).json(),
+  );
+  expect(second.output?.stdout).toBe("99\n");
+  expect(second.sourceHash).not.toBe(first.sourceHash);
+});
+
+test("module loading respects permissions and rejects missing, malformed or computed imports before reserving a run", async () => {
+  const token = await setup("module-errors");
+  expect(
+    (
+      await act("module-errors", token, {
+        op: "filesystem.writeFile",
+        path: "/tmp/secret.mjs",
+        content: "export const secret=42;",
+        encoding: "utf8",
+      })
+    ).status,
+  ).toBe(200);
+  expect(
+    (
+      await act("module-errors", token, {
+        op: "filesystem.chmod",
+        path: "/tmp/secret.mjs",
+        mode: 0,
+      })
+    ).status,
+  ).toBe(200);
+  expect(
+    (
+      await act("module-errors", token, {
+        op: "javascript.execute",
+        id: "denied",
+        source: "import {secret} from './secret.mjs'; console.log(secret);",
+      })
+    ).status,
+  ).toBe(403);
+  expect(
+    (
+      await act("module-errors", token, {
+        op: "javascript.execute",
+        id: "missing",
+        source: "import './missing.mjs';",
+      })
+    ).status,
+  ).toBe(422);
+  expect(
+    (
+      await act("module-errors", token, {
+        op: "javascript.execute",
+        id: "computed",
+        source: "const name='./secret.mjs'; await import(name);",
+      })
+    ).status,
+  ).toBe(422);
+  expect(
+    (
+      await act("module-errors", token, {
+        op: "javascript.execute",
+        id: "syntax",
+        source: "const = ;",
+      })
+    ).status,
+  ).toBe(422);
+  expect((await act("module-errors", token, { op: "process.get", id: "syntax" })).status).toBe(404);
+  const restricted = Schema.decodeUnknownSync(TokenResponse)(
+    await (
+      await post("/v1/sandboxes/module-errors/capabilities", admin, {
+        permissions: ["execute"],
+        expiresInSeconds: 3600,
+      })
+    ).json(),
+  ).token;
+  expect(
+    (
+      await act("module-errors", restricted, {
+        op: "javascript.executeFile",
+        id: "restricted",
+        path: "/tmp/secret.mjs",
+      })
+    ).status,
+  ).toBe(403);
+  const plain = Schema.decodeUnknownSync(RunRecord)(
+    await (
+      await act("module-errors", restricted, {
+        op: "javascript.evaluate",
+        id: "plain",
+        expression: "40+2",
+      })
+    ).json(),
+  );
+  expect(plain.output?.result).toBe(42);
+});
+
+test("compiler stack exhaustion cannot poison subsequent compilation in the same Worker", async () => {
+  const token = await setup("compiler-lifetime");
+  const expression = "(".repeat(10000) + "42" + ")".repeat(10000);
+  for (const id of ["first", "second", "third"]) {
+    expect(
+      (await act("compiler-lifetime", token, { op: "javascript.evaluate", id, expression })).status,
+    ).toBe(422);
+    const recovered = Schema.decodeUnknownSync(RunRecord)(
+      await (
+        await act("compiler-lifetime", token, {
+          op: "typescript.evaluate",
+          id: `${id}-recovered`,
+          expression: "(40 as number)+2",
+        })
+      ).json(),
+    );
+    expect(recovered.output?.result).toBe(42);
+  }
 });
 
 test("guest cannot access network or host bindings", async () => {

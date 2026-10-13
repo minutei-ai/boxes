@@ -23,21 +23,53 @@ await Effect.runPromise(
     yield* run([
       "cargo",
       "build",
-      "--workspace",
+      "-p",
+      "cirro-kernel",
+      "-p",
+      "cirro-guest",
       "--target",
       "wasm32-unknown-unknown",
       "--release",
       "--locked",
     ]);
-    yield* Effect.forEach(["kernel", "guest", "compiler"], (name) =>
+    yield* run([
+      "cargo",
+      "rustc",
+      "-p",
+      "cirro-compiler",
+      "--target",
+      "wasm32-unknown-unknown",
+      "--release",
+      "--locked",
+      "--",
+      "-C",
+      "link-arg=--max-memory=67108864",
+    ]);
+    const targets = { kernel: "web", guest: "web", compiler: "no-modules" } as const;
+    yield* Effect.forEach(["kernel", "guest", "compiler"] as const, (name) =>
       run([
         join(homedir(), ".cargo/bin/wasm-bindgen"),
         `target/wasm32-unknown-unknown/release/cirro_${name}.wasm`,
         "--target",
-        "web",
+        targets[name],
         "--out-dir",
         `dist/${name}`,
       ]),
+    );
+    const compiler = yield* Effect.promise(() =>
+      Bun.file(join(root, "dist/compiler/cirro_compiler.js")).text(),
+    );
+    yield* Effect.promise(() =>
+      Bun.write(
+        join(root, "dist/compiler/bindings.js"),
+        `export const createBindings = () => {\n${compiler}\nreturn wasm_bindgen;\n};\n`,
+      ),
+    );
+    yield* Effect.promise(() =>
+      Bun.write(
+        join(root, "dist/compiler/bindings.d.ts"),
+        'import "./cirro_compiler";\nexport declare const createBindings: () => typeof wasm_bindgen;\n',
+      ),
     );
     yield* run([
       "rustc",

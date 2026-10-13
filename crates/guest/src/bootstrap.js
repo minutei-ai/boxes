@@ -1,6 +1,7 @@
-import main from "program";
 const call = globalThis.__call;
 const finish = globalThis.__finish;
+const mode = globalThis.__mode;
+delete globalThis.__mode;
 const maxOutput = globalThis.__maxOutput;
 delete globalThis.__call;
 delete globalThis.__finish;
@@ -25,10 +26,24 @@ const console = Object.freeze({
 });
 globalThis.console = console;
 const tools = Object.freeze({
-  call: async (action) => JSON.parse(await call(JSON.stringify(action))),
+  call: async (action) => {
+    const result = await call(JSON.stringify(action)).catch((failure) => {
+      const details = JSON.parse(failure);
+      const error = new Error(details.message);
+      error.code = details.error;
+      throw error;
+    });
+    return JSON.parse(result);
+  },
 });
+globalThis.tools = tools;
 Promise.resolve()
-  .then(() => main({ tools, console }))
+  .then(() => import("program"))
+  .then((namespace) => {
+    if (mode === "function") return namespace.default({ tools, console });
+    if (mode === "evaluate") return namespace.default;
+    return null;
+  })
   .then(
     (result) => {
       if (result !== undefined) output.result = result;

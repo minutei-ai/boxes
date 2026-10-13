@@ -127,13 +127,67 @@ const memory = Schema.decodeUnknownSync(RunRecord)(
     })
   ).json(),
 );
-const platformImport = Schema.decodeUnknownSync(RunRecord)(
+const platformImport = await action({
+  op: "process.run",
+  id: "platform-import",
+  language: "javascript",
+  source: "import {env} from 'cloudflare:workers'; export default () => env;",
+});
+const moduleWrite = await action({
+  op: "filesystem.writeFile",
+  path: "/tmp/answer.ts",
+  content: "export const answer: number=42;",
+  encoding: "utf8",
+});
+const entryWrite = await action({
+  op: "filesystem.writeFile",
+  path: "/tmp/main.ts",
+  content:
+    "import {answer} from './answer.ts'; console.log('module',answer); await tools.call({op:'filesystem.writeFile',path:'/tmp/module-result',content:String(answer),encoding:'utf8'});",
+  encoding: "utf8",
+});
+const moduleRun = Schema.decodeUnknownSync(RunRecord)(
+  await (await action({ op: "typescript.executeFile", id: "module", path: "/tmp/main.ts" })).json(),
+);
+const expression = Schema.decodeUnknownSync(RunRecord)(
+  await (
+    await action({ op: "typescript.evaluate", id: "expression", expression: "(40 as number)+2" })
+  ).json(),
+);
+const script = Schema.decodeUnknownSync(RunRecord)(
   await (
     await action({
-      op: "process.run",
-      id: "platform-import",
-      language: "javascript",
-      source: "import {env} from 'cloudflare:workers'; export default () => env;",
+      op: "javascript.execute",
+      id: "script",
+      source: "console.log('script without default export');",
+    })
+  ).json(),
+);
+const guestFault = Schema.decodeUnknownSync(RunRecord)(
+  await (
+    await action({
+      op: "javascript.evaluate",
+      id: "fault",
+      expression: "tools.call({op:'filesystem.readFile',path:'/missing'}).catch(error=>error.code)",
+    })
+  ).json(),
+);
+const compilerDeep = await action({
+  op: "javascript.evaluate",
+  id: "deep-first",
+  expression: "(".repeat(10000) + "42" + ")".repeat(10000),
+});
+const compilerDeepAgain = await action({
+  op: "javascript.evaluate",
+  id: "deep-second",
+  expression: "(".repeat(10000) + "42" + ")".repeat(10000),
+});
+const compilerRecovered = Schema.decodeUnknownSync(RunRecord)(
+  await (
+    await action({
+      op: "typescript.evaluate",
+      id: "compiler-recovered",
+      expression: "(40 as number)+2",
     })
   ).json(),
 );
@@ -161,7 +215,18 @@ const checks = {
   executionBudgetEnforcement: cpu.status === "failed" && alive.status === 200,
   memoryEnforcement:
     memory.output?.exitCode === 1 && memory.output.stderr.includes("out of memory"),
-  platformImportsDenied: platformImport.status === "failed",
+  platformImportsDenied: platformImport.status === 422,
+  sandboxModuleExecution:
+    moduleWrite.status === 200 &&
+    entryWrite.status === 200 &&
+    moduleRun.output?.stdout === "module 42\n",
+  expressionEvaluation: expression.output?.result === 42,
+  scriptExecution: script.output?.stdout === "script without default export\n",
+  guestFaultCodes: guestFault.output?.result === "ENOENT",
+  compilerRecovery:
+    compilerDeep.status === 422 &&
+    compilerDeepAgain.status === 422 &&
+    compilerRecovered.output?.result === 42,
   disposal: disposed.status === 200 && afterDispose.status === 404,
 };
 const report = {

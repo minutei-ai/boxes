@@ -134,10 +134,18 @@ const route = Effect.fn("api.route")(function* (request: Request, env: Env) {
     onExcessProperty: "error",
   })(data.toString("utf8"));
   const value = yield* Match.value(action).pipe(
-    Match.when({ op: "process.run" }, (action) =>
-      run(env, capability, action).pipe(
-        Effect.map((result) => Schema.encodeSync(Schema.fromJsonString(RunRecord))(result)),
-      ),
+    Match.whenOr(
+      { op: "process.run" },
+      { op: "javascript.execute" },
+      { op: "javascript.evaluate" },
+      { op: "javascript.executeFile" },
+      { op: "typescript.execute" },
+      { op: "typescript.evaluate" },
+      { op: "typescript.executeFile" },
+      (action) =>
+        run(env, capability, action).pipe(
+          Effect.map((result) => Schema.encodeSync(Schema.fromJsonString(RunRecord))(result)),
+        ),
     ),
     Match.when({ op: "process.get" }, (action) =>
       inspect(env, capability, action.id).pipe(

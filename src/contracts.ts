@@ -73,12 +73,53 @@ export const ProcessReadAction = Schema.Union([
   ProcessListAction,
 ]);
 export const GuestAction = Schema.Union([FilesystemAction, NetworkAction, ProcessReadAction]);
-export const RunAction = Schema.Struct({
+const InlineRun = Schema.Struct({
   op: Schema.Literal("process.run"),
   id: Id,
   language: Schema.Literals(["javascript", "typescript", "python", "shell", "wasm"]),
   source: Schema.String.check(Schema.isMaxLength(1_048_576)),
 });
+const ScriptSource = Schema.String.check(Schema.isMaxLength(1_048_576));
+export const RunAction = Schema.Union([
+  InlineRun,
+  Schema.Struct({
+    op: Schema.Literals(["javascript.execute", "typescript.execute"]),
+    id: Id,
+    source: ScriptSource,
+    filePath: Schema.optionalKey(Path),
+  }),
+  Schema.Struct({
+    op: Schema.Literals(["javascript.evaluate", "typescript.evaluate"]),
+    id: Id,
+    expression: ScriptSource,
+    filePath: Schema.optionalKey(Path),
+  }),
+  Schema.Struct({
+    op: Schema.Literals(["javascript.executeFile", "typescript.executeFile"]),
+    id: Id,
+    path: Path,
+  }),
+]);
+export const ModuleImports = Schema.Array(Schema.String.check(Schema.isMaxLength(4096))).check(
+  Schema.isMaxLength(128),
+);
+export const ModuleSource = Schema.Struct({
+  name: Path,
+  source: ScriptSource,
+  imports: Schema.Array(Schema.Struct({ specifier: Path, target: Path })).check(
+    Schema.isMaxLength(128),
+  ),
+});
+export const ScriptProgram = Schema.Struct({
+  language: Schema.Literals(["javascript", "typescript"]),
+  entry: Path,
+  mode: Schema.Literals(["function", "module", "evaluate"]),
+  modules: Schema.Array(ModuleSource).check(Schema.isMinLength(1), Schema.isMaxLength(128)),
+});
+export const Program = Schema.Union([
+  ScriptProgram,
+  Schema.Struct({ language: Schema.Literals(["python", "shell", "wasm"]), source: ScriptSource }),
+]);
 export const Action = Schema.Union([
   GuestAction,
   RunAction,

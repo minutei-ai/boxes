@@ -8,6 +8,7 @@ Rust/Wasm agent sandboxes inside Cloudflare Workers. Effect owns validated reque
 
 - Rust filesystem kernel with directories, files, modes, relative symlinks, rename, append and truncate.
 - Rust QuickJS for JavaScript, Oxc for TypeScript and Wasmi for standalone Wasm, inside one ordinary Worker.
+- JavaScript/TypeScript script execution, expression evaluation and execution of files with sandbox imports, reexports, cycles and symlinks.
 - A bounded shell with pipes, redirection, conditionals and initial commands.
 - Capability tokens scoped to one sandbox, permission set and expiration.
 - Guest RPC for authorized filesystem operations, process inspection and HTTPS GET to explicitly authorized hosts.
@@ -32,7 +33,7 @@ bun run bench
 
 The benchmark records distributions and artifact sizes in [performance-local.json](docs/evidence/performance-local.json). These are local measurements, not production latency or upstream comparisons.
 
-The ordinary Worker cutover passed 14 Rust tests, 22 workerd integration tests and 17 production checks using the `minutei` profile. [Production evidence](docs/evidence/production.json) covers implemented operations, isolation and resource limits; it includes the explicit Python rejection and does not establish upstream parity. Repeat it with `CIRRO_URL=<deployed-url> bun run live` and the private administrator key in `.env`.
+Validation passed 16 Rust tests, 27 workerd integration tests and 22 production checks. Deployment uses the `minutei` profile. [Production evidence](docs/evidence/production.json) covers implemented operations, isolation and resource limits; it includes the explicit Python rejection and does not establish upstream parity. Repeat it with `CIRRO_URL=<deployed-url> bun run live` and the private administrator key in `.env`.
 
 ## Deploy
 
@@ -78,6 +79,18 @@ Example action:
 ```
 
 The guest module exports a default function accepting `{ tools, console }`. `tools.call(action)` executes the allowed action inside the trusted Worker. The guest has no administrator credential, direct bucket reference or direct network access. The guest cannot access Worker globals, platform imports, Node modules, bucket bindings or direct fetch. Each execution receives a fresh QuickJS runtime. TypeScript uses the same entry contract after Oxc removes its types and compiles runtime constructs; this is transpilation, not project type checking.
+
+For script-style code, use `javascript.execute` or `typescript.execute` with `id` and `source`. The module receives scoped `tools` and captured `console` as globals. `javascript.evaluate` and `typescript.evaluate` accept `id` and `expression`; the serialized expression value is returned in `output.result`. Optional `filePath` gives inline code its module name and relative import base; its default is `/tmp/__cirro_inline__.mjs`.
+
+Execute a file already in R2 with `javascript.executeFile` or `typescript.executeFile`:
+
+```json
+{ "op": "typescript.executeFile", "id": "report-1", "path": "/tmp/main.ts" }
+```
+
+File execution and imports require `read` in addition to `execute`. Rust parses imports and reexports; the trusted Worker resolves local JS/TS files from one filesystem snapshot and preloads the graph. Static imports and literal `import('./file.js')` work. Relative/absolute paths, extensionless `.js`/`.mjs`/`.ts` paths and directory indexes resolve inside the sandbox. Computed imports, Node/platform imports and npm resolution remain unsupported and fail preflight. Syntax and module resolution errors return a failure before reserving an execution ID. Compiled program artifacts retain the module graph and are addressed by its digest. Guest tools reject with an Error containing the domain `code` and `message`.
+
+The parser/compiler uses a fresh Wasm instance per module, with 64 MiB maximum linear memory. Stack exhaustion in one compilation cannot poison later requests. Graphs allow at most 128 modules, 128 imports per module and 8 MiB serialized data. Source compilation is not TypeScript project type checking.
 
 For `language: "shell"`, source is a shell script. For `language: "wasm"`, source is canonical base64 of a module exporting `run() -> i32` and requiring no imports. Wasmi interprets it with fuel and memory limits; arbitrary Wasm is never compiled through Worker JavaScript. WASI support is pending.
 

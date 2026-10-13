@@ -7,8 +7,10 @@ import {
   RunMetadata,
   RunRecord,
   RunResult,
+  Program,
   ProcessListAction,
 } from "./contracts";
+import { load } from "./modules";
 import { execute } from "./execution";
 import { open, StorageFailure } from "./storage";
 import type { Env } from "./resources";
@@ -24,17 +26,18 @@ export const run = Effect.fn("process.run")(function* (
 ) {
   yield* requirePermission(capability, "execute");
   const session = yield* open(env, capability.sandboxId);
-  if (action.language === "python")
+  if (action.op === "process.run" && action.language === "python")
     return yield* new Fault({
       code: "UNSUPPORTED_RUNTIME",
       status: 501,
       message: "Python interpreter is not available in the standard Worker",
     });
+  const program = yield* load(env, capability, session.kernel, action);
   const startedAt = yield* Clock.currentTimeMillis;
   const key = `sandboxes/${capability.sandboxId}/runs/${action.id}.json`;
   if (
-    action.language === "wasm" &&
-    !/^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$/.test(action.source)
+    program.language === "wasm" &&
+    !/^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$/.test(program.source)
   )
     return yield* new Fault({
       code: "EINVAL",
@@ -42,8 +45,8 @@ export const run = Effect.fn("process.run")(function* (
       message: "Invalid canonical Wasm base64",
     });
   const source = yield* Effect.sync(() => {
-    if (action.language === "wasm") return Buffer.from(action.source, "base64");
-    return Buffer.from(action.source, "utf8");
+    if (program.language === "wasm") return Buffer.from(program.source, "base64");
+    return Buffer.from(Schema.encodeSync(Schema.fromJsonString(Program))(program), "utf8");
   });
   const digest = yield* Effect.promise(() => crypto.subtle.digest("SHA-256", source));
   const sourceHash = Buffer.from(digest).toString("hex");
@@ -58,7 +61,7 @@ export const run = Effect.fn("process.run")(function* (
     id: action.id,
     status: "running",
     sourceHash,
-    language: action.language,
+    language: program.language,
     startedAt,
     finishedAt: null,
     output: null,
@@ -80,8 +83,8 @@ export const run = Effect.fn("process.run")(function* (
       message: "Execution ID already exists; use process.get to inspect its confirmed state",
     });
   const output = yield* Effect.gen(function* () {
-    if (action.language === "shell") return yield* shell(env, capability, action.source);
-    return yield* execute(env, capability, action, session.head.policy);
+    if (program.language === "shell") return yield* shell(env, capability, program.source);
+    return yield* execute(env, capability, program, session.head.policy);
   }).pipe(Effect.result);
   const finishedAt = yield* Clock.currentTimeMillis;
   const finished = yield* Effect.sync(() => {

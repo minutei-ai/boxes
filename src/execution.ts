@@ -1,22 +1,21 @@
 import { Effect, Schema } from "effect";
 import guestWasm from "cirro:guest";
-import compilerWasm from "cirro:compiler";
 import { initSync, Guest, run_wasm } from "../dist/guest/cirro_guest";
-import { initSync as initCompiler, transpile } from "../dist/compiler/cirro_compiler";
 import {
   Capability,
   Fault,
   GuestAction,
   GuestResponse,
   Policy,
-  RunAction,
+  Program,
+  ScriptProgram,
+  ErrorResponse,
   RunResult,
 } from "./contracts";
 import { guestAction } from "./capabilities";
 import type { Env } from "./resources";
 
 initSync({ module: guestWasm });
-initCompiler({ module: compilerWasm });
 
 class InterpreterFailure extends Schema.TaggedError<InterpreterFailure>()("InterpreterFailure", {
   cause: Schema.Unknown,
@@ -29,21 +28,21 @@ const Step = Schema.Union([
 export const execute = Effect.fn("execution.run")(function* (
   env: Env,
   capability: typeof Capability.Type,
-  action: typeof RunAction.Type,
+  program: typeof Program.Type,
   policy: typeof Policy.Type,
 ) {
-  if (action.language === "python")
+  if (program.language === "python")
     return yield* new Fault({
       code: "UNSUPPORTED_RUNTIME",
       status: 501,
       message:
         "Python requires a bounded interpreter inside the standard Worker; Dynamic Workers are disabled",
     });
-  if (action.language === "wasm") {
+  if (program.language === "wasm") {
     const result = yield* Effect.try({
       try: () =>
         run_wasm(
-          Buffer.from(action.source, "base64"),
+          Buffer.from(program.source, "base64"),
           policy.memoryBytes,
           BigInt(policy.interruptBudget) * 1000n,
         ),
@@ -51,17 +50,17 @@ export const execute = Effect.fn("execution.run")(function* (
     });
     return { stdout: "", stderr: "", result, exitCode: 0 };
   }
-  const source = yield* Effect.try({
-    try: () => {
-      if (action.language === "typescript") return transpile(action.source);
-      return action.source;
-    },
-    catch: (cause) => new InterpreterFailure({ cause }),
-  });
+  if (!("modules" in program))
+    return yield* new InterpreterFailure({ cause: "This program belongs to another runtime" });
   const guest = yield* Effect.acquireRelease(
     Effect.try({
       try: () =>
-        new Guest(source, policy.memoryBytes, policy.interruptBudget, policy.maxOutputBytes),
+        new Guest(
+          Schema.encodeSync(Schema.fromJsonString(ScriptProgram))(program),
+          policy.memoryBytes,
+          policy.interruptBudget,
+          policy.maxOutputBytes,
+        ),
       catch: (cause) => new InterpreterFailure({ cause }),
     }),
     (guest) => Effect.sync(() => guest.free()),
@@ -89,7 +88,23 @@ export const execute = Effect.fn("execution.run")(function* (
         });
       } else {
         yield* Effect.try({
-          try: () => guest.respond("Capability operation failed", true),
+          try: () => {
+            if (response.failure._tag === "Fault")
+              return guest.respond(
+                Schema.encodeSync(Schema.fromJsonString(ErrorResponse))({
+                  error: response.failure.code,
+                  message: response.failure.message,
+                }),
+                true,
+              );
+            return guest.respond(
+              Schema.encodeSync(Schema.fromJsonString(ErrorResponse))({
+                error: "INTERNAL",
+                message: "Capability operation failed",
+              }),
+              true,
+            );
+          },
           catch: (cause) => new InterpreterFailure({ cause }),
         });
       }
