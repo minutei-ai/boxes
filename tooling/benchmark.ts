@@ -140,6 +140,39 @@ const python = await sample(25, async (index) => {
   const record = Schema.decodeUnknownSync(RunRecord)(await response.json());
   if (record.output?.exitCode !== 0 || record.output.result !== 328350) process.exit(1);
 });
+const rangeBytes = Buffer.alloc(8_388_608, 97);
+const rangeCreated = await call({
+  op: "filesystem.writeFile",
+  path: "/tmp/range-benchmark",
+  content: rangeBytes.toString("base64"),
+  encoding: "base64",
+});
+if (rangeCreated.status !== 200) process.exit(1);
+const fullEightMiB = await sample(25, async () => {
+  const response = await call({ op: "filesystem.readFile", path: "/tmp/range-benchmark" });
+  if (response.status !== 200) process.exit(1);
+  await response.arrayBuffer();
+});
+const rangeFourKiB = await sample(25, async () => {
+  const response = await call({
+    op: "filesystem.readFile",
+    path: "/tmp/range-benchmark",
+    offset: 4_194_304,
+    length: 4096,
+  });
+  if (response.status !== 200) process.exit(1);
+  await response.arrayBuffer();
+});
+const patchFourKiB = await sample(25, async (index) => {
+  const response = await call({
+    op: "filesystem.writeFile",
+    path: "/tmp/range-benchmark",
+    offset: 4_194_304,
+    content: Buffer.alloc(4096, index).toString("base64"),
+    encoding: "base64",
+  });
+  if (response.status !== 200) process.exit(1);
+});
 const report = {
   measuredAt: new Date().toISOString(),
   environment: {
@@ -158,6 +191,9 @@ const report = {
     compilerWasm: (await stat(join(import.meta.dir, "../dist/worker/cirro_compiler_bg.wasm"))).size,
   },
   measurements: {
+    fullEightMiB,
+    rangeFourKiB,
+    patchFourKiB,
     python,
     sequentialEightFiles,
     batchEightFiles,

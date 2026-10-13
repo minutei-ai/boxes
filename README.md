@@ -141,3 +141,5 @@ print("running inside the Worker")
 await tools.call({"op": "filesystem.writeFile", "path": "/tmp/result", "content": "42", "encoding": "utf8"})
 (await tools.call({"op": "filesystem.readFile", "path": "/tmp/result"}))["content"]
 ```
+
+`filesystem.readFile` accepts optional byte `offset` and `length`; omitted values read the complete file. It verifies only the immutable blocks needed by that range. `filesystem.writeFile` accepts an optional byte `offset`; when provided, the write preserves other bytes and zero-fills a gap before the new content. Without an offset it replaces the complete file. Existing zero-byte positional writes leave metadata and generation unchanged. Positional writes need only the `write` grant and publish through the same conditional R2 root commit. File size remains limited to 16 MiB.

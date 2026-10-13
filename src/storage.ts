@@ -1,6 +1,6 @@
 import { Clock, Effect, Schema } from "effect";
 import { Kernel } from "../dist/kernel/cirro_kernel";
-import { Chunks, Fault, FileStat, Head } from "./contracts";
+import { Chunks, Fault, Head, ContentBlock, ReadPlan, RangeWritePlan } from "./contracts";
 import type { Env } from "./resources";
 
 export class StorageFailure extends Schema.TaggedError<StorageFailure>()("StorageFailure", {
@@ -79,55 +79,123 @@ export const publish = Effect.fn("filesystem.publish")(function* (
   return written.etag;
 });
 
+const block = Effect.fn("filesystem.block")(function* (
+  env: Env,
+  id: string,
+  reference: typeof ContentBlock.Type,
+) {
+  const object = yield* Effect.tryPromise({
+    try: () => env.OBJECTS.get(`sandboxes/${id}/blobs/${reference.hash}`),
+    catch: (cause) => new StorageFailure({ cause }),
+  });
+  if (object === null)
+    return yield* new Fault({ code: "EIO", status: 500, message: "Missing file content block" });
+  if (object.size !== reference.size)
+    return yield* new Fault({
+      code: "EIO",
+      status: 500,
+      message: "File content block length mismatch",
+    });
+  const data = yield* Effect.tryPromise({
+    try: () => object.arrayBuffer(),
+    catch: (cause) => new StorageFailure({ cause }),
+  });
+  const digest = yield* Effect.promise(() => crypto.subtle.digest("SHA-256", data));
+  if (Buffer.from(digest).toString("hex") !== reference.hash)
+    return yield* new Fault({
+      code: "EIO",
+      status: 500,
+      message: "File content checksum mismatch",
+    });
+  return Buffer.from(data);
+});
+
 export const read = Effect.fn("filesystem.read")(function* (
   env: Env,
   id: string,
   kernel: Kernel,
   path: string,
   forWrite = false,
+  offset = 0,
+  length = 16_777_216,
 ) {
-  const refs = yield* kernelCall(() => kernel.chunks(path, forWrite));
-  const hashes = yield* Schema.decodeUnknownEffect(Schema.fromJsonString(Chunks))(refs);
-  const metadata = yield* kernelCall(() => kernel.stat(path, true)).pipe(
-    Effect.flatMap(Schema.decodeUnknownEffect(Schema.fromJsonString(FileStat))),
-  );
-  const blocks = yield* Effect.forEach(
-    hashes,
-    (hash, index) =>
+  const plan = yield* kernelCall(() =>
+    kernel.read_plan(path, BigInt(offset), BigInt(length), forWrite),
+  ).pipe(Effect.flatMap(Schema.decodeUnknownEffect(Schema.fromJsonString(ReadPlan))));
+  const blocks = yield* Effect.forEach(plan.blocks, (reference) => block(env, id, reference), {
+    concurrency: 4,
+  });
+  return Buffer.concat(blocks).subarray(plan.skip, plan.skip + plan.length);
+});
+
+export const writeRange = Effect.fn("filesystem.writeRange")(function* (
+  env: Env,
+  id: string,
+  kernel: Kernel,
+  path: string,
+  data: Uint8Array,
+  offset: number,
+) {
+  const plan = yield* kernelCall(() =>
+    kernel.write_range_plan(path, BigInt(offset), BigInt(data.byteLength)),
+  ).pipe(Effect.flatMap(Schema.decodeUnknownEffect(Schema.fromJsonString(RangeWritePlan))));
+  if (!plan.changed) return false;
+  const now = yield* Clock.currentTimeNanos;
+  yield* kernelCall(() => kernel.set_time(now));
+  const patches = yield* Effect.forEach(
+    plan.blocks,
+    (patch) =>
       Effect.gen(function* () {
-        const object = yield* Effect.tryPromise({
-          try: () => env.OBJECTS.get(`sandboxes/${id}/blobs/${hash}`),
-          catch: (cause) => new StorageFailure({ cause }),
-        });
-        if (object === null)
-          return yield* new Fault({
-            code: "EIO",
-            status: 500,
-            message: "Missing file content block",
-          });
-        const expected = Math.min(262_144, metadata.size - index * 262_144);
-        if (object.size !== expected)
-          return yield* new Fault({
-            code: "EIO",
-            status: 500,
-            message: "File content block length mismatch",
-          });
-        const data = yield* Effect.tryPromise({
-          try: () => object.arrayBuffer(),
-          catch: (cause) => new StorageFailure({ cause }),
-        });
-        const digest = yield* Effect.promise(() => crypto.subtle.digest("SHA-256", data));
-        if (Buffer.from(digest).toString("hex") !== hash)
-          return yield* new Fault({
-            code: "EIO",
-            status: 500,
-            message: "File content checksum mismatch",
-          });
-        return Buffer.from(data);
+        const bytes = Buffer.alloc(patch.size);
+        const start = patch.index * 262_144;
+        if (
+          patch.previous !== null &&
+          (offset > start || offset + data.byteLength < start + patch.previous.size)
+        ) {
+          const previous = yield* block(env, id, patch.previous);
+          bytes.set(previous);
+        }
+        const from = Math.max(start, offset);
+        const to = Math.min(start + patch.size, offset + data.byteLength);
+        if (to > from) bytes.set(data.subarray(from - offset, to - offset), from - start);
+        const digest = yield* Effect.promise(() => crypto.subtle.digest("SHA-256", bytes));
+        return { index: patch.index, hash: Buffer.from(digest).toString("hex"), bytes };
       }),
     { concurrency: 4 },
   );
-  return Buffer.concat(blocks);
+  const hashes = plan.chunks.map((hash, index) => {
+    const patch = patches.find((patch) => patch.index === index);
+    if (patch !== undefined) return patch.hash;
+    return hash;
+  });
+  const references = yield* Schema.decodeUnknownEffect(Chunks)(hashes);
+  const encoded = Schema.encodeSync(Schema.fromJsonString(Chunks))(references);
+  const needed = yield* kernelCall(() =>
+    kernel.prepare_write(plan.path, BigInt(plan.size), encoded),
+  ).pipe(Effect.flatMap(Schema.decodeUnknownEffect(Schema.fromJsonString(Chunks))));
+  yield* Effect.forEach(
+    needed,
+    (hash) =>
+      Effect.gen(function* () {
+        const patch = patches.find((patch) => patch.hash === hash);
+        if (patch === undefined)
+          return yield* new Fault({
+            code: "EIO",
+            status: 500,
+            message: "Range write has no content for a new digest",
+          });
+        yield* Effect.tryPromise({
+          try: () =>
+            env.OBJECTS.put(`sandboxes/${id}/blobs/${hash}`, patch.bytes, {
+              onlyIf: { etagDoesNotMatch: "*" },
+            }),
+          catch: (cause) => new StorageFailure({ cause }),
+        });
+      }),
+    { concurrency: 4 },
+  );
+  yield* kernelCall(() => kernel.write(plan.path, BigInt(plan.size), encoded));
+  return true;
 });
 
 export const write = Effect.fn("filesystem.write")(function* (

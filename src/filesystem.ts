@@ -2,6 +2,7 @@ import { Clock, Effect, Match, Schema } from "effect";
 import { requirePermission } from "./auth";
 import {
   Capability,
+  ContentEncoding,
   DirectoryEntries,
   Fault,
   FileContent,
@@ -13,8 +14,25 @@ import {
   DirectoryTree,
   DirectoryExclusions,
 } from "./contracts";
-import { kernelCall, open, publish, read, write } from "./storage";
+import { kernelCall, open, publish, read, write, writeRange } from "./storage";
 import type { Env } from "./resources";
+
+const content = Effect.fn("filesystem.content")(function* (
+  value: string,
+  encoding: typeof ContentEncoding.Type,
+) {
+  if (
+    encoding === "base64" &&
+    (value.length % 4 !== 0 ||
+      !/^[A-Za-z0-9+/]*={0,2}$/.test(value) ||
+      Buffer.from(value.slice(-4), "base64").toString("base64") !== value.slice(-4))
+  )
+    return yield* new Fault({ code: "EINVAL", status: 400, message: "Invalid canonical base64" });
+  const data = Buffer.from(value, encoding);
+  if (data.byteLength > 16_777_216)
+    return yield* new Fault({ code: "EFBIG", status: 413, message: "Maximum file size is 16 MiB" });
+  return data;
+});
 
 export const filesystem = Effect.fn("filesystem.action")(function* (
   env: Env,
@@ -103,21 +121,11 @@ export const filesystem = Effect.fn("filesystem.action")(function* (
         const results = yield* Effect.forEach(input.entries, (entry) =>
           Effect.gen(function* () {
             const result = yield* Effect.gen(function* () {
-              if (
-                entry.encoding === "base64" &&
-                !/^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$/.test(
-                  entry.content,
-                )
-              )
-                return yield* new Fault({
-                  code: "EINVAL",
-                  status: 400,
-                  message: "Invalid canonical base64",
-                });
+              const data = yield* content(entry.content, entry.encoding);
               const target = yield* kernelCall(() => kernel.canonical(entry.path, "/"));
               const parent = target.slice(0, target.lastIndexOf("/"));
               if (parent.length > 0) yield* kernelCall(() => kernel.mkdir(parent, true));
-              yield* write(env, id, kernel, target, Buffer.from(entry.content, entry.encoding));
+              yield* write(env, id, kernel, target, data);
             }).pipe(Effect.result);
             if (result._tag === "Success") return { path: entry.path, success: true as const };
             if (result.failure._tag === "Fault")
@@ -149,7 +157,15 @@ export const filesystem = Effect.fn("filesystem.action")(function* (
     ),
     Match.when({ op: "filesystem.readFile" }, (input) =>
       Effect.gen(function* () {
-        const data = yield* read(env, id, kernel, input.path);
+        const data = yield* read(
+          env,
+          id,
+          kernel,
+          input.path,
+          false,
+          input.offset ?? 0,
+          input.length ?? 16_777_216,
+        );
         return {
           content: data.toString("base64"),
           encoding: "base64" as const,
@@ -183,17 +199,12 @@ export const filesystem = Effect.fn("filesystem.action")(function* (
     ),
     Match.when({ op: "filesystem.writeFile" }, (input) =>
       Effect.gen(function* () {
-        if (
-          input.encoding === "base64" &&
-          !/^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$/.test(input.content)
-        ) {
-          return yield* new Fault({
-            code: "EINVAL",
-            status: 400,
-            message: "Invalid canonical base64",
-          });
+        const data = yield* content(input.content, input.encoding);
+        if (input.offset !== undefined) {
+          const changed = yield* writeRange(env, id, kernel, input.path, data, input.offset);
+          if (changed) yield* publish(env, id, session);
+          return { ok: true } satisfies typeof Success.Type;
         }
-        const data = Buffer.from(input.content, input.encoding);
         yield* write(env, id, kernel, input.path, data);
         yield* publish(env, id, session);
         return { ok: true } satisfies typeof Success.Type;

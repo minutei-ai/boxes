@@ -476,6 +476,30 @@ const allocated = Schema.decodeUnknownSync(FileContent)(
   await (await action({ op: "filesystem.readFile", path: "/tmp/allocated" })).json(),
 );
 const alive = await action({ op: "vm.status" });
+const rangeWritten = await action({
+  op: "filesystem.writeFile",
+  path: "/tmp/range",
+  offset: 262_145,
+  content: "Z",
+  encoding: "utf8",
+});
+const rangeRead = Schema.decodeUnknownSync(FileContent)(
+  await (
+    await action({ op: "filesystem.readFile", path: "/tmp/range", offset: 262_142, length: 4 })
+  ).json(),
+);
+const rangePatched = await action({
+  op: "filesystem.writeFile",
+  path: "/tmp/range",
+  offset: 262_142,
+  content: "abcd",
+  encoding: "utf8",
+});
+const rangeFinal = Schema.decodeUnknownSync(FileContent)(
+  await (
+    await action({ op: "filesystem.readFile", path: "/tmp/range", offset: 262_142, length: 4 })
+  ).json(),
+);
 const hostFsPackage = await action({
   op: "software.install",
   source: { path: "/tmp/probe.aospkg" },
@@ -491,6 +515,11 @@ const hostFs = Schema.decodeUnknownSync(RunRecord)(
 const disposed = await action({ op: "vm.dispose" });
 const afterDispose = await action({ op: "vm.status" });
 const checks = {
+  positionalFilesystem:
+    rangeWritten.status === 200 &&
+    rangePatched.status === 200 &&
+    Buffer.from(rangeRead.content, "base64").equals(Buffer.from([0, 0, 0, 90])) &&
+    Buffer.from(rangeFinal.content, "base64").toString() === "abcd",
   wasiAllocationPoll:
     pollRun.output?.exitCode === 0 &&
     pollRun.output.stdout ===

@@ -14,7 +14,7 @@ Multi-file writes execute in input order, create parent directories and report d
 
 Rename modifies the metadata tree and publishes one new root; it does not rewrite file content. Shell scripts retain one private kernel and publish their filesystem changes in one commit after command execution. JavaScript/TypeScript tools commit each filesystem action independently. Consequently, a failed guest can have already committed files, while a rejected shell commit leaves its private changes invisible.
 
-Full bounded metadata is loaded per operation. That is acceptable for the initial validated workloads but is not proof of performance at 16,384 files. Paged metadata, random-access writes, hard links, ownership/timestamps and safe block reclamation remain unimplemented.
+Full bounded metadata is loaded per operation. That is acceptable for the initial validated workloads but is not proof of performance at 16,384 files. Paged metadata, descriptor APIs, hard links, ownership/timestamps and safe block reclamation remain unimplemented.
 
 ## Guest boundary
 
@@ -77,3 +77,5 @@ Python runs through `src/python.ts` in a fresh RustPython Wasm instance for ever
 `tooling/wasm-meter` owns build-time instrumentation of function and loop entries and checks every `memory.grow` before allocation. Wasm globals carry the counter and page ceiling; guest Python cannot disable the meter through tracing APIs. An abrupt Wasm trap does not unwind Rust or release wasm-bindgen borrows. The interpreter state is owned by the entire fresh Wasm instance, so generated Python bindings detach the wrapper during release instead of invoking a destructor on interrupted memory. The build verifies the pinned destructor shape before this transformation. Discarding the binding scope makes the entire native heap collectible; interrupted instances are never reused.
 
 The Ruff dependencies remain at the versions in RustPython 0.6.0's published lockfile. Later compatible-range releases changed the AST and fail RustPython's codegen build. The application lockfile owns those resolved versions; no installed library source is patched.
+
+Rust produces bounded read and positional-write plans from the acquired manifest snapshot. Range reads fetch complete touched blocks to verify their length and SHA-256, then return the requested bytes. Positional writes preserve untouched digest references; boundary blocks are verified before merging data, fully covered blocks require no old-content fetch, and growth creates zero-filled blocks. The native kernel owns mode, path, quota and inode checks. The Worker uploads the new immutable blocks and publishes one conditional head update. Missing or corrupt requested content fails instead of returning partial bytes. Unrequested corruption does not make an independent range read or write fetch the rest of a file.

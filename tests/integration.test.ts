@@ -3514,3 +3514,339 @@ test("Python output and host-call budgets fail without undoing acknowledged R2 w
   );
   expect(healthy.output?.result).toBe(42);
 });
+
+test("positional file reads and writes preserve block boundaries, inode identity and zero-filled holes", async () => {
+  const token = await setup("ranges");
+  const bytes = Buffer.concat([
+    Buffer.alloc(262_144, 65),
+    Buffer.alloc(262_144, 66),
+    Buffer.alloc(64, 67),
+  ]);
+  expect(
+    (
+      await act("ranges", token, {
+        op: "filesystem.writeFile",
+        path: "/tmp/data",
+        content: bytes.toString("base64"),
+        encoding: "base64",
+      })
+    ).status,
+  ).toBe(200);
+  const before = Schema.decodeUnknownSync(FileStat)(
+    await (
+      await act("ranges", token, { op: "filesystem.stat", path: "/tmp/data", follow: true })
+    ).json(),
+  );
+  const span = Schema.decodeUnknownSync(FileContent)(
+    await (
+      await act("ranges", token, {
+        op: "filesystem.readFile",
+        path: "/tmp/data",
+        offset: 262_142,
+        length: 4,
+      })
+    ).json(),
+  );
+  expect(Buffer.from(span.content, "base64")).toEqual(Buffer.from("AABB"));
+  expect(span.size).toBe(4);
+  expect(
+    (
+      await act("ranges", token, {
+        op: "filesystem.writeFile",
+        path: "/tmp/data",
+        offset: 262_142,
+        content: "wxyz",
+        encoding: "utf8",
+      })
+    ).status,
+  ).toBe(200);
+  bytes.set(Buffer.from("wxyz"), 262_142);
+  const patched = Schema.decodeUnknownSync(FileContent)(
+    await (await act("ranges", token, { op: "filesystem.readFile", path: "/tmp/data" })).json(),
+  );
+  expect(Buffer.from(patched.content, "base64")).toEqual(bytes);
+  const after = Schema.decodeUnknownSync(FileStat)(
+    await (
+      await act("ranges", token, { op: "filesystem.stat", path: "/tmp/data", follow: true })
+    ).json(),
+  );
+  expect(after.inode).toBe(before.inode);
+  expect(after.size).toBe(before.size);
+  expect(
+    (
+      await act("ranges", token, {
+        op: "filesystem.writeFile",
+        path: "/tmp/hole",
+        offset: 262_145,
+        content: "Z",
+        encoding: "utf8",
+      })
+    ).status,
+  ).toBe(200);
+  const hole = Schema.decodeUnknownSync(FileContent)(
+    await (
+      await act("ranges", token, {
+        op: "filesystem.readFile",
+        path: "/tmp/hole",
+        offset: 262_142,
+        length: 4,
+      })
+    ).json(),
+  );
+  expect(Buffer.from(hole.content, "base64")).toEqual(Buffer.from([0, 0, 0, 90]));
+  const empty = Schema.decodeUnknownSync(FileContent)(
+    await (
+      await act("ranges", token, {
+        op: "filesystem.readFile",
+        path: "/tmp/data",
+        offset: Number.MAX_SAFE_INTEGER,
+        length: 8,
+      })
+    ).json(),
+  );
+  expect(empty.content).toBe("");
+  const status = Schema.decodeUnknownSync(Status)(
+    await (await act("ranges", token, { op: "vm.status" })).json(),
+  );
+  expect(
+    (
+      await act("ranges", token, {
+        op: "filesystem.writeFile",
+        path: "/tmp/data",
+        offset: Number.MAX_SAFE_INTEGER,
+        content: "",
+        encoding: "utf8",
+      })
+    ).status,
+  ).toBe(200);
+  const unchanged = Schema.decodeUnknownSync(Status)(
+    await (await act("ranges", token, { op: "vm.status" })).json(),
+  );
+  expect(unchanged.generation).toBe(status.generation);
+  expect(
+    (
+      await act("ranges", token, {
+        op: "filesystem.writeFile",
+        path: "/tmp/data",
+        offset: 16_777_216,
+        content: "X",
+        encoding: "utf8",
+      })
+    ).status,
+  ).toBe(413);
+});
+
+test("partial R2 I/O fetches and verifies only needed blocks and can overwrite a corrupt block completely", async () => {
+  const token = await setup("range-blocks");
+  const a = Buffer.alloc(262_144, 65);
+  const b = Buffer.alloc(262_144, 66);
+  const digest = Buffer.from(await crypto.subtle.digest("SHA-256", b)).toString("hex");
+  expect(
+    (
+      await act("range-blocks", token, {
+        op: "filesystem.writeFile",
+        path: "/tmp/data",
+        content: Buffer.concat([a, b]).toString("base64"),
+        encoding: "base64",
+      })
+    ).status,
+  ).toBe(200);
+  const bucket = await mf.getR2Bucket("OBJECTS");
+  await bucket.put(`sandboxes/range-blocks/blobs/${digest}`, "bad");
+  const first = Schema.decodeUnknownSync(FileContent)(
+    await (
+      await act("range-blocks", token, {
+        op: "filesystem.readFile",
+        path: "/tmp/data",
+        offset: 10,
+        length: 4,
+      })
+    ).json(),
+  );
+  expect(Buffer.from(first.content, "base64").toString()).toBe("AAAA");
+  expect(
+    (
+      await act("range-blocks", token, {
+        op: "filesystem.readFile",
+        path: "/tmp/data",
+        offset: 262_144,
+        length: 4,
+      })
+    ).status,
+  ).toBe(500);
+  expect(
+    (
+      await act("range-blocks", token, {
+        op: "filesystem.writeFile",
+        path: "/tmp/data",
+        offset: 3,
+        content: "X",
+        encoding: "utf8",
+      })
+    ).status,
+  ).toBe(200);
+  expect(
+    (
+      await act("range-blocks", token, {
+        op: "filesystem.writeFile",
+        path: "/tmp/data",
+        offset: 262_144,
+        content: Buffer.alloc(262_144, 67).toString("base64"),
+        encoding: "base64",
+      })
+    ).status,
+  ).toBe(200);
+  const full = Schema.decodeUnknownSync(FileContent)(
+    await (
+      await act("range-blocks", token, { op: "filesystem.readFile", path: "/tmp/data" })
+    ).json(),
+  );
+  const expected = Buffer.concat([a, Buffer.alloc(262_144, 67)]);
+  expected[3] = 88;
+  expect(Buffer.from(full.content, "base64")).toEqual(expected);
+});
+
+test("positional writes respect write-only grants, readonly modes, symlink targets and atomic conflict publication", async () => {
+  const token = await setup("range-grants");
+  expect(
+    (
+      await act("range-grants", token, {
+        op: "filesystem.writeFile",
+        path: "/tmp/data",
+        content: "original",
+        encoding: "utf8",
+      })
+    ).status,
+  ).toBe(200);
+  expect(
+    (
+      await act("range-grants", token, {
+        op: "filesystem.symlink",
+        path: "/tmp/link",
+        target: "data",
+      })
+    ).status,
+  ).toBe(200);
+  const minted = await post("/v1/sandboxes/range-grants/capabilities", admin, {
+    permissions: ["write"],
+    expiresInSeconds: 3600,
+  });
+  const writer = Schema.decodeUnknownSync(TokenResponse)(await minted.json()).token;
+  expect(
+    (
+      await act("range-grants", writer, {
+        op: "filesystem.readFile",
+        path: "/tmp/data",
+        offset: 0,
+        length: 1,
+      })
+    ).status,
+  ).toBe(403);
+  expect(
+    (
+      await act("range-grants", writer, {
+        op: "filesystem.writeFile",
+        path: "/tmp/link",
+        offset: 2,
+        content: "XX",
+        encoding: "utf8",
+      })
+    ).status,
+  ).toBe(200);
+  const file = Schema.decodeUnknownSync(FileContent)(
+    await (
+      await act("range-grants", token, { op: "filesystem.readFile", path: "/tmp/data" })
+    ).json(),
+  );
+  expect(Buffer.from(file.content, "base64").toString()).toBe("orXXinal");
+  const responses = await Promise.all([
+    act("range-grants", writer, {
+      op: "filesystem.writeFile",
+      path: "/tmp/data",
+      offset: 0,
+      content: "A",
+      encoding: "utf8",
+    }),
+    act("range-grants", writer, {
+      op: "filesystem.writeFile",
+      path: "/tmp/data",
+      offset: 1,
+      content: "B",
+      encoding: "utf8",
+    }),
+  ]);
+  expect(responses.every((response) => [200, 409].includes(response.status))).toBe(true);
+  const final = Schema.decodeUnknownSync(FileContent)(
+    await (
+      await act("range-grants", token, { op: "filesystem.readFile", path: "/tmp/data" })
+    ).json(),
+  );
+  const text = Buffer.from(final.content, "base64").toString();
+  if (responses[0].status === 200) expect(text[0]).toBe("A");
+  else expect(text[0]).toBe("o");
+  if (responses[1].status === 200) expect(text[1]).toBe("B");
+  else expect(text[1]).toBe("r");
+  expect(
+    (await act("range-grants", token, { op: "filesystem.chmod", path: "/tmp/data", mode: 0o444 }))
+      .status,
+  ).toBe(200);
+  expect(
+    (
+      await act("range-grants", writer, {
+        op: "filesystem.writeFile",
+        path: "/tmp/data",
+        offset: 0,
+        content: "X",
+        encoding: "utf8",
+      })
+    ).status,
+  ).toBe(403);
+});
+
+test("filesystem base64 validation accepts boundary-sized files without recursive regex failure and rejects noncanonical input", async () => {
+  const token = await setup("base64-boundary");
+  const bytes = Buffer.alloc(16_777_216, 90);
+  const response = await act("base64-boundary", token, {
+    op: "filesystem.writeFile",
+    path: "/tmp/max",
+    content: bytes.toString("base64"),
+    encoding: "base64",
+  });
+  expect(response.status).toBe(200);
+  const slice = Schema.decodeUnknownSync(FileContent)(
+    await (
+      await act("base64-boundary", token, {
+        op: "filesystem.readFile",
+        path: "/tmp/max",
+        offset: 16_777_200,
+        length: 16,
+      })
+    ).json(),
+  );
+  expect(Buffer.from(slice.content, "base64")).toEqual(Buffer.alloc(16, 90));
+  for (const content of ["AB==", "AAB=", "AAAA=", "AA A", "AA\nA", "A===", "===="]) {
+    expect(
+      (
+        await act("base64-boundary", token, {
+          op: "filesystem.writeFile",
+          path: "/tmp/invalid",
+          content,
+          encoding: "base64",
+        })
+      ).status,
+    ).toBe(400);
+  }
+  const batch = Schema.decodeUnknownSync(BatchWriteResults)(
+    await (
+      await act("base64-boundary", token, {
+        op: "filesystem.writeFiles",
+        entries: [
+          { path: "/tmp/noncanonical", content: "AB==", encoding: "base64" },
+          { path: "/tmp/canonical", content: "YQ==", encoding: "base64" },
+        ],
+      })
+    ).json(),
+  );
+  expect(batch[0].success).toBe(false);
+  expect(batch[1].success).toBe(true);
+});

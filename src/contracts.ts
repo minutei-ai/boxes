@@ -2,6 +2,7 @@ import { Schema, Struct } from "effect";
 
 export const Id = Schema.String.check(Schema.isPattern(/^[a-zA-Z0-9_-]{1,64}$/));
 export const Path = Schema.String.check(Schema.isMinLength(1), Schema.isMaxLength(4096));
+export const ContentEncoding = Schema.Literals(["utf8", "base64"]);
 export const Content = Schema.String.check(Schema.isMaxLength(22_369_624));
 export const Permission = Schema.Literals(["read", "write", "execute", "network", "manage"]);
 export const Policy = Schema.Struct({
@@ -46,7 +47,7 @@ export const FilesystemAction = Schema.Union([
       Schema.Struct({
         path: Path,
         content: Content,
-        encoding: Schema.Literals(["utf8", "base64"]),
+        encoding: ContentEncoding,
       }),
     ).check(Schema.isMaxLength(128)),
   }),
@@ -57,12 +58,24 @@ export const FilesystemAction = Schema.Union([
     exclude: Schema.optionalKey(DirectoryExclusions),
   }),
   Schema.Struct({ op: Schema.Literal("filesystem.realpath"), path: Path }),
-  Schema.Struct({ op: Schema.Literal("filesystem.readFile"), path: Path }),
+  Schema.Struct({
+    op: Schema.Literal("filesystem.readFile"),
+    path: Path,
+    offset: Schema.optionalKey(
+      Schema.Int.check(Schema.isBetween({ minimum: 0, maximum: Number.MAX_SAFE_INTEGER })),
+    ),
+    length: Schema.optionalKey(
+      Schema.Int.check(Schema.isBetween({ minimum: 0, maximum: 16_777_216 })),
+    ),
+  }),
   Schema.Struct({
     op: Schema.Literal("filesystem.writeFile"),
     path: Path,
+    offset: Schema.optionalKey(
+      Schema.Int.check(Schema.isBetween({ minimum: 0, maximum: Number.MAX_SAFE_INTEGER })),
+    ),
     content: Content,
-    encoding: Schema.Literals(["utf8", "base64"]),
+    encoding: ContentEncoding,
   }),
   Schema.Struct({ op: Schema.Literal("filesystem.appendFile"), path: Path, content: Content }),
   Schema.Struct({ op: Schema.Literal("filesystem.stat"), path: Path, follow: Schema.Boolean }),
@@ -97,7 +110,7 @@ export const ProcessReadAction = Schema.Union([
   Schema.Struct({ op: Schema.Literal("process.get"), id: Id }),
   ProcessListAction,
 ]);
-export const PackageDigest = Schema.String.check(Schema.isPattern(/^[0-9a-f]{64}$/));
+export const Digest = Schema.String.check(Schema.isPattern(/^[0-9a-f]{64}$/));
 export const SourceDigest = Schema.String.check(Schema.isPattern(/^sha256:[0-9a-f]{64}$/));
 export const CommandName = Schema.String.check(Schema.isPattern(/^[a-zA-Z0-9_+.-]{1,128}$/));
 export const SoftwareAction = Schema.Union([
@@ -113,10 +126,10 @@ export const SoftwareAction = Schema.Union([
   }),
   Schema.Struct({ op: Schema.Literal("software.list") }),
   Schema.Struct({ op: Schema.Literal("software.installed") }),
-  Schema.Struct({ op: Schema.Literal("software.uninstall"), packageId: PackageDigest }),
+  Schema.Struct({ op: Schema.Literal("software.uninstall"), packageId: Digest }),
   Schema.Struct({
     op: Schema.Literal("software.link"),
-    packageId: PackageDigest,
+    packageId: Digest,
     command: CommandName,
     alias: Schema.optionalKey(CommandName),
   }),
@@ -153,7 +166,7 @@ const WasmOptions = {
   stdin: Schema.optionalKey(
     Schema.Struct({
       content: Schema.String.check(Schema.isMaxLength(1_398_104)),
-      encoding: Schema.Literals(["utf8", "base64"]),
+      encoding: ContentEncoding,
     }),
   ),
 };
@@ -274,7 +287,30 @@ export const DirectoryEntries = Schema.Array(
     inode: Schema.Int,
   }),
 );
-export const Chunks = Schema.Array(Schema.String.check(Schema.isPattern(/^[a-f0-9]{64}$/)));
+export const Chunks = Schema.Array(Digest);
+export const ContentBlock = Schema.Struct({
+  hash: Digest,
+  size: Schema.Int.check(Schema.isBetween({ minimum: 1, maximum: 262_144 })),
+});
+export const ReadPlan = Schema.Struct({
+  blocks: Schema.Array(ContentBlock).check(Schema.isMaxLength(64)),
+  skip: Schema.Int.check(Schema.isBetween({ minimum: 0, maximum: 262_143 })),
+  length: Schema.Int.check(Schema.isBetween({ minimum: 0, maximum: 16_777_216 })),
+});
+export const RangeWritePlan = Schema.Struct({
+  path: Path,
+  size: Schema.Int.check(Schema.isBetween({ minimum: 0, maximum: 16_777_216 })),
+  changed: Schema.Boolean,
+  chunks: Schema.Array(Schema.NullOr(Digest)).check(Schema.isMaxLength(64)),
+  blocks: Schema.Array(
+    Schema.Struct({
+      index: Schema.Int.check(Schema.isBetween({ minimum: 0, maximum: 63 })),
+      size: ContentBlock.fields.size,
+      previous: Schema.NullOr(ContentBlock),
+    }),
+  ).check(Schema.isMaxLength(64)),
+});
+
 export const RunResult = Schema.Struct({
   stdout: Schema.String,
   stderr: Schema.String,
@@ -443,7 +479,7 @@ export const Exists = Schema.Struct({ exists: Schema.Boolean });
 export const Link = Schema.Struct({ target: Schema.String });
 export const PackagePreparation = Schema.Struct({
   installed: Schema.Struct({
-    packageId: PackageDigest,
+    packageId: Digest,
     digest: SourceDigest,
     sizeBytes: Schema.Int,
     manifest: Schema.Struct({

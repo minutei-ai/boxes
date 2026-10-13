@@ -50,6 +50,36 @@ struct Manifest {
     links: BTreeMap<String, software::Link>,
 }
 
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+struct ContentBlock<'a> {
+    hash: &'a str,
+    size: u64,
+}
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+struct ReadPlan<'a> {
+    blocks: Vec<ContentBlock<'a>>,
+    skip: u64,
+    length: u64,
+}
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+struct PatchBlock<'a> {
+    index: usize,
+    size: u64,
+    previous: Option<ContentBlock<'a>>,
+}
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+struct RangeWritePlan<'a> {
+    path: &'a str,
+    size: u64,
+    changed: bool,
+    chunks: Vec<Option<&'a str>>,
+    blocks: Vec<PatchBlock<'a>>,
+}
+
 struct WritePlan {
     path: String,
     mode: u32,
@@ -488,6 +518,26 @@ impl Kernel {
             .sum()
     }
 
+    fn writable_file(&self, path: &str, size: u64) -> Result<u32, String> {
+        let mode = match self.state.nodes.get(path) {
+            Some(Node::File { mode, .. }) if mode & 0o200 != 0 => *mode,
+            Some(Node::File { .. }) => return Err("EACCES: file is not writable".into()),
+            Some(_) => return Err("EISDIR: not a regular file".into()),
+            None => {
+                self.writable_parent(path)?;
+                0o644
+            }
+        };
+        let old = self.state.nodes.get(path).map_or(0, Node::size);
+        if self.used_bytes().saturating_sub(old).saturating_add(size) > MAX_TOTAL {
+            return Err("ENOSPC: filesystem byte quota exceeded".into());
+        }
+        if !self.state.nodes.contains_key(path) && self.state.nodes.len() >= MAX_NODES {
+            return Err("ENOSPC: inode quota exceeded".into());
+        }
+        Ok(mode)
+    }
+
     fn write_plan(&self, path: &str, size: u64, chunks: &str) -> Result<WritePlan, String> {
         let path = self.resolve(path, true)?;
         self.package_writable(&path, false)?;
@@ -506,15 +556,7 @@ impl Kernel {
         }) {
             return Err("EINVAL: invalid content digest".into());
         }
-        let mode = match self.state.nodes.get(&path) {
-            Some(Node::File { mode, .. }) if mode & 0o200 != 0 => *mode,
-            Some(Node::File { .. }) => return Err("EACCES: file is not writable".into()),
-            Some(_) => return Err("EISDIR: not a regular file".into()),
-            None => {
-                self.writable_parent(&path)?;
-                0o644
-            }
-        };
+        let mode = self.writable_file(&path, size)?;
         let existing: BTreeSet<_> = match self.state.nodes.get(&path) {
             Some(Node::File { chunks, .. }) => chunks.iter().cloned().collect(),
             _ => BTreeSet::new(),
@@ -524,13 +566,6 @@ impl Kernel {
             .filter(|hash| !existing.contains(*hash))
             .cloned()
             .collect();
-        let old = self.state.nodes.get(&path).map_or(0, Node::size);
-        if self.used_bytes().saturating_sub(old).saturating_add(size) > MAX_TOTAL {
-            return Err("ENOSPC: filesystem byte quota exceeded".into());
-        }
-        if !self.state.nodes.contains_key(&path) && self.state.nodes.len() >= MAX_NODES {
-            return Err("ENOSPC: inode quota exceeded".into());
-        }
         Ok(WritePlan {
             path,
             mode,
@@ -732,6 +767,101 @@ impl Kernel {
             Some(_) => Err(fail("EISDIR: not a regular file")),
             None => Err(fail("ENOENT: file does not exist")),
         }
+    }
+
+    pub fn read_plan(
+        &self,
+        path: &str,
+        offset: u64,
+        length: u64,
+        for_write: bool,
+    ) -> Result<String, JsValue> {
+        let path = self.resolve(path, true).map_err(|error| fail(&error))?;
+        let required = if for_write { 0o200 } else { 0o400 };
+        let (size, chunks) = match self.state.nodes.get(&path) {
+            Some(Node::File { size, chunks, mode }) if mode & required != 0 => (*size, chunks),
+            Some(Node::File { .. }) => return Err(fail("EACCES: file content access is denied")),
+            Some(_) => return Err(fail("EISDIR: not a regular file")),
+            None => return Err(fail("ENOENT: file does not exist")),
+        };
+        let length = length.min(size.saturating_sub(offset));
+        let mut blocks = Vec::new();
+        if length != 0 {
+            for index in offset / 262_144..(offset + length).div_ceil(262_144) {
+                blocks.push(ContentBlock {
+                    hash: &chunks[index as usize],
+                    size: (size - index * 262_144).min(262_144),
+                });
+            }
+        }
+        serde_json::to_string(&ReadPlan {
+            blocks,
+            skip: offset % 262_144,
+            length,
+        })
+        .map_err(|error| fail(&error.to_string()))
+    }
+
+    pub fn write_range_plan(
+        &self,
+        path: &str,
+        offset: u64,
+        length: u64,
+    ) -> Result<String, JsValue> {
+        let path = self.resolve(path, true).map_err(|error| fail(&error))?;
+        self.package_writable(&path, false)
+            .map_err(|error| fail(&error))?;
+        let old_size = self.state.nodes.get(&path).map_or(0, Node::size);
+        let size = if length == 0 {
+            old_size
+        } else {
+            offset
+                .checked_add(length)
+                .ok_or_else(|| fail("EFBIG: write position overflow"))?
+                .max(old_size)
+        };
+        if size > MAX_FILE {
+            return Err(fail("EFBIG: file limit exceeded"));
+        }
+        self.writable_file(&path, size)
+            .map_err(|error| fail(&error))?;
+        let old = match self.state.nodes.get(&path) {
+            Some(Node::File { chunks, .. }) => chunks.as_slice(),
+            _ => &[],
+        };
+        let changed = length != 0 || !self.state.nodes.contains_key(&path);
+        let mut chunks = Vec::new();
+        let mut blocks = Vec::new();
+        for index in 0..size.div_ceil(262_144) {
+            let start = index * 262_144;
+            let block_size = (size - start).min(262_144);
+            let previous = old.get(index as usize).map(|hash| ContentBlock {
+                hash,
+                size: (old_size - start).min(262_144),
+            });
+            let overlaps = length != 0 && start < offset + length && start + block_size > offset;
+            let resize = previous
+                .as_ref()
+                .is_none_or(|block| block.size != block_size);
+            if overlaps || resize {
+                chunks.push(None);
+                blocks.push(PatchBlock {
+                    index: index as usize,
+                    size: block_size,
+                    previous,
+                });
+            } else {
+                chunks.push(previous.map(|block| block.hash));
+            }
+        }
+        serde_json::to_string(&RangeWritePlan {
+            path: &path,
+            size,
+            changed,
+            chunks,
+            blocks,
+        })
+        .map_err(|error| fail(&error.to_string()))
     }
 
     pub fn prepare_write(&self, path: &str, size: u64, chunks: &str) -> Result<String, JsValue> {
