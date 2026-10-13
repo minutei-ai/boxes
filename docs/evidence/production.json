@@ -1,12 +1,14 @@
 {
-  "measuredAt": "2026-10-13T21:06:04.785Z",
+  "measuredAt": "2026-10-13T22:07:23.969Z",
   "url": "https://cirro-sandbox-prod-rs7wexxow56rmsoz.manoel-carvalhoneto.workers.dev",
   "profile": "minutei",
   "runtime": "standard-worker-rust-quickjs-wasmi-rustpython",
   "parityComplete": false,
   "scope": "Implemented operations, native Python, isolation and resource limits",
-  "sandboxId": "proof-cab30b4d-dd3f-4917-946f-3860882a775e",
+  "sandboxId": "proof-f9e0e4e2-ea0a-45d4-ae39-bdb382103c63",
   "checks": {
+    "httpRequest": true,
+    "httpHead": true,
     "largeFileBoundary": true,
     "positionalFilesystem": true,
     "wasiAllocationPoll": true,
