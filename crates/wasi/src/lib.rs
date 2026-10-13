@@ -22,14 +22,27 @@ struct Descriptor {
     directory: bool,
     read: bool,
     write: bool,
-    append: bool,
+    flags: u16,
     offset: usize,
     rights: u64,
     inheriting: u64,
+    cache: Option<u32>,
+    linked: bool,
+    metadata: [u8; 64],
+}
+
+struct FileBuffer {
+    path: Option<String>,
+    bytes: Vec<u8>,
+    metadata: [u8; 64],
 }
 
 #[derive(Serialize)]
-#[serde(tag = "kind", rename_all = "camelCase")]
+#[serde(
+    tag = "kind",
+    rename_all = "camelCase",
+    rename_all_fields = "camelCase"
+)]
 enum Request {
     Open {
         path: String,
@@ -43,8 +56,46 @@ enum Request {
         follow: bool,
     },
     Flush {
+        path: Option<String>,
+        fd: u32,
+    },
+    FdStat {
+        fd: u32,
+        path: Option<String>,
+        write: bool,
+    },
+    PathStat {
+        path: String,
+        base: String,
+        follow: bool,
+    },
+    Directory {
         path: String,
         fd: u32,
+    },
+    Mkdir {
+        path: String,
+        base: String,
+    },
+    Remove {
+        path: String,
+        base: String,
+        directory: bool,
+    },
+    Rename {
+        from: String,
+        from_base: String,
+        to: String,
+        to_base: String,
+    },
+    Symlink {
+        path: String,
+        base: String,
+        target: String,
+    },
+    Readlink {
+        path: String,
+        base: String,
     },
     Sync,
     Random {
@@ -72,6 +123,25 @@ enum Completion {
         offset: usize,
         positioned: bool,
     },
+    Directory {
+        fd: u32,
+        pointer: usize,
+        length: usize,
+        cookie: u64,
+        output: usize,
+    },
+    Remove,
+    Rename,
+    Stat {
+        fd: Option<u32>,
+        pointer: usize,
+    },
+    Unit,
+    Readlink {
+        pointer: usize,
+        length: usize,
+        output: usize,
+    },
     Sync,
     Bytes {
         pointer: usize,
@@ -82,6 +152,14 @@ enum Completion {
     },
 }
 
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+struct DirectoryEntry {
+    name: String,
+    kind: String,
+    inode: u64,
+}
+
 struct Pending {
     request: Request,
     completion: Completion,
@@ -90,7 +168,7 @@ struct Pending {
 struct State {
     limits: StoreLimits,
     descriptors: BTreeMap<u32, Descriptor>,
-    files: BTreeMap<String, Vec<u8>>,
+    files: BTreeMap<u32, FileBuffer>,
     stdout: Vec<u8>,
     stderr: Vec<u8>,
     max_output: usize,
@@ -101,6 +179,7 @@ struct State {
     environment: Vec<Vec<u8>>,
     stdin: Vec<u8>,
     stdin_offset: usize,
+    directories: BTreeMap<u32, Vec<DirectoryEntry>>,
 }
 
 enum Failure {
@@ -212,15 +291,96 @@ fn confined(base: &str, path: &str) -> Result<String, Failure> {
     Ok(path)
 }
 
+fn detach(state: &mut State, path: &str) {
+    for file in state.files.values_mut() {
+        if file
+            .path
+            .as_deref()
+            .is_some_and(|current| current == path || current.starts_with(&format!("{path}/")))
+        {
+            file.path = None;
+            file.metadata[24..32].copy_from_slice(&0u64.to_le_bytes());
+        }
+    }
+    for descriptor in state.descriptors.values_mut() {
+        if descriptor.path == path || descriptor.path.starts_with(&format!("{path}/")) {
+            descriptor.linked = false;
+            descriptor.metadata[24..32].copy_from_slice(&0u64.to_le_bytes());
+        }
+    }
+}
+
 fn close(state: &mut State, fd: u32) {
+    state.directories.remove(&fd);
     if let Some(descriptor) = state.descriptors.remove(&fd)
+        && let Some(cache) = descriptor.cache
         && !state
             .descriptors
             .values()
-            .any(|other| other.path == descriptor.path)
+            .any(|other| other.cache == Some(cache))
     {
-        state.files.remove(&descriptor.path);
+        state.files.remove(&cache);
     }
+}
+
+fn directory_path(
+    caller: &Caller<'_, State>,
+    fd: u32,
+    pointer: usize,
+    length: usize,
+    right: u64,
+) -> Result<(String, String), Failure> {
+    let descriptor = caller
+        .data()
+        .descriptors
+        .get(&fd)
+        .ok_or(Failure::Errno(8))?;
+    if !descriptor.directory {
+        return Err(Failure::Errno(54));
+    }
+    if !descriptor.linked {
+        return Err(Failure::Errno(44));
+    }
+    if descriptor.rights & right == 0 {
+        return Err(Failure::Errno(76));
+    }
+    let raw = bytes(caller, pointer, length)?;
+    let raw = std::str::from_utf8(&raw).map_err(|_| Failure::Errno(25))?;
+    Ok((confined(&descriptor.path, raw)?, descriptor.path.clone()))
+}
+
+fn directory_bytes(entries: &[DirectoryEntry], cookie: u64, length: usize) -> Result<Vec<u8>, i32> {
+    let start = usize::try_from(cookie).map_err(|_| 28)?;
+    if start > entries.len() {
+        return Err(28);
+    }
+    let mut data = Vec::new();
+    for (index, entry) in entries.iter().enumerate().skip(start) {
+        if data.len() == length {
+            break;
+        }
+        let mut header = [0u8; 24];
+        header[8..16].copy_from_slice(&entry.inode.to_le_bytes());
+        header[..8].copy_from_slice(&((index + 1) as u64).to_le_bytes());
+        header[16..20].copy_from_slice(&(entry.name.len() as u32).to_le_bytes());
+        header[20] = match entry.kind.as_str() {
+            "file" => 4,
+            "directory" => 3,
+            "symlink" => 7,
+            _ => return Err(28),
+        };
+        let remaining = length - data.len();
+        data.extend_from_slice(&header[..remaining.min(24)]);
+        if remaining < 24 {
+            break;
+        }
+        let remaining = length - data.len();
+        data.extend_from_slice(&entry.name.as_bytes()[..remaining.min(entry.name.len())]);
+        if remaining < entry.name.len() {
+            break;
+        }
+    }
+    Ok(data)
 }
 
 fn dispatch(caller: &mut Caller<'_, State>, name: &str, args: &[u64]) -> Result<i32, Failure> {
@@ -307,11 +467,25 @@ fn dispatch(caller: &mut Caller<'_, State>, name: &str, args: &[u64]) -> Result<
                     .get(&(a[0] as u32))
                     .ok_or(Failure::Errno(8))?;
                 stat[0] = if descriptor.directory { 3 } else { 4 };
-                stat[2] = u8::from(descriptor.append);
+                stat[2..4].copy_from_slice(&descriptor.flags.to_le_bytes());
                 stat[8..16].copy_from_slice(&descriptor.rights.to_le_bytes());
                 stat[16..24].copy_from_slice(&descriptor.inheriting.to_le_bytes());
             }
             put(caller, a[1], &stat)?;
+        }
+        "fd_fdstat_set_flags" => {
+            if a[1] & !5 != 0 {
+                return Err(Failure::Errno(58));
+            }
+            let descriptor = caller
+                .data_mut()
+                .descriptors
+                .get_mut(&(a[0] as u32))
+                .ok_or(Failure::Errno(8))?;
+            if descriptor.rights & (1 << 3) == 0 {
+                return Err(Failure::Errno(76));
+            }
+            descriptor.flags = a[1] as u16;
         }
         "fd_read" | "fd_pread" => {
             let output = *a.last().ok_or(Failure::Errno(28))?;
@@ -359,8 +533,9 @@ fn dispatch(caller: &mut Caller<'_, State>, name: &str, args: &[u64]) -> Result<
                 let data = caller
                     .data()
                     .files
-                    .get(&descriptor.path)
+                    .get(&descriptor.cache.ok_or(Failure::Errno(8))?)
                     .ok_or(Failure::Errno(8))?;
+                let data = &data.bytes;
                 let start = offset.min(data.len());
                 let end = start.saturating_add(length).min(data.len());
                 let data = data[start..end].to_vec();
@@ -419,16 +594,20 @@ fn dispatch(caller: &mut Caller<'_, State>, name: &str, args: &[u64]) -> Result<
                     put(caller, output, &0u32.to_le_bytes())?;
                     return Ok(0);
                 }
-                let file = state.files.get(&descriptor.path).ok_or(Failure::Errno(8))?;
+                let file = &state
+                    .files
+                    .get(&descriptor.cache.ok_or(Failure::Errno(8))?)
+                    .ok_or(Failure::Errno(8))?
+                    .bytes;
                 let offset = if name == "fd_pwrite" {
                     usize::try_from(args[3]).map_err(|_| Failure::Errno(28))?
-                } else if descriptor.append {
+                } else if descriptor.flags & 1 != 0 {
                     file.len()
                 } else {
                     descriptor.offset
                 };
                 let end = offset.checked_add(data.len()).ok_or(Failure::Errno(22))?;
-                let total: usize = state.files.values().map(Vec::len).sum();
+                let total: usize = state.files.values().map(|file| file.bytes.len()).sum();
                 if end > MAX_BYTES {
                     return Err(Failure::Errno(22));
                 }
@@ -437,15 +616,17 @@ fn dispatch(caller: &mut Caller<'_, State>, name: &str, args: &[u64]) -> Result<
                 }
                 let file = state
                     .files
-                    .get_mut(&descriptor.path)
+                    .get_mut(&descriptor.cache.ok_or(Failure::Errno(8))?)
                     .ok_or(Failure::Errno(8))?;
+                let linked_path = file.path.clone();
+                let file = &mut file.bytes;
                 let previous_length = file.len();
                 let previous = file[offset.min(file.len())..end.min(file.len())].to_vec();
                 if end > file.len() {
                     file.resize(end, 0);
                 }
                 file[offset..end].copy_from_slice(&data);
-                let path = descriptor.path.clone();
+                let path = linked_path;
                 suspend(
                     caller,
                     Request::Flush {
@@ -467,9 +648,171 @@ fn dispatch(caller: &mut Caller<'_, State>, name: &str, args: &[u64]) -> Result<
             }
             put(caller, output, &(data.len() as u32).to_le_bytes())?;
         }
+        "fd_filestat_get" => {
+            bytes(caller, a[1], 64)?;
+            let descriptor = caller
+                .data()
+                .descriptors
+                .get(&(a[0] as u32))
+                .ok_or(Failure::Errno(8))?;
+            if descriptor.rights & (1 << 21) == 0 {
+                return Err(Failure::Errno(76));
+            }
+            let path = if descriptor.linked {
+                Some(descriptor.path.clone())
+            } else {
+                None
+            };
+            let write = descriptor.write;
+            suspend(
+                caller,
+                Request::FdStat {
+                    fd: a[0] as u32,
+                    path,
+                    write,
+                },
+                Completion::Stat {
+                    fd: Some(a[0] as u32),
+                    pointer: a[1],
+                },
+            )?;
+        }
+        "path_filestat_get" => {
+            bytes(caller, a[4], 64)?;
+            if a[1] & !1 != 0 {
+                return Err(Failure::Errno(28));
+            }
+            let (path, base) = directory_path(caller, a[0] as u32, a[2], a[3], 1 << 18)?;
+            suspend(
+                caller,
+                Request::PathStat {
+                    path,
+                    base,
+                    follow: a[1] & 1 != 0,
+                },
+                Completion::Stat {
+                    fd: None,
+                    pointer: a[4],
+                },
+            )?;
+        }
+        "path_create_directory"
+        | "path_remove_directory"
+        | "path_unlink_file"
+        | "path_readlink" => {
+            let right = match name {
+                "path_create_directory" => 1 << 9,
+                "path_remove_directory" => 1 << 25,
+                "path_unlink_file" => 1 << 26,
+                _ => 1 << 15,
+            };
+            let (path, base) = directory_path(caller, a[0] as u32, a[1], a[2], right)?;
+            match name {
+                "path_create_directory" => {
+                    suspend(caller, Request::Mkdir { path, base }, Completion::Unit)?;
+                }
+                "path_remove_directory" | "path_unlink_file" => {
+                    suspend(
+                        caller,
+                        Request::Remove {
+                            path,
+                            base,
+                            directory: name == "path_remove_directory",
+                        },
+                        Completion::Remove,
+                    )?;
+                }
+                _ => {
+                    bytes(caller, a[3], a[4])?;
+                    bytes(caller, a[5], 4)?;
+                    suspend(
+                        caller,
+                        Request::Readlink { path, base },
+                        Completion::Readlink {
+                            pointer: a[3],
+                            length: a[4],
+                            output: a[5],
+                        },
+                    )?;
+                }
+            }
+        }
+        "path_rename" => {
+            let (from, from_base) = directory_path(caller, a[0] as u32, a[1], a[2], 1 << 16)?;
+            let (to, to_base) = directory_path(caller, a[3] as u32, a[4], a[5], 1 << 17)?;
+            suspend(
+                caller,
+                Request::Rename {
+                    from,
+                    from_base,
+                    to,
+                    to_base,
+                },
+                Completion::Rename,
+            )?;
+        }
+        "path_symlink" => {
+            let (path, base) = directory_path(caller, a[2] as u32, a[3], a[4], 1 << 24)?;
+            let target = bytes(caller, a[0], a[1])?;
+            let target = std::str::from_utf8(&target)
+                .map_err(|_| Failure::Errno(25))?
+                .to_string();
+            if target.is_empty() || target.len() > 4096 || target.contains('\0') {
+                return Err(Failure::Errno(28));
+            }
+            suspend(
+                caller,
+                Request::Symlink { path, base, target },
+                Completion::Unit,
+            )?;
+        }
+        "fd_readdir" => {
+            bytes(caller, a[1], a[2])?;
+            bytes(caller, a[4], 4)?;
+            let descriptor = caller
+                .data()
+                .descriptors
+                .get(&(a[0] as u32))
+                .ok_or(Failure::Errno(8))?;
+            if !descriptor.directory {
+                return Err(Failure::Errno(54));
+            }
+            if descriptor.rights & (1 << 14) == 0 {
+                return Err(Failure::Errno(76));
+            }
+            if !descriptor.linked {
+                put(caller, a[4], &0u32.to_le_bytes())?;
+                return Ok(0);
+            }
+            if args[3] == 0 || !caller.data().directories.contains_key(&(a[0] as u32)) {
+                let path = descriptor.path.clone();
+                suspend(
+                    caller,
+                    Request::Directory {
+                        path,
+                        fd: a[0] as u32,
+                    },
+                    Completion::Directory {
+                        fd: a[0] as u32,
+                        pointer: a[1],
+                        length: a[2],
+                        cookie: args[3],
+                        output: a[4],
+                    },
+                )?;
+            }
+            let entries = caller
+                .data()
+                .directories
+                .get(&(a[0] as u32))
+                .ok_or(Failure::Errno(8))?;
+            let data = directory_bytes(entries, args[3], a[2]).map_err(Failure::Errno)?;
+            put(caller, a[1], &data)?;
+            put(caller, a[4], &(data.len() as u32).to_le_bytes())?;
+        }
         "path_open" => {
             bytes(caller, a[8], 4)?;
-            if a[1] & !1 != 0 || a[4] & !15 != 0 || a[7] & !1 != 0 {
+            if a[1] & !1 != 0 || a[4] & !15 != 0 || a[7] & !5 != 0 {
                 return Err(Failure::Errno(58));
             }
             if caller.data().descriptors.len() >= MAX_FILES {
@@ -480,6 +823,9 @@ fn dispatch(caller: &mut Caller<'_, State>, name: &str, args: &[u64]) -> Result<
                 .descriptors
                 .get(&(a[0] as u32))
                 .ok_or(Failure::Errno(8))?;
+            if !parent.linked {
+                return Err(Failure::Errno(44));
+            }
             if !parent.directory {
                 return Err(Failure::Errno(54));
             }
@@ -501,10 +847,13 @@ fn dispatch(caller: &mut Caller<'_, State>, name: &str, args: &[u64]) -> Result<
                 directory,
                 read,
                 write,
-                append: a[7] & 1 != 0,
+                flags: a[7] as u16,
                 offset: 0,
                 rights: args[5],
                 inheriting: args[6],
+                cache: None,
+                linked: true,
+                metadata: [0; 64],
             };
             suspend(
                 caller,
@@ -582,8 +931,9 @@ fn dispatch(caller: &mut Caller<'_, State>, name: &str, args: &[u64]) -> Result<
                     1 => descriptor.offset,
                     2 => state
                         .files
-                        .get(&descriptor.path)
+                        .get(&descriptor.cache.ok_or(Failure::Errno(8))?)
                         .ok_or(Failure::Errno(8))?
+                        .bytes
                         .len(),
                     _ => return Err(Failure::Errno(28)),
                 };
@@ -663,6 +1013,13 @@ fn linker(engine: &Engine) -> Result<Linker<State>, String> {
     bind!("fd_pread",a:i32,b:i32,c:i32,d:i64,e:i32);
     bind!("fd_pwrite",a:i32,b:i32,c:i32,d:i64,e:i32);
     bind!("path_open",a:i32,b:i32,c:i32,d:i32,e:i32,f:i64,g:i64,h:i32,i:i32);
+    bind!("path_create_directory",a:i32,b:i32,c:i32);
+    bind!("path_remove_directory",a:i32,b:i32,c:i32);
+    bind!("path_unlink_file",a:i32,b:i32,c:i32);
+    bind!("path_readlink",a:i32,b:i32,c:i32,d:i32,e:i32,f:i32);
+    bind!("path_rename",a:i32,b:i32,c:i32,d:i32,e:i32,f:i32);
+    bind!("path_symlink",a:i32,b:i32,c:i32,d:i32,e:i32);
+    bind!("fd_readdir",a:i32,b:i32,c:i32,d:i64,e:i32);
     bind!("fd_close",a:i32);
     bind!("fd_sync",a:i32);
     bind!("fd_datasync",a:i32);
@@ -776,10 +1133,13 @@ impl WasmGuest {
                         directory: true,
                         read: true,
                         write: true,
-                        append: false,
+                        flags: 0,
                         offset: 0,
                         rights: (1 << 30) - 1,
                         inheriting: (1 << 30) - 1,
+                        cache: None,
+                        linked: true,
+                        metadata: [0; 64],
                     },
                 )]),
                 files: BTreeMap::new(),
@@ -793,6 +1153,7 @@ impl WasmGuest {
                 environment,
                 stdin: stdin.to_vec(),
                 stdin_offset: 0,
+                directories: BTreeMap::new(),
             },
         );
         store.limiter(|state| &mut state.limits);
@@ -904,10 +1265,35 @@ impl WasmGuest {
     }
 
     pub fn has_file(&self, path: &str) -> bool {
-        self.store.data().files.contains_key(path)
+        self.store
+            .data()
+            .files
+            .values()
+            .any(|file| file.path.as_deref() == Some(path))
     }
     pub fn buffered_bytes(&self) -> usize {
-        self.store.data().files.values().map(Vec::len).sum()
+        self.store
+            .data()
+            .files
+            .values()
+            .map(|file| file.bytes.len())
+            .sum()
+    }
+
+    pub fn file_metadata(&self, fd: u32) -> Result<Vec<u8>, JsValue> {
+        let state = self.store.data();
+        let descriptor = state
+            .descriptors
+            .get(&fd)
+            .ok_or_else(|| JsValue::from_str("Missing descriptor"))?;
+        if let Some(cache) = descriptor.cache {
+            return state
+                .files
+                .get(&cache)
+                .map(|file| file.metadata.to_vec())
+                .ok_or_else(|| JsValue::from_str("Missing file cache"));
+        }
+        Ok(descriptor.metadata.to_vec())
     }
 
     pub fn file_data(&self, fd: u32) -> Result<Vec<u8>, JsValue> {
@@ -916,10 +1302,13 @@ impl WasmGuest {
             .descriptors
             .get(&fd)
             .ok_or_else(|| JsValue::from_str("Missing file descriptor"))?;
+        let cache = descriptor
+            .cache
+            .ok_or_else(|| JsValue::from_str("Descriptor is not a file"))?;
         state
             .files
-            .get(&descriptor.path)
-            .cloned()
+            .get(&cache)
+            .map(|file| file.bytes.clone())
             .ok_or_else(|| JsValue::from_str("Missing file buffer"))
     }
 
@@ -930,6 +1319,7 @@ impl WasmGuest {
         path: &str,
         directory: bool,
         value: u64,
+        metadata: &[u8],
     ) -> Result<(), JsValue> {
         let pending = self
             .store
@@ -956,8 +1346,13 @@ impl WasmGuest {
             descriptor.offset = *previous_offset;
             let file = state
                 .files
-                .get_mut(&descriptor.path)
+                .get_mut(
+                    &descriptor
+                        .cache
+                        .ok_or_else(|| JsValue::from_str("Missing cache reference"))?,
+                )
                 .ok_or_else(|| JsValue::from_str("Missing file buffer"))?;
+            let file = &mut file.bytes;
             file.truncate(*previous_length);
             if !previous.is_empty() {
                 let end = start
@@ -979,8 +1374,8 @@ impl WasmGuest {
                     let total: usize = state
                         .files
                         .iter()
-                        .filter(|(key, _)| key.as_str() != path)
-                        .map(|(_, file)| file.len())
+                        .filter(|(_, file)| file.path.as_deref() != Some(path))
+                        .map(|(_, file)| file.bytes.len())
                         .sum();
                     if state.descriptors.len() >= MAX_FILES
                         || total.saturating_add(data.len()) > MAX_BYTES
@@ -989,8 +1384,31 @@ impl WasmGuest {
                     } else {
                         descriptor.path = path.into();
                         descriptor.directory = directory;
-                        if !directory && (truncate || !state.files.contains_key(path)) {
-                            state.files.insert(path.into(), data.to_vec());
+                        descriptor.metadata = metadata
+                            .try_into()
+                            .map_err(|_| JsValue::from_str("Invalid inode metadata"))?;
+                        if !directory {
+                            let cache = state
+                                .files
+                                .iter()
+                                .find(|(_, file)| file.path.as_deref() == Some(path))
+                                .map(|(cache, _)| *cache)
+                                .or_else(|| {
+                                    (0..MAX_FILES as u32)
+                                        .find(|cache| !state.files.contains_key(cache))
+                                })
+                                .ok_or_else(|| JsValue::from_str("File cache quota exceeded"))?;
+                            if truncate || !state.files.contains_key(&cache) {
+                                state.files.insert(
+                                    cache,
+                                    FileBuffer {
+                                        path: Some(path.into()),
+                                        bytes: data.to_vec(),
+                                        metadata: descriptor.metadata,
+                                    },
+                                );
+                            }
+                            descriptor.cache = Some(cache);
                         }
                         let fd = (4..MAX_FILES as u32 + 4)
                             .find(|fd| !state.descriptors.contains_key(fd))
@@ -1010,6 +1428,19 @@ impl WasmGuest {
                     positioned,
                     ..
                 } => {
+                    let state = self.store.data_mut();
+                    let cache = state
+                        .descriptors
+                        .get(&fd)
+                        .and_then(|descriptor| descriptor.cache)
+                        .ok_or_else(|| JsValue::from_str("Missing cache reference"))?;
+                    state
+                        .files
+                        .get_mut(&cache)
+                        .ok_or_else(|| JsValue::from_str("Missing file cache"))?
+                        .metadata = metadata
+                        .try_into()
+                        .map_err(|_| JsValue::from_str("Invalid inode metadata"))?;
                     if !positioned {
                         self.store
                             .data_mut()
@@ -1022,6 +1453,97 @@ impl WasmGuest {
                         .ok_or_else(|| JsValue::from_str("Missing Wasm memory"))?
                         .write(&mut self.store, pointer, &(length as u32).to_le_bytes())
                         .map_err(|error| JsValue::from_str(&error.to_string()))?;
+                }
+                Completion::Stat { fd, pointer } => {
+                    let bytes: [u8; 64] = data
+                        .try_into()
+                        .map_err(|_| JsValue::from_str("Invalid stat response"))?;
+                    if let Some(fd) = fd {
+                        let state = self.store.data_mut();
+                        let descriptor = state
+                            .descriptors
+                            .get_mut(&fd)
+                            .ok_or_else(|| JsValue::from_str("Missing descriptor"))?;
+                        descriptor.metadata = bytes;
+                        if let Some(cache) = descriptor.cache {
+                            state
+                                .files
+                                .get_mut(&cache)
+                                .ok_or_else(|| JsValue::from_str("Missing cache reference"))?
+                                .metadata = bytes;
+                        }
+                    }
+                    self.memory
+                        .ok_or_else(|| JsValue::from_str("Missing Wasm memory"))?
+                        .write(&mut self.store, pointer, &bytes)
+                        .map_err(|error| JsValue::from_str(&error.to_string()))?;
+                }
+                Completion::Unit => {}
+                Completion::Remove => detach(self.store.data_mut(), path),
+                Completion::Rename => {
+                    let to = std::str::from_utf8(data)
+                        .map_err(|error| JsValue::from_str(&error.to_string()))?;
+                    if path != to {
+                        let state = self.store.data_mut();
+                        detach(state, to);
+                        for file in state.files.values_mut() {
+                            if let Some(current) = &file.path
+                                && (current == path || current.starts_with(&format!("{path}/")))
+                            {
+                                file.path = Some(format!("{to}{}", &current[path.len()..]));
+                            }
+                        }
+                        for descriptor in state.descriptors.values_mut() {
+                            if descriptor.linked
+                                && (descriptor.path == path
+                                    || descriptor.path.starts_with(&format!("{path}/")))
+                            {
+                                descriptor.path = format!("{to}{}", &descriptor.path[path.len()..]);
+                            }
+                        }
+                    }
+                }
+                Completion::Readlink {
+                    pointer,
+                    length,
+                    output,
+                } => {
+                    let count = length.min(data.len());
+                    let memory = self
+                        .memory
+                        .ok_or_else(|| JsValue::from_str("Missing Wasm memory"))?;
+                    memory
+                        .write(&mut self.store, pointer, &data[..count])
+                        .map_err(|error| JsValue::from_str(&error.to_string()))?;
+                    memory
+                        .write(&mut self.store, output, &(count as u32).to_le_bytes())
+                        .map_err(|error| JsValue::from_str(&error.to_string()))?;
+                }
+                Completion::Directory {
+                    fd,
+                    pointer,
+                    length,
+                    cookie,
+                    output,
+                } => {
+                    let entries: Vec<DirectoryEntry> = serde_json::from_slice(data)
+                        .map_err(|error| JsValue::from_str(&error.to_string()))?;
+                    let data = directory_bytes(&entries, cookie, length);
+                    self.store.data_mut().directories.insert(fd, entries);
+                    match data {
+                        Ok(data) => {
+                            let memory = self
+                                .memory
+                                .ok_or_else(|| JsValue::from_str("Missing Wasm memory"))?;
+                            memory
+                                .write(&mut self.store, pointer, &data)
+                                .map_err(|error| JsValue::from_str(&error.to_string()))?;
+                            memory
+                                .write(&mut self.store, output, &(data.len() as u32).to_le_bytes())
+                                .map_err(|error| JsValue::from_str(&error.to_string()))?;
+                        }
+                        Err(errno) => result = errno,
+                    }
                 }
                 Completion::Sync => {}
                 Completion::Bytes { pointer, length } => {

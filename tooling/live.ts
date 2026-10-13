@@ -340,6 +340,15 @@ const wasiFromFile = Schema.decodeUnknownSync(RunRecord)(
     })
   ).json(),
 );
+const wasiPathsSource = Buffer.from(
+  await Bun.file(join(import.meta.dir, "../dist/wasi-paths.wasm")).arrayBuffer(),
+).toString("base64");
+const wasiPaths = Schema.decodeUnknownSync(RunRecord)(
+  await (
+    await action({ op: "process.run", id: "wasi-paths", language: "wasm", source: wasiPathsSource })
+  ).json(),
+);
+const wasiPathsRemoved = await action({ op: "filesystem.readdir", path: "/tmp/paths" });
 const alive = await action({ op: "vm.status" });
 const disposed = await action({ op: "vm.dispose" });
 const afterDispose = await action({ op: "vm.status" });
@@ -375,6 +384,11 @@ const checks = {
     wasiInputsFile.status === 200 &&
     wasiFromFile.output?.stdout.includes('argv=["/tmp/inputs.wasm", "file"]') === true &&
     wasiFromFile.output.stdout.includes("stdin=[102, 97, 108, 97]"),
+  wasiPaths:
+    wasiPaths.output?.exitCode === 0 &&
+    wasiPaths.output.stdout ===
+      'link=source\nnames=["link", "source", "target"]\nold=target bytes\ncurrent=updatedbytes\nmissing=true\npaths removed\n' &&
+    wasiPathsRemoved.status === 404,
   health: health.status === 200,
   created: created.status === 201,
   r2RoundTrip:

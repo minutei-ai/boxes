@@ -141,9 +141,24 @@ await Effect.runPromise(
       "-o",
       "dist/wasi-inputs.wasm",
     ]);
+    yield* run([
+      "rustc",
+      "--target",
+      "wasm32-wasip1",
+      "-O",
+      "-C",
+      "strip=symbols",
+      "tests/fixtures/wasi-paths.rs",
+      "-o",
+      "dist/wasi-paths.wasm",
+    ]);
     yield* Effect.forEach(
       [
         "bad-pointer",
+        "directory-cookies",
+        "directory-rights",
+        "path-types",
+        "readlink-small",
         "buffers",
         "race-a",
         "race-b",

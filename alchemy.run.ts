@@ -19,7 +19,11 @@ const migrate = Alchemy.Action(
     return Effect.fn("deployment.migrate")(function* (input: typeof Deployment.Type) {
       const url = yield* Schema.decodeUnknownEffect(Schema.String)(input.url);
       const receipts = yield* Effect.forEach(
-        ["/v1/migrations/execution-policy-v2", "/v1/migrations/wasm-inputs-v1"],
+        [
+          "/v1/migrations/execution-policy-v2",
+          "/v1/migrations/filesystem-metadata-v2",
+          "/v1/migrations/wasm-inputs-v1",
+        ],
         (path) =>
           Effect.gen(function* () {
             const response = yield* Effect.tryPromise({

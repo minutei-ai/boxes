@@ -206,9 +206,18 @@ export const FileStat = Schema.Struct({
   kind: Schema.Literals(["file", "directory", "symlink"]),
   size: Schema.Int,
   mode: Schema.Int,
+  inode: Schema.Int,
+  nlink: Schema.Int,
+  atimeNs: Schema.String.check(Schema.isPattern(/^\d+$/)),
+  mtimeNs: Schema.String.check(Schema.isPattern(/^\d+$/)),
+  ctimeNs: Schema.String.check(Schema.isPattern(/^\d+$/)),
 });
 export const DirectoryEntries = Schema.Array(
-  Schema.Struct({ name: Schema.String, kind: Schema.Literals(["file", "directory", "symlink"]) }),
+  Schema.Struct({
+    name: Schema.String,
+    kind: Schema.Literals(["file", "directory", "symlink"]),
+    inode: Schema.Int,
+  }),
 );
 export const Chunks = Schema.Array(Schema.String.check(Schema.isPattern(/^[a-f0-9]{64}$/)));
 export const RunResult = Schema.Struct({
@@ -231,7 +240,36 @@ export const WasmStep = Schema.Union([
     directory: Schema.Boolean,
     follow: Schema.Boolean,
   }),
-  Schema.Struct({ kind: Schema.Literal("flush"), path: Path, fd: Schema.Int }),
+  Schema.Struct({ kind: Schema.Literal("flush"), path: Schema.NullOr(Path), fd: Schema.Int }),
+  Schema.Struct({
+    kind: Schema.Literal("fdStat"),
+    fd: Schema.Int,
+    path: Schema.NullOr(Path),
+    write: Schema.Boolean,
+  }),
+  Schema.Struct({
+    kind: Schema.Literal("pathStat"),
+    path: Path,
+    base: Path,
+    follow: Schema.Boolean,
+  }),
+  Schema.Struct({ kind: Schema.Literal("directory"), path: Path, fd: Schema.Int }),
+  Schema.Struct({ kind: Schema.Literal("mkdir"), path: Path, base: Path }),
+  Schema.Struct({
+    kind: Schema.Literal("remove"),
+    path: Path,
+    base: Path,
+    directory: Schema.Boolean,
+  }),
+  Schema.Struct({
+    kind: Schema.Literal("rename"),
+    from: Path,
+    fromBase: Path,
+    to: Path,
+    toBase: Path,
+  }),
+  Schema.Struct({ kind: Schema.Literal("symlink"), path: Path, base: Path, target: Path }),
+  Schema.Struct({ kind: Schema.Literal("readlink"), path: Path, base: Path }),
   Schema.Struct({ kind: Schema.Literal("sync") }),
   Schema.Struct({
     kind: Schema.Literal("random"),

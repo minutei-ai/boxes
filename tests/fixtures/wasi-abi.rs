@@ -1,5 +1,7 @@
 #![no_std]
 
+use core::convert::TryInto;
+
 #[repr(C)]
 struct Iovec {
     pointer: *const u8,
@@ -28,6 +30,18 @@ unsafe extern "C" {
         count: usize,
         offset: u64,
         written: *mut u32,
+    ) -> i32;
+    fn fd_readdir(fd: u32, buffer: *mut u8, length: usize, cookie: u64, used: *mut u32) -> i32;
+    fn path_create_directory(fd: u32, path: *const u8, length: usize) -> i32;
+    fn path_remove_directory(fd: u32, path: *const u8, length: usize) -> i32;
+    fn path_unlink_file(fd: u32, path: *const u8, length: usize) -> i32;
+    fn path_readlink(
+        fd: u32,
+        path: *const u8,
+        length: usize,
+        buffer: *mut u8,
+        capacity: usize,
+        used: *mut u32,
     ) -> i32;
     fn fd_sync(fd: u32) -> i32;
     fn fd_close(fd: u32) -> i32;
@@ -75,6 +89,81 @@ fn write(fd: u32, data: &[u8]) -> i32 {
 
 #[unsafe(no_mangle)]
 pub extern "C" fn run() -> i32 {
+    if cfg!(case = "directory-cookies") {
+        let fd = match open(3, b"tmp/raw-dir", 2, 1 << 14, 0, 1) {
+            Ok(fd) => fd,
+            Err(errno) => return errno,
+        };
+        let mut data = [0u8; 25];
+        let mut used = 0;
+        if unsafe { fd_readdir(fd, data.as_mut_ptr(), 1, 0, &mut used) } != 0 || used != 1 {
+            return -1;
+        }
+        if unsafe { fd_readdir(fd, data.as_mut_ptr(), 25, 0, &mut used) } != 0
+            || used != 25
+            || data[24] != b'a'
+            || data[20] != 4
+        {
+            return -1;
+        }
+        let inode = u64::from_le_bytes(data[8..16].try_into().unwrap_or_default());
+        if inode == 0 {
+            return -1;
+        }
+        if unsafe { fd_readdir(fd, data.as_mut_ptr(), 25, 1, &mut used) } != 0
+            || used != 25
+            || data[24] != b'b'
+            || data[20] != 3
+        {
+            return -1;
+        }
+        if unsafe { fd_readdir(fd, data.as_mut_ptr(), 25, 3, &mut used) } != 0 || used != 0 {
+            return -1;
+        }
+        return unsafe { fd_readdir(fd, data.as_mut_ptr(), 25, 99, &mut used) };
+    }
+    if cfg!(case = "directory-rights") {
+        let fd = match open(3, b"tmp/raw-dir", 2, 1 << 13, 0, 1) {
+            Ok(fd) => fd,
+            Err(errno) => return errno,
+        };
+        let mut data = [0u8; 25];
+        let mut used = 0;
+        return unsafe { fd_readdir(fd, data.as_mut_ptr(), 25, 0, &mut used) };
+    }
+    if cfg!(case = "path-types") {
+        let path = b"tmp/raw-dir";
+        if unsafe { path_create_directory(3, path.as_ptr(), path.len()) } != 20 {
+            return -1;
+        }
+        if unsafe { path_unlink_file(3, path.as_ptr(), path.len()) } != 31 {
+            return -1;
+        }
+        if unsafe { path_remove_directory(3, path.as_ptr(), path.len()) } != 55 {
+            return -1;
+        }
+        let file = b"tmp/raw-dir/a";
+        return unsafe { path_remove_directory(3, file.as_ptr(), file.len()) };
+    }
+    if cfg!(case = "readlink-small") {
+        let path = b"tmp/raw-dir/c";
+        let mut data = [0u8; 1];
+        let mut used = 0;
+        let errno = unsafe {
+            path_readlink(
+                3,
+                path.as_ptr(),
+                path.len(),
+                data.as_mut_ptr(),
+                1,
+                &mut used,
+            )
+        };
+        if errno != 0 || used != 1 || data[0] != b't' {
+            return -1;
+        }
+        return 42;
+    }
     if cfg!(case = "buffers") {
         let first = match open(3, b"tmp/large", 0, 2, 0, 1) {
             Ok(fd) => fd,

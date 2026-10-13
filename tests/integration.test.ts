@@ -137,9 +137,11 @@ test("directories, relative symlinks, rename, removal and chmod keep filesystem 
     (await act("files", token, { op: "filesystem.move", from: "/tmp/a", to: "/tmp/moved" })).status,
   ).toBe(200);
   const directory = await act("files", token, { op: "filesystem.readdir", path: "/tmp/moved/b" });
-  expect(Schema.decodeUnknownSync(DirectoryEntries)(await directory.json())).toEqual([
+  const listed = Schema.decodeUnknownSync(DirectoryEntries)(await directory.json());
+  expect(listed.map((entry) => ({ name: entry.name, kind: entry.kind }))).toEqual([
     { name: "x", kind: "file" },
   ]);
+  expect(listed[0]?.inode).toBeGreaterThan(0);
   expect(
     (await act("files", token, { op: "filesystem.remove", path: "/tmp/moved", recursive: false }))
       .status,
@@ -2010,4 +2012,203 @@ test("concurrent WASI options stay isolated and different inputs have different 
   expect(results[1]?.output?.stdout).toContain("marker=second");
   expect(results[0]?.output?.stdout).toContain("private=caller-value");
   expect(results[0]?.sourceHash).not.toBe(results[1]?.sourceHash);
+});
+
+test("Rust WASI path mutations, directory listing and replaced or unlinked open files retain their semantics", async () => {
+  const token = await setup("wasi-paths");
+  const source = Buffer.from(
+    await Bun.file(join(import.meta.dir, "../dist/wasi-paths.wasm")).arrayBuffer(),
+  ).toString("base64");
+  const response = await act("wasi-paths", token, {
+    op: "process.run",
+    id: "paths",
+    language: "wasm",
+    source,
+  });
+  expect(response.status).toBe(200);
+  const run = Schema.decodeUnknownSync(RunRecord)(await response.json());
+  expect(run.output?.exitCode).toBe(0);
+  expect(run.output?.stdout).toBe(
+    'link=source\nnames=["link", "source", "target"]\nold=target bytes\ncurrent=updatedbytes\nmissing=true\npaths removed\n',
+  );
+  expect(
+    (await act("wasi-paths", token, { op: "filesystem.readFile", path: "/tmp/paths/target" }))
+      .status,
+  ).toBe(404);
+  expect(
+    (await act("wasi-paths", token, { op: "filesystem.readdir", path: "/tmp/paths" })).status,
+  ).toBe(404);
+});
+
+test("filesystem inode identities survive writes and rename while replacements retain the source identity", async () => {
+  const token = await setup("inode");
+  expect(
+    (
+      await act("inode", token, {
+        op: "filesystem.writeFile",
+        path: "/tmp/a",
+        content: "a",
+        encoding: "utf8",
+      })
+    ).status,
+  ).toBe(200);
+  const first = Schema.decodeUnknownSync(FileStat)(
+    await (
+      await act("inode", token, { op: "filesystem.stat", path: "/tmp/a", follow: true })
+    ).json(),
+  );
+  expect(first.inode).toBeGreaterThan(0);
+  expect(BigInt(first.mtimeNs)).toBeGreaterThan(0n);
+  expect(
+    (
+      await act("inode", token, {
+        op: "filesystem.writeFile",
+        path: "/tmp/b",
+        content: "b",
+        encoding: "utf8",
+      })
+    ).status,
+  ).toBe(200);
+  const other = Schema.decodeUnknownSync(FileStat)(
+    await (
+      await act("inode", token, { op: "filesystem.stat", path: "/tmp/b", follow: true })
+    ).json(),
+  );
+  expect(other.inode).not.toBe(first.inode);
+  expect(
+    (
+      await act("inode", token, {
+        op: "filesystem.writeFile",
+        path: "/tmp/a",
+        content: "changed",
+        encoding: "utf8",
+      })
+    ).status,
+  ).toBe(200);
+  expect(
+    (await act("inode", token, { op: "filesystem.move", from: "/tmp/a", to: "/tmp/b" })).status,
+  ).toBe(200);
+  const moved = Schema.decodeUnknownSync(FileStat)(
+    await (
+      await act("inode", token, { op: "filesystem.stat", path: "/tmp/b", follow: true })
+    ).json(),
+  );
+  expect(moved.inode).toBe(first.inode);
+  expect(BigInt(moved.mtimeNs)).toBeGreaterThanOrEqual(BigInt(first.mtimeNs));
+  expect(BigInt(moved.ctimeNs)).toBeGreaterThanOrEqual(BigInt(moved.mtimeNs));
+  const listing = Schema.decodeUnknownSync(DirectoryEntries)(
+    await (await act("inode", token, { op: "filesystem.readdir", path: "/tmp" })).json(),
+  );
+  expect(listing.find((entry) => entry.name === "b")?.inode).toBe(first.inode);
+});
+
+test("metadata migration assigns persistent unique identities without inventing historical timestamps", async () => {
+  const token = await setup("metadata-migration");
+  const bucket = await mf.getR2Bucket("OBJECTS");
+  const key = "sandboxes/metadata-migration/head.json";
+  const stored = await bucket.get(key);
+  if (stored === null) return expect(stored).not.toBeNull();
+  const head = Schema.decodeUnknownSync(Schema.fromJsonString(Head))(await stored.text());
+  const prior = JSON.stringify({
+    version: 1,
+    generation: 7,
+    nodes: {
+      "/": { kind: "directory", mode: 0o755 },
+      "/tmp": { kind: "directory", mode: 0o777 },
+      "/tmp/kept": { kind: "file", mode: 0o644, size: 0, chunks: [] },
+    },
+  });
+  await bucket.put(
+    key,
+    Schema.encodeSync(Schema.fromJsonString(Head))({ ...head, manifest: prior }),
+  );
+  expect((await act("metadata-migration", token, { op: "vm.status" })).status).toBe(500);
+  expect((await post("/v1/migrations/filesystem-metadata-v2", token, {})).status).toBe(401);
+  const receipt = Schema.decodeUnknownSync(MigrationReceipt)(
+    await (await post("/v1/migrations/filesystem-metadata-v2", admin, {})).json(),
+  );
+  expect(receipt.migrated).toBe(1);
+  const stat = Schema.decodeUnknownSync(FileStat)(
+    await (
+      await act("metadata-migration", token, {
+        op: "filesystem.stat",
+        path: "/tmp/kept",
+        follow: true,
+      })
+    ).json(),
+  );
+  expect(stat.inode).toBeGreaterThan(0);
+  expect(stat.mtimeNs).toBe("0");
+  const status = Schema.decodeUnknownSync(Status)(
+    await (await act("metadata-migration", token, { op: "vm.status" })).json(),
+  );
+  expect(status.generation).toBe(7);
+  const repeat = Schema.decodeUnknownSync(MigrationReceipt)(
+    await (await post("/v1/migrations/filesystem-metadata-v2", admin, {})).json(),
+  );
+  expect(repeat.migrated).toBe(0);
+});
+
+test("WASI directory buffers, cookies, descriptor rights and path type errors use the native ABI", async () => {
+  const token = await setup("wasi-path-abi");
+  expect(
+    (
+      await act("wasi-path-abi", token, {
+        op: "filesystem.writeFiles",
+        entries: [
+          { path: "/tmp/raw-dir/a", content: "a", encoding: "utf8" },
+          { path: "/tmp/raw-dir/b/inside", content: "b", encoding: "utf8" },
+        ],
+      })
+    ).status,
+  ).toBe(200);
+  expect(
+    (
+      await act("wasi-path-abi", token, {
+        op: "filesystem.symlink",
+        path: "/tmp/raw-dir/c",
+        target: "target",
+      })
+    ).status,
+  ).toBe(200);
+  for (const [name, result] of [
+    ["directory-cookies", 28],
+    ["directory-rights", 76],
+    ["path-types", 54],
+    ["readlink-small", 42],
+  ] as const) {
+    const record = Schema.decodeUnknownSync(RunRecord)(
+      await (
+        await act("wasi-path-abi", token, {
+          op: "process.run",
+          id: name,
+          language: "wasm",
+          source: await wasmFixture(name),
+        })
+      ).json(),
+    );
+    expect(record.output?.result).toBe(result);
+  }
+});
+
+test("WASI path mutations require write while directory and link reads require read", async () => {
+  const token = await setup("wasi-path-grants", ["read", "execute"]);
+  const source = Buffer.from(
+    await Bun.file(join(import.meta.dir, "../dist/wasi-paths.wasm")).arrayBuffer(),
+  ).toString("base64");
+  const record = Schema.decodeUnknownSync(RunRecord)(
+    await (
+      await act("wasi-path-grants", token, {
+        op: "process.run",
+        id: "denied",
+        language: "wasm",
+        source,
+      })
+    ).json(),
+  );
+  expect(record.output?.exitCode).toBe(1);
+  expect(record.output?.stderr).toContain("PermissionDenied");
+  expect(
+    (await act("wasi-path-grants", token, { op: "filesystem.readdir", path: "/tmp/paths" })).status,
+  ).toBe(404);
 });

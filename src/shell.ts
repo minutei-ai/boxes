@@ -1,4 +1,4 @@
-import { Effect, Match, Schema } from "effect";
+import { Clock, Effect, Match, Schema } from "effect";
 import { requirePermission } from "./auth";
 import {
   Capability,
@@ -32,6 +32,8 @@ export const shell = Effect.fn("shell.execute")(function* (
       Effect.gen(function* () {
         if (command.gate === "success" && state.exitCode !== 0) return state;
         if (command.gate === "failure" && state.exitCode === 0) return state;
+        const now = yield* Clock.currentTimeNanos;
+        yield* kernelCall(() => kernel.set_time(now));
         const name = command.argv[0];
         const args = command.argv.slice(1);
         const cwd = state.cwd;

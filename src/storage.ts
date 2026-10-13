@@ -1,4 +1,4 @@
-import { Effect, Schema } from "effect";
+import { Clock, Effect, Schema } from "effect";
 import { Kernel } from "../dist/kernel/cirro_kernel";
 import { Chunks, Fault, FileStat, Head } from "./contracts";
 import type { Env } from "./resources";
@@ -137,6 +137,8 @@ export const write = Effect.fn("filesystem.write")(function* (
 ) {
   if (data.byteLength > 16_777_216)
     return yield* new Fault({ code: "EFBIG", status: 413, message: "Maximum file size is 16 MiB" });
+  const now = yield* Clock.currentTimeNanos;
+  yield* kernelCall(() => kernel.set_time(now));
   const blocks = Array.from({ length: Math.ceil(data.byteLength / 262_144) }, (_, index) =>
     data.subarray(index * 262_144, (index + 1) * 262_144),
   );

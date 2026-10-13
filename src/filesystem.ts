@@ -1,4 +1,4 @@
-import { Effect, Match, Schema } from "effect";
+import { Clock, Effect, Match, Schema } from "effect";
 import { requirePermission } from "./auth";
 import {
   Capability,
@@ -39,6 +39,8 @@ export const filesystem = Effect.fn("filesystem.action")(function* (
   yield* requirePermission(capability, permission);
   const session = yield* open(env, id);
   const kernel = session.kernel;
+  const now = yield* Clock.currentTimeNanos;
+  yield* kernelCall(() => kernel.set_time(now));
   return yield* Match.value(action).pipe(
     Match.when({ op: "filesystem.readFiles" }, (input) =>
       Effect.gen(function* () {

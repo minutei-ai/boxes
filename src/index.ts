@@ -28,6 +28,7 @@ import {
 } from "./contracts";
 import { guestAction } from "./capabilities";
 import { migrate } from "./migration";
+import { migrateMetadata } from "./metadata-migration";
 import { migrateWasm } from "./wasm-migration";
 import { readBounded } from "./http";
 import { inspect, list, run } from "./process";
@@ -71,6 +72,13 @@ const route = Effect.fn("api.route")(function* (request: Request, env: Env) {
       headers: { "content-type": "application/json", "cache-control": "no-store" },
     });
   }
+  if (url.pathname === "/v1/migrations/filesystem-metadata-v2") {
+    yield* administrator(env, token);
+    const receipt = yield* migrateMetadata(env);
+    return new Response(Schema.encodeSync(Schema.fromJsonString(MigrationReceipt))(receipt), {
+      headers: { "content-type": "application/json", "cache-control": "no-store" },
+    });
+  }
   if (url.pathname === "/v1/sandboxes") {
     yield* administrator(env, token);
     const bytes = yield* readBounded(request.body, 16_384);
@@ -82,6 +90,7 @@ const route = Effect.fn("api.route")(function* (request: Request, env: Env) {
       kernelCall(() => new Kernel()),
       (kernel) => Effect.sync(() => kernel.free()),
     );
+    yield* kernelCall(() => kernel.initialize_times(BigInt(createdAt) * 1_000_000n));
     const manifest = yield* kernelCall(() => kernel.manifest());
     const record: typeof Head.Type = {
       version: 2,

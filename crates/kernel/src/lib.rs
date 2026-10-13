@@ -28,10 +28,21 @@ enum Node {
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
+struct Metadata {
+    inode: u64,
+    atime_ns: u64,
+    mtime_ns: u64,
+    ctime_ns: u64,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
 struct Manifest {
     version: u32,
     generation: u64,
     nodes: BTreeMap<String, Node>,
+    metadata: BTreeMap<String, Metadata>,
+    next_inode: u64,
 }
 
 struct WritePlan {
@@ -48,12 +59,18 @@ struct Stat<'a> {
     kind: &'static str,
     size: u64,
     mode: u32,
+    inode: u64,
+    nlink: u64,
+    atime_ns: String,
+    mtime_ns: String,
+    ctime_ns: String,
 }
 
 #[derive(Debug, Serialize)]
 struct Entry<'a> {
     name: &'a str,
     kind: &'static str,
+    inode: u64,
 }
 
 #[derive(Serialize)]
@@ -68,10 +85,66 @@ struct TreeEntry {
 #[derive(Debug)]
 pub struct Kernel {
     state: Manifest,
+    now: u64,
 }
 
 fn fail(message: &str) -> JsValue {
     JsValue::from_str(message)
+}
+
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+struct PriorManifest {
+    version: u32,
+    generation: u64,
+    nodes: BTreeMap<String, Node>,
+}
+
+#[wasm_bindgen]
+pub fn migrate_metadata(json: &str) -> Result<String, JsValue> {
+    if json.len() > 8_388_608 {
+        return Err(fail("EFBIG: manifest exceeds its quota"));
+    }
+    let value: serde_json::Value =
+        serde_json::from_str(json).map_err(|_| fail("EINVAL: invalid manifest"))?;
+    if value.get("version").and_then(serde_json::Value::as_u64) == Some(2) {
+        let state: Manifest =
+            serde_json::from_value(value).map_err(|_| fail("EINVAL: invalid manifest"))?;
+        let kernel = Kernel { state, now: 0 };
+        kernel.validate().map_err(|error| fail(&error))?;
+        return kernel.manifest();
+    }
+    let prior: PriorManifest =
+        serde_json::from_value(value).map_err(|_| fail("EINVAL: invalid prior manifest"))?;
+    if prior.version != 1 {
+        return Err(fail("EINVAL: unsupported manifest version"));
+    }
+    let metadata = prior
+        .nodes
+        .keys()
+        .enumerate()
+        .map(|(index, path)| {
+            (
+                path.clone(),
+                Metadata {
+                    inode: index as u64 + 1,
+                    atime_ns: 0,
+                    mtime_ns: 0,
+                    ctime_ns: 0,
+                },
+            )
+        })
+        .collect();
+    let state = Manifest {
+        version: 2,
+        generation: prior.generation,
+        next_inode: prior.nodes.len() as u64 + 1,
+        nodes: prior.nodes,
+        metadata,
+    };
+    let kernel = Kernel { state, now: 0 };
+    kernel.validate().map_err(|error| fail(&error))?;
+    kernel.manifest()
 }
 
 pub fn normalize(path: &str, cwd: &str) -> Result<String, String> {
@@ -199,8 +272,24 @@ impl Kernel {
     fn fresh() -> Self {
         Self {
             state: Manifest {
-                version: 1,
+                version: 2,
                 generation: 0,
+                next_inode: 5,
+                metadata: ["/", "/home", "/home/cirro", "/tmp"]
+                    .into_iter()
+                    .enumerate()
+                    .map(|(index, path)| {
+                        (
+                            path.into(),
+                            Metadata {
+                                inode: index as u64 + 1,
+                                atime_ns: 0,
+                                mtime_ns: 0,
+                                ctime_ns: 0,
+                            },
+                        )
+                    })
+                    .collect(),
                 nodes: BTreeMap::from([
                     ("/".into(), Node::Directory { mode: 0o755 }),
                     ("/home".into(), Node::Directory { mode: 0o755 }),
@@ -208,6 +297,7 @@ impl Kernel {
                     ("/tmp".into(), Node::Directory { mode: 0o777 }),
                 ]),
             },
+            now: 0,
         }
     }
 
@@ -261,11 +351,21 @@ impl Kernel {
     }
 
     fn validate(&self) -> Result<(), String> {
-        if self.state.version != 1 || self.state.nodes.len() > MAX_NODES {
+        if self.state.version != 2 || self.state.nodes.len() > MAX_NODES {
             return Err("EINVAL: invalid manifest version or node count".into());
         }
         if !matches!(self.state.nodes.get("/"), Some(Node::Directory { .. })) {
             return Err("EINVAL: root must be a directory".into());
+        }
+        if self.state.metadata.keys().ne(self.state.nodes.keys()) {
+            return Err("EINVAL: metadata paths do not match nodes".into());
+        }
+        let mut inodes = BTreeSet::new();
+        for meta in self.state.metadata.values() {
+            if meta.inode == 0 || meta.inode >= self.state.next_inode || !inodes.insert(meta.inode)
+            {
+                return Err("EINVAL: duplicate or invalid inode identity".into());
+            }
         }
         for (path, node) in &self.state.nodes {
             if normalize(path, "/")? != *path || node.mode() > 0o777 {
@@ -369,6 +469,28 @@ impl Kernel {
         if !self.state.nodes.contains_key(&path) && self.state.nodes.len() >= MAX_NODES {
             return Err("ENOSPC: inode quota exceeded".into());
         }
+        if let Some(meta) = self.state.metadata.get_mut(&path) {
+            meta.mtime_ns = self.now;
+            meta.ctime_ns = self.now;
+        } else {
+            if self.state.next_inode >= 9_007_199_254_740_991 {
+                return Err("EOVERFLOW: inode identity exhausted".into());
+            }
+            self.state.metadata.insert(
+                path.clone(),
+                Metadata {
+                    inode: self.state.next_inode,
+                    atime_ns: self.now,
+                    mtime_ns: self.now,
+                    ctime_ns: self.now,
+                },
+            );
+            self.state.next_inode += 1;
+            if let Some(meta) = self.state.metadata.get_mut(parent(&path)) {
+                meta.mtime_ns = self.now;
+                meta.ctime_ns = self.now;
+            }
+        }
         self.state.nodes.insert(path, node);
         Ok(())
     }
@@ -386,11 +508,24 @@ impl Kernel {
                 let kernel = Self {
                     state: serde_json::from_str(&json)
                         .map_err(|_| fail("EINVAL: invalid manifest"))?,
+                    now: 0,
                 };
                 kernel.validate().map_err(|e| fail(&e))?;
                 Ok(kernel)
             }
             None => Ok(Self::fresh()),
+        }
+    }
+
+    pub fn set_time(&mut self, now: u64) {
+        self.now = now;
+    }
+    pub fn initialize_times(&mut self, now: u64) {
+        self.now = now;
+        for meta in self.state.metadata.values_mut() {
+            meta.atime_ns = now;
+            meta.mtime_ns = now;
+            meta.ctime_ns = now;
         }
     }
 
@@ -446,6 +581,48 @@ impl Kernel {
             kind: node.kind(),
             size: node.size(),
             mode: node.mode(),
+            inode: self
+                .state
+                .metadata
+                .get(&path)
+                .ok_or_else(|| fail("EIO: missing metadata"))?
+                .inode,
+            nlink: match node {
+                Node::Directory { .. } => {
+                    2 + self
+                        .state
+                        .nodes
+                        .iter()
+                        .filter(|(key, node)| {
+                            key.as_str() != "/"
+                                && parent(key) == path
+                                && matches!(node, Node::Directory { .. })
+                        })
+                        .count() as u64
+                }
+                _ => 1,
+            },
+            atime_ns: self
+                .state
+                .metadata
+                .get(&path)
+                .ok_or_else(|| fail("EIO: missing metadata"))?
+                .atime_ns
+                .to_string(),
+            mtime_ns: self
+                .state
+                .metadata
+                .get(&path)
+                .ok_or_else(|| fail("EIO: missing metadata"))?
+                .mtime_ns
+                .to_string(),
+            ctime_ns: self
+                .state
+                .metadata
+                .get(&path)
+                .ok_or_else(|| fail("EIO: missing metadata"))?
+                .ctime_ns
+                .to_string(),
         })
         .map_err(|_| fail("EIO: serialization failed"))
     }
@@ -544,6 +721,7 @@ impl Kernel {
             .map(|(key, value)| Entry {
                 name: key.rsplit('/').next().unwrap_or_default(),
                 kind: value.kind(),
+                inode: self.state.metadata.get(key).map_or(0, |meta| meta.inode),
             })
             .collect();
         serde_json::to_string(&entries).map_err(|_| fail("EIO: serialization failed"))
@@ -575,6 +753,13 @@ impl Kernel {
             return Err(fail("ENOTEMPTY: directory is not empty"));
         }
         self.state
+            .metadata
+            .retain(|key, _| key != &path && !key.starts_with(&prefix));
+        if let Some(meta) = self.state.metadata.get_mut(parent(&path)) {
+            meta.mtime_ns = self.now;
+            meta.ctime_ns = self.now;
+        }
+        self.state
             .nodes
             .retain(|key, _| key != &path && !key.starts_with(&prefix));
         Ok(())
@@ -600,7 +785,10 @@ impl Kernel {
             if matches!(source, Node::Directory { .. })
                 != matches!(destination, Node::Directory { .. })
             {
-                return Err(fail("EINVAL: incompatible rename types"));
+                if matches!(source, Node::Directory { .. }) {
+                    return Err(fail("ENOTDIR: rename destination is not a directory"));
+                }
+                return Err(fail("EISDIR: rename destination is a directory"));
             }
             if self
                 .state
@@ -629,6 +817,25 @@ impl Kernel {
                 })
             })
             .collect();
+        let moved_metadata: Vec<_> = keys
+            .iter()
+            .filter_map(|key| {
+                self.state.metadata.remove(key).map(|mut meta| {
+                    meta.ctime_ns = self.now;
+                    (
+                        format!("{to}{}", key.strip_prefix(&from).unwrap_or_default()),
+                        meta,
+                    )
+                })
+            })
+            .collect();
+        self.state.metadata.extend(moved_metadata);
+        for path in [parent(&from), parent(&to)] {
+            if let Some(meta) = self.state.metadata.get_mut(path) {
+                meta.mtime_ns = self.now;
+                meta.ctime_ns = self.now;
+            }
+        }
         self.state.nodes.extend(moved);
         Ok(())
     }
@@ -666,6 +873,9 @@ impl Kernel {
         match self.state.nodes.get_mut(&path) {
             Some(Node::File { mode: current, .. } | Node::Directory { mode: current }) => {
                 *current = mode;
+                if let Some(meta) = self.state.metadata.get_mut(&path) {
+                    meta.ctime_ns = self.now;
+                }
                 Ok(())
             }
             _ => Err(fail("ENOENT: file does not exist")),
@@ -704,16 +914,17 @@ mod tests {
     #[test]
     fn manifest_round_trip_and_symlink_resolution() -> Result<(), String> {
         let mut kernel = Kernel::fresh();
-        kernel.state.nodes.insert(
+        kernel.insert(
             "/home/cirro/link".into(),
             Node::Symlink {
                 target: "/tmp".into(),
             },
-        );
+        )?;
         assert_eq!(kernel.resolve("/home/cirro/link/file", true)?, "/tmp/file");
         let data = serde_json::to_string(&kernel.state).map_err(|e| e.to_string())?;
         let restored = Kernel {
             state: serde_json::from_str(&data).map_err(|e| e.to_string())?,
+            now: 0,
         };
         restored.validate()?;
         assert_eq!(restored.state.nodes, kernel.state.nodes);
