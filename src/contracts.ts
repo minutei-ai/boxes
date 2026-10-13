@@ -441,7 +441,7 @@ export const WasmStep = Schema.Union([
 ]);
 export const RunRecord = Schema.Struct({
   id: Id,
-  status: Schema.Literals(["running", "exited", "failed"]),
+  status: Schema.Literals(["queued", "running", "exited", "failed"]),
   sourceHash: Schema.String.check(Schema.isPattern(/^[a-f0-9]{64}$/)),
   language: Schema.Literals(["javascript", "typescript", "python", "shell", "wasm"]),
   startedAt: Schema.Int,
@@ -450,6 +450,17 @@ export const RunRecord = Schema.Struct({
 });
 export const RunSummary = RunRecord.mapFields((fields) => Struct.omit(fields, ["output"]));
 export const RunMetadata = Schema.Struct({ summary: Schema.fromJsonString(RunSummary) });
+export const StoredRun = RunRecord.mapFields((fields) => ({
+  ...fields,
+  authority: Schema.NullOr(Capability),
+  deadlineAt: Schema.NullOr(Schema.Int),
+}));
+export const StoredRunMetadata = RunMetadata.mapFields((fields) => ({
+  ...fields,
+  format: Schema.Literal("run-v2"),
+}));
+export const DispatchReceipt = Schema.Struct({ notifications: Schema.Int });
+export const ProcessDelivery = Schema.Struct({ key: Schema.String, eTag: Schema.String });
 export const ProcessPage = Schema.Struct({
   items: Schema.Array(RunSummary),
   cursor: Schema.NullOr(Schema.String),

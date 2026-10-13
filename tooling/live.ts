@@ -174,6 +174,31 @@ const backgroundRepeated = Schema.decodeUnknownSync(RunRecord)(
   await (await action({ op: "process.wait", id: "background", timeoutMs: 0 })).json(),
 );
 
+const longStarted = Schema.decodeUnknownSync(RunRecord)(
+  await (
+    await action({
+      op: "process.spawn",
+      execution: {
+        op: "process.run",
+        id: "long-background",
+        language: "wasm",
+        source: Buffer.from(
+          await Bun.file(join(import.meta.dir, "../dist/wasi-background.wasm")).arrayBuffer(),
+        ).toString("base64"),
+      },
+    })
+  ).json(),
+);
+const earlyLong = await action({ op: "process.wait", id: "long-background", timeoutMs: 25_000 });
+const longCompleted = Schema.decodeUnknownSync(RunRecord)(
+  await (await action({ op: "process.wait", id: "long-background", timeoutMs: 25_000 })).json(),
+);
+const repaired = await post(
+  "/v1/maintenance/process-dispatch",
+  Redacted.value(configuration.key),
+  {},
+);
+
 const page = Schema.decodeUnknownSync(ProcessPage)(
   await (await action({ op: "process.list", limit: 2, cursor: null })).json(),
 );
@@ -578,8 +603,16 @@ const hostFs = Schema.decodeUnknownSync(RunRecord)(
 const disposed = await action({ op: "vm.dispose" });
 const afterDispose = await action({ op: "vm.status" });
 const checks = {
+  durableBackground:
+    longStarted.status === "queued" &&
+    earlyLong.status === 408 &&
+    longCompleted.status === "exited" &&
+    longCompleted.output?.exitCode === 0 &&
+    longCompleted.output.stdout === "continued beyond the HTTP continuation\n",
+  dispatchMaintenance: repaired.status === 200,
+
   backgroundExecution:
-    backgroundStarted.status === "running" &&
+    backgroundStarted.status === "queued" &&
     backgroundObserved.status === "exited" &&
     backgroundObserved.output?.exitCode === 0 &&
     backgroundObserved.output.result === 42 &&

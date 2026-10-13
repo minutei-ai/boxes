@@ -1,7 +1,7 @@
 import * as Alchemy from "alchemy";
 import * as Cloudflare from "alchemy/Cloudflare";
 import { Clock, Config, Effect, Layer, Redacted, Schedule, Schema } from "effect";
-import { bucket, worker } from "./src/resources";
+import { bucket, executions, worker } from "./src/resources";
 import { MigrationReceipt } from "./src/contracts";
 
 const Deployment = Schema.Struct({
@@ -23,6 +23,7 @@ const migrate = Alchemy.Action(
           "/v1/migrations/execution-policy-v2",
           "/v1/migrations/filesystem-v3",
           "/v1/migrations/wasm-inputs-v1",
+          "/v1/migrations/process-receipts-v2",
         ],
         (path) =>
           Effect.gen(function* () {
@@ -71,6 +72,18 @@ export default Cirro.make(
   Effect.gen(function* () {
     const service = yield* worker;
     const objects = yield* bucket;
+    const queue = yield* executions;
+    yield* Cloudflare.Queues.Consumer("ExecutionConsumer", {
+      queueId: queue.queueId,
+      scriptName: service.workerName,
+      settings: {
+        batchSize: 1,
+        maxConcurrency: 1,
+        maxRetries: 100,
+        maxWaitTimeMs: 0,
+        retryDelay: 30,
+      },
+    });
     const deployedAt = yield* Clock.currentTimeMillis;
     yield* migrate({ deployedAt, url: service.url });
     return { url: service.url, bucketName: objects.bucketName };

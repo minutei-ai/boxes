@@ -22,3 +22,26 @@ export const archive = Effect.fn("code.archive")(function* (
   });
   return hash;
 });
+
+export const restore = Effect.fn("code.restore")(function* (
+  env: Env,
+  sandboxId: string,
+  hash: string,
+) {
+  const object = yield* Effect.tryPromise({
+    try: () => env.OBJECTS.get(`sandboxes/${sandboxId}/code/${hash}`),
+    catch: (cause) => new StorageFailure({ cause }),
+  });
+  if (object === null || object.size > 18_000_000)
+    return yield* new StorageFailure({ cause: "Archived program missing or oversized" });
+  const bytes = yield* Effect.tryPromise({
+    try: () => object.arrayBuffer(),
+    catch: (cause) => new StorageFailure({ cause }),
+  });
+  const digest = yield* Effect.promise(() => crypto.subtle.digest("SHA-256", bytes));
+  if (Buffer.from(digest).toString("hex") !== hash)
+    return yield* new StorageFailure({ cause: "Archived program digest mismatch" });
+  return yield* Schema.decodeUnknownEffect(Schema.fromJsonString(Program))(
+    Buffer.from(bytes).toString("utf8"),
+  ).pipe(Effect.mapError((cause) => new StorageFailure({ cause })));
+});

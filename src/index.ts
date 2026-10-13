@@ -4,6 +4,7 @@ import { initSync, Kernel } from "../dist/kernel/cirro_kernel";
 import { administrator, authorize, mint, requirePermission } from "./auth";
 import {
   Action,
+  DispatchReceipt,
   SoftwareCatalog,
   PackagePreparation,
   BatchReadResults,
@@ -31,9 +32,10 @@ import {
 import { guestAction } from "./capabilities";
 import { migrate } from "./migration";
 import { migrateFilesystem } from "./filesystem-migration";
+import { migrateProcesses } from "./process-migration";
 import { migrateWasm } from "./wasm-migration";
 import { readBounded } from "./http";
-import { inspect, list, run, reserve, complete, wait } from "./process";
+import { inspect, list, run, spawn, dispatch, reconcile, wait } from "./process";
 import { kernelCall, open, publish, StorageFailure } from "./storage";
 import type { Env } from "./resources";
 
@@ -42,11 +44,7 @@ initSync({ module: wasm });
 const Exists = Schema.Struct({ exists: Schema.Boolean });
 const Link = Schema.Struct({ target: Schema.String });
 
-const route = Effect.fn("api.route")(function* (
-  request: Request,
-  env: Env,
-  executionContext: ExecutionContext,
-) {
+const route = Effect.fn("api.route")(function* (request: Request, env: Env) {
   const url = new URL(request.url);
   if (request.method === "GET" && url.pathname === "/v1/schema")
     return Response.json(Schema.toJsonSchemaDocument(Action), {
@@ -64,9 +62,27 @@ const route = Effect.fn("api.route")(function* (
       message: "Bearer credential required",
     });
   const token = authorization.slice(7);
+  if (url.pathname === "/v1/maintenance/process-dispatch") {
+    yield* administrator(env, token);
+    const input = yield* readBounded(request.body, 4096);
+    yield* Schema.decodeUnknownEffect(Schema.fromJsonString(Schema.Struct({})), {
+      onExcessProperty: "error",
+    })(input.toString("utf8"));
+    const receipt = yield* reconcile(env);
+    return new Response(Schema.encodeSync(Schema.fromJsonString(DispatchReceipt))(receipt), {
+      headers: { "content-type": "application/json", "cache-control": "no-store" },
+    });
+  }
   if (url.pathname === "/v1/migrations/execution-policy-v2") {
     yield* administrator(env, token);
     const receipt = yield* migrate(env);
+    return new Response(Schema.encodeSync(Schema.fromJsonString(MigrationReceipt))(receipt), {
+      headers: { "content-type": "application/json", "cache-control": "no-store" },
+    });
+  }
+  if (url.pathname === "/v1/migrations/process-receipts-v2") {
+    yield* administrator(env, token);
+    const receipt = yield* migrateProcesses(env);
     return new Response(Schema.encodeSync(Schema.fromJsonString(MigrationReceipt))(receipt), {
       headers: { "content-type": "application/json", "cache-control": "no-store" },
     });
@@ -180,18 +196,9 @@ const route = Effect.fn("api.route")(function* (
         ),
     ),
     Match.when({ op: "process.spawn" }, (action) =>
-      Effect.gen(function* () {
-        const reservation = yield* Effect.scoped(reserve(env, capability, action.execution));
-        const background = Effect.scoped(complete(env, capability, reservation, 25_000)).pipe(
-          Effect.catchCause((cause) =>
-            Effect.sync(() =>
-              console.error("Cirro background execution could not settle", Cause.pretty(cause)),
-            ),
-          ),
-        );
-        executionContext.waitUntil(Effect.runPromise(background));
-        return Schema.encodeSync(Schema.fromJsonString(RunRecord))(reservation.record);
-      }),
+      spawn(env, capability, action.execution).pipe(
+        Effect.map((record) => Schema.encodeSync(Schema.fromJsonString(RunRecord))(record)),
+      ),
     ),
     Match.when({ op: "process.wait" }, (action) =>
       wait(env, capability, action).pipe(
@@ -306,9 +313,35 @@ const route = Effect.fn("api.route")(function* (
 });
 
 export default {
-  fetch(request: Request, env: Env, executionContext: ExecutionContext) {
+  scheduled(_controller: ScheduledController, env: Env) {
+    return Effect.runPromise(Effect.scoped(reconcile(env)));
+  },
+  queue(batch: MessageBatch<unknown>, env: Env) {
     return Effect.runPromise(
-      Effect.scoped(route(request, env, executionContext)).pipe(
+      Effect.scoped(
+        Effect.forEach(
+          batch.messages,
+          (message) =>
+            dispatch(env, message.body).pipe(
+              Effect.tap(() => Effect.sync(() => message.ack())),
+              Effect.catchTag("ExecutionPending", (failure) =>
+                Effect.sync(() => message.retry({ delaySeconds: failure.retryAfterSeconds })),
+              ),
+              Effect.catchCause((cause) =>
+                Effect.sync(() => {
+                  console.error("Cirro dispatch failed", Cause.pretty(cause));
+                  message.retry({ delaySeconds: 30 });
+                }),
+              ),
+            ),
+          { concurrency: 1 },
+        ),
+      ),
+    );
+  },
+  fetch(request: Request, env: Env) {
+    return Effect.runPromise(
+      Effect.scoped(route(request, env)).pipe(
         Effect.catchTag("Fault", (fault) =>
           Effect.succeed(
             new Response(

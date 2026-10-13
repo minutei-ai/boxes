@@ -1929,6 +1929,7 @@ test("Wasm input migration preserves old results and updates source references a
   const bucket = await mf.getR2Bucket("OBJECTS");
   const oldHash = Buffer.from(await crypto.subtle.digest("SHA-256", source)).toString("hex");
   await bucket.put(`sandboxes/wasm-input-migration/code/${oldHash}`, source);
+  await bucket.delete("processes/wasm-input-migration/prior.json");
   const prior = { ...run, sourceHash: oldHash };
   await bucket.put(
     "sandboxes/wasm-input-migration/runs/prior.json",
@@ -1944,6 +1945,7 @@ test("Wasm input migration preserves old results and updates source references a
     await (await post("/v1/migrations/wasm-inputs-v1", admin, {})).json(),
   );
   expect(receipt.migrated).toBe(2);
+  expect((await post("/v1/migrations/process-receipts-v2", admin, {})).status).toBe(200);
   const converted = Schema.decodeUnknownSync(RunRecord)(
     await (await act("wasm-input-migration", token, { op: "process.get", id: "prior" })).json(),
   );
@@ -1988,18 +1990,20 @@ test("Wasm input migration rejects corrupt immutable source instead of rewriting
   );
   const hash = Buffer.from(await crypto.subtle.digest("SHA-256", source)).toString("hex");
   const bucket = await mf.getR2Bucket("OBJECTS");
+  await bucket.delete("processes/wasm-corrupt-migration/prior.json");
   await bucket.put(`sandboxes/wasm-corrupt-migration/code/${hash}`, "corrupt");
   await bucket.put(
     "sandboxes/wasm-corrupt-migration/runs/prior.json",
     Schema.encodeSync(Schema.fromJsonString(RunRecord))({ ...run, sourceHash: hash }),
   );
   expect((await post("/v1/migrations/wasm-inputs-v1", admin, {})).status).toBe(500);
-  const unchanged = Schema.decodeUnknownSync(RunRecord)(
-    await (await act("wasm-corrupt-migration", token, { op: "process.get", id: "prior" })).json(),
-  );
+  const prior = await bucket.get("sandboxes/wasm-corrupt-migration/runs/prior.json");
+  if (prior === null) return expect(prior).not.toBeNull();
+  const unchanged = Schema.decodeUnknownSync(Schema.fromJsonString(RunRecord))(await prior.text());
   expect(unchanged.sourceHash).toBe(hash);
   await bucket.put(`sandboxes/wasm-corrupt-migration/code/${hash}`, source);
   expect((await post("/v1/migrations/wasm-inputs-v1", admin, {})).status).toBe(200);
+  expect((await post("/v1/migrations/process-receipts-v2", admin, {})).status).toBe(200);
 });
 
 test("concurrent WASI options stay isolated and different inputs have different artifact digests", async () => {

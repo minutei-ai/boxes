@@ -117,7 +117,7 @@ const detachedJavascript = await sample(25, async (index) => {
   });
   if (response.status !== 200) process.exit(1);
   const reserved = Schema.decodeUnknownSync(RunRecord)(await response.json());
-  if (reserved.status !== "running") process.exit(1);
+  if (reserved.status !== "queued") process.exit(1);
   const waited = await call({ op: "process.wait", id: reserved.id, timeoutMs: 25_000 });
   if (waited.status !== 200) process.exit(1);
   const completed = Schema.decodeUnknownSync(RunRecord)(await waited.json());
