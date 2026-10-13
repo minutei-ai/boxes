@@ -105,6 +105,24 @@ const javascript = await sample(25, async (i) => {
   const record = Schema.decodeUnknownSync(RunRecord)(await response.json());
   if (record.output?.result !== 42) process.exit(1);
 });
+const detachedJavascript = await sample(25, async (index) => {
+  const response = await call({
+    op: "process.spawn",
+    execution: {
+      op: "process.run",
+      id: `detached-${index}`,
+      language: "javascript",
+      source: "export default () => 6 * 7;",
+    },
+  });
+  if (response.status !== 200) process.exit(1);
+  const reserved = Schema.decodeUnknownSync(RunRecord)(await response.json());
+  if (reserved.status !== "running") process.exit(1);
+  const waited = await call({ op: "process.wait", id: reserved.id, timeoutMs: 25_000 });
+  if (waited.status !== 200) process.exit(1);
+  const completed = Schema.decodeUnknownSync(RunRecord)(await waited.json());
+  if (completed.output?.result !== 42 || completed.output.exitCode !== 0) process.exit(1);
+});
 const wasiSource = Buffer.from(
   await Bun.file(join(import.meta.dir, "../dist/wasi-test.wasm")).arrayBuffer(),
 ).toString("base64");
@@ -201,6 +219,7 @@ const report = {
     write256KiB: writes,
     read256KiB: reads,
     isolatedJavascript: javascript,
+    detachedJavascript,
     wasiFileAndSync,
     shellPipeline: shell,
   },

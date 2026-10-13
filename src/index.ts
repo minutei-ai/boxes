@@ -33,7 +33,7 @@ import { migrate } from "./migration";
 import { migrateFilesystem } from "./filesystem-migration";
 import { migrateWasm } from "./wasm-migration";
 import { readBounded } from "./http";
-import { inspect, list, run } from "./process";
+import { inspect, list, run, reserve, complete, wait } from "./process";
 import { kernelCall, open, publish, StorageFailure } from "./storage";
 import type { Env } from "./resources";
 
@@ -42,7 +42,11 @@ initSync({ module: wasm });
 const Exists = Schema.Struct({ exists: Schema.Boolean });
 const Link = Schema.Struct({ target: Schema.String });
 
-const route = Effect.fn("api.route")(function* (request: Request, env: Env) {
+const route = Effect.fn("api.route")(function* (
+  request: Request,
+  env: Env,
+  executionContext: ExecutionContext,
+) {
   const url = new URL(request.url);
   if (request.method === "GET" && url.pathname === "/v1/schema")
     return Response.json(Schema.toJsonSchemaDocument(Action), {
@@ -175,6 +179,25 @@ const route = Effect.fn("api.route")(function* (request: Request, env: Env) {
           Effect.map((result) => Schema.encodeSync(Schema.fromJsonString(RunRecord))(result)),
         ),
     ),
+    Match.when({ op: "process.spawn" }, (action) =>
+      Effect.gen(function* () {
+        const reservation = yield* Effect.scoped(reserve(env, capability, action.execution));
+        const background = Effect.scoped(complete(env, capability, reservation, 25_000)).pipe(
+          Effect.catchCause((cause) =>
+            Effect.sync(() =>
+              console.error("Cirro background execution could not settle", Cause.pretty(cause)),
+            ),
+          ),
+        );
+        executionContext.waitUntil(Effect.runPromise(background));
+        return Schema.encodeSync(Schema.fromJsonString(RunRecord))(reservation.record);
+      }),
+    ),
+    Match.when({ op: "process.wait" }, (action) =>
+      wait(env, capability, action).pipe(
+        Effect.map((record) => Schema.encodeSync(Schema.fromJsonString(RunRecord))(record)),
+      ),
+    ),
     Match.when({ op: "process.get" }, (action) =>
       inspect(env, capability, action.id).pipe(
         Effect.map((result) => Schema.encodeSync(Schema.fromJsonString(RunRecord))(result)),
@@ -283,9 +306,9 @@ const route = Effect.fn("api.route")(function* (request: Request, env: Env) {
 });
 
 export default {
-  fetch(request: Request, env: Env) {
+  fetch(request: Request, env: Env, executionContext: ExecutionContext) {
     return Effect.runPromise(
-      Effect.scoped(route(request, env)).pipe(
+      Effect.scoped(route(request, env, executionContext)).pipe(
         Effect.catchTag("Fault", (fault) =>
           Effect.succeed(
             new Response(

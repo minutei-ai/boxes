@@ -16,6 +16,18 @@ Rename modifies the metadata tree and publishes one new root; it does not rewrit
 
 Full bounded metadata is loaded per operation. That is acceptable for the initial validated workloads but is not proof of performance at 16,384 files. Paged metadata, descriptor APIs, hard links, ownership/timestamps and safe block reclamation remain unimplemented.
 
+## Background process lifetime
+
+Process preparation loads and validates its existing execution action, archives the immutable program, and reserves its unique R2 receipt with `etagDoesNotMatch: "*"`. It releases the preparation kernel before execution. Synchronous and detached calls share the completion owner. Completion acquires its own kernel and current policy; the archived entry bytes retain their preparation identity. This adds one head read to a synchronous run compared with the earlier combined preparation/execution scope, while avoiding two simultaneously retained kernels.
+
+The HTTP transport owns `ExecutionContext.waitUntil` and runs completion in an independent Effect scope. Nothing from the request's acquired kernel is transferred into that continuation. A closed HTTP connection does not close the background scope. Background execution has a 25-second wall-time timeout, leaving the normal continuation margin for publishing its terminal receipt. Native fuel/memory limits remain independent. Guest resources close before receipt publication; a timeout records failure without an observed exit code. A successful guest completion records its real result. The receipt transition is conditional on the reservation ETag, so a competing write is reported rather than overwritten or retried.
+
+`process.wait` observes the same receipt, using native Clock and Effect sleep with an exponential polling interval capped at one second and a caller deadline capped at 25 seconds. Each observation uses its own scope and releases its kernel immediately; polling cannot accumulate manifest heaps. Every observation rechecks sandbox disposal and capability expiry. A wait timeout is an observation failure, not a terminal process state. A `failed` receipt rejects the wait without manufacturing an exit code; an `exited` receipt returns the retained output. Waiting is available to guest tools under `read`, while process creation still belongs to the authenticated transport.
+
+The measured local workerd workload of 25 runs reports synchronous JavaScript at p50 11.90 ms/p95 15.68 ms and spawn followed by wait at p50 14.93 ms/p95 19.13 ms. This does not establish remote latency or savings.
+
+R2 retains receipts across Worker replacement, but native continuation lifetime is not durable scheduling. Abrupt isolate loss before settlement can leave `running`; the system does not replay that command or claim its effects were rolled back. Durable recovery, explicit cancellation, guest descendants, incremental stdio and interactive terminals remain parity gates.
+
 ## Guest boundary
 
 One ordinary Worker loads precompiled Rust/Wasm modules for its filesystem kernel, QuickJS, Oxc and WASI/Wasmi. JavaScript runs in a fresh QuickJS runtime with its own heap, stack ceiling, interrupt budget and microtask ceiling. TypeScript is transpiled by Oxc before entering that runtime. Each module compilation owns a fresh Wasm instance with 64 MiB maximum linear memory; generated native bindings are instantiated through a build-time factory. This contains compiler stack/memory traps instead of retaining a poisoned instance across requests. Guest Wasm is interpreted with Wasmi fuel and memory limits; it is never dynamically compiled using the platform WebAssembly API.

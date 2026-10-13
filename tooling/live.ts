@@ -146,6 +146,34 @@ const postEcho = Schema.decodeUnknownSync(
   ),
 )(Buffer.from(networkPost.content, "base64").toString());
 const denied = await action({ op: "network.fetch", url: "https://developers.cloudflare.com" });
+const backgroundStarted = Schema.decodeUnknownSync(RunRecord)(
+  await (
+    await action({
+      op: "process.spawn",
+      execution: {
+        op: "process.run",
+        id: "background",
+        language: "javascript",
+        source:
+          "export default async ({tools}) => { await tools.call({op:'network.fetch',url:'https://example.com'}); await tools.call({op:'filesystem.writeFile',path:'/tmp/background-proof',content:'continued',encoding:'utf8'}); return 42; }",
+      },
+    })
+  ).json(),
+);
+const backgroundObserved = Schema.decodeUnknownSync(RunRecord)(
+  await (await action({ op: "process.wait", id: "background", timeoutMs: 25_000 })).json(),
+);
+const backgroundContent = Schema.decodeUnknownSync(FileContent)(
+  await (await action({ op: "filesystem.readFile", path: "/tmp/background-proof" })).json(),
+);
+const duplicateBackground = await action({
+  op: "process.spawn",
+  execution: { op: "process.run", id: "background", language: "shell", source: "false" },
+});
+const backgroundRepeated = Schema.decodeUnknownSync(RunRecord)(
+  await (await action({ op: "process.wait", id: "background", timeoutMs: 0 })).json(),
+);
+
 const page = Schema.decodeUnknownSync(ProcessPage)(
   await (await action({ op: "process.list", limit: 2, cursor: null })).json(),
 );
@@ -550,6 +578,17 @@ const hostFs = Schema.decodeUnknownSync(RunRecord)(
 const disposed = await action({ op: "vm.dispose" });
 const afterDispose = await action({ op: "vm.status" });
 const checks = {
+  backgroundExecution:
+    backgroundStarted.status === "running" &&
+    backgroundObserved.status === "exited" &&
+    backgroundObserved.output?.exitCode === 0 &&
+    backgroundObserved.output.result === 42 &&
+    Buffer.from(backgroundContent.content, "base64").toString() === "continued",
+  backgroundObservation:
+    duplicateBackground.status === 409 &&
+    backgroundRepeated.finishedAt === backgroundObserved.finishedAt &&
+    backgroundRepeated.output?.result === 42,
+
   httpRequest:
     networkPost.status === 200 &&
     postEcho.data === "cirro-http-native" &&

@@ -6,8 +6,8 @@ import {
   RunAction,
   RunMetadata,
   RunRecord,
-  RunResult,
   ProcessListAction,
+  ProcessWaitAction,
 } from "./contracts";
 import { load } from "./modules";
 import { archive } from "./code";
@@ -16,10 +16,7 @@ import { open, StorageFailure } from "./storage";
 import type { Env } from "./resources";
 import { shell } from "./shell";
 
-export class ExecutionFailure extends Schema.TaggedError<ExecutionFailure>()("ExecutionFailure", {
-  cause: Schema.Unknown,
-}) {}
-export const run = Effect.fn("process.run")(function* (
+export const reserve = Effect.fn("process.reserve")(function* (
   env: Env,
   capability: typeof Capability.Type,
   action: typeof RunAction.Type,
@@ -31,7 +28,10 @@ export const run = Effect.fn("process.run")(function* (
   const key = `sandboxes/${capability.sandboxId}/runs/${action.id}.json`;
   if (
     program.language === "wasm" &&
-    !/^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$/.test(program.source)
+    (program.source.length % 4 !== 0 ||
+      !/^[A-Za-z0-9+/]*={0,2}$/.test(program.source) ||
+      Buffer.from(program.source.slice(-4), "base64").toString("base64") !==
+        program.source.slice(-4))
   )
     return yield* new Fault({
       code: "EINVAL",
@@ -64,14 +64,39 @@ export const run = Effect.fn("process.run")(function* (
       status: 409,
       message: "Execution ID already exists; use process.get to inspect its confirmed state",
     });
+  return { record, program, etag: receipt.etag };
+});
+
+export const complete = Effect.fn("process.complete")(function* (
+  env: Env,
+  capability: typeof Capability.Type,
+  reservation: Effect.Success<ReturnType<typeof reserve>>,
+  timeoutMs: number | null,
+) {
+  const { record, program, etag } = reservation;
+  const key = `sandboxes/${capability.sandboxId}/runs/${record.id}.json`;
+  const execution = Effect.scoped(
+    Effect.gen(function* () {
+      const now = yield* Clock.currentTimeMillis;
+      if (capability.expiresAt <= now)
+        return yield* new Fault({
+          code: "UNAUTHORIZED",
+          status: 401,
+          message: "Capability expired",
+        });
+      if (program.language === "shell")
+        return {
+          program,
+          changed: false,
+          outcome: yield* shell(env, capability, program.source).pipe(Effect.result),
+        };
+      const session = yield* open(env, capability.sandboxId);
+      return yield* execute(env, capability, program, session);
+    }),
+  );
   const output = yield* Effect.gen(function* () {
-    if (program.language === "shell")
-      return {
-        program,
-        changed: false,
-        outcome: yield* shell(env, capability, program.source).pipe(Effect.result),
-      };
-    return yield* execute(env, capability, program, session);
+    if (timeoutMs === null) return yield* execution;
+    return yield* execution.pipe(Effect.timeout(timeoutMs));
   }).pipe(Effect.result);
   const snapshot = yield* Effect.gen(function* () {
     if (output._tag === "Success" && output.success.changed) {
@@ -97,7 +122,7 @@ export const run = Effect.fn("process.run")(function* (
   const completed = yield* Effect.tryPromise({
     try: () =>
       env.OBJECTS.put(key, Schema.encodeSync(Schema.fromJsonString(RunRecord))(finished), {
-        onlyIf: { etagMatches: receipt.etag },
+        onlyIf: { etagMatches: etag },
         customMetadata: Schema.encodeSync(RunMetadata)({
           summary: Struct.omit(finished, ["output"]),
         }),
@@ -111,6 +136,15 @@ export const run = Effect.fn("process.run")(function* (
       message: "Execution state changed; inspect process.get",
     });
   return finished;
+});
+
+export const run = Effect.fn("process.run")(function* (
+  env: Env,
+  capability: typeof Capability.Type,
+  action: typeof RunAction.Type,
+) {
+  const reservation = yield* Effect.scoped(reserve(env, capability, action));
+  return yield* complete(env, capability, reservation, null);
 });
 
 export const inspect = Effect.fn("process.inspect")(function* (
@@ -161,4 +195,40 @@ export const list = Effect.fn("process.list")(function* (
   );
   if (page.truncated) return { items, cursor: page.cursor };
   return { items, cursor: null };
+});
+
+export const wait = Effect.fn("process.wait")(function* (
+  env: Env,
+  capability: typeof Capability.Type,
+  action: typeof ProcessWaitAction.Type,
+) {
+  yield* requirePermission(capability, "read");
+  const startedAt = yield* Clock.currentTimeMillis;
+  const deadline = Math.min(startedAt + action.timeoutMs, capability.expiresAt);
+  const polling = { delay: 100 };
+  while (true) {
+    const now = yield* Clock.currentTimeMillis;
+    if (capability.expiresAt <= now)
+      return yield* new Fault({ code: "UNAUTHORIZED", status: 401, message: "Capability expired" });
+    const record = yield* Effect.scoped(inspect(env, capability, action.id));
+    const observedAt = yield* Clock.currentTimeMillis;
+    if (capability.expiresAt <= observedAt)
+      return yield* new Fault({ code: "UNAUTHORIZED", status: 401, message: "Capability expired" });
+    if (record.status === "exited") return record;
+    if (record.status === "failed")
+      return yield* new Fault({
+        code: "EXECUTION_FAILED",
+        status: 500,
+        message: "Execution failed without an observed guest exit; inspect process.get",
+      });
+    if (observedAt >= deadline)
+      return yield* new Fault({
+        code: "ETIMEDOUT",
+        status: 408,
+        message:
+          "No exit was observed before the wait deadline; the execution may still be running",
+      });
+    yield* Effect.sleep(Math.min(polling.delay, deadline - observedAt));
+    polling.delay = Math.min(polling.delay * 2, 1000);
+  }
 });

@@ -123,7 +123,13 @@ export const ProcessListAction = Schema.Struct({
   limit: Schema.Int.check(Schema.isBetween({ minimum: 1, maximum: 50 })),
   cursor: Schema.NullOr(Schema.String.check(Schema.isMinLength(1), Schema.isMaxLength(4096))),
 });
+export const ProcessWaitAction = Schema.Struct({
+  op: Schema.Literal("process.wait"),
+  id: Id,
+  timeoutMs: Schema.Int.check(Schema.isBetween({ minimum: 0, maximum: 25_000 })),
+});
 export const ProcessReadAction = Schema.Union([
+  ProcessWaitAction,
   Schema.Struct({ op: Schema.Literal("process.get"), id: Id }),
   ProcessListAction,
 ]);
@@ -243,6 +249,10 @@ export const RunAction = Schema.Union([
     path: Path,
   }),
 ]);
+export const SpawnAction = Schema.Struct({
+  op: Schema.Literal("process.spawn"),
+  execution: RunAction,
+});
 export const ModuleImports = Schema.Array(Schema.String.check(Schema.isMaxLength(4096))).check(
   Schema.isMaxLength(128),
 );
@@ -276,6 +286,7 @@ export const Program = Schema.Union([
   Schema.Struct({ language: Schema.Literal("shell"), source: ScriptSource }),
 ]);
 export const Action = Schema.Union([
+  SpawnAction,
   GuestAction,
   RunAction,
   Schema.Struct({ op: Schema.Literal("config.get") }),

@@ -145,3 +145,21 @@ await tools.call({"op": "filesystem.writeFile", "path": "/tmp/result", "content"
 `filesystem.readFile` accepts optional byte `offset` and `length`; omitted values read the complete file. It verifies only the immutable blocks needed by that range. `filesystem.writeFile` accepts an optional byte `offset`; when provided, the write preserves other bytes and zero-fills a gap before the new content. Without an offset it replaces the complete file. Existing zero-byte positional writes leave metadata and generation unchanged. Positional writes need only the `write` grant and publish through the same conditional R2 root commit. File size remains limited to 16 MiB.
 
 `network.fetch` accepts `url`, optional `method` (GET by default; HEAD, POST, PUT, PATCH, DELETE and OPTIONS supported), optional `headers`, and optional `body: {content, encoding}`. Request bodies support UTF-8 and canonical base64 up to 1 MiB; GET/HEAD reject bodies. The result includes `status`, `headers`, and base64 `content`. Each call requires the `network` grant and an exact HTTPS hostname in the current sandbox policy. Redirects remain responses. Header counts/bytes and response bodies are bounded; transport-managed routing/framing headers are rejected. JavaScript and Python use the same operation through `tools.call`. VM-local servers, sockets, previews and streaming remain pending.
+
+`process.spawn` starts any existing execution action in the ordinary Worker's native `waitUntil` continuation:
+
+```json
+{
+  "op": "process.spawn",
+  "execution": {
+    "op": "process.run",
+    "id": "background-task",
+    "language": "javascript",
+    "source": "export default async ({tools}) => { await tools.call({op:'filesystem.writeFile',path:'/tmp/result',content:'done',encoding:'utf8'}); return 42; }"
+  }
+}
+```
+
+It returns the reserved `running` receipt after R2 has accepted the unique execution ID. The HTTP connection may close without canceling the continuation. Inline, evaluation and file-entry actions use the same `execution` contract as synchronous calls, including WASI argv/environment/stdin. Each background execution has a 25-second wall-time budget inside the native Worker's continuation lifetime. Native fuel/memory limits still apply. Exceeding the budget records `failed`, not an invented exit code. If the platform interrupts the Worker before settlement, its receipt may remain `running`; crash recovery and longer-lived execution remain open.
+
+`process.wait` takes `id` and `timeoutMs` (0–25,000) and returns the persisted receipt only after an actual guest exit. Zero performs one observation. An observation timeout returns `408 ETIMEDOUT` and does not cancel the process; a failure without an observed guest exit returns `500 EXECUTION_FAILED`. `process.get` exposes the confirmed state. Waiting requires `read`, honors capability expiry while polling and is available through guest tools. Spawn requires `execute` plus the permissions of its existing execution action; guest-created descendants, signals, interactive stdin and incremental output replay remain pending.
