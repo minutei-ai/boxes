@@ -476,6 +476,22 @@ const allocated = Schema.decodeUnknownSync(FileContent)(
   await (await action({ op: "filesystem.readFile", path: "/tmp/allocated" })).json(),
 );
 const alive = await action({ op: "vm.status" });
+const largeFileWritten = await action({
+  op: "filesystem.writeFile",
+  path: "/tmp/large-boundary",
+  content: Buffer.alloc(16_777_216, 90).toString("base64"),
+  encoding: "base64",
+});
+const largeFileTail = Schema.decodeUnknownSync(FileContent)(
+  await (
+    await action({
+      op: "filesystem.readFile",
+      path: "/tmp/large-boundary",
+      offset: 16_777_200,
+      length: 16,
+    })
+  ).json(),
+);
 const rangeWritten = await action({
   op: "filesystem.writeFile",
   path: "/tmp/range",
@@ -515,6 +531,9 @@ const hostFs = Schema.decodeUnknownSync(RunRecord)(
 const disposed = await action({ op: "vm.dispose" });
 const afterDispose = await action({ op: "vm.status" });
 const checks = {
+  largeFileBoundary:
+    largeFileWritten.status === 200 &&
+    Buffer.from(largeFileTail.content, "base64").equals(Buffer.alloc(16, 90)),
   positionalFilesystem:
     rangeWritten.status === 200 &&
     rangePatched.status === 200 &&
