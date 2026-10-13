@@ -110,3 +110,35 @@ test("native snapshot rollback preserves inode identities and package catalog wh
   expect(kernel.manifest()).toBe(initial);
   kernel.free();
 });
+
+test("anonymous inode allocation leaves directory metadata and persistent nodes unchanged", () => {
+  const kernel = new Kernel();
+  kernel.set_time(1000n);
+  const before = Schema.decodeUnknownSync(Schema.fromJsonString(FileStat))(
+    kernel.stat("/tmp", true),
+  );
+  const count = kernel.node_count();
+  const first = Schema.decodeUnknownSync(Schema.fromJsonString(FileStat))(
+    kernel.temporary_file("/tmp", 0o600),
+  );
+  const second = Schema.decodeUnknownSync(Schema.fromJsonString(FileStat))(
+    kernel.temporary_file("/tmp", 0o600),
+  );
+  const after = Schema.decodeUnknownSync(Schema.fromJsonString(FileStat))(
+    kernel.stat("/tmp", true),
+  );
+  expect(first.nlink).toBe(0);
+  expect(first.size).toBe(0);
+  expect(first.mode).toBe(0o600);
+  expect(first.inode).not.toBe(second.inode);
+  expect(first.mtimeNs).toBe("1000");
+  expect(after).toEqual(before);
+  expect(kernel.node_count()).toBe(count);
+  const restored = new Kernel(kernel.manifest());
+  const third = Schema.decodeUnknownSync(Schema.fromJsonString(FileStat))(
+    restored.temporary_file("/tmp", 0o600),
+  );
+  expect(third.inode).toBeGreaterThan(second.inode);
+  restored.free();
+  kernel.free();
+});

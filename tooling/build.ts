@@ -174,6 +174,17 @@ await Effect.runPromise(
       "-o",
       "dist/wasi-poll.wasm",
     ]);
+    yield* run([
+      "rustc",
+      "--target",
+      "wasm32-wasip1",
+      "-O",
+      "-C",
+      "strip=symbols",
+      "tests/fixtures/wasi-host-fs.rs",
+      "-o",
+      "dist/wasi-host-fs.wasm",
+    ]);
     yield* Effect.forEach(
       [
         "allocate-rights",

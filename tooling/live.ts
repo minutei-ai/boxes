@@ -460,6 +460,18 @@ const allocated = Schema.decodeUnknownSync(FileContent)(
   await (await action({ op: "filesystem.readFile", path: "/tmp/allocated" })).json(),
 );
 const alive = await action({ op: "vm.status" });
+const hostFsPackage = await action({
+  op: "software.install",
+  source: { path: "/tmp/probe.aospkg" },
+});
+const hostFsSource = Buffer.from(
+  await Bun.file(join(import.meta.dir, "../dist/wasi-host-fs.wasm")).arrayBuffer(),
+).toString("base64");
+const hostFs = Schema.decodeUnknownSync(RunRecord)(
+  await (
+    await action({ op: "process.run", id: "host-fs", language: "wasm", source: hostFsSource })
+  ).json(),
+);
 const disposed = await action({ op: "vm.dispose" });
 const afterDispose = await action({ op: "vm.status" });
 const checks = {
@@ -572,6 +584,10 @@ const checks = {
     compilerRecovered.output?.result === 42,
   lazyModuleExecution: lazy.output?.stdout === "42 true\n42\n",
   lazyModuleFailure: lazyFailure.output?.result === "MODULE_NOT_FOUND",
+  hostFilesystem:
+    hostFsPackage.status === 200 &&
+    hostFs.output?.exitCode === 0 &&
+    hostFs.output.stdout === "creation modes and detached temporary file passed\n",
   disposal: disposed.status === 200 && afterDispose.status === 404,
 };
 const report = {

@@ -14,6 +14,7 @@ struct Configuration {
 }
 
 const MAX_FILES: usize = 128;
+const HIDDEN_PREOPEN: u32 = 0x40000003;
 const MAX_BYTES: usize = 16_777_216;
 
 #[derive(Clone)]
@@ -64,6 +65,13 @@ enum Request {
         exclusive: bool,
         directory: bool,
         follow: bool,
+        mode: u32,
+    },
+    Tmpfile {
+        path: String,
+        base: String,
+        read: bool,
+        mode: u32,
     },
     Flush {
         path: Option<String>,
@@ -140,6 +148,10 @@ enum Completion {
         descriptor: Descriptor,
         pointer: usize,
         truncate: bool,
+    },
+    Tmpfile {
+        descriptor: Descriptor,
+        pointer: usize,
     },
     Flush {
         fd: u32,
@@ -218,6 +230,8 @@ struct State {
     stdin: Vec<u8>,
     stdin_offset: usize,
     directories: BTreeMap<u32, Vec<DirectoryEntry>>,
+    open_mode: Option<u32>,
+    open_direct: bool,
 }
 
 enum Failure {
@@ -478,13 +492,17 @@ fn dispatch(caller: &mut Caller<'_, State>, name: &str, args: &[u64]) -> Result<
         }
         "sched_yield" => {}
         "fd_prestat_get" => {
-            if a[0] != 3 {
+            if (a[0] != 3 && a[0] as u32 != HIDDEN_PREOPEN)
+                || !caller.data().descriptors.contains_key(&(a[0] as u32))
+            {
                 return Err(Failure::Errno(8));
             }
             put(caller, a[1], &[0, 0, 0, 0, 1, 0, 0, 0])?;
         }
         "fd_prestat_dir_name" => {
-            if a[0] != 3 {
+            if (a[0] != 3 && a[0] as u32 != HIDDEN_PREOPEN)
+                || !caller.data().descriptors.contains_key(&(a[0] as u32))
+            {
                 return Err(Failure::Errno(8));
             }
             if a[2] < 1 {
@@ -822,7 +840,7 @@ fn dispatch(caller: &mut Caller<'_, State>, name: &str, args: &[u64]) -> Result<
             let mut clock_indices = BTreeSet::new();
             let mut events = Vec::new();
             let state = caller.data();
-            for (index, subscription) in subscriptions.chunks_exact(48).enumerate() {
+            for (index, subscription) in subscriptions.as_chunks::<48>().0.iter().enumerate() {
                 let mut event = [0u8; 32];
                 event[..8].copy_from_slice(&subscription[..8]);
                 event[10] = subscription[8];
@@ -1103,7 +1121,96 @@ fn dispatch(caller: &mut Caller<'_, State>, name: &str, args: &[u64]) -> Result<
             put(caller, a[1], &data)?;
             put(caller, a[4], &(data.len() as u32).to_le_bytes())?;
         }
+        "set_open_mode" => caller.data_mut().open_mode = Some(a[0] as u32 & 0o7777),
+        "set_open_direct" => caller.data_mut().open_direct = a[0] != 0,
+        "net_recv" | "net_send" => {
+            let fd = a[0] as u32;
+            if (fd < 3 && !caller.data().closed.contains(&fd))
+                || caller.data().descriptors.contains_key(&fd)
+            {
+                return Err(Failure::Errno(57));
+            }
+            return Err(Failure::Errno(8));
+        }
+        "open_tmpfile" => {
+            bytes(caller, a[5], 4)?;
+            if caller.data().descriptors.len() >= MAX_FILES {
+                return Err(Failure::Errno(33));
+            }
+            if a[3] & !(0x04000000 | 0x10000000 | 1 | 4 | (4 << 12)) != 0 {
+                return Err(Failure::Errno(58));
+            }
+            let parent = caller
+                .data()
+                .descriptors
+                .get(&(a[0] as u32))
+                .ok_or(Failure::Errno(8))?;
+            if !parent.directory {
+                return Err(Failure::Errno(54));
+            }
+            if !parent.linked {
+                return Err(Failure::Errno(44));
+            }
+            if parent.rights & (1 << 10) == 0 {
+                return Err(Failure::Errno(76));
+            }
+            let base = parent.path.clone();
+            let raw = bytes(caller, a[1], a[2])?;
+            let raw = std::str::from_utf8(&raw).map_err(|_| Failure::Errno(25))?;
+            let path = confined(&base, raw)?;
+            let read = a[3] & 0x04000000 != 0;
+            let write = a[3] & 0x10000000 != 0;
+            let rights = (1 << 21)
+                | (1 << 27)
+                | 4
+                | 32
+                | 8
+                | 16
+                | 1
+                | (1 << 22)
+                | (1 << 23)
+                | (1 << 8)
+                | if read { 2 } else { 0 }
+                | if write { 64 } else { 0 };
+            if rights & !parent.inheriting != 0 {
+                return Err(Failure::Errno(76));
+            }
+            let descriptor = Descriptor {
+                path: path.clone(),
+                directory: false,
+                read,
+                write,
+                flags: (a[3] & 5) as u16,
+                offset: 0,
+                rights,
+                inheriting: 0,
+                cache: None,
+                linked: false,
+                metadata: [0; 64],
+            };
+            suspend(
+                caller,
+                Request::Tmpfile {
+                    path,
+                    base,
+                    read,
+                    mode: a[4] as u32 & 0o7777,
+                },
+                Completion::Tmpfile {
+                    descriptor,
+                    pointer: a[5],
+                },
+            )?;
+        }
         "path_open" => {
+            let mode = caller.data_mut().open_mode.take().unwrap_or(0o644);
+            let direct = std::mem::take(&mut caller.data_mut().open_direct);
+            if direct {
+                return Err(Failure::Errno(58));
+            }
+            if mode > 0o777 {
+                return Err(Failure::Errno(28));
+            }
             bytes(caller, a[8], 4)?;
             if a[1] & !1 != 0 || a[4] & !15 != 0 || a[7] & !5 != 0 {
                 return Err(Failure::Errno(58));
@@ -1160,6 +1267,7 @@ fn dispatch(caller: &mut Caller<'_, State>, name: &str, args: &[u64]) -> Result<
                     exclusive: a[4] & 4 != 0,
                     directory,
                     follow: a[1] & 1 != 0,
+                    mode,
                 },
                 Completion::Open {
                     descriptor,
@@ -1169,6 +1277,9 @@ fn dispatch(caller: &mut Caller<'_, State>, name: &str, args: &[u64]) -> Result<
             )?;
         }
         "fd_close" => {
+            if a[0] as u32 == HIDDEN_PREOPEN {
+                return Err(Failure::Errno(8));
+            }
             if a[0] < 3 {
                 caller.data_mut().closed.insert(a[0] as u32);
                 return Ok(0);
@@ -1282,8 +1393,8 @@ fn dispatch(caller: &mut Caller<'_, State>, name: &str, args: &[u64]) -> Result<
 fn linker(engine: &Engine) -> Result<Linker<State>, String> {
     let mut linker = Linker::new(engine);
     macro_rules! bind {
-        ($name:literal $(,$arg:ident:$type:ty)*) => {
-            linker.func_wrap("wasi_snapshot_preview1",$name,|mut caller:Caller<'_,State>,$($arg:$type),*| -> Result<i32,Error> {
+        ($namespace:literal,$name:literal $(,$arg:ident:$type:ty)*) => {
+            linker.func_wrap($namespace,$name,|mut caller:Caller<'_,State>,$($arg:$type),*| -> Result<i32,Error> {
                 match dispatch(&mut caller,$name,&[$($arg as u64),*]) {
                     Ok(value) => Ok(value),
                     Err(Failure::Errno(errno)) => Ok(errno),
@@ -1293,42 +1404,47 @@ fn linker(engine: &Engine) -> Result<Linker<State>, String> {
             }).map_err(|error|error.to_string())?;
         }
     }
-    bind!("args_sizes_get",a:i32,b:i32);
-    bind!("args_get",a:i32,b:i32);
-    bind!("environ_sizes_get",a:i32,b:i32);
-    bind!("environ_get",a:i32,b:i32);
-    bind!("fd_prestat_get",a:i32,b:i32);
-    bind!("fd_prestat_dir_name",a:i32,b:i32,c:i32);
-    bind!("fd_fdstat_get",a:i32,b:i32);
-    bind!("fd_fdstat_set_flags",a:i32,b:i32);
-    bind!("fd_read",a:i32,b:i32,c:i32,d:i32);
-    bind!("fd_write",a:i32,b:i32,c:i32,d:i32);
-    bind!("fd_pread",a:i32,b:i32,c:i32,d:i64,e:i32);
-    bind!("fd_pwrite",a:i32,b:i32,c:i32,d:i64,e:i32);
-    bind!("path_open",a:i32,b:i32,c:i32,d:i32,e:i32,f:i64,g:i64,h:i32,i:i32);
-    bind!("path_create_directory",a:i32,b:i32,c:i32);
-    bind!("path_remove_directory",a:i32,b:i32,c:i32);
-    bind!("path_unlink_file",a:i32,b:i32,c:i32);
-    bind!("path_readlink",a:i32,b:i32,c:i32,d:i32,e:i32,f:i32);
-    bind!("path_rename",a:i32,b:i32,c:i32,d:i32,e:i32,f:i32);
-    bind!("path_symlink",a:i32,b:i32,c:i32,d:i32,e:i32);
-    bind!("fd_readdir",a:i32,b:i32,c:i32,d:i64,e:i32);
-    bind!("fd_close",a:i32);
-    bind!("fd_sync",a:i32);
-    bind!("fd_datasync",a:i32);
-    bind!("fd_seek",a:i32,b:i64,c:i32,d:i32);
-    bind!("fd_tell",a:i32,b:i32);
-    bind!("fd_filestat_set_size",a:i32,b:i64);
-    bind!("fd_allocate",a:i32,b:i64,c:i64);
-    bind!("poll_oneoff",a:i32,b:i32,c:i32,d:i32);
-    bind!("fd_filestat_set_times",a:i32,b:i64,c:i64,d:i32);
-    bind!("path_filestat_set_times",a:i32,b:i32,c:i32,d:i32,e:i64,f:i64,g:i32);
-    bind!("fd_filestat_get",a:i32,b:i32);
-    bind!("path_filestat_get",a:i32,b:i32,c:i32,d:i32,e:i32);
-    bind!("random_get",a:i32,b:i32);
-    bind!("clock_time_get",a:i32,b:i64,c:i32);
-    bind!("clock_res_get",a:i32,b:i32);
-    bind!("sched_yield");
+    bind!("wasi_snapshot_preview1","args_sizes_get",a:i32,b:i32);
+    bind!("wasi_snapshot_preview1","args_get",a:i32,b:i32);
+    bind!("wasi_snapshot_preview1","environ_sizes_get",a:i32,b:i32);
+    bind!("wasi_snapshot_preview1","environ_get",a:i32,b:i32);
+    bind!("wasi_snapshot_preview1","fd_prestat_get",a:i32,b:i32);
+    bind!("wasi_snapshot_preview1","fd_prestat_dir_name",a:i32,b:i32,c:i32);
+    bind!("wasi_snapshot_preview1","fd_fdstat_get",a:i32,b:i32);
+    bind!("wasi_snapshot_preview1","fd_fdstat_set_flags",a:i32,b:i32);
+    bind!("wasi_snapshot_preview1","fd_read",a:i32,b:i32,c:i32,d:i32);
+    bind!("wasi_snapshot_preview1","fd_write",a:i32,b:i32,c:i32,d:i32);
+    bind!("wasi_snapshot_preview1","fd_pread",a:i32,b:i32,c:i32,d:i64,e:i32);
+    bind!("wasi_snapshot_preview1","fd_pwrite",a:i32,b:i32,c:i32,d:i64,e:i32);
+    bind!("wasi_snapshot_preview1","path_open",a:i32,b:i32,c:i32,d:i32,e:i32,f:i64,g:i64,h:i32,i:i32);
+    bind!("wasi_snapshot_preview1","path_create_directory",a:i32,b:i32,c:i32);
+    bind!("wasi_snapshot_preview1","path_remove_directory",a:i32,b:i32,c:i32);
+    bind!("wasi_snapshot_preview1","path_unlink_file",a:i32,b:i32,c:i32);
+    bind!("wasi_snapshot_preview1","path_readlink",a:i32,b:i32,c:i32,d:i32,e:i32,f:i32);
+    bind!("wasi_snapshot_preview1","path_rename",a:i32,b:i32,c:i32,d:i32,e:i32,f:i32);
+    bind!("wasi_snapshot_preview1","path_symlink",a:i32,b:i32,c:i32,d:i32,e:i32);
+    bind!("wasi_snapshot_preview1","fd_readdir",a:i32,b:i32,c:i32,d:i64,e:i32);
+    bind!("wasi_snapshot_preview1","fd_close",a:i32);
+    bind!("wasi_snapshot_preview1","fd_sync",a:i32);
+    bind!("wasi_snapshot_preview1","fd_datasync",a:i32);
+    bind!("wasi_snapshot_preview1","fd_seek",a:i32,b:i64,c:i32,d:i32);
+    bind!("wasi_snapshot_preview1","fd_tell",a:i32,b:i32);
+    bind!("wasi_snapshot_preview1","fd_filestat_set_size",a:i32,b:i64);
+    bind!("wasi_snapshot_preview1","fd_allocate",a:i32,b:i64,c:i64);
+    bind!("wasi_snapshot_preview1","poll_oneoff",a:i32,b:i32,c:i32,d:i32);
+    bind!("wasi_snapshot_preview1","fd_filestat_set_times",a:i32,b:i64,c:i64,d:i32);
+    bind!("wasi_snapshot_preview1","path_filestat_set_times",a:i32,b:i32,c:i32,d:i32,e:i64,f:i64,g:i32);
+    bind!("wasi_snapshot_preview1","fd_filestat_get",a:i32,b:i32);
+    bind!("wasi_snapshot_preview1","path_filestat_get",a:i32,b:i32,c:i32,d:i32,e:i32);
+    bind!("wasi_snapshot_preview1","random_get",a:i32,b:i32);
+    bind!("wasi_snapshot_preview1","clock_time_get",a:i32,b:i64,c:i32);
+    bind!("wasi_snapshot_preview1","clock_res_get",a:i32,b:i32);
+    bind!("wasi_snapshot_preview1", "sched_yield");
+    bind!("host_fs","set_open_mode",a:i32);
+    bind!("host_fs","set_open_direct",a:i32);
+    bind!("host_fs","open_tmpfile",a:i32,b:i32,c:i32,d:i32,e:i32,f:i32);
+    bind!("host_net","net_recv",a:i32,b:i32,c:i32,d:i32,e:i32);
+    bind!("host_net","net_send",a:i32,b:i32,c:i32,d:i32,e:i32);
     linker
         .func_wrap(
             "wasi_snapshot_preview1",
@@ -1420,26 +1536,24 @@ impl WasmGuest {
             .memories(1)
             .trap_on_grow_failure(true)
             .build();
+        let root = Descriptor {
+            path: "/".into(),
+            directory: true,
+            read: true,
+            write: true,
+            flags: 0,
+            offset: 0,
+            rights: (1 << 30) - 1,
+            inheriting: (1 << 30) - 1,
+            cache: None,
+            linked: true,
+            metadata: [0; 64],
+        };
         let mut store = Store::new(
             &engine,
             State {
                 limits,
-                descriptors: BTreeMap::from([(
-                    3,
-                    Descriptor {
-                        path: "/".into(),
-                        directory: true,
-                        read: true,
-                        write: true,
-                        flags: 0,
-                        offset: 0,
-                        rights: (1 << 30) - 1,
-                        inheriting: (1 << 30) - 1,
-                        cache: None,
-                        linked: true,
-                        metadata: [0; 64],
-                    },
-                )]),
+                descriptors: BTreeMap::from([(3, root.clone()), (HIDDEN_PREOPEN, root)]),
                 files: BTreeMap::new(),
                 stdout: Vec::new(),
                 stderr: Vec::new(),
@@ -1452,6 +1566,8 @@ impl WasmGuest {
                 stdin: stdin.to_vec(),
                 stdin_offset: 0,
                 directories: BTreeMap::new(),
+                open_mode: None,
+                open_direct: false,
             },
         );
         store.limiter(|state| &mut state.limits);
@@ -1663,6 +1779,35 @@ impl WasmGuest {
         }
         if errno == 0 {
             match pending.completion {
+                Completion::Tmpfile {
+                    mut descriptor,
+                    pointer,
+                } => {
+                    let state = self.store.data_mut();
+                    let cache = (0..MAX_FILES as u32)
+                        .find(|cache| !state.files.contains_key(cache))
+                        .ok_or_else(|| JsValue::from_str("File cache quota exceeded"))?;
+                    let fd = (4..MAX_FILES as u32 + 4)
+                        .find(|fd| !state.descriptors.contains_key(fd))
+                        .ok_or_else(|| JsValue::from_str("Descriptor quota exceeded"))?;
+                    descriptor.metadata = metadata
+                        .try_into()
+                        .map_err(|_| JsValue::from_str("Invalid inode metadata"))?;
+                    descriptor.cache = Some(cache);
+                    state.files.insert(
+                        cache,
+                        FileBuffer {
+                            path: None,
+                            bytes: Vec::new(),
+                            metadata: descriptor.metadata,
+                        },
+                    );
+                    state.descriptors.insert(fd, descriptor);
+                    self.memory
+                        .ok_or_else(|| JsValue::from_str("Missing Wasm memory"))?
+                        .write(&mut self.store, pointer, &fd.to_le_bytes())
+                        .map_err(|error| JsValue::from_str(&error.to_string()))?;
+                }
                 Completion::Open {
                     mut descriptor,
                     pointer,

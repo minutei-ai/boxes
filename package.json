@@ -12,6 +12,7 @@
     "deploy": "bun run build && alchemy deploy alchemy.run.ts --stage prod --profile minutei",
     "bench": "bun tooling/benchmark.ts",
     "live": "bun tooling/live.ts",
+    "software:proof": "bun tooling/software-proof.ts",
     "format": "oxfmt . && cargo fmt --all && rustfmt tests/fixtures/*.rs",
     "format:check": "oxfmt --check . && cargo fmt --all -- --check && rustfmt --check tests/fixtures/*.rs",
     "plan": "bun run build && alchemy plan alchemy.run.ts --stage prod --profile minutei --no-input"

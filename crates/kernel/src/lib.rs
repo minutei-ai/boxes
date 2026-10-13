@@ -1007,6 +1007,44 @@ impl Kernel {
         Ok(())
     }
 
+    pub fn temporary_file(&mut self, directory: &str, mode: u32) -> Result<String, JsValue> {
+        if mode > 0o777 {
+            return Err(fail("EINVAL: invalid permission mode"));
+        }
+        let path = self
+            .resolve(directory, true)
+            .map_err(|error| fail(&error))?;
+        self.package_writable(&path, false)
+            .map_err(|error| fail(&error))?;
+        match self.state.nodes.get(&path) {
+            Some(Node::Directory { mode }) if mode & 0o300 == 0o300 => {}
+            Some(Node::Directory { .. }) => return Err(fail("EACCES: directory is not writable")),
+            Some(_) => return Err(fail("ENOTDIR: not a directory")),
+            None => return Err(fail("ENOENT: directory does not exist")),
+        }
+        let next = self
+            .state
+            .next_inode
+            .checked_add(1)
+            .ok_or_else(|| fail("ENOSPC: inode identifiers exhausted"))?;
+        let encoded = serde_json::to_string(&Stat {
+            path: &path,
+            kind: "file",
+            size: 0,
+            mode,
+            inode: self.state.next_inode,
+            nlink: 0,
+            uid: 0,
+            gid: 0,
+            atime_ns: self.now.to_string(),
+            mtime_ns: self.now.to_string(),
+            ctime_ns: self.now.to_string(),
+        })
+        .map_err(|error| fail(&error.to_string()))?;
+        self.state.next_inode = next;
+        Ok(encoded)
+    }
+
     pub fn chmod(&mut self, path: &str, mode: u32) -> Result<(), JsValue> {
         if mode > 0o777 {
             return Err(fail("EINVAL: invalid permission mode"));

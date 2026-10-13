@@ -196,6 +196,7 @@ export const wasi = Effect.fn("wasi.execute")(function* (
             const data = yield* Effect.gen(function* () {
               if (found === null || input.truncate) {
                 yield* write(env, capability.sandboxId, kernel, path, Buffer.alloc(0));
+                if (found === null) yield* kernelCall(() => kernel.chmod(path, input.mode));
                 state.dirty = true;
                 return Buffer.alloc(0);
               }
@@ -215,6 +216,29 @@ export const wasi = Effect.fn("wasi.execute")(function* (
               );
             });
             return { data, path, directory: false, value: 0n };
+          }),
+        ),
+        Match.when({ kind: "tmpfile" }, (input) =>
+          Effect.gen(function* () {
+            yield* requirePermission(capability, "write");
+            if (input.read) yield* requirePermission(capability, "read");
+            const directory = yield* kernelCall(() => kernel.realpath(input.path));
+            if (
+              input.base !== "/" &&
+              directory !== input.base &&
+              !directory.startsWith(input.base + "/")
+            )
+              return yield* new Fault({
+                code: "ENOTCAPABLE",
+                status: 403,
+                message: "Temporary file escapes its directory descriptor",
+              });
+            const stat = yield* kernelCall(() => kernel.temporary_file(directory, input.mode)).pipe(
+              Effect.flatMap(Schema.decodeUnknownEffect(Schema.fromJsonString(FileStat))),
+            );
+            state.dirty = true;
+            const data = statBytes(stat);
+            return { data, path: directory, directory: false, value: 0n };
           }),
         ),
         Match.when({ kind: "flush" }, (input) =>
@@ -555,6 +579,7 @@ export const wasi = Effect.fn("wasi.execute")(function* (
       if (response._tag === "Success") {
         const value = response.success;
         const metadata = yield* Effect.gen(function* () {
+          if (step.kind === "tmpfile") return value.data;
           if (step.kind === "open") {
             const stat = yield* kernelCall(() => kernel.stat(value.path, true)).pipe(
               Effect.flatMap(Schema.decodeUnknownEffect(Schema.fromJsonString(FileStat))),

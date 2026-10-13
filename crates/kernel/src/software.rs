@@ -243,7 +243,10 @@ pub fn prepare(bytes: &[u8]) -> Result<Preparation, String> {
                 }
             }
             format::TarEntryKind::Directory => {
-                if entry.offset != 0 || entry.size != 0 || entry.link_target.is_some() {
+                if entry.offset > (bytes.len() - mount_start) as u64
+                    || entry.size != 0
+                    || entry.link_target.is_some()
+                {
                     return Err("EINVAL: package directory has payload fields".into());
                 }
                 super::Node::Directory {
@@ -251,7 +254,7 @@ pub fn prepare(bytes: &[u8]) -> Result<Preparation, String> {
                 }
             }
             format::TarEntryKind::Symlink => {
-                if entry.offset != 0 || entry.size != 0 {
+                if entry.offset > (bytes.len() - mount_start) as u64 || entry.size != 0 {
                     return Err("EINVAL: package symlink has payload fields".into());
                 }
                 let target = entry
@@ -883,6 +886,17 @@ mod tests {
         assert!(prepare(&encode(&manifest, &index, &tar)?).is_err());
         index.tar_entries.swap(0, 1);
         index.tar_entries.remove(0);
+        assert!(prepare(&encode(&manifest, &index, &tar)?).is_err());
+        Ok(())
+    }
+
+    #[test]
+    fn nonfile_tar_offsets_are_validated_as_payload_positions() -> Result<(), String> {
+        let (manifest, mut index, tar) = fixture();
+        index.tar_entries[0].offset = 512;
+        let prepared = prepare(&encode(&manifest, &index, &tar)?)?;
+        assert_eq!(prepared.entries.len(), 2);
+        index.tar_entries[0].offset = tar.len() as u64 + 1;
         assert!(prepare(&encode(&manifest, &index, &tar)?).is_err());
         Ok(())
     }

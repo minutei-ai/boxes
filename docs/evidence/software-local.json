@@ -1,0 +1,62 @@
+{
+  "artifact": "sha256:edb1cf0bbcf663d177916592d2f1b4361a02966dbf2eb44e3e61ea2a399bb43a",
+  "checks": {
+    "created": true,
+    "uploaded": true,
+    "installed": true,
+    "written": true,
+    "commands": true,
+    "pipeline": true,
+    "disposed": true
+  },
+  "receipts": [
+    {
+      "id": "version",
+      "output": {
+        "stdout": "jq-jaq-0.1.0\n",
+        "stderr": "",
+        "result": null,
+        "exitCode": 0
+      },
+      "elapsedMs": 202.9671199999999,
+      "ok": true
+    },
+    {
+      "id": "stdin",
+      "output": {
+        "stdout": "42\n",
+        "stderr": "",
+        "result": null,
+        "exitCode": 0
+      },
+      "elapsedMs": 257.842905,
+      "ok": true
+    },
+    {
+      "id": "filter",
+      "output": {
+        "stdout": "45\n",
+        "stderr": "",
+        "result": null,
+        "exitCode": 0
+      },
+      "elapsedMs": 279.9296059999999,
+      "ok": true
+    },
+    {
+      "id": "file",
+      "output": {
+        "stdout": "73\n",
+        "stderr": "",
+        "result": null,
+        "exitCode": 0
+      },
+      "elapsedMs": 252.85089300000004,
+      "ok": true
+    }
+  ],
+  "environment": {
+    "runtime": "local workerd via Miniflare",
+    "production": false
+  }
+}

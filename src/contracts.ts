@@ -271,6 +271,14 @@ export const WasmStep = Schema.Union([
     exclusive: Schema.Boolean,
     directory: Schema.Boolean,
     follow: Schema.Boolean,
+    mode: Schema.Int,
+  }),
+  Schema.Struct({
+    kind: Schema.Literal("tmpfile"),
+    path: Path,
+    base: Path,
+    read: Schema.Boolean,
+    mode: Schema.Int,
   }),
   Schema.Struct({ kind: Schema.Literal("flush"), path: Schema.NullOr(Path), fd: Schema.Int }),
   Schema.Struct({

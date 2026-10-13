@@ -3212,3 +3212,72 @@ test("WASI allocation permission failure restores its buffer and polling stops w
   expect(expired.status).toBe("failed");
   expect(expired.output).toBeNull();
 });
+
+test("published libc host filesystem imports preserve modes, detached files and permissions", async () => {
+  const token = await setup("host-fs");
+  const packageBytes = commandPackage(
+    new Uint8Array(await Bun.file(join(import.meta.dir, "../dist/wasi-inputs.wasm")).arrayBuffer()),
+  );
+  expect(
+    (
+      await act("host-fs", token, {
+        op: "filesystem.writeFile",
+        path: "/tmp/extensions.aospkg",
+        content: packageBytes.toString("base64"),
+        encoding: "base64",
+      })
+    ).status,
+  ).toBe(200);
+  expect(
+    (
+      await act("host-fs", token, {
+        op: "software.install",
+        source: { path: "/tmp/extensions.aospkg" },
+      })
+    ).status,
+  ).toBe(200);
+  const source = Buffer.from(
+    await Bun.file(join(import.meta.dir, "../dist/wasi-host-fs.wasm")).arrayBuffer(),
+  ).toString("base64");
+  const response = await act("host-fs", token, {
+    op: "process.run",
+    id: "extensions",
+    language: "wasm",
+    source,
+  });
+  expect(response.status).toBe(200);
+  const record = Schema.decodeUnknownSync(RunRecord)(await response.json());
+  expect(record.output?.exitCode).toBe(0);
+  expect(record.output?.stdout).toBe("creation modes and detached temporary file passed\n");
+  for (const [path, mode] of [
+    ["/tmp/mode-explicit", 0o600],
+    ["/tmp/mode-default", 0o644],
+  ] as const) {
+    const stat = Schema.decodeUnknownSync(FileStat)(
+      await (await act("host-fs", token, { op: "filesystem.stat", path, follow: true })).json(),
+    );
+    expect(stat.mode).toBe(mode);
+  }
+  const entries = Schema.decodeUnknownSync(DirectoryEntries)(
+    await (await act("host-fs", token, { op: "filesystem.readdir", path: "/tmp" })).json(),
+  );
+  expect(entries.some((entry) => entry.name.startsWith(".cirro-tmp-"))).toBe(false);
+  const minted = await post("/v1/sandboxes/host-fs/capabilities", admin, {
+    permissions: ["read", "execute"],
+    expiresInSeconds: 3600,
+  });
+  const restricted = Schema.decodeUnknownSync(TokenResponse)(await minted.json()).token;
+  const denied = Schema.decodeUnknownSync(RunRecord)(
+    await (
+      await act("host-fs", restricted, {
+        op: "process.run",
+        id: "denied",
+        language: "wasm",
+        source,
+        args: ["--denied"],
+      })
+    ).json(),
+  );
+  expect(denied.output?.exitCode).toBe(0);
+  expect(denied.output?.stdout).toBe("temporary file denied\n");
+});
