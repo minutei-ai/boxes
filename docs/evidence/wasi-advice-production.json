@@ -1,0 +1,82 @@
+{
+  "target": "https://cirro-sandbox-prod-rs7wexxow56rmsoz.manoel-carvalhoneto.workers.dev",
+  "measuredAt": "2026-10-14T15:25:54.848Z",
+  "sourceHash": "986a4868c47992cfc8ad89f2af76e91ff9cbce9879c40458e0c56eaa95e83039",
+  "checks": {
+    "nativeAdvice": true,
+    "guestAssertions": true,
+    "persistedBytes": true,
+    "disposal": true
+  },
+  "deployedCommit": "a742040f51f490d0c3225194739140acaa80bc79",
+  "local": {
+    "tests": 271,
+    "failures": 0,
+    "assertions": 2536,
+    "seconds": 143.72,
+    "typesPassed": true,
+    "rustTestsPassed": true,
+    "clippyPassed": true,
+    "formatPassed": true
+  },
+  "softwareCompatibility": {
+    "artifact": "sha256:edb1cf0bbcf663d177916592d2f1b4361a02966dbf2eb44e3e61ea2a399bb43a",
+    "checks": {
+      "created": true,
+      "uploaded": true,
+      "installed": true,
+      "written": true,
+      "commands": true,
+      "pipeline": true,
+      "disposed": true
+    },
+    "receipts": [
+      {
+        "id": "version",
+        "output": {
+          "stdout": "jq-jaq-0.1.0\n",
+          "stderr": "",
+          "result": null,
+          "exitCode": 0
+        },
+        "elapsedMs": 5034.230781,
+        "ok": true
+      },
+      {
+        "id": "stdin",
+        "output": {
+          "stdout": "42\n",
+          "stderr": "",
+          "result": null,
+          "exitCode": 0
+        },
+        "elapsedMs": 4359.095709999998,
+        "ok": true
+      },
+      {
+        "id": "filter",
+        "output": {
+          "stdout": "45\n",
+          "stderr": "",
+          "result": null,
+          "exitCode": 0
+        },
+        "elapsedMs": 6649.563725999997,
+        "ok": true
+      },
+      {
+        "id": "file",
+        "output": {
+          "stdout": "73\n",
+          "stderr": "",
+          "result": null,
+          "exitCode": 0
+        },
+        "elapsedMs": 5545.258890000001,
+        "ok": true
+      }
+    ]
+  },
+  "fullParity": false,
+  "cpythonExecutionProven": false
+}
