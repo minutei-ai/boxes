@@ -1,0 +1,54 @@
+{
+  "measuredAt": "2026-10-14T21:54:55.022147+00:00",
+  "commit": "b2877a9952db7df3938f7017381d811a69ed8427",
+  "local": {
+    "tests": 300,
+    "failures": 0,
+    "assertions": 2746,
+    "seconds": 161.59,
+    "typesPassed": true,
+    "clippyPassed": true,
+    "rustTestsPassed": true,
+    "formatPassed": true
+  },
+  "sdk": {
+    "version": "0.7.0",
+    "effectConsumerVersion": "4.0.0",
+    "packedNativeWorkerTests": 12,
+    "packedNativeWorkerFailures": 0,
+    "packedNativeWorkerSeconds": 4.9,
+    "archiveSha256": "e12210a14c42d8529565bba17fd8361a1910b5026ee0cb467f11e3bf9d2678d8",
+    "tanstackRuntimeImports": false,
+    "tanstackOptionalTypePeer": true
+  },
+  "driver": {
+    "nativeServiceBinding": true,
+    "freshSandboxPerContext": true,
+    "scopedCredentials": true,
+    "callbackAndVoidValues": true,
+    "contextReuse": true,
+    "preflightAbort": true,
+    "pendingHostOperationCancellation": true,
+    "earlierConfirmedWritePreserved": true,
+    "disposalTombstoneVerified": true,
+    "postDisposalExecutionRejected": true
+  },
+  "build": {
+    "compilerOutputCollisionFixed": true,
+    "sharedNativeTranspileModule": true,
+    "oxcVersionsWorkspaceOwned": true
+  },
+  "ci": "https://github.com/minutei-ai/boxes/actions/runs/38642950294",
+  "minutei": {
+    "consumerSourceChangedLocally": true,
+    "sourceTypeErrorsReported": false,
+    "globalTypecheckPassed": false,
+    "existingNativePatchTests": 7,
+    "consumerFlowTested": false,
+    "configurationApplied": false,
+    "merged": false,
+    "deployed": false
+  },
+  "remoteRpcInvoked": false,
+  "fullParity": false
+}
