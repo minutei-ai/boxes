@@ -1,0 +1,141 @@
+{
+  "measuredAt": "2026-10-14T09:50:51.123Z",
+  "url": "https://cirro-sandbox-prod-rs7wexxow56rmsoz.manoel-carvalhoneto.workers.dev",
+  "sandboxId": "exec-proof-05ef6873-8d6c-482a-b8d9-273c4e6afe46",
+  "profile": "minutei",
+  "runtime": "standard Worker",
+  "receipts": [
+    {
+      "mode": "path",
+      "observed": {
+        "status": "exited",
+        "result": 7,
+        "exitCode": 0,
+        "stdout": "1B"
+      },
+      "passed": true
+    },
+    {
+      "mode": "fexec",
+      "observed": {
+        "status": "exited",
+        "result": 7,
+        "exitCode": 0,
+        "stdout": "1B"
+      },
+      "passed": true
+    },
+    {
+      "mode": "child",
+      "observed": {
+        "status": "exited",
+        "result": 0,
+        "exitCode": 0,
+        "stdout": "2B"
+      },
+      "passed": true
+    },
+    {
+      "mode": "children",
+      "observed": {
+        "status": "exited",
+        "result": 7,
+        "exitCode": 0,
+        "stdout": "1B"
+      },
+      "passed": true
+    },
+    {
+      "mode": "loop",
+      "observed": {
+        "status": "exited",
+        "result": 7,
+        "exitCode": 0,
+        "stdout": "1B"
+      },
+      "passed": true
+    },
+    {
+      "mode": "start",
+      "observed": {
+        "status": "exited",
+        "result": 7,
+        "exitCode": 0,
+        "stdout": "Z1B"
+      },
+      "passed": true
+    },
+    {
+      "mode": "start-trap",
+      "observed": {
+        "status": "failed",
+        "result": null,
+        "exitCode": null,
+        "stdout": "Z"
+      },
+      "passed": true
+    },
+    {
+      "mode": "signal",
+      "observed": {
+        "status": "exited",
+        "result": null,
+        "exitCode": 138,
+        "stdout": "1B"
+      },
+      "passed": true
+    },
+    {
+      "mode": "pending",
+      "observed": {
+        "status": "exited",
+        "result": null,
+        "exitCode": 130,
+        "stdout": "1B"
+      },
+      "passed": true
+    },
+    {
+      "mode": "missing",
+      "observed": {
+        "status": "exited",
+        "result": 44,
+        "exitCode": 0,
+        "stdout": ""
+      },
+      "passed": true
+    },
+    {
+      "mode": "invalid",
+      "observed": {
+        "status": "exited",
+        "result": 45,
+        "exitCode": 0,
+        "stdout": ""
+      },
+      "passed": true
+    },
+    {
+      "mode": "denied",
+      "observed": {
+        "status": "exited",
+        "result": 2,
+        "exitCode": 0,
+        "stdout": ""
+      },
+      "passed": true
+    },
+    {
+      "mode": "badfd",
+      "observed": {
+        "status": "exited",
+        "result": 8,
+        "exitCode": 0,
+        "stdout": ""
+      },
+      "passed": true
+    }
+  ],
+  "allPassed": true,
+  "fullProcessParity": false
+}
