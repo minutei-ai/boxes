@@ -19,6 +19,7 @@
     "fd-dup:proof": "bun tooling/fd-dup-proof.ts",
     "guest-spawn:proof": "bun tooling/guest-spawn-proof.ts",
     "signal-mask:proof": "bun tooling/signal-mask-proof.ts",
+    "wasi-child:proof": "bun tooling/wasi-child-proof.ts",
     "wasi-slices:proof": "bun tooling/wasi-slices-proof.ts",
     "pipe:proof": "bun tooling/pipe-proof.ts",
     "format": "oxfmt . && cargo fmt --all && rustfmt tests/fixtures/*.rs",

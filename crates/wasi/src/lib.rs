@@ -1,7 +1,7 @@
 use serde::{Deserialize, Serialize};
 use std::cell::{Cell, RefCell};
 use std::collections::{BTreeMap, BTreeSet, VecDeque};
-use std::rc::Rc;
+use std::rc::{Rc, Weak};
 use wasm_bindgen::prelude::*;
 use wasmi::{
     Caller, CompilationMode, Config, Engine, Error, Func, Linker, Memory, Module, ResumableCall,
@@ -96,6 +96,14 @@ struct PollClock {
     rename_all_fields = "camelCase"
 )]
 enum Request {
+    Spawn {
+        path: String,
+        argv: Vec<String>,
+        env: BTreeMap<String, String>,
+    },
+    Wait {
+        pids: Vec<u32>,
+    },
     Open {
         path: String,
         base: String,
@@ -193,6 +201,15 @@ enum StatProjection {
 }
 
 enum Completion {
+    Spawn {
+        pointer: usize,
+        actions: Vec<SpawnAction>,
+        mask: u64,
+    },
+    Wait {
+        pids: Vec<u32>,
+        pointers: [usize; 4],
+    },
     HostStat {
         fd: Option<u32>,
         projection: StatProjection,
@@ -270,23 +287,44 @@ struct Pending {
     completion: Completion,
 }
 
+struct ChildStatus {
+    parent: u32,
+    code: Option<i32>,
+    failed: bool,
+}
+struct ProcessTable {
+    next_pid: u32,
+    memory_bytes: usize,
+    children: BTreeMap<u32, ChildStatus>,
+    buffers: Vec<Weak<RefCell<FileBuffer>>>,
+}
+#[derive(Clone)]
+struct SpawnAction {
+    command: u32,
+    fd: u32,
+    source: u32,
+}
+
 struct State {
     limits: StoreLimits,
     descriptors: BTreeMap<u32, Descriptor>,
     files: BTreeMap<u32, Rc<RefCell<FileBuffer>>>,
-    stdout: Vec<u8>,
-    stderr: Vec<u8>,
+    stdout: Rc<RefCell<Vec<u8>>>,
+    stderr: Rc<RefCell<Vec<u8>>>,
     max_output: usize,
     pending: Option<Pending>,
-    requests: usize,
+    requests: Rc<Cell<usize>>,
+    pid: u32,
+    parent_pid: u32,
+    processes: Rc<RefCell<ProcessTable>>,
     closed: BTreeSet<u32>,
     cloexec: BTreeSet<u32>,
     signal_mask: u64,
     stdio_flags: [Rc<Cell<u16>>; 3],
     argv: Vec<Vec<u8>>,
     environment: Vec<Vec<u8>>,
-    stdin: Vec<u8>,
-    stdin_offset: usize,
+    stdin: Rc<Vec<u8>>,
+    stdin_offset: Rc<Cell<usize>>,
     directories: BTreeMap<u32, Vec<DirectoryEntry>>,
     open_mode: Option<u32>,
     open_direct: bool,
@@ -363,8 +401,8 @@ fn suspend(
     completion: Completion,
 ) -> Result<i32, Failure> {
     let state = caller.data_mut();
-    state.requests += 1;
-    if state.requests > 256 {
+    state.requests.set(state.requests.get() + 1);
+    if state.requests.get() > 256 {
         return Err(Failure::Budget);
     }
     state.pending = Some(Pending {
@@ -402,8 +440,38 @@ fn confined(base: &str, path: &str) -> Result<String, Failure> {
     Ok(path)
 }
 
+fn buffered_bytes(state: &State) -> usize {
+    state
+        .processes
+        .borrow()
+        .buffers
+        .iter()
+        .filter_map(Weak::upgrade)
+        .map(|file| file.borrow().bytes.len())
+        .sum()
+}
+
+fn descriptor_path(state: &State, descriptor: &Descriptor) -> Result<Option<String>, Failure> {
+    if let Some(cache) = descriptor.cache {
+        return Ok(state
+            .files
+            .get(&cache)
+            .ok_or(Failure::Errno(8))?
+            .borrow()
+            .path
+            .clone());
+    }
+    Ok(descriptor.linked.then(|| descriptor.path.clone()))
+}
+
 fn detach(state: &mut State, path: &str) {
-    for file in state.files.values_mut() {
+    for file in state
+        .processes
+        .borrow()
+        .buffers
+        .iter()
+        .filter_map(Weak::upgrade)
+    {
         let mut file = file.borrow_mut();
         if file
             .path
@@ -505,6 +573,27 @@ fn directory_path(
     Ok((confined(&descriptor.path, raw)?, descriptor.path.clone()))
 }
 
+fn spawn_strings(
+    caller: &Caller<'_, State>,
+    pointer: usize,
+    length: usize,
+) -> Result<Vec<String>, Failure> {
+    if length > 65_536 {
+        return Err(Failure::Errno(22));
+    }
+    let raw = bytes(caller, pointer, length)?;
+    if raw.is_empty() {
+        return Ok(Vec::new());
+    }
+    let text = std::str::from_utf8(&raw).map_err(|_| Failure::Errno(25))?;
+    let text = text.strip_suffix('\0').unwrap_or(text);
+    let entries: Vec<String> = text.split('\0').map(str::to_string).collect();
+    if entries.iter().any(|value| value.len() > 4096) {
+        return Err(Failure::Errno(22));
+    }
+    Ok(entries)
+}
+
 fn directory_bytes(entries: &[DirectoryEntry], cookie: u64, length: usize) -> Result<Vec<u8>, i32> {
     let start = usize::try_from(cookie).map_err(|_| 28)?;
     if start > entries.len() {
@@ -548,6 +637,137 @@ fn dispatch(caller: &mut Caller<'_, State>, name: &str, args: &[u64]) -> Result<
         return Err(Failure::Errno(8));
     }
     match name {
+        "proc_getpid" | "proc_getppid" => {
+            bytes(caller, a[0], 4)?;
+            let pid = if name == "proc_getpid" {
+                caller.data().pid
+            } else {
+                caller.data().parent_pid
+            };
+            put(caller, a[0], &pid.to_le_bytes())?;
+        }
+        "proc_spawn_v3" => {
+            bytes(caller, a[16], 4)?;
+            if a[10] & !8 != 0 || a[11] != 0 || a[12] != 0 || a[15] != 0 {
+                return Err(Failure::Errno(58));
+            }
+            let cwd = bytes(caller, a[8], a[9])?;
+            if !cwd.is_empty() && cwd != b"/" {
+                return Err(Failure::Errno(58));
+            }
+            let raw = bytes(caller, a[0], a[1])?;
+            let executable = std::str::from_utf8(&raw).map_err(|_| Failure::Errno(25))?;
+            let path = confined("/", executable.trim_start_matches('/'))?;
+            if raw.is_empty() || raw.contains(&0) {
+                return Err(Failure::Errno(28));
+            }
+            let argv = spawn_strings(caller, a[2], a[3])?;
+            let envp = spawn_strings(caller, a[4], a[5])?;
+            if argv.len() > 129 || envp.len() > 128 {
+                return Err(Failure::Errno(22));
+            }
+            let mut env = BTreeMap::new();
+            for entry in envp {
+                let (key, value) = entry.split_once('=').ok_or(Failure::Errno(28))?;
+                if key.is_empty() || key.chars().count() > 128 {
+                    return Err(Failure::Errno(28));
+                }
+                env.insert(key.to_string(), value.to_string());
+            }
+            if a[7] > 65536 {
+                return Err(Failure::Errno(22));
+            }
+            let encoded = bytes(caller, a[6], a[7])?;
+            if !encoded.len().is_multiple_of(24) || encoded.len() / 24 > 128 {
+                return Err(Failure::Errno(28));
+            }
+            let mut actions = Vec::new();
+            for chunk in encoded.chunks_exact(24) {
+                let fields: Vec<u32> = chunk
+                    .chunks_exact(4)
+                    .map(|word| u32::from_le_bytes(word.try_into().unwrap()))
+                    .collect();
+                if fields[0] != 1 && fields[0] != 2 {
+                    return Err(Failure::Errno(58));
+                }
+                if fields[3] != 0 || fields[4] != 0 || fields[5] != 0 {
+                    return Err(Failure::Errno(28));
+                }
+                if fields[1] >= MAX_FILES as u32 + 4 {
+                    return Err(Failure::Errno(8));
+                }
+                actions.push(SpawnAction {
+                    command: fields[0],
+                    fd: fields[1],
+                    source: fields[2],
+                });
+            }
+            let mask = (u64::from(a[13] as u32) | (u64::from(a[14] as u32) << 32))
+                & !((1 << 8) | (1 << 18));
+            suspend(
+                caller,
+                Request::Spawn { path, argv, env },
+                Completion::Spawn {
+                    pointer: a[16],
+                    actions,
+                    mask,
+                },
+            )?;
+        }
+        "proc_waitpid_v2" => {
+            if a[1] & !1 != 0 {
+                return Err(Failure::Errno(28));
+            }
+            let pid = a[0] as u32;
+            let pids: Vec<u32> = caller
+                .data()
+                .processes
+                .borrow()
+                .children
+                .iter()
+                .filter(|(id, child)| {
+                    child.parent == caller.data().pid && (pid == u32::MAX || pid == **id)
+                })
+                .map(|(id, _)| *id)
+                .collect();
+            if pids.is_empty() {
+                return Err(Failure::Errno(12));
+            }
+            let pointers = [a[2], a[3], a[4], a[5]];
+            for pointer in pointers {
+                bytes(caller, pointer, 4)?;
+            }
+            let ready = caller
+                .data()
+                .processes
+                .borrow()
+                .children
+                .iter()
+                .find(|(id, child)| pids.contains(id) && (child.code.is_some() || child.failed))
+                .map(|(id, child)| (*id, child.code, child.failed));
+            if let Some((pid, code, failed)) = ready {
+                caller.data().processes.borrow_mut().children.remove(&pid);
+                if failed {
+                    return Err(Failure::Errno(29));
+                }
+                let code = code.ok_or(Failure::Errno(29))?;
+                for (pointer, value) in pointers.into_iter().zip([code as u32, 0, pid, 0]) {
+                    put(caller, pointer, &value.to_le_bytes())?;
+                }
+                return Ok(0);
+            }
+            if a[1] == 1 {
+                for pointer in pointers {
+                    put(caller, pointer, &0u32.to_le_bytes())?;
+                }
+                return Ok(0);
+            }
+            suspend(
+                caller,
+                Request::Wait { pids: pids.clone() },
+                Completion::Wait { pids, pointers },
+            )?;
+        }
         "proc_signal_mask_v2" => {
             if a[0] > 3 {
                 return Err(Failure::Errno(28));
@@ -754,11 +974,7 @@ fn dispatch(caller: &mut Caller<'_, State>, name: &str, args: &[u64]) -> Result<
                 if descriptor.rights & (1 << 21) == 0 {
                     return Err(Failure::Errno(76));
                 }
-                let path = if descriptor.linked {
-                    Some(descriptor.path.clone())
-                } else {
-                    None
-                };
+                let path = descriptor_path(caller.data(), descriptor)?;
                 let write = descriptor.write;
                 suspend(
                     caller,
@@ -926,11 +1142,11 @@ fn dispatch(caller: &mut Caller<'_, State>, name: &str, args: &[u64]) -> Result<
                 let mut read = 0usize;
                 for (pointer, length) in vectors {
                     let state = caller.data();
-                    let start = state.stdin_offset;
+                    let start = state.stdin_offset.get();
                     let end = start.saturating_add(length).min(state.stdin.len());
                     let data = state.stdin[start..end].to_vec();
                     put(caller, pointer, &data)?;
-                    caller.data_mut().stdin_offset = end;
+                    caller.data().stdin_offset.set(end);
                     read += data.len();
                     if data.len() < length {
                         break;
@@ -1043,13 +1259,15 @@ fn dispatch(caller: &mut Caller<'_, State>, name: &str, args: &[u64]) -> Result<
                     return Err(Failure::Errno(70));
                 }
                 let state = caller.data_mut();
-                if state.stdout.len() + state.stderr.len() + data.len() > state.max_output {
+                if state.stdout.borrow().len() + state.stderr.borrow().len() + data.len()
+                    > state.max_output
+                {
                     return Err(Failure::Errno(22));
                 }
                 if index == 1 {
-                    state.stdout.extend(&data);
+                    state.stdout.borrow_mut().extend(&data);
                 } else {
-                    state.stderr.extend(&data);
+                    state.stderr.borrow_mut().extend(&data);
                 }
             } else {
                 let state = caller.data_mut();
@@ -1110,11 +1328,7 @@ fn dispatch(caller: &mut Caller<'_, State>, name: &str, args: &[u64]) -> Result<
                     descriptor.offset.get()
                 };
                 let end = offset.checked_add(data.len()).ok_or(Failure::Errno(22))?;
-                let total: usize = state
-                    .files
-                    .values()
-                    .map(|file| file.borrow().bytes.len())
-                    .sum();
+                let total: usize = buffered_bytes(state);
                 if end > MAX_BYTES {
                     return Err(Failure::Errno(22));
                 }
@@ -1197,11 +1411,7 @@ fn dispatch(caller: &mut Caller<'_, State>, name: &str, args: &[u64]) -> Result<
             } else {
                 size
             };
-            let total: usize = state
-                .files
-                .values()
-                .map(|file| file.borrow().bytes.len())
-                .sum();
+            let total: usize = buffered_bytes(state);
             if total - previous_length + size > MAX_BYTES {
                 return Err(Failure::Errno(48));
             }
@@ -1243,11 +1453,7 @@ fn dispatch(caller: &mut Caller<'_, State>, name: &str, args: &[u64]) -> Result<
             if descriptor.rights & (1 << 23) == 0 {
                 return Err(Failure::Errno(76));
             }
-            let path = if descriptor.linked {
-                Some(descriptor.path.clone())
-            } else {
-                None
-            };
+            let path = descriptor_path(caller.data(), descriptor)?;
             suspend(
                 caller,
                 Request::FdTimes {
@@ -1355,15 +1561,15 @@ fn dispatch(caller: &mut Caller<'_, State>, name: &str, args: &[u64]) -> Result<
                         } else if let Some(index) = stream(state, fd) {
                             if index == 0 && !writing {
                                 let available =
-                                    state.stdin.len().saturating_sub(state.stdin_offset);
+                                    state.stdin.len().saturating_sub(state.stdin_offset.get());
                                 event[16..24].copy_from_slice(&(available as u64).to_le_bytes());
                                 if available == 0 {
                                     event[24..26].copy_from_slice(&1u16.to_le_bytes());
                                 }
                             } else if index > 0 && writing {
-                                let available = state
-                                    .max_output
-                                    .saturating_sub(state.stdout.len() + state.stderr.len());
+                                let available = state.max_output.saturating_sub(
+                                    state.stdout.borrow().len() + state.stderr.borrow().len(),
+                                );
                                 event[16..24].copy_from_slice(&(available as u64).to_le_bytes());
                                 if available == 0 {
                                     errno = 22;
@@ -1396,11 +1602,7 @@ fn dispatch(caller: &mut Caller<'_, State>, name: &str, args: &[u64]) -> Result<
                             {
                                 let file = file.borrow();
                                 let available = if writing {
-                                    let total: usize = state
-                                        .files
-                                        .values()
-                                        .map(|file| file.borrow().bytes.len())
-                                        .sum();
+                                    let total: usize = buffered_bytes(state);
                                     let position = if descriptor.flags.get() & 1 != 0 {
                                         file.bytes.len()
                                     } else {
@@ -1452,11 +1654,7 @@ fn dispatch(caller: &mut Caller<'_, State>, name: &str, args: &[u64]) -> Result<
                 put(caller, a[1], &metadata[..64])?;
                 return Ok(0);
             }
-            let path = if descriptor.linked {
-                Some(descriptor.path.clone())
-            } else {
-                None
-            };
+            let path = descriptor_path(caller.data(), descriptor)?;
             let write = descriptor.write;
             suspend(
                 caller,
@@ -1933,6 +2131,31 @@ fn linker(engine: &Engine) -> Result<Linker<State>, String> {
     bind!("wasi_snapshot_preview1","clock_time_get",a:i32,b:i64,c:i32);
     bind!("wasi_snapshot_preview1","clock_res_get",a:i32,b:i32);
     bind!("wasi_snapshot_preview1", "sched_yield");
+    bind!("host_process","proc_getpid",a:i32);
+    bind!("host_process","proc_getppid",a:i32);
+    linker
+        .func_new(
+            "host_process",
+            "proc_spawn_v3",
+            wasmi::FuncType::new([wasmi::ValType::I32; 17], [wasmi::ValType::I32]),
+            |mut caller, inputs, outputs| {
+                let args: Vec<u64> = inputs
+                    .iter()
+                    .map(|value| u64::from(value.i32().unwrap() as u32))
+                    .collect();
+                outputs[0] = Val::I32(match dispatch(&mut caller, "proc_spawn_v3", &args) {
+                    Ok(value) => value,
+                    Err(Failure::Errno(errno)) => errno,
+                    Err(Failure::Suspend) => return Err(Error::new("Cirro host request")),
+                    Err(Failure::Budget) => {
+                        return Err(Error::new("WASI host request budget exceeded"));
+                    }
+                });
+                Ok(())
+            },
+        )
+        .map_err(|error| error.to_string())?;
+    bind!("host_process","proc_waitpid_v2",a:i32,b:i32,c:i32,d:i32,e:i32,f:i32);
     bind!("host_process","proc_signal_mask_v2",a:i32,b:i32,c:i32,d:i32,e:i32);
     bind!("host_process","fd_pipe",a:i32,b:i32);
     bind!("host_process","fd_dup",a:i32,b:i32);
@@ -1982,7 +2205,8 @@ pub struct WasmGuest {
     memory: Option<Memory>,
     invocation: Option<ResumableCallHostTrap>,
     exhaustion: Option<ResumableCallOutOfFuel>,
-    fuel_left: u64,
+    budget: Rc<Cell<u64>>,
+    memory_limit: usize,
     fuel_limit: u64,
     response: Option<Val>,
     outputs: Vec<Val>,
@@ -1997,6 +2221,7 @@ impl WasmGuest {
         memory: usize,
         fuel: u64,
         max_output: usize,
+        pool: Option<Rc<Cell<u64>>>,
     ) -> Result<Self, String> {
         if bytes.len() > MAX_MODULE_BYTES
             || !(4_194_304..=33_554_432).contains(&memory)
@@ -2081,19 +2306,27 @@ impl WasmGuest {
                 limits,
                 descriptors: BTreeMap::from([(3, root.clone()), (HIDDEN_PREOPEN, root)]),
                 files: BTreeMap::new(),
-                stdout: Vec::new(),
-                stderr: Vec::new(),
+                stdout: Rc::new(RefCell::new(Vec::new())),
+                stderr: Rc::new(RefCell::new(Vec::new())),
                 max_output,
                 pending: None,
-                requests: 0,
+                requests: Rc::new(Cell::new(0)),
+                pid: 1,
+                parent_pid: 0,
+                processes: Rc::new(RefCell::new(ProcessTable {
+                    next_pid: 2,
+                    memory_bytes: memory,
+                    children: BTreeMap::new(),
+                    buffers: Vec::new(),
+                })),
                 closed: BTreeSet::new(),
                 cloexec: BTreeSet::new(),
                 signal_mask: 0,
                 stdio_flags: std::array::from_fn(|_| Rc::new(Cell::new(0))),
                 argv,
                 environment,
-                stdin: stdin.to_vec(),
-                stdin_offset: 0,
+                stdin: Rc::new(stdin.to_vec()),
+                stdin_offset: Rc::new(Cell::new(0)),
                 directories: BTreeMap::new(),
                 open_mode: None,
                 open_direct: false,
@@ -2101,9 +2334,15 @@ impl WasmGuest {
         );
         store.limiter(|state| &mut state.limits);
         store.set_fuel(fuel).map_err(|error| error.to_string())?;
-        let instance = linker(&engine)?
-            .instantiate_and_start(&mut store, &module)
-            .map_err(|error| error.to_string())?;
+        let linker = linker(&engine)?;
+        if let Some(pool) = &pool {
+            pool.set(0);
+        }
+        let started = linker.instantiate_and_start(&mut store, &module);
+        if let Some(pool) = &pool {
+            pool.set(store.get_fuel().map_err(|error| error.to_string())?);
+        }
+        let instance = started.map_err(|error| error.to_string())?;
         let start = instance.get_func(&store, "_start");
         let is_start = start.is_some();
         let function = start
@@ -2121,17 +2360,18 @@ impl WasmGuest {
             .iter()
             .map(|ty| Val::default_for_ty(*ty))
             .collect();
+        let memory_limit = memory;
         let memory = instance.get_memory(&store, "memory");
         let available = store.get_fuel().map_err(|error| error.to_string())?;
-        let slice = available.min(FUEL_SLICE);
-        store.set_fuel(slice).map_err(|error| error.to_string())?;
+        store.set_fuel(0).map_err(|error| error.to_string())?;
         Ok(Self {
             store,
             function,
             memory,
             invocation: None,
             exhaustion: None,
-            fuel_left: available - slice,
+            budget: pool.unwrap_or_else(|| Rc::new(Cell::new(available))),
+            memory_limit,
             fuel_limit: fuel,
             response: None,
             outputs,
@@ -2140,17 +2380,21 @@ impl WasmGuest {
     }
 
     fn advance(&mut self) -> Result<(), String> {
+        let required = self
+            .exhaustion
+            .as_ref()
+            .map(ResumableCallOutOfFuel::required_fuel)
+            .unwrap_or(1);
+        let available = self.budget.get();
+        if available < required {
+            return Err("Wasm fuel exhausted".into());
+        }
+        let slice = available.min(FUEL_SLICE).max(required);
+        self.budget.set(available - slice);
+        self.store
+            .set_fuel(slice)
+            .map_err(|error| error.to_string())?;
         let call = if let Some(invocation) = self.exhaustion.take() {
-            let available =
-                self.store.get_fuel().map_err(|error| error.to_string())? + self.fuel_left;
-            if available < invocation.required_fuel() {
-                return Err("Wasm fuel exhausted".into());
-            }
-            let slice = available.min(FUEL_SLICE).max(invocation.required_fuel());
-            self.fuel_left = available - slice;
-            self.store
-                .set_fuel(slice)
-                .map_err(|error| error.to_string())?;
             invocation.resume(&mut self.store, &mut self.outputs)
         } else {
             match self.invocation.take() {
@@ -2166,6 +2410,9 @@ impl WasmGuest {
                     .call_resumable(&mut self.store, &[], &mut self.outputs),
             }
         };
+        let unused = self.store.get_fuel().map_err(|error| error.to_string())?;
+        self.budget.set(self.budget.get() + unused);
+        self.store.set_fuel(0).map_err(|error| error.to_string())?;
         match call {
             Ok(ResumableCall::Finished) => self.done = Some(0),
             Ok(ResumableCall::HostTrap(invocation)) => {
@@ -2179,8 +2426,7 @@ impl WasmGuest {
                 }
             }
             Ok(ResumableCall::OutOfFuel(invocation)) => {
-                let available =
-                    self.store.get_fuel().map_err(|error| error.to_string())? + self.fuel_left;
+                let available = self.budget.get();
                 if available < invocation.required_fuel() {
                     return Err("Wasm fuel exhausted".into());
                 }
@@ -2199,6 +2445,12 @@ impl WasmGuest {
     }
 }
 
+impl Drop for WasmGuest {
+    fn drop(&mut self) {
+        self.store.data().processes.borrow_mut().memory_bytes -= self.memory_limit;
+    }
+}
+
 #[wasm_bindgen]
 impl WasmGuest {
     #[wasm_bindgen(constructor)]
@@ -2210,8 +2462,141 @@ impl WasmGuest {
         fuel: u64,
         max_output: usize,
     ) -> Result<WasmGuest, JsValue> {
-        Self::create(bytes, configuration, stdin, memory, fuel, max_output)
+        Self::create(bytes, configuration, stdin, memory, fuel, max_output, None)
             .map_err(|error| JsValue::from_str(&error))
+    }
+
+    #[wasm_bindgen(getter)]
+    pub fn pid(&self) -> u32 {
+        self.store.data().pid
+    }
+
+    pub fn finish_child(&self, failed: bool) {
+        if let Some(child) = self
+            .store
+            .data()
+            .processes
+            .borrow_mut()
+            .children
+            .get_mut(&self.store.data().pid)
+        {
+            child.code = self.done;
+            child.failed = failed || self.done.is_none();
+        }
+    }
+
+    pub fn spawn_child(
+        &mut self,
+        bytes: &[u8],
+        configuration: &str,
+    ) -> Result<Option<WasmGuest>, JsValue> {
+        let (actions, mask) = match self
+            .store
+            .data()
+            .pending
+            .as_ref()
+            .map(|pending| &pending.completion)
+        {
+            Some(Completion::Spawn { actions, mask, .. }) => (actions.clone(), *mask),
+            _ => return Err(JsValue::from_str("No pending spawn")),
+        };
+        let table = self.store.data().processes.clone();
+        if table.borrow().children.len() >= 8
+            || table.borrow().memory_bytes + self.memory_limit > 67_108_864
+        {
+            self.respond(48, &[], "/", false, 0, &[])?;
+            return Ok(None);
+        }
+        let available = self.budget.get();
+        let mut child = match Self::create(
+            bytes,
+            configuration,
+            &[],
+            self.memory_limit,
+            available,
+            self.store.data().max_output,
+            Some(self.budget.clone()),
+        ) {
+            Ok(child) => child,
+            Err(_) => {
+                self.respond(52, &[], "/", false, 0, &[])?;
+                return Ok(None);
+            }
+        };
+        self.budget.set(child.budget.get());
+        child.budget = self.budget.clone();
+        child.fuel_limit = self.fuel_limit;
+        let parent = self.store.data();
+        let state = child.store.data_mut();
+        state.descriptors = parent.descriptors.clone();
+        state.files = parent.files.clone();
+        state.closed = parent.closed.clone();
+        state.cloexec = parent.cloexec.clone();
+        state.stdout = parent.stdout.clone();
+        state.stderr = parent.stderr.clone();
+        state.stdin = parent.stdin.clone();
+        state.stdin_offset = parent.stdin_offset.clone();
+        state.stdio_flags = parent.stdio_flags.clone();
+        state.requests = parent.requests.clone();
+        state.signal_mask = mask;
+        for action in actions {
+            let source = match duplicate_source(
+                state,
+                if action.command == 1 {
+                    action.fd
+                } else {
+                    action.source
+                },
+            ) {
+                Ok(source) => source,
+                Err(_) => {
+                    self.respond(8, &[], "/", false, 0, &[])?;
+                    return Ok(None);
+                }
+            };
+            if action.command == 1 {
+                close(state, action.fd);
+            } else if action.fd != action.source {
+                if stream(state, action.fd).is_none()
+                    && !state.descriptors.contains_key(&action.fd)
+                    && state.descriptors.len() >= MAX_FILES
+                {
+                    self.respond(33, &[], "/", false, 0, &[])?;
+                    return Ok(None);
+                }
+                close(state, action.fd);
+                state.descriptors.insert(action.fd, source);
+                state.closed.remove(&action.fd);
+                state.cloexec.remove(&action.fd);
+            }
+        }
+        for fd in state.cloexec.clone() {
+            close(state, fd);
+        }
+        if state
+            .descriptors
+            .values()
+            .any(|descriptor| descriptor.pipe.is_some())
+        {
+            self.respond(58, &[], "/", false, 0, &[])?;
+            return Ok(None);
+        }
+        let pid = table.borrow().next_pid;
+        state.pid = pid;
+        state.parent_pid = parent.pid;
+        state.processes = table.clone();
+        table.borrow_mut().next_pid += 1;
+        table.borrow_mut().memory_bytes += self.memory_limit;
+        table.borrow_mut().children.insert(
+            pid,
+            ChildStatus {
+                parent: parent.pid,
+                code: None,
+                failed: false,
+            },
+        );
+        self.respond(0, &[], "/", false, u64::from(pid), &[])?;
+        Ok(Some(child))
     }
 
     pub fn step(&mut self) -> Result<String, JsValue> {
@@ -2219,11 +2604,7 @@ impl WasmGuest {
             self.advance().map_err(|error| JsValue::from_str(&error))?;
         }
         if self.exhaustion.is_some() {
-            let available = self
-                .store
-                .get_fuel()
-                .map_err(|error| JsValue::from_str(&error.to_string()))?
-                + self.fuel_left;
+            let available = self.budget.get();
             return serde_json::to_string(
                 &serde_json::json!({"kind":"yield","fuelUsed":self.fuel_limit - available}),
             )
@@ -2235,7 +2616,7 @@ impl WasmGuest {
         }
         let state = self.store.data();
         let result = self.outputs.first().and_then(Val::i32);
-        let output = serde_json::json!({"stdout":String::from_utf8_lossy(&state.stdout),"stderr":String::from_utf8_lossy(&state.stderr),"exitCode":self.done,"result":result});
+        let output = serde_json::json!({"stdout":String::from_utf8_lossy(&state.stdout.borrow()),"stderr":String::from_utf8_lossy(&state.stderr.borrow()),"exitCode":self.done,"result":result});
         let encoded = serde_json::to_string(&output)
             .map_err(|error| JsValue::from_str(&error.to_string()))?;
         if encoded.len() > state.max_output {
@@ -2247,23 +2628,21 @@ impl WasmGuest {
 
     pub fn stdio(&self) -> Result<String, JsValue> {
         let state = self.store.data();
-        serde_json::to_string(&serde_json::json!({"stdout":String::from_utf8_lossy(&state.stdout),"stderr":String::from_utf8_lossy(&state.stderr)})).map_err(|error| JsValue::from_str(&error.to_string()))
+        serde_json::to_string(&serde_json::json!({"stdout":String::from_utf8_lossy(&state.stdout.borrow()),"stderr":String::from_utf8_lossy(&state.stderr.borrow())})).map_err(|error| JsValue::from_str(&error.to_string()))
     }
 
     pub fn has_file(&self, path: &str) -> bool {
         self.store
             .data()
-            .files
-            .values()
+            .processes
+            .borrow()
+            .buffers
+            .iter()
+            .filter_map(Weak::upgrade)
             .any(|file| file.borrow().path.as_deref() == Some(path))
     }
     pub fn buffered_bytes(&self) -> usize {
-        self.store
-            .data()
-            .files
-            .values()
-            .map(|file| file.borrow().bytes.len())
-            .sum()
+        buffered_bytes(self.store.data())
     }
 
     pub fn file_metadata(&self, fd: u32) -> Result<Vec<u8>, JsValue> {
@@ -2360,6 +2739,50 @@ impl WasmGuest {
         }
         if errno == 0 {
             match pending.completion {
+                Completion::Spawn { pointer, .. } => {
+                    self.memory
+                        .ok_or_else(|| JsValue::from_str("Missing memory"))?
+                        .write(&mut self.store, pointer, &(value as u32).to_le_bytes())
+                        .map_err(|error| JsValue::from_str(&error.to_string()))?;
+                }
+                Completion::Wait { pids, pointers } => {
+                    let ready = self
+                        .store
+                        .data()
+                        .processes
+                        .borrow()
+                        .children
+                        .iter()
+                        .find(|(pid, child)| {
+                            pids.contains(pid) && (child.code.is_some() || child.failed)
+                        })
+                        .map(|(pid, child)| (*pid, child.code, child.failed));
+                    if let Some((pid, code, failed)) = ready {
+                        self.store
+                            .data()
+                            .processes
+                            .borrow_mut()
+                            .children
+                            .remove(&pid);
+                        if failed {
+                            result = 29;
+                        } else {
+                            for (pointer, value) in pointers.into_iter().zip([
+                                code.ok_or_else(|| JsValue::from_str("Missing child exit"))? as u32,
+                                0,
+                                pid,
+                                0,
+                            ]) {
+                                self.memory
+                                    .ok_or_else(|| JsValue::from_str("Missing memory"))?
+                                    .write(&mut self.store, pointer, &value.to_le_bytes())
+                                    .map_err(|error| JsValue::from_str(&error.to_string()))?;
+                            }
+                        }
+                    } else {
+                        result = 12;
+                    }
+                }
                 Completion::Tmpfile {
                     mut descriptor,
                     pointer,
@@ -2375,14 +2798,22 @@ impl WasmGuest {
                         .try_into()
                         .map_err(|_| JsValue::from_str("Invalid inode metadata"))?;
                     descriptor.cache = Some(cache);
-                    state.files.insert(
-                        cache,
-                        Rc::new(RefCell::new(FileBuffer {
-                            path: None,
-                            bytes: Vec::new(),
-                            metadata: descriptor.metadata,
-                        })),
-                    );
+                    let buffer = Rc::new(RefCell::new(FileBuffer {
+                        path: None,
+                        bytes: Vec::new(),
+                        metadata: descriptor.metadata,
+                    }));
+                    state
+                        .processes
+                        .borrow_mut()
+                        .buffers
+                        .retain(|file| file.strong_count() > 0);
+                    state
+                        .processes
+                        .borrow_mut()
+                        .buffers
+                        .push(Rc::downgrade(&buffer));
+                    state.files.insert(cache, buffer);
                     state.descriptors.insert(fd, descriptor);
                     self.memory
                         .ok_or_else(|| JsValue::from_str("Missing Wasm memory"))?
@@ -2396,10 +2827,13 @@ impl WasmGuest {
                 } => {
                     let state = self.store.data_mut();
                     let total: usize = state
-                        .files
+                        .processes
+                        .borrow()
+                        .buffers
                         .iter()
-                        .filter(|(_, file)| file.borrow().path.as_deref() != Some(path))
-                        .map(|(_, file)| file.borrow().bytes.len())
+                        .filter_map(Weak::upgrade)
+                        .filter(|file| file.borrow().path.as_deref() != Some(path))
+                        .map(|file| file.borrow().bytes.len())
                         .sum();
                     if state.descriptors.len() >= MAX_FILES
                         || total.saturating_add(data.len()) > MAX_BYTES
@@ -2422,22 +2856,39 @@ impl WasmGuest {
                                         .find(|cache| !state.files.contains_key(cache))
                                 })
                                 .ok_or_else(|| JsValue::from_str("File cache quota exceeded"))?;
-                            if let Some(file) = state.files.get(&cache) {
+                            let shared = state
+                                .processes
+                                .borrow()
+                                .buffers
+                                .iter()
+                                .filter_map(Weak::upgrade)
+                                .find(|file| file.borrow().path.as_deref() == Some(path));
+                            let buffer = if let Some(buffer) = shared {
                                 if truncate {
-                                    let mut file = file.borrow_mut();
+                                    let mut file = buffer.borrow_mut();
                                     file.bytes = data.to_vec();
                                     file.metadata = descriptor.metadata;
                                 }
+                                buffer
                             } else {
-                                state.files.insert(
-                                    cache,
-                                    Rc::new(RefCell::new(FileBuffer {
-                                        path: Some(path.into()),
-                                        bytes: data.to_vec(),
-                                        metadata: descriptor.metadata,
-                                    })),
-                                );
-                            }
+                                let buffer = Rc::new(RefCell::new(FileBuffer {
+                                    path: Some(path.into()),
+                                    bytes: data.to_vec(),
+                                    metadata: descriptor.metadata,
+                                }));
+                                state
+                                    .processes
+                                    .borrow_mut()
+                                    .buffers
+                                    .retain(|file| file.strong_count() > 0);
+                                state
+                                    .processes
+                                    .borrow_mut()
+                                    .buffers
+                                    .push(Rc::downgrade(&buffer));
+                                buffer
+                            };
+                            state.files.insert(cache, buffer);
                             descriptor.cache = Some(cache);
                         }
                         let fd = (4..MAX_FILES as u32 + 4)
@@ -2631,7 +3082,13 @@ impl WasmGuest {
                     if path != to {
                         let state = self.store.data_mut();
                         detach(state, to);
-                        for file in state.files.values_mut() {
+                        for file in state
+                            .processes
+                            .borrow()
+                            .buffers
+                            .iter()
+                            .filter_map(Weak::upgrade)
+                        {
                             let mut file = file.borrow_mut();
                             if let Some(current) = &file.path
                                 && (current == path || current.starts_with(&format!("{path}/")))
@@ -2726,7 +3183,8 @@ mod tests {
                 &[],
                 8_388_608,
                 1000,
-                1024
+                1024,
+                None
             )
             .is_err()
         );
@@ -2736,9 +3194,9 @@ mod tests {
         let module = include_bytes!("../../../dist/wasi-pipe-blocked.wasm");
         let configuration = r#"{"argv":[],"env":{}}"#;
         let mut parent =
-            WasmGuest::create(module, configuration, &[], 8_388_608, 100_000, 1024).unwrap();
+            WasmGuest::create(module, configuration, &[], 8_388_608, 100_000, 1024, None).unwrap();
         let mut child =
-            WasmGuest::create(module, configuration, &[], 8_388_608, 100_000, 1024).unwrap();
+            WasmGuest::create(module, configuration, &[], 8_388_608, 100_000, 1024, None).unwrap();
         parent.advance().unwrap();
         child.advance().unwrap();
         assert!(matches!(
@@ -2804,7 +3262,7 @@ mod tests {
                 .has_peer()
         );
         let mut receiver =
-            WasmGuest::create(module, configuration, &[], 8_388_608, 100_000, 1024).unwrap();
+            WasmGuest::create(module, configuration, &[], 8_388_608, 100_000, 1024, None).unwrap();
         receiver.advance().unwrap();
         close(parent.store.data_mut(), reader);
         parent.store.data_mut().descriptors.insert(
@@ -2840,6 +3298,7 @@ mod tests {
                 8_388_608,
                 100_000,
                 1024,
+                None,
             )
             .unwrap();
             let mut child = WasmGuest::create(
@@ -2849,6 +3308,7 @@ mod tests {
                 8_388_608,
                 100_000,
                 1024,
+                None,
             )
             .unwrap();
             parent.advance().unwrap();
@@ -2867,6 +3327,8 @@ mod tests {
                 Request::Clock { .. }
             ));
             child.store.data_mut().files = parent.store.data().files.clone();
+            child.store.data().processes.borrow_mut().buffers =
+                parent.store.data().processes.borrow().buffers.clone();
             child
                 .store
                 .data_mut()
@@ -2906,6 +3368,7 @@ mod tests {
             8_388_608,
             100_000_000,
             1024,
+            None,
         )
         .unwrap();
         let mut slices = 0;
@@ -2922,7 +3385,7 @@ mod tests {
         }
         assert!(slices > 1);
         assert_eq!(guest.outputs.first().and_then(Val::i32), Some(352));
-        assert_eq!(guest.store.data().stdout, b"cpu loop started\n");
+        assert_eq!(*guest.store.data().stdout.borrow(), b"cpu loop started\n");
         let mut guest = WasmGuest::create(
             include_bytes!("../../../dist/wasi-slices-infinite.wasm"),
             configuration,
@@ -2930,6 +3393,7 @@ mod tests {
             8_388_608,
             500_000,
             1024,
+            None,
         )
         .unwrap();
         let mut slices = 0;
@@ -2946,8 +3410,8 @@ mod tests {
             }
         }
         assert!(slices > 1);
-        assert_eq!(guest.store.data().stdout, b"cpu loop started\n");
-        assert!(guest.fuel_left < FUEL_SLICE);
+        assert_eq!(*guest.store.data().stdout.borrow(), b"cpu loop started\n");
+        assert!(guest.budget.get() < FUEL_SLICE);
     }
 
     #[test]

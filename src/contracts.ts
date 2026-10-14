@@ -383,6 +383,18 @@ export const ToolStep = Schema.Union([
 
 export const WasmStep = Schema.Union([
   Schema.Struct({
+    kind: Schema.Literal("spawn"),
+    path: Path,
+    argv: WasmConfiguration.fields.argv,
+    env: WasmConfiguration.fields.env,
+  }),
+  Schema.Struct({
+    kind: Schema.Literal("wait"),
+    pids: Schema.Array(
+      Schema.Int.check(Schema.isBetween({ minimum: 1, maximum: 4294967295 })),
+    ).check(Schema.isMinLength(1), Schema.isMaxLength(8)),
+  }),
+  Schema.Struct({
     kind: Schema.Literal("yield"),
     fuelUsed: Schema.Int.check(Schema.isBetween({ minimum: 0, maximum: 100_000_000 })),
   }),
