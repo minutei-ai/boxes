@@ -1,0 +1,49 @@
+{
+  "measuredAt": "2026-10-14T07:15:46.055Z",
+  "url": "https://cirro-sandbox-prod-rs7wexxow56rmsoz.manoel-carvalhoneto.workers.dev",
+  "sandboxId": "signals-proof-ba5e3996-beb2-4402-9cfc-ae005b207f44",
+  "profile": "minutei",
+  "runtime": "standard Worker",
+  "receipts": [
+    {
+      "mode": "pid",
+      "passed": true
+    },
+    {
+      "mode": "group",
+      "passed": true
+    },
+    {
+      "mode": "masked",
+      "passed": true
+    },
+    {
+      "mode": "unmask",
+      "passed": true
+    },
+    {
+      "mode": "natural",
+      "passed": true
+    },
+    {
+      "mode": "wait",
+      "passed": true
+    },
+    {
+      "mode": "upper",
+      "passed": true
+    },
+    {
+      "mode": "self",
+      "passed": true
+    },
+    {
+      "mode": "inherit-mask",
+      "passed": true
+    }
+  ],
+  "disposal": true,
+  "allPassed": true,
+  "handlersAndStopContinue": false,
+  "fullProcessParity": false
+}
