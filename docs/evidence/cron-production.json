@@ -1,0 +1,50 @@
+{
+  "measuredAt": "2026-10-14T19:57:04.291884+00:00",
+  "deployedCommit": "7b1f39eb14f038d43a9a4be422bcd63e4e18c466",
+  "profile": "minutei",
+  "production": {
+    "checks": 6,
+    "failures": 0,
+    "nativeScheduledDelivery": true,
+    "queuedExecutionResult": 42,
+    "pagination": true,
+    "cancellation": true,
+    "disposal": true
+  },
+  "local": {
+    "tests": 292,
+    "failures": 0,
+    "assertions": 2704,
+    "seconds": 163.72,
+    "typesPassed": true,
+    "clippyPassed": true,
+    "rustTestsPassed": true,
+    "formatPassed": true,
+    "focusedCronTests": 5,
+    "focusedCronSeconds": 2.93,
+    "concurrentTickAndDuplicateQueueDelivery": true,
+    "replacementWorkerAfterReservedOccurrence": true,
+    "expiryAndDisposedSandbox": true,
+    "allowSkipQueueOverlap": true
+  },
+  "sdk": {
+    "version": "0.4.0",
+    "operations": 59,
+    "effectConsumerVersion": "4.0.0",
+    "packedNativeServiceBindingTests": 4,
+    "packedNativeServiceBindingFailures": 0,
+    "archiveSha256": "5b619f2ed4cf104f96d12212113ffdadc44059b9664ba5d39a5eb12610efba6d",
+    "minuteiIntegrationApplied": false
+  },
+  "ci": "https://github.com/minutei-ai/boxes/actions/runs/38627273060",
+  "upstreamCommit": "4d48628304c1ddedafc9d55f60752093fcf6f3d2",
+  "remainingCronGates": [
+    "persistent authority",
+    "host callbacks",
+    "job quotas",
+    "retained per-job history and events",
+    "global scan scalability",
+    "arbitrary-crash execution recovery"
+  ],
+  "fullParity": false
+}

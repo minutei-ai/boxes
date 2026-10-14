@@ -33,6 +33,14 @@ await Effect.runPromise(
     });
     if (scheduled.state !== "active" || scheduled.runCount !== 0)
       return yield* Effect.die("Schedule not registered");
+    console.log(
+      JSON.stringify({
+        phase: "scheduled",
+        sandboxId: id,
+        jobId: scheduled.id,
+        nextRun: scheduled.nextRun,
+      }),
+    );
     const invalid = yield* boxes
       .action(id, {
         op: "cron.schedule",
