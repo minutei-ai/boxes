@@ -375,6 +375,7 @@ struct State {
     signal_mask: u64,
     pending_signals: Rc<Cell<u64>>,
     delivered_signal: u32,
+    readiness_notification: bool,
     stdio_flags: [Rc<Cell<u16>>; 3],
     argv: Vec<Vec<u8>>,
     environment: Vec<Vec<u8>>,
@@ -588,6 +589,13 @@ fn detach(state: &mut State, path: &str) {
 }
 
 fn close(state: &mut State, fd: u32) {
+    if state
+        .descriptors
+        .get(&fd)
+        .is_some_and(|descriptor| descriptor.pipe.is_some())
+    {
+        state.readiness_notification = true;
+    }
     state.directories.remove(&fd);
     state.cloexec.remove(&fd);
     if fd < 3 {
@@ -797,6 +805,7 @@ fn dispatch(caller: &mut Caller<'_, State>, name: &str, args: &[u64]) -> Result<
             for target in targets {
                 target.set(target.get() | (1u64 << (signal - 1)));
             }
+            caller.data_mut().readiness_notification = true;
             if let Some(signal) = deliver_signal(caller.data_mut()) {
                 return Err(Failure::Signal(signal));
             }
@@ -1540,6 +1549,9 @@ fn dispatch(caller: &mut Caller<'_, State>, name: &str, args: &[u64]) -> Result<
                         break;
                     }
                 }
+                if read != 0 {
+                    caller.data_mut().readiness_notification = true;
+                }
                 put(caller, output, &(read as u32).to_le_bytes())?;
                 return Ok(0);
             }
@@ -1647,6 +1659,9 @@ fn dispatch(caller: &mut Caller<'_, State>, name: &str, args: &[u64]) -> Result<
                     }
                     let count = data.len().min(available);
                     pipe.pipe.bytes.borrow_mut().extend(&data[..count]);
+                    if count != 0 {
+                        state.readiness_notification = true;
+                    }
                     put(caller, output, &(count as u32).to_le_bytes())?;
                     return Ok(0);
                 }
@@ -2695,6 +2710,7 @@ impl WasmGuest {
                 signal_mask: 0,
                 pending_signals,
                 delivered_signal: 0,
+                readiness_notification: false,
                 stdio_flags: std::array::from_fn(|_| Rc::new(Cell::new(0))),
                 argv,
                 environment,
@@ -2876,6 +2892,13 @@ impl WasmGuest {
     #[wasm_bindgen(getter)]
     pub fn pid(&self) -> u32 {
         self.store.data().pid
+    }
+
+    pub fn take_readiness_notification(&mut self) -> bool {
+        let state = self.store.data_mut();
+        let notify = state.readiness_notification;
+        state.readiness_notification = false;
+        notify
     }
 
     pub fn signal_ready(&self) -> bool {

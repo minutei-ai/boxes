@@ -259,7 +259,11 @@ export const wasi = Effect.fn("wasi.execute")(function* (
           const step = yield* Schema.decodeUnknownEffect(Schema.fromJsonString(WasmStep), {
             onExcessProperty: "error",
           })(raw);
-          yield* notify();
+          const readinessChanged = yield* Effect.try({
+            try: () => guest.take_readiness_notification(),
+            catch: (cause) => new WasmFailure({ cause }),
+          });
+          if (readinessChanged) yield* notify();
           if (
             capture !== null &&
             step.kind !== "done" &&
