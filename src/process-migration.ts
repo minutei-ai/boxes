@@ -129,94 +129,91 @@ const PreviousMetadata = StoredRunMetadata.mapFields((fields) => ({
 }));
 const MigrationMetadata = Schema.Union([StoredRunMetadata, PreviousMetadata, InlineMetadata]);
 
-export const migrateOutput = Effect.fn("migration.outputChunks")(function* (env: Env) {
-  const cursors: (string | undefined)[] = [undefined];
+export const migrateOutput = Effect.fn("migration.outputChunks")(function* (
+  env: Env,
+  cursor: string | null,
+) {
   const progress = { migrated: 0 };
-  while (cursors.length > 0) {
-    const cursor = cursors.shift();
-    const page = yield* Effect.tryPromise({
-      try: () =>
-        env.OBJECTS.list({
-          prefix: "processes/",
-          cursor,
-          limit: 1000,
-          include: ["customMetadata"],
-        }),
-      catch: (cause) => new StorageFailure({ cause }),
-    });
-    yield* Effect.forEach(
-      page.objects,
-      (object) =>
-        Effect.gen(function* () {
-          const metadata = yield* Schema.decodeUnknownEffect(MigrationMetadata)(
-            object.customMetadata,
-          );
-          if (metadata.format === "run-v4") return;
-          const parts = object.key.split("/");
-          const sandboxId = yield* Schema.decodeUnknownEffect(Id)(parts[1]);
-          if (
-            parts.length !== 3 ||
-            parts[0] !== "processes" ||
-            parts[2] !== `${metadata.summary.id}.json`
-          )
-            return yield* new StorageFailure({
-              cause: "Process migration key does not match its identity",
-            });
-          const stored = yield* Effect.tryPromise({
-            try: () => env.OBJECTS.get(object.key, { onlyIf: { etagMatches: object.etag } }),
-            catch: (cause) => new StorageFailure({ cause }),
+  const page = yield* Effect.tryPromise({
+    try: () =>
+      env.OBJECTS.list({
+        prefix: "processes/",
+        cursor: cursor ?? undefined,
+        limit: 50,
+        include: ["customMetadata"],
+      }),
+    catch: (cause) => new StorageFailure({ cause }),
+  });
+  yield* Effect.forEach(
+    page.objects,
+    (object) =>
+      Effect.gen(function* () {
+        const metadata = yield* Schema.decodeUnknownEffect(MigrationMetadata)(
+          object.customMetadata,
+        );
+        if (metadata.format === "run-v4") return;
+        const parts = object.key.split("/");
+        const sandboxId = yield* Schema.decodeUnknownEffect(Id)(parts[1]);
+        if (
+          parts.length !== 3 ||
+          parts[0] !== "processes" ||
+          parts[2] !== `${metadata.summary.id}.json`
+        )
+          return yield* new StorageFailure({
+            cause: "Process migration key does not match its identity",
           });
-          if (stored === null || !("body" in stored) || stored.size > 8_388_608)
-            return yield* new StorageFailure({ cause: "Process changed during output migration" });
-          const text = yield* Effect.tryPromise({
-            try: () => stored.text(),
-            catch: (cause) => new StorageFailure({ cause }),
+        const stored = yield* Effect.tryPromise({
+          try: () => env.OBJECTS.get(object.key, { onlyIf: { etagMatches: object.etag } }),
+          catch: (cause) => new StorageFailure({ cause }),
+        });
+        if (stored === null || !("body" in stored) || stored.size > 8_388_608)
+          return yield* new StorageFailure({ cause: "Process changed during output migration" });
+        const text = yield* Effect.tryPromise({
+          try: () => stored.text(),
+          catch: (cause) => new StorageFailure({ cause }),
+        });
+        const converted = yield* Effect.gen(function* () {
+          if (metadata.format === "run-v3") {
+            const record = yield* Schema.decodeUnknownEffect(
+              Schema.fromJsonString(PreviousStoredRun),
+            )(text);
+            return { ...record, stdinMode: "closed" as const };
+          }
+          const record = yield* Schema.decodeUnknownEffect(Schema.fromJsonString(InlineRun))(text);
+          const output = yield* Effect.gen(function* () {
+            if (record.output === null) return null;
+            return yield* archiveOutput(env, sandboxId, record.output, null);
           });
-          const converted = yield* Effect.gen(function* () {
-            if (metadata.format === "run-v3") {
-              const record = yield* Schema.decodeUnknownEffect(
-                Schema.fromJsonString(PreviousStoredRun),
-              )(text);
-              return { ...record, stdinMode: "closed" as const };
-            }
-            const record = yield* Schema.decodeUnknownEffect(Schema.fromJsonString(InlineRun))(
-              text,
-            );
-            const output = yield* Effect.gen(function* () {
-              if (record.output === null) return null;
-              return yield* archiveOutput(env, sandboxId, record.output, null);
-            });
-            return { ...record, output, stdinMode: "closed" as const };
-          });
-          if (converted.id !== metadata.summary.id)
-            return yield* new StorageFailure({ cause: "Process body does not match its identity" });
-          const receipt = yield* Effect.tryPromise({
-            try: () =>
-              env.OBJECTS.put(
-                object.key,
-                Schema.encodeSync(Schema.fromJsonString(StoredRun))(converted),
-                {
-                  onlyIf: { etagMatches: stored.etag },
-                  customMetadata: Schema.encodeSync(StoredRunMetadata)({
-                    format: "run-v4",
-                    summary: Struct.omit(converted, [
-                      "output",
-                      "authority",
-                      "deadlineAt",
-                      "stdinMode",
-                    ]),
-                  }),
-                },
-              ),
-            catch: (cause) => new StorageFailure({ cause }),
-          });
-          if (receipt === null)
-            return yield* new StorageFailure({ cause: "Process changed during output migration" });
-          progress.migrated += 1;
-        }),
-      { concurrency: 4 },
-    );
-    if (page.truncated) cursors.push(page.cursor);
-  }
-  return progress;
+          return { ...record, output, stdinMode: "closed" as const };
+        });
+        if (converted.id !== metadata.summary.id)
+          return yield* new StorageFailure({ cause: "Process body does not match its identity" });
+        const receipt = yield* Effect.tryPromise({
+          try: () =>
+            env.OBJECTS.put(
+              object.key,
+              Schema.encodeSync(Schema.fromJsonString(StoredRun))(converted),
+              {
+                onlyIf: { etagMatches: stored.etag },
+                customMetadata: Schema.encodeSync(StoredRunMetadata)({
+                  format: "run-v4",
+                  summary: Struct.omit(converted, [
+                    "output",
+                    "authority",
+                    "deadlineAt",
+                    "stdinMode",
+                  ]),
+                }),
+              },
+            ),
+          catch: (cause) => new StorageFailure({ cause }),
+        });
+        if (receipt === null)
+          return yield* new StorageFailure({ cause: "Process changed during output migration" });
+        progress.migrated += 1;
+      }),
+    { concurrency: 4 },
+  );
+  if (page.truncated) return { ...progress, cursor: page.cursor };
+  return { ...progress, cursor: null };
 });

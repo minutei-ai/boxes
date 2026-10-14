@@ -2,7 +2,7 @@ import * as Alchemy from "alchemy";
 import * as Cloudflare from "alchemy/Cloudflare";
 import { Clock, Config, Effect, Layer, Redacted, Schedule, Schema } from "effect";
 import { bucket, executions, worker } from "./src/resources";
-import { MigrationReceipt } from "./src/contracts";
+import { MigrationReceipt, OutputMigrationInput, OutputMigrationReceipt } from "./src/contracts";
 
 const Deployment = Schema.Struct({
   deployedAt: Schema.Int,
@@ -24,10 +24,10 @@ const migrate = Alchemy.Action(
           "/v1/migrations/filesystem-v3",
           "/v1/migrations/wasm-inputs-v1",
           "/v1/migrations/process-receipts-v2",
-          "/v1/migrations/output-chunks-v1",
         ],
         (path) =>
           Effect.gen(function* () {
+            yield* Effect.logInfo({ migration: path, phase: "start" });
             const response = yield* Effect.tryPromise({
               try: () =>
                 fetch(new URL(path, url), {
@@ -43,7 +43,11 @@ const migrate = Alchemy.Action(
               try: () => response.text(),
               catch: (cause) => new MigrationRequestFailure({ cause, path }),
             });
-            return yield* Schema.decodeUnknownEffect(Schema.fromJsonString(MigrationReceipt))(text);
+            const receipt = yield* Schema.decodeUnknownEffect(
+              Schema.fromJsonString(MigrationReceipt),
+            )(text);
+            yield* Effect.logInfo({ migration: path, phase: "done", migrated: receipt.migrated });
+            return receipt;
           }).pipe(
             Effect.retry({
               times: 10,
@@ -53,7 +57,47 @@ const migrate = Alchemy.Action(
             }),
           ),
       );
-      return { receipts, deployedAt: input.deployedAt };
+      const progress = { pages: 0, migrated: 0 };
+      const cursors: (string | null)[] = [null];
+      while (cursors.length > 0) {
+        const cursor = cursors.shift();
+        const response = yield* Effect.tryPromise({
+          try: () =>
+            fetch(new URL("/v1/migrations/output-chunks-v1", url), {
+              method: "POST",
+              headers: {
+                authorization: `Bearer ${Redacted.value(key)}`,
+                "content-type": "application/json",
+              },
+              body: Schema.encodeSync(Schema.fromJsonString(OutputMigrationInput))({ cursor }),
+            }),
+          catch: (cause) =>
+            new MigrationRequestFailure({ cause, path: "/v1/migrations/output-chunks-v1" }),
+        });
+        if (!response.ok)
+          return yield* new MigrationRequestFailure({
+            cause: response.status,
+            path: "/v1/migrations/output-chunks-v1",
+          });
+        const text = yield* Effect.tryPromise({
+          try: () => response.text(),
+          catch: (cause) =>
+            new MigrationRequestFailure({ cause, path: "/v1/migrations/output-chunks-v1" }),
+        });
+        const page = yield* Schema.decodeUnknownEffect(
+          Schema.fromJsonString(OutputMigrationReceipt),
+        )(text);
+        progress.pages += 1;
+        progress.migrated += page.migrated;
+        yield* Effect.logInfo({
+          migration: "process-input-v4",
+          page: progress.pages,
+          migrated: page.migrated,
+          hasMore: page.cursor !== null,
+        });
+        if (page.cursor !== null) cursors.push(page.cursor);
+      }
+      return { receipts, inputMigration: progress, deployedAt: input.deployedAt };
     });
   }),
 );

@@ -760,4 +760,11 @@ export const CommandOutput = Schema.Struct({
 });
 export const CommandArguments = Schema.Array(Schema.String);
 
+export const OutputMigrationInput = Schema.Struct({
+  cursor: Schema.optionalKey(Schema.NullOr(Schema.String)),
+});
+export const OutputMigrationReceipt = Schema.Struct({
+  migrated: Schema.Int,
+  cursor: Schema.NullOr(Schema.String),
+});
 export const MigrationReceipt = Schema.Struct({ migrated: Schema.Int });

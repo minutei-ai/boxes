@@ -12,6 +12,8 @@ import {
   DirectoryTree,
   CanonicalPath,
   MigrationReceipt,
+  OutputMigrationInput,
+  OutputMigrationReceipt,
   CreateSandbox,
   DirectoryEntries,
   ErrorResponse,
@@ -105,8 +107,12 @@ const route = Effect.fn("api.route")(function* (request: Request, env: Env) {
   }
   if (url.pathname === "/v1/migrations/output-chunks-v1") {
     yield* administrator(env, token);
-    const receipt = yield* migrateOutput(env);
-    return new Response(Schema.encodeSync(Schema.fromJsonString(MigrationReceipt))(receipt), {
+    const bytes = yield* readBounded(request.body, 4096);
+    const input = yield* Schema.decodeUnknownEffect(Schema.fromJsonString(OutputMigrationInput), {
+      onExcessProperty: "error",
+    })(bytes.toString("utf8"));
+    const receipt = yield* migrateOutput(env, input.cursor ?? null);
+    return new Response(Schema.encodeSync(Schema.fromJsonString(OutputMigrationReceipt))(receipt), {
       headers: { "content-type": "application/json", "cache-control": "no-store" },
     });
   }

@@ -11,6 +11,7 @@ import {
   StoredRunMetadata,
   Capability,
   MigrationReceipt,
+  OutputMigrationReceipt,
 } from "../src/contracts";
 import { runtime } from "../tooling/runtime";
 
@@ -567,3 +568,63 @@ test("version 3 chunked receipts migrate to explicit closed stdin without rewrit
     (await post(mf, "/v1/migrations/output-chunks-v1", "cirro-local-test-credential", {})).status,
   ).toBe(200);
 });
+test("receipt migration returns bounded page cursors and skips confirmed conversions on retry", async () => {
+  const persisted = await mkdtemp(join(tmpdir(), "cirro-migration-pages-"));
+  const instance = runtime(persisted);
+  await setup(instance, "paged");
+  const bucket = await instance.getR2Bucket("OBJECTS");
+  for (const index of Array.from({ length: 101 }, (_, index) => index)) {
+    const record = {
+      id: `old-${String(index).padStart(3, "0")}`,
+      status: "exited" as const,
+      sourceHash: "a".repeat(64),
+      language: "wasm" as const,
+      startedAt: 0,
+      finishedAt: 1,
+      output: null,
+      authority: null,
+      deadlineAt: null,
+    };
+    await bucket.put(`processes/paged/${record.id}.json`, JSON.stringify(record), {
+      customMetadata: {
+        format: "run-v3",
+        summary: JSON.stringify(Struct.omit(record, ["output", "authority", "deadlineAt"])),
+      },
+    });
+  }
+  const cursors: (typeof OutputMigrationReceipt.Type.cursor)[] = [null];
+  const progress = { pages: 0, migrated: 0 };
+  while (cursors.length > 0) {
+    const cursor = cursors.shift();
+    const response = await post(
+      instance,
+      "/v1/migrations/output-chunks-v1",
+      "cirro-local-test-credential",
+      { cursor },
+    );
+    expect(response.status).toBe(200);
+    const page = Schema.decodeUnknownSync(OutputMigrationReceipt)(await response.json());
+    progress.pages += 1;
+    progress.migrated += page.migrated;
+    expect(page.migrated).toBeLessThanOrEqual(50);
+    if (progress.pages === 1) {
+      const pending = await bucket.get("processes/paged/old-100.json");
+      expect(pending?.customMetadata?.format).toBe("run-v3");
+    }
+    if (page.cursor !== null) cursors.push(page.cursor);
+  }
+  expect(progress.pages).toBe(3);
+  expect(progress.migrated).toBe(101);
+  const last = await bucket.get("processes/paged/old-100.json");
+  expect(last?.customMetadata?.format).toBe("run-v4");
+  const retry = await post(
+    instance,
+    "/v1/migrations/output-chunks-v1",
+    "cirro-local-test-credential",
+    {},
+  );
+  expect(retry.status).toBe(200);
+  expect(Schema.decodeUnknownSync(OutputMigrationReceipt)(await retry.json()).migrated).toBe(0);
+  await instance.dispose();
+  await rm(persisted, { recursive: true, force: true });
+}, 15000);

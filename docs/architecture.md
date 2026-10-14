@@ -88,7 +88,7 @@ The shell is a trusted bounded interpreter, not arbitrary native process executi
 
 A scoped feeder validates addressed block sizes and SHA-256 before delivering at most 64 KiB into the Rust family's existing native pipe. The same pipe endpoints survive spawn and exec. Native reader/writer lifetimes, poll readiness, nonblocking behavior, EINTR and signal restart remain owned by that pipe implementation. A closed input head closes the writer only after all accepted bytes have been fed. Losing the last native reader closes the R2 head. Cancellation closes the feeder scope, and settlement seals the input head. Status treats a terminal receipt as closed even if a queued execution never entered. Input acknowledgement reports retention rather than guest consumption. Queued input survives Worker replacement; live interpreter resumption remains a separate gate.
 
-The unconditional output migration converts v2 inline and v3 chunked receipts to v4 with closed stdin. It preserves grants, deadlines, output references and public summaries. Runtime reads only v4 receipts; legacy shapes are confined to the migration owner.
+The unconditional output migration converts v2 inline and v3 chunked receipts to v4 with closed stdin. It preserves grants, deadlines, output references and public summaries. Runtime reads only v4 receipts; legacy shapes are confined to the migration owner. The migration returns a continuation cursor after at most 50 listed receipts. Alchemy follows each confirmed cursor and logs page receipts, keeping individual requests below the client timeout. Retrying from the beginning reads persisted metadata and skips already converted receipts.
 
 ## Execution receipts
 
