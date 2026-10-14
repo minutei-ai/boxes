@@ -1,10 +1,11 @@
 {
-  "measuredAt": "2026-10-14T06:28:29.753Z",
+  "measuredAt": "2026-10-14T09:19:40.546Z",
   "url": "https://cirro-sandbox-prod-rs7wexxow56rmsoz.manoel-carvalhoneto.workers.dev",
-  "sandboxId": "cwd-proof-4995e659-85e0-4c4e-aeaa-8926978f0514",
+  "sandboxId": "cwd-proof-1f459c7e-345b-4a0a-9aad-610cc574eae5",
   "profile": "minutei",
   "runtime": "standard Worker",
   "checks": {
+    "deniedImage": true,
     "setup": true,
     "publishedRelativeInput": true,
     "invalidCwdAndActions": true,
@@ -33,6 +34,26 @@
       "passed": true
     },
     {
+      "mode": "path-absolute",
+      "passed": true
+    },
+    {
+      "mode": "path-empty",
+      "passed": true
+    },
+    {
+      "mode": "path-chdir",
+      "passed": true
+    },
+    {
+      "mode": "path-slash",
+      "passed": true
+    },
+    {
+      "mode": "sched-zero",
+      "passed": true
+    },
+    {
       "mode": "open-dir",
       "passed": true
     },
@@ -50,6 +71,36 @@
       "mode": "missing",
       "errno": 44,
       "observed": 44,
+      "passed": true
+    },
+    {
+      "mode": "path-missing",
+      "errno": 44,
+      "observed": 44,
+      "passed": true
+    },
+    {
+      "mode": "path-absent",
+      "errno": 44,
+      "observed": 44,
+      "passed": true
+    },
+    {
+      "mode": "path-denied",
+      "errno": 2,
+      "observed": 2,
+      "passed": true
+    },
+    {
+      "mode": "sched-priority",
+      "errno": 28,
+      "observed": 28,
+      "passed": true
+    },
+    {
+      "mode": "sched-policy",
+      "errno": 63,
+      "observed": 63,
       "passed": true
     },
     {

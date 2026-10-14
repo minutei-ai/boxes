@@ -1,7 +1,7 @@
 {
-  "measuredAt": "2026-10-14T08:55:58.233Z",
+  "measuredAt": "2026-10-14T09:22:06.991Z",
   "url": "https://cirro-sandbox-prod-rs7wexxow56rmsoz.manoel-carvalhoneto.workers.dev",
-  "sandboxId": "handlers-proof-8d476e24-cb94-4e3d-bcc1-4ec6b61994f7",
+  "sandboxId": "handlers-proof-1719a3e6-1b03-4dc5-a344-dea96a538157",
   "profile": "minutei",
   "runtime": "standard Worker",
   "receipts": [
@@ -63,6 +63,10 @@
     },
     {
       "mode": "inherit",
+      "passed": true
+    },
+    {
+      "mode": "inherit-default",
       "passed": true
     },
     {
