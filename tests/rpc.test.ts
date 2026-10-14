@@ -34,6 +34,11 @@ test("RPC callbacks preserve declared tool errors and enforce response byte boun
   expect(oversized.calls).toBe(1);
   expect(oversized.record?.output?.result).toBe("EFBIG");
 });
+test("RPC preserves omitted input and void tool results without substituting null", async () => {
+  const result = await probe("undefined");
+  expect(result.calls).toBe(1);
+  expect(result.record?.output?.result).toBe(true);
+});
 test("invalid credentials and sandbox identity never invoke a host callback", async () => {
   for (const mode of ["credentials", "wrong-sandbox"]) {
     const result = await probe(mode);

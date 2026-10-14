@@ -51,6 +51,7 @@ const tools = Object.freeze({
       error.code = details.error;
       throw error;
     });
+    if (result === undefined) return undefined;
     return JSON.parse(result);
   },
 });

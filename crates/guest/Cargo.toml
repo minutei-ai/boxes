@@ -13,3 +13,6 @@ serde_json = "1"
 wasm-bindgen = "=0.2.129"
 
 url = "=2.5.8"
+
+[build-dependencies]
+cirro-compiler = { path = "../compiler" }

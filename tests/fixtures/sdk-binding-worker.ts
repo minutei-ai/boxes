@@ -20,6 +20,7 @@ export const RpcProbe = Schema.Struct({
   denied: Schema.NullOr(Schema.Int),
 });
 const RpcCase = Schema.Literals([
+  "undefined",
   "disposal",
   "error",
   "timeout",
@@ -69,6 +70,9 @@ export default {
               'export default async ({tools}) => tools.call({op:"host.call",name:"lookup",input:{}}).catch(error => error.code)',
           };
           if (mode === "timeout") input.timeoutMs = 25;
+          if (mode === "undefined")
+            input.source =
+              'export default async ({tools}) => (await tools.call({op:"host.call",name:"lookup"})) === undefined';
           if (mode === "disposal") {
             input.maxToolCalls = 2;
             input.source =
@@ -89,8 +93,13 @@ export default {
               if (mode === "wrong-sandbox") return `${id}-other`;
               return id;
             });
-            return yield* agent.runWithTools(sandbox, input, async () => {
+            return yield* agent.runWithTools(sandbox, input, async (call) => {
               calls.count += 1;
+              if (mode === "undefined") {
+                if (call.input !== undefined)
+                  return { ok: false, message: "Undefined input changed" };
+                return { ok: true, value: undefined };
+              }
               if (mode === "disposal") {
                 await Effect.runPromise(boxes.action(id, { op: "vm.dispose" }));
                 return { ok: true, value: "disposed" };
@@ -196,6 +205,7 @@ export default {
           },
           async (call) => {
             hostCalls.push(call.name);
+            if (call.input === undefined) return { ok: true, value: undefined };
             return { ok: true, value: { echoed: call.input, actor: id } };
           },
         );

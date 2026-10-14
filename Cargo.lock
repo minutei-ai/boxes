@@ -227,6 +227,7 @@ dependencies = [
 name = "cirro-guest"
 version = "0.1.0"
 dependencies = [
+ "cirro-compiler",
  "rquickjs",
  "serde",
  "serde_json",

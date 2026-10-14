@@ -149,11 +149,13 @@ export const execute = Effect.fn("execution.run")(function* (
           }).pipe(Effect.result);
           yield* Effect.try({
             try: () => {
-              if (response._tag === "Success")
+              if (response._tag === "Success") {
+                if (response.success === undefined) return guest.respond_undefined();
                 return guest.respond(
                   Schema.encodeSync(Schema.fromJsonString(Schema.Json))(response.success),
                   false,
                 );
+              }
               if (response.failure._tag === "Fault")
                 return guest.respond(
                   Schema.encodeSync(Schema.fromJsonString(ErrorResponse))({

@@ -5,7 +5,7 @@ The `@minutei-ai/boxes` SDK targets Effect 4 and ordinary Cloudflare Workers. It
 Install the SDK archive attached to the GitHub SDK release:
 
 ```sh
-bun add https://github.com/minutei-ai/boxes/releases/download/sdk-v0.5.0/minutei-ai-boxes-0.5.0.tgz
+bun add https://github.com/minutei-ai/boxes/releases/download/sdk-v0.6.0/minutei-ai-boxes-0.6.0.tgz
 ```
 
 Use the service binding from the Minutei Worker environment:
@@ -88,6 +88,6 @@ import type { AgentProtocol } from "@minutei-ai/boxes/rpc";
 const agentBinding = Cloudflare.WorkerEntrypoint<AgentProtocol>(boxes, "Agent");
 ```
 
-Use `makeAgentBinding` from `@minutei-ai/boxes/rpc` with that binding and a scoped token. It retains the HTTP client methods and adds `runWithTools(sandboxId, input, callback)`. Inputs provide `id`, TypeScript module `source`, granted tool names, `maxToolCalls` (1–256) and `timeoutMs` (1–30,000). The source exports its default function and calls `tools.call({ op: "host.call", name, input })`. The callback receives that validated JSON request and returns `{ ok: true, value }` or `{ ok: false, message }`. Values are JSON and each response is bounded to 1 MiB. The server checks capability expiry, the per-execution name grant and call budget before invoking the callback. The caller still owns actor/workspace authorization and domain tool budgets.
+Use `makeAgentBinding` from `@minutei-ai/boxes/rpc` with that binding and a scoped token. It retains the HTTP client methods and adds `runWithTools(sandboxId, input, callback)`. Inputs provide `id`, TypeScript module `source`, granted tool names, `maxToolCalls` (1–256) and `timeoutMs` (1–30,000). The source exports its default function and calls `tools.call({ op: "host.call", name, input })`. The callback receives that validated JSON request and returns `{ ok: true, value }` or `{ ok: false, message }`. Inputs and successful values accept JSON or undefined. Omitted input and void tool results remain undefined inside the Rust guest; null remains distinct. Each response is bounded to 1 MiB. The server checks capability expiry, the per-execution name grant and call budget before invoking the callback. The caller still owns actor/workspace authorization and domain tool budgets.
 
 The Rust guest runs with the sandbox's existing fuel/memory/output policy. Source, execution outcome and acknowledged output use existing R2 process receipts. Callbacks remain with the current RPC execution and are released through native disposers. Queued processes and later executions cannot inherit them. Client interruption does not cancel a durable process; use `process.cancel`. Server timeout stops guest continuation, but already accepted callback effects retain their own lifetime and are not rolled back. Domain API errors remain `BoxesError`; native RPC transport failures are `RpcFailure`. The SDK and server both dispose native RPC result references after decoding them.

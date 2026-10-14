@@ -372,10 +372,13 @@ export const SpawnAction = Schema.Struct({
 export const HostCall = Schema.Struct({
   op: Schema.Literal("host.call"),
   name: Schema.String.check(Schema.isPattern(/^[a-zA-Z_$][a-zA-Z0-9_$-]{0,127}$/)),
-  input: Schema.Json,
+  input: Schema.optionalKey(Schema.UndefinedOr(Schema.Json)),
 });
 export const HostReply = Schema.Union([
-  Schema.Struct({ ok: Schema.Literal(true), value: Schema.Json }),
+  Schema.Struct({
+    ok: Schema.Literal(true),
+    value: Schema.optionalKey(Schema.UndefinedOr(Schema.Json)),
+  }),
   Schema.Struct({
     ok: Schema.Literal(false),
     message: Schema.String.check(Schema.isMaxLength(8192)),

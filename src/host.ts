@@ -8,4 +8,7 @@ export class HostFailure extends Schema.TaggedError<HostFailure>()("HostFailure"
 
 export type HostBridge = (
   request: typeof HostCall.Type,
-) => Effect.Effect<Schema.Json, Fault | HostFailure | Schema.SchemaError | StorageFailure>;
+) => Effect.Effect<
+  Schema.Json | undefined,
+  Fault | HostFailure | Schema.SchemaError | StorageFailure
+>;

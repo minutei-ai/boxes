@@ -186,8 +186,12 @@ impl Guest {
             ctx.globals()
                 .set("__mode", registry.borrow().mode().name())
                 .map_err(|error| failure(&ctx, error))?;
-            Module::evaluate(ctx.clone(), "entry", include_str!("bootstrap.js"))
-                .map_err(|error| failure(&ctx, error))?;
+            Module::evaluate(
+                ctx.clone(),
+                "entry",
+                include_str!(concat!(env!("OUT_DIR"), "/bootstrap.js")),
+            )
+            .map_err(|error| failure(&ctx, error))?;
             let capture = ctx
                 .globals()
                 .get::<_, Function>("__capture")
@@ -391,6 +395,24 @@ impl Guest {
         self.settle(value, rejected)
             .map_err(|error| JsValue::from_str(&error))
     }
+    pub fn respond_undefined(&mut self) -> Result<(), JsValue> {
+        let request = self
+            .active
+            .take()
+            .ok_or_else(|| JsValue::from_str("No pending capability request"))?;
+        if !matches!(request.kind, RequestKind::Action(_)) {
+            return Err(JsValue::from_str(
+                "Undefined response requires a capability request",
+            ));
+        }
+        self.context.with(|ctx| {
+            request
+                .resolve
+                .restore(&ctx)
+                .and_then(|callback| callback.call::<_, ()>((rquickjs::Undefined,)))
+                .map_err(|error| JsValue::from_str(&failure(&ctx, error)))
+        })
+    }
 }
 
 #[cfg(test)]
@@ -419,6 +441,13 @@ mod tests {
         assert!(guest.advance().unwrap().contains("filesystem.exists"));
         guest.settle("{\"exists\":true}", false).unwrap();
         assert!(guest.advance().unwrap().contains("undefined"));
+    }
+    #[test]
+    fn undefined_host_values_remain_undefined_inside_the_guest() {
+        let mut guest = Guest::create(&fixture("export default async ({tools}) => (await tools.call({op:'host.call',name:'empty'})) === undefined;"), 8_388_608, 1000, 4096).unwrap();
+        assert!(guest.advance().unwrap().contains("host.call"));
+        guest.respond_undefined().unwrap();
+        assert!(guest.advance().unwrap().contains("\\\"result\\\":true"));
     }
 
     #[test]
