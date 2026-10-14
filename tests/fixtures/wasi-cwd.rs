@@ -104,10 +104,15 @@ pub extern "C" fn run() -> i32 {
             || cfg!(case = "open-dir")
             || cfg!(case = "exclusive")
             || cfg!(case = "open-close")
+            || cfg!(case = "readonly")
+            || cfg!(case = "nofollow")
         {
-            length = 0;
             let path = if cfg!(case = "open-dir") {
                 b"work".as_slice()
+            } else if cfg!(case = "readonly") {
+                b"/opt/cirro/bin/jq".as_slice()
+            } else if cfg!(case = "nofollow") {
+                b"work/jq".as_slice()
             } else if cfg!(case = "exclusive") {
                 b"work/input.json".as_slice()
             } else {
@@ -115,6 +120,10 @@ pub extern "C" fn run() -> i32 {
             };
             let flags = if cfg!(case = "open-dir") {
                 0x10000u32
+            } else if cfg!(case = "readonly") {
+                1
+            } else if cfg!(case = "nofollow") {
+                0x20000
             } else if cfg!(case = "exclusive") {
                 0xc1
             } else {
@@ -203,6 +212,8 @@ pub extern "C" fn run() -> i32 {
             || cfg!(case = "malformed")
             || cfg!(case = "exclusive")
             || cfg!(case = "open-close")
+            || cfg!(case = "readonly")
+            || cfg!(case = "nofollow")
         {
             if pid != 91 {
                 return 99;

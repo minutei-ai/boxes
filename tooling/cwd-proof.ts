@@ -115,6 +115,8 @@ const rejected = await Effect.runPromise(
       ["malformed", 28],
       ["exclusive", 20],
       ["open-close", 8],
+      ["readonly", 2],
+      ["nofollow", 32],
     ] as const,
     ([mode, errno]) =>
       Effect.tryPromise(async () => {
@@ -123,12 +125,16 @@ const rejected = await Effect.runPromise(
         ).toString("base64");
         const response = await action({ op: "process.run", id: mode, language: "wasm", source });
         const record = Schema.decodeUnknownSync(RunRecord)(await response.json());
-        return (
-          response.status === 200 &&
-          record.status === "exited" &&
-          record.output?.result === errno &&
-          record.output.stdout === ""
-        );
+        return {
+          mode,
+          errno,
+          observed: record.output?.result,
+          passed:
+            response.status === 200 &&
+            record.status === "exited" &&
+            record.output?.result === errno &&
+            record.output.stdout === "",
+        };
       }),
   ),
 );
@@ -154,7 +160,7 @@ const checks = {
     linked.status === 200 &&
     imageLinked.status === 200,
   publishedRelativeInput: receipts.every((receipt) => receipt.passed),
-  invalidCwdAndActions: rejected.every(Boolean),
+  invalidCwdAndActions: rejected.every((receipt) => receipt.passed),
   orderedOpenRedirection:
     redirectResponse.status === 200 &&
     redirect.output?.result === 0 &&
@@ -171,6 +177,7 @@ const report = {
   runtime: "standard Worker",
   checks,
   receipts,
+  rejected,
   artifactDigest,
   allPassed: Object.values(checks).every(Boolean),
   openFileActions: true,

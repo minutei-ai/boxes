@@ -106,6 +106,8 @@ for (const [mode, errno] of [
   ["malformed", 28],
   ["exclusive", 20],
   ["open-close", 8],
+  ["readonly", 2],
+  ["nofollow", 32],
 ] as const) {
   test(`spawn ${mode} rejects before allocating a child PID`, async () => {
     const source = Buffer.from(

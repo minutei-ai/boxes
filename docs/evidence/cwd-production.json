@@ -1,13 +1,14 @@
 {
-  "measuredAt": "2026-10-14T05:48:11.754Z",
+  "measuredAt": "2026-10-14T06:12:17.418Z",
   "url": "https://cirro-sandbox-prod-rs7wexxow56rmsoz.manoel-carvalhoneto.workers.dev",
-  "sandboxId": "cwd-proof-0013d36a-02e0-44d7-8b16-6178e9bef296",
+  "sandboxId": "cwd-proof-bc813dbd-e9f9-4a71-994e-e6f0d9f59fde",
   "profile": "minutei",
   "runtime": "standard Worker",
   "checks": {
     "setup": true,
     "publishedRelativeInput": true,
     "invalidCwdAndActions": true,
+    "orderedOpenRedirection": true,
     "disposal": true
   },
   "receipts": [
@@ -30,11 +31,65 @@
     {
       "mode": "symlink",
       "passed": true
+    },
+    {
+      "mode": "open-dir",
+      "passed": true
+    }
+  ],
+  "rejected": [
+    {
+      "mode": "missing",
+      "errno": 44,
+      "observed": 44,
+      "passed": true
+    },
+    {
+      "mode": "file",
+      "errno": 54,
+      "observed": 54,
+      "passed": true
+    },
+    {
+      "mode": "closed",
+      "errno": 8,
+      "observed": 8,
+      "passed": true
+    },
+    {
+      "mode": "malformed",
+      "errno": 28,
+      "observed": 28,
+      "passed": true
+    },
+    {
+      "mode": "exclusive",
+      "errno": 20,
+      "observed": 20,
+      "passed": true
+    },
+    {
+      "mode": "open-close",
+      "errno": 8,
+      "observed": 8,
+      "passed": true
+    },
+    {
+      "mode": "readonly",
+      "errno": 2,
+      "observed": 2,
+      "passed": true
+    },
+    {
+      "mode": "nofollow",
+      "errno": 32,
+      "observed": 32,
+      "passed": true
     }
   ],
   "artifactDigest": "edb1cf0bbcf663d177916592d2f1b4361a02966dbf2eb44e3e61ea2a399bb43a",
   "allPassed": true,
-  "openFileActions": false,
+  "openFileActions": true,
   "fullProcessParity": false,
   "packageParity": false
 }

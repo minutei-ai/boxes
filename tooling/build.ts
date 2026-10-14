@@ -213,6 +213,8 @@ await Effect.runPromise(
       "open-dir",
       "exclusive",
       "open-close",
+      "readonly",
+      "nofollow",
     ]) {
       yield* run([
         "rustc",
