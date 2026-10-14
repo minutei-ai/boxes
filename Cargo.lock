@@ -227,7 +227,12 @@ dependencies = [
 name = "cirro-guest"
 version = "0.1.0"
 dependencies = [
- "cirro-compiler",
+ "oxc_allocator",
+ "oxc_codegen",
+ "oxc_parser",
+ "oxc_semantic",
+ "oxc_span",
+ "oxc_transformer",
  "rquickjs",
  "serde",
  "serde_json",
