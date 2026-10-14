@@ -272,7 +272,7 @@ struct Pending {
 struct State {
     limits: StoreLimits,
     descriptors: BTreeMap<u32, Descriptor>,
-    files: BTreeMap<u32, FileBuffer>,
+    files: BTreeMap<u32, Rc<RefCell<FileBuffer>>>,
     stdout: Vec<u8>,
     stderr: Vec<u8>,
     max_output: usize,
@@ -403,6 +403,7 @@ fn confined(base: &str, path: &str) -> Result<String, Failure> {
 
 fn detach(state: &mut State, path: &str) {
     for file in state.files.values_mut() {
+        let mut file = file.borrow_mut();
         if file
             .path
             .as_deref()
@@ -999,15 +1000,17 @@ fn dispatch(caller: &mut Caller<'_, State>, name: &str, args: &[u64]) -> Result<
             };
             let mut read = 0usize;
             for (pointer, length) in vectors {
-                let data = caller
-                    .data()
-                    .files
-                    .get(&descriptor.cache.ok_or(Failure::Errno(8))?)
-                    .ok_or(Failure::Errno(8))?;
-                let data = &data.bytes;
-                let start = offset.min(data.len());
-                let end = start.saturating_add(length).min(data.len());
-                let data = data[start..end].to_vec();
+                let data = {
+                    let file = caller
+                        .data()
+                        .files
+                        .get(&descriptor.cache.ok_or(Failure::Errno(8))?)
+                        .ok_or(Failure::Errno(8))?
+                        .borrow();
+                    let start = offset.min(file.bytes.len());
+                    let end = start.saturating_add(length).min(file.bytes.len());
+                    file.bytes[start..end].to_vec()
+                };
                 put(caller, pointer, &data)?;
                 offset += data.len();
                 read += data.len();
@@ -1091,32 +1094,39 @@ fn dispatch(caller: &mut Caller<'_, State>, name: &str, args: &[u64]) -> Result<
                     put(caller, output, &(count as u32).to_le_bytes())?;
                     return Ok(0);
                 }
-                let file = &state
+                let file = state
                     .files
                     .get(&descriptor.cache.ok_or(Failure::Errno(8))?)
                     .ok_or(Failure::Errno(8))?
-                    .bytes;
+                    .borrow()
+                    .bytes
+                    .len();
                 let offset = if name == "fd_pwrite" {
                     usize::try_from(args[3]).map_err(|_| Failure::Errno(28))?
                 } else if descriptor.flags.get() & 1 != 0 {
-                    file.len()
+                    file
                 } else {
                     descriptor.offset.get()
                 };
                 let end = offset.checked_add(data.len()).ok_or(Failure::Errno(22))?;
-                let total: usize = state.files.values().map(|file| file.bytes.len()).sum();
+                let total: usize = state
+                    .files
+                    .values()
+                    .map(|file| file.borrow().bytes.len())
+                    .sum();
                 if end > MAX_BYTES {
                     return Err(Failure::Errno(22));
                 }
-                if total - file.len() + file.len().max(end) > MAX_BYTES {
+                if total - file + file.max(end) > MAX_BYTES {
                     return Err(Failure::Errno(48));
                 }
                 let file = state
                     .files
                     .get_mut(&descriptor.cache.ok_or(Failure::Errno(8))?)
                     .ok_or(Failure::Errno(8))?;
-                let linked_path = file.path.clone();
-                let file = &mut file.bytes;
+                let mut buffer = file.borrow_mut();
+                let linked_path = buffer.path.clone();
+                let file = &mut buffer.bytes;
                 let previous_length = file.len();
                 let previous = file[offset.min(file.len())..end.min(file.len())].to_vec();
                 if end > file.len() {
@@ -1124,6 +1134,7 @@ fn dispatch(caller: &mut Caller<'_, State>, name: &str, args: &[u64]) -> Result<
                 }
                 file[offset..end].copy_from_slice(&data);
                 let path = linked_path;
+                drop(buffer);
                 suspend(
                     caller,
                     Request::Flush {
@@ -1177,6 +1188,7 @@ fn dispatch(caller: &mut Caller<'_, State>, name: &str, args: &[u64]) -> Result<
                 .files
                 .get(&cache)
                 .ok_or(Failure::Errno(8))?
+                .borrow()
                 .bytes
                 .len();
             let size = if name == "fd_allocate" {
@@ -1184,14 +1196,20 @@ fn dispatch(caller: &mut Caller<'_, State>, name: &str, args: &[u64]) -> Result<
             } else {
                 size
             };
-            let total: usize = state.files.values().map(|file| file.bytes.len()).sum();
+            let total: usize = state
+                .files
+                .values()
+                .map(|file| file.borrow().bytes.len())
+                .sum();
             if total - previous_length + size > MAX_BYTES {
                 return Err(Failure::Errno(48));
             }
             let file = state.files.get_mut(&cache).ok_or(Failure::Errno(8))?;
+            let mut file = file.borrow_mut();
             let previous = file.bytes[size.min(previous_length)..].to_vec();
             let path = file.path.clone();
             file.bytes.resize(size, 0);
+            drop(file);
             suspend(
                 caller,
                 Request::Flush {
@@ -1375,9 +1393,13 @@ fn dispatch(caller: &mut Caller<'_, State>, name: &str, args: &[u64]) -> Result<
                             } else if let Some(file) =
                                 descriptor.cache.and_then(|cache| state.files.get(&cache))
                             {
+                                let file = file.borrow();
                                 let available = if writing {
-                                    let total: usize =
-                                        state.files.values().map(|file| file.bytes.len()).sum();
+                                    let total: usize = state
+                                        .files
+                                        .values()
+                                        .map(|file| file.borrow().bytes.len())
+                                        .sum();
                                     let position = if descriptor.flags.get() & 1 != 0 {
                                         file.bytes.len()
                                     } else {
@@ -1804,6 +1826,7 @@ fn dispatch(caller: &mut Caller<'_, State>, name: &str, args: &[u64]) -> Result<
                         .files
                         .get(&descriptor.cache.ok_or(Failure::Errno(8))?)
                         .ok_or(Failure::Errno(8))?
+                        .borrow()
                         .bytes
                         .len(),
                     _ => return Err(Failure::Errno(28)),
@@ -2189,14 +2212,14 @@ impl WasmGuest {
             .data()
             .files
             .values()
-            .any(|file| file.path.as_deref() == Some(path))
+            .any(|file| file.borrow().path.as_deref() == Some(path))
     }
     pub fn buffered_bytes(&self) -> usize {
         self.store
             .data()
             .files
             .values()
-            .map(|file| file.bytes.len())
+            .map(|file| file.borrow().bytes.len())
             .sum()
     }
 
@@ -2210,7 +2233,7 @@ impl WasmGuest {
             return state
                 .files
                 .get(&cache)
-                .map(|file| file.metadata.to_vec())
+                .map(|file| file.borrow().metadata.to_vec())
                 .ok_or_else(|| JsValue::from_str("Missing file cache"));
         }
         Ok(descriptor.metadata.to_vec())
@@ -2228,7 +2251,7 @@ impl WasmGuest {
         state
             .files
             .get(&cache)
-            .map(|file| file.bytes.clone())
+            .map(|file| file.borrow().bytes.clone())
             .ok_or_else(|| JsValue::from_str("Missing file buffer"))
     }
 
@@ -2280,7 +2303,8 @@ impl WasmGuest {
                         .ok_or_else(|| JsValue::from_str("Missing cache reference"))?,
                 )
                 .ok_or_else(|| JsValue::from_str("Missing file buffer"))?;
-            let file = &mut file.bytes;
+            let mut buffer = file.borrow_mut();
+            let file = &mut buffer.bytes;
             file.resize(*previous_length, 0);
             if !previous.is_empty() {
                 let end = start
@@ -2310,11 +2334,11 @@ impl WasmGuest {
                     descriptor.cache = Some(cache);
                     state.files.insert(
                         cache,
-                        FileBuffer {
+                        Rc::new(RefCell::new(FileBuffer {
                             path: None,
                             bytes: Vec::new(),
                             metadata: descriptor.metadata,
-                        },
+                        })),
                     );
                     state.descriptors.insert(fd, descriptor);
                     self.memory
@@ -2331,8 +2355,8 @@ impl WasmGuest {
                     let total: usize = state
                         .files
                         .iter()
-                        .filter(|(_, file)| file.path.as_deref() != Some(path))
-                        .map(|(_, file)| file.bytes.len())
+                        .filter(|(_, file)| file.borrow().path.as_deref() != Some(path))
+                        .map(|(_, file)| file.borrow().bytes.len())
                         .sum();
                     if state.descriptors.len() >= MAX_FILES
                         || total.saturating_add(data.len()) > MAX_BYTES
@@ -2348,21 +2372,27 @@ impl WasmGuest {
                             let cache = state
                                 .files
                                 .iter()
-                                .find(|(_, file)| file.path.as_deref() == Some(path))
+                                .find(|(_, file)| file.borrow().path.as_deref() == Some(path))
                                 .map(|(cache, _)| *cache)
                                 .or_else(|| {
                                     (0..MAX_FILES as u32)
                                         .find(|cache| !state.files.contains_key(cache))
                                 })
                                 .ok_or_else(|| JsValue::from_str("File cache quota exceeded"))?;
-                            if truncate || !state.files.contains_key(&cache) {
+                            if let Some(file) = state.files.get(&cache) {
+                                if truncate {
+                                    let mut file = file.borrow_mut();
+                                    file.bytes = data.to_vec();
+                                    file.metadata = descriptor.metadata;
+                                }
+                            } else {
                                 state.files.insert(
                                     cache,
-                                    FileBuffer {
+                                    Rc::new(RefCell::new(FileBuffer {
                                         path: Some(path.into()),
                                         bytes: data.to_vec(),
                                         metadata: descriptor.metadata,
-                                    },
+                                    })),
                                 );
                             }
                             descriptor.cache = Some(cache);
@@ -2395,6 +2425,7 @@ impl WasmGuest {
                         .files
                         .get_mut(&cache)
                         .ok_or_else(|| JsValue::from_str("Missing file cache"))?
+                        .borrow_mut()
                         .metadata = metadata
                         .try_into()
                         .map_err(|_| JsValue::from_str("Invalid inode metadata"))?;
@@ -2434,6 +2465,7 @@ impl WasmGuest {
                                 .files
                                 .get_mut(&cache)
                                 .ok_or_else(|| JsValue::from_str("Missing cache reference"))?
+                                .borrow_mut()
                                 .metadata = bytes;
                         }
                     }
@@ -2482,6 +2514,7 @@ impl WasmGuest {
                                 .files
                                 .get_mut(&cache)
                                 .ok_or_else(|| JsValue::from_str("Missing cache reference"))?
+                                .borrow_mut()
                                 .metadata = bytes;
                         }
                     }
@@ -2503,6 +2536,7 @@ impl WasmGuest {
                                     .files
                                     .get_mut(&cache)
                                     .ok_or_else(|| JsValue::from_str("Missing file cache"))?
+                                    .borrow_mut()
                                     .metadata = metadata;
                             }
                         }
@@ -2555,6 +2589,7 @@ impl WasmGuest {
                         let state = self.store.data_mut();
                         detach(state, to);
                         for file in state.files.values_mut() {
+                            let mut file = file.borrow_mut();
                             if let Some(current) = &file.path
                                 && (current == path || current.starts_with(&format!("{path}/")))
                             {
@@ -2749,6 +2784,73 @@ mod tests {
                 .unwrap()
                 .has_peer()
         );
+    }
+
+    #[test]
+    fn inherited_file_buffers_survive_close_and_share_guest_writes_and_rollback() {
+        let configuration = r#"{"argv":[],"env":{}}"#;
+        for errno in [0, 2] {
+            let mut parent = WasmGuest::create(
+                include_bytes!("../../../dist/wasi-shared-file-parent.wasm"),
+                configuration,
+                &[],
+                8_388_608,
+                100_000,
+                1024,
+            )
+            .unwrap();
+            let mut child = WasmGuest::create(
+                include_bytes!("../../../dist/wasi-shared-file-child.wasm"),
+                configuration,
+                &[],
+                8_388_608,
+                100_000,
+                1024,
+            )
+            .unwrap();
+            parent.advance().unwrap();
+            assert!(matches!(
+                parent.store.data().pending.as_ref().unwrap().request,
+                Request::Open { .. }
+            ));
+            let mut metadata = [0u8; 76];
+            metadata[32..40].copy_from_slice(&3u64.to_le_bytes());
+            parent
+                .respond(0, b"abc", "/tmp/shared", false, 0, &metadata)
+                .unwrap();
+            parent.advance().unwrap();
+            assert!(matches!(
+                parent.store.data().pending.as_ref().unwrap().request,
+                Request::Clock { .. }
+            ));
+            child.store.data_mut().files = parent.store.data().files.clone();
+            child
+                .store
+                .data_mut()
+                .descriptors
+                .insert(4, duplicate_source(parent.store.data(), 4).unwrap());
+            let buffer = Rc::downgrade(parent.store.data().files.values().next().unwrap());
+            close(parent.store.data_mut(), 4);
+            assert!(parent.store.data().files.is_empty());
+            assert_eq!(child.file_data(4).unwrap(), b"abc");
+            child.advance().unwrap();
+            assert!(matches!(
+                child.store.data().pending.as_ref().unwrap().request,
+                Request::Flush { .. }
+            ));
+            assert_eq!(child.file_data(4).unwrap(), b"abcX");
+            metadata[32..40].copy_from_slice(&4u64.to_le_bytes());
+            child
+                .respond(errno, &[], "/tmp/shared", false, 0, &metadata)
+                .unwrap();
+            child.advance().unwrap();
+            assert_eq!(child.done, Some(0));
+            assert_eq!(child.outputs.first().and_then(Val::i32), Some(0));
+            assert_eq!(child.buffered_bytes(), if errno == 0 { 4 } else { 3 });
+            assert!(buffer.upgrade().is_some());
+            drop(child);
+            assert!(buffer.upgrade().is_none());
+        }
     }
 
     #[test]
