@@ -85,7 +85,16 @@ afterAll(async () => {
   await rm(directory, { recursive: true, force: true });
 });
 
-for (const mode of ["explicit", "relative", "chdir", "fchdir", "symlink", "open-dir"] as const) {
+for (const mode of [
+  "explicit",
+  "relative",
+  "chdir",
+  "fchdir",
+  "symlink",
+  "open-dir",
+  "closefrom-root",
+  "closefrom-high",
+] as const) {
   test(`spawn ${mode} supplies the resolved cwd to published libc and opens a relative input`, async () => {
     const source = Buffer.from(
       await Bun.file(join(import.meta.dir, `../dist/wasi-cwd-${mode}.wasm`)).arrayBuffer(),
@@ -106,6 +115,8 @@ for (const [mode, errno] of [
   ["malformed", 28],
   ["exclusive", 20],
   ["open-close", 8],
+  ["closefrom", 8],
+  ["closefrom-negative", 8],
   ["readonly", 2],
   ["nofollow", 32],
 ] as const) {

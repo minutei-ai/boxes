@@ -104,6 +104,7 @@ pub extern "C" fn run() -> i32 {
             || cfg!(case = "open-dir")
             || cfg!(case = "exclusive")
             || cfg!(case = "open-close")
+            || cfg!(case = "closefrom")
             || cfg!(case = "readonly")
             || cfg!(case = "nofollow")
         {
@@ -139,6 +140,8 @@ pub extern "C" fn run() -> i32 {
             length = 24 + path.len();
             let next = if cfg!(case = "open-dir") {
                 5u32
+            } else if cfg!(case = "closefrom") {
+                6
             } else if cfg!(case = "open-close") {
                 1
             } else {
@@ -156,7 +159,7 @@ pub extern "C" fn run() -> i32 {
                 actions[length + 4..length + 8].copy_from_slice(&12u32.to_le_bytes());
                 length += 24;
             }
-            if cfg!(case = "open-close") {
+            if cfg!(case = "open-close") || cfg!(case = "closefrom") {
                 actions[length..length + 4].copy_from_slice(&2u32.to_le_bytes());
                 actions[length + 4..length + 8].copy_from_slice(&1u32.to_le_bytes());
                 actions[length + 8..length + 12].copy_from_slice(&12u32.to_le_bytes());
@@ -168,6 +171,28 @@ pub extern "C" fn run() -> i32 {
                 actions[offset + 20..offset + 24].copy_from_slice(&4u32.to_le_bytes());
                 actions[offset + 24..offset + 28].copy_from_slice(b"work");
                 length += 28;
+            }
+        }
+        if cfg!(case = "closefrom-root")
+            || cfg!(case = "closefrom-high")
+            || cfg!(case = "closefrom-negative")
+        {
+            actions.fill(0);
+            actions[..4].copy_from_slice(&6u32.to_le_bytes());
+            let minimum = if cfg!(case = "closefrom-negative") {
+                u32::MAX
+            } else if cfg!(case = "closefrom-high") {
+                1024
+            } else {
+                3
+            };
+            actions[4..8].copy_from_slice(&minimum.to_le_bytes());
+            length = 24;
+            if !cfg!(case = "closefrom-negative") {
+                actions[24..28].copy_from_slice(&4u32.to_le_bytes());
+                actions[44..48].copy_from_slice(&4u32.to_le_bytes());
+                actions[48..52].copy_from_slice(b"work");
+                length = 52;
             }
         }
         let cwd = if cfg!(case = "explicit") || cfg!(case = "relative") {
@@ -210,8 +235,10 @@ pub extern "C" fn run() -> i32 {
             || cfg!(case = "file")
             || cfg!(case = "closed")
             || cfg!(case = "malformed")
+            || cfg!(case = "closefrom-negative")
             || cfg!(case = "exclusive")
             || cfg!(case = "open-close")
+            || cfg!(case = "closefrom")
             || cfg!(case = "readonly")
             || cfg!(case = "nofollow")
         {

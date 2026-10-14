@@ -799,6 +799,17 @@ fn dispatch(caller: &mut Caller<'_, State>, name: &str, args: &[u64]) -> Result<
                             return Err(Failure::Errno(58));
                         }
                     }
+                    6 => {
+                        if fields[1] > i32::MAX as u32 {
+                            return Err(Failure::Errno(8));
+                        }
+                        if length != 0 {
+                            return Err(Failure::Errno(28));
+                        }
+                        if fields[2] != 0 || fields[3] != 0 || fields[4] != 0 {
+                            return Err(Failure::Errno(58));
+                        }
+                    }
                     3 => {
                         if fields[1] >= MAX_FILES as u32 + 4 || path.is_empty() {
                             return Err(Failure::Errno(28));
@@ -2118,6 +2129,22 @@ fn dispatch(caller: &mut Caller<'_, State>, name: &str, args: &[u64]) -> Result<
                 },
             )?;
         }
+        "proc_closefrom" => {
+            let minimum = a[0] as u32;
+            let state = caller.data_mut();
+            let closing: Vec<u32> = state
+                .descriptors
+                .keys()
+                .copied()
+                .filter(|fd| *fd >= minimum && *fd != HIDDEN_PREOPEN)
+                .collect();
+            for fd in closing {
+                close(state, fd);
+            }
+            for fd in minimum.min(3)..3 {
+                close(state, fd);
+            }
+        }
         "fd_close" => {
             if a[0] as u32 == HIDDEN_PREOPEN {
                 return Err(Failure::Errno(8));
@@ -2317,6 +2344,7 @@ fn linker(engine: &Engine) -> Result<Linker<State>, String> {
     bind!("host_process","fd_pipe",a:i32,b:i32);
     bind!("host_process","fd_dup",a:i32,b:i32);
     bind!("host_process","fd_dup2",a:i32,b:i32);
+    bind!("host_process","proc_closefrom",a:i32);
     bind!("host_process","fd_getfd",a:i32,b:i32);
     bind!("host_process","fd_setfd",a:i32,b:i32);
     bind!("host_user","isatty",a:i32,b:i32);
@@ -2734,6 +2762,20 @@ impl WasmGuest {
                     }
                 } else {
                     errno = 8;
+                }
+            }
+            6 => {
+                let closing: Vec<u32> = resources
+                    .descriptors
+                    .keys()
+                    .copied()
+                    .filter(|fd| *fd >= action.fd && *fd != HIDDEN_PREOPEN)
+                    .collect();
+                for fd in closing {
+                    resources.close(fd);
+                }
+                for fd in action.fd.min(3)..3 {
+                    resources.close(fd);
                 }
             }
             5 => match resources.descriptors.get(&action.fd) {

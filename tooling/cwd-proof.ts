@@ -86,7 +86,16 @@ const imageLinked = await action({
 });
 const receipts = await Effect.runPromise(
   Effect.forEach(
-    ["explicit", "relative", "chdir", "fchdir", "symlink", "open-dir"] as const,
+    [
+      "explicit",
+      "relative",
+      "chdir",
+      "fchdir",
+      "symlink",
+      "open-dir",
+      "closefrom-root",
+      "closefrom-high",
+    ] as const,
     (mode) =>
       Effect.tryPromise(async () => {
         const source = Buffer.from(
@@ -115,6 +124,8 @@ const rejected = await Effect.runPromise(
       ["malformed", 28],
       ["exclusive", 20],
       ["open-close", 8],
+      ["closefrom", 8],
+      ["closefrom-negative", 8],
       ["readonly", 2],
       ["nofollow", 32],
     ] as const,

@@ -81,6 +81,16 @@ const file = Schema.decodeUnknownSync(FileContent)(
 const other = Schema.decodeUnknownSync(FileContent)(
   await (await action({ op: "filesystem.readFile", path: "/tmp/other" })).json(),
 );
+const closefromSource = Buffer.from(
+  await Bun.file(join(import.meta.dir, "../dist/wasi-closefrom.wasm")).arrayBuffer(),
+).toString("base64");
+const closefromResponse = await action({
+  op: "process.run",
+  id: "closefrom",
+  language: "wasm",
+  source: closefromSource,
+});
+const closefrom = Schema.decodeUnknownSync(RunRecord)(await closefromResponse.json());
 const disposed = await action({ op: "vm.dispose" });
 const checks = {
   setup: written.status === 200 && otherWritten.status === 200,
@@ -90,6 +100,12 @@ const checks = {
   persistedWrites:
     Buffer.from(file.content, file.encoding).toString() === "abcdefZ" &&
     Buffer.from(other.content, other.encoding).toString() === "other",
+  closefromLifetimeAndHiddenPreopen:
+    closefromResponse.status === 200 &&
+    closefrom.status === "exited" &&
+    closefrom.output?.result === 0 &&
+    closefrom.output.stdout === "" &&
+    closefrom.output.stderr === "",
   disposal: disposed.status === 200,
 };
 const report = {

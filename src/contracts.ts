@@ -418,7 +418,7 @@ export const WasmStep = Schema.Union([
     env: WasmConfiguration.fields.env,
     actions: Schema.Array(
       Schema.Struct({
-        command: Schema.Literals([1, 2, 3, 4, 5]),
+        command: Schema.Literals([1, 2, 3, 4, 5, 6]),
         fd: Schema.Int,
         source: Schema.Int,
         flags: Schema.Int,

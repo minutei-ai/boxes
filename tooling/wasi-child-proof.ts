@@ -140,6 +140,33 @@ const trapped = await Effect.runPromise(
     }),
   ),
 );
+const closefromUploaded = await action({
+  op: "filesystem.writeFile",
+  path: "/tmp/child.wasm",
+  content: child,
+  encoding: "base64",
+});
+const closefromExecutable = await action({
+  op: "filesystem.chmod",
+  path: "/tmp/child.wasm",
+  mode: 493,
+});
+const closefromReset = await action({
+  op: "filesystem.writeFile",
+  path: "/tmp/shared",
+  content: "abc",
+  encoding: "utf8",
+});
+const closefromSource = Buffer.from(
+  await Bun.file(join(import.meta.dir, "../dist/wasi-child-parent-closefrom.wasm")).arrayBuffer(),
+).toString("base64");
+const closefromResponse = await action({
+  op: "process.run",
+  id: "closefrom",
+  language: "wasm",
+  source: closefromSource,
+});
+const closefrom = Schema.decodeUnknownSync(RunRecord)(await closefromResponse.json());
 const disposed = await action({ op: "vm.dispose" });
 const checks = {
   setup: uploaded.status === 200 && executable.status === 200 && written.status === 200,
@@ -156,6 +183,13 @@ const checks = {
     Buffer.from(moved.content, moved.encoding).toString() === "abcX" &&
     missing.status === 404,
   childTrapIsolation: trapped.every((receipt) => receipt.passed),
+  spawnClosefromPreservesParent:
+    closefromUploaded.status === 200 &&
+    closefromExecutable.status === 200 &&
+    closefromReset.status === 200 &&
+    closefromResponse.status === 200 &&
+    closefrom.output?.result === 0 &&
+    closefrom.output.stdout === "parent\nchild\nwaited\n",
   disposal: disposed.status === 200,
 };
 const report = {

@@ -206,3 +206,42 @@ for (const mode of ["child-trap", "child-oob"] as const) {
     expect(Buffer.from(file.content, file.encoding).toString()).toBe("abcXY");
   });
 }
+
+test("spawn closefrom preserves lower child descriptors and the complete parent table", async () => {
+  const child = Buffer.from(
+    await Bun.file(join(import.meta.dir, "../dist/wasi-child-child.wasm")).arrayBuffer(),
+  ).toString("base64");
+  expect(
+    (
+      await act({
+        op: "filesystem.writeFile",
+        path: "/tmp/child.wasm",
+        content: child,
+        encoding: "base64",
+      })
+    ).status,
+  ).toBe(200);
+  expect((await act({ op: "filesystem.chmod", path: "/tmp/child.wasm", mode: 493 })).status).toBe(
+    200,
+  );
+  expect(
+    (
+      await act({
+        op: "filesystem.writeFile",
+        path: "/tmp/shared",
+        content: "abc",
+        encoding: "utf8",
+      })
+    ).status,
+  ).toBe(200);
+  const source = Buffer.from(
+    await Bun.file(join(import.meta.dir, "../dist/wasi-child-parent-closefrom.wasm")).arrayBuffer(),
+  ).toString("base64");
+  const record = Schema.decodeUnknownSync(RunRecord)(
+    await (
+      await act({ op: "process.run", id: "spawn-closefrom", language: "wasm", source })
+    ).json(),
+  );
+  expect(record.output?.result).toBe(0);
+  expect(record.output?.stdout).toBe("parent\nchild\nwaited\n");
+});

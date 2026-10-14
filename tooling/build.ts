@@ -213,6 +213,10 @@ await Effect.runPromise(
       "open-dir",
       "exclusive",
       "open-close",
+      "closefrom",
+      "closefrom-root",
+      "closefrom-high",
+      "closefrom-negative",
       "readonly",
       "nofollow",
     ]) {
@@ -266,6 +270,7 @@ await Effect.runPromise(
       "child-trap",
       "child-oob",
       "parent-trap",
+      "parent-closefrom",
       "denied",
     ]) {
       yield* run([
@@ -332,6 +337,22 @@ await Effect.runPromise(
       "tests/fixtures/wasi-fd-dup.rs",
       "-o",
       "dist/wasi-fd-dup.wasm",
+    ]);
+    yield* run([
+      "rustc",
+      "--edition",
+      "2024",
+      "--target",
+      "wasm32-unknown-unknown",
+      "--crate-type",
+      "cdylib",
+      "-C",
+      "opt-level=2",
+      "-C",
+      "panic=abort",
+      "tests/fixtures/wasi-closefrom.rs",
+      "-o",
+      "dist/wasi-closefrom.wasm",
     ]);
     yield* run([
       "rustc",

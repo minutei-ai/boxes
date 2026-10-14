@@ -239,7 +239,14 @@ pub extern "C" fn run() -> i32 {
         actions[..4].copy_from_slice(&2u32.to_le_bytes());
         actions[4..8].copy_from_slice(&10u32.to_le_bytes());
         actions[8..12].copy_from_slice(&9u32.to_le_bytes());
-        actions[24..28].copy_from_slice(&1u32.to_le_bytes());
+        actions[24..28].copy_from_slice(
+            &if cfg!(case = "parent-closefrom") {
+                6u32
+            } else {
+                1u32
+            }
+            .to_le_bytes(),
+        );
         actions[28..32].copy_from_slice(&10u32.to_le_bytes());
         let mut child = 91;
         let status = proc_spawn_v3(

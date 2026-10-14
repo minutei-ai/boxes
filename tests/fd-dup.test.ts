@@ -76,3 +76,20 @@ test("dup shares file position/status while descriptor flags and closure remain 
   );
   expect(Buffer.from(other.content, other.encoding).toString()).toBe("other");
 });
+
+test("closefrom releases aliases and 72 pipe generations, preserves lower descriptors and hidden pathname resolution", async () => {
+  const source = Buffer.from(
+    await Bun.file(join(import.meta.dir, "../dist/wasi-closefrom.wasm")).arrayBuffer(),
+  ).toString("base64");
+  const response = await act({ op: "process.run", id: "closefrom", language: "wasm", source });
+  expect(response.status).toBe(200);
+  const record = Schema.decodeUnknownSync(RunRecord)(await response.json());
+  expect(record.status).toBe("exited");
+  expect(record.output?.result).toBe(0);
+  expect(record.output?.stdout).toBe("");
+  expect(record.output?.stderr).toBe("");
+  const other = Schema.decodeUnknownSync(FileContent)(
+    await (await act({ op: "filesystem.readFile", path: "/tmp/other" })).json(),
+  );
+  expect(Buffer.from(other.content, other.encoding).toString()).toBe("other");
+});
