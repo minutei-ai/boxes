@@ -2535,6 +2535,17 @@ test("package installation publishes immutable files, catalog, projections and e
   expect(stat.mode).toBe(0o555);
   expect(stat.uid).toBe(1000);
   expect(stat.gid).toBe(1001);
+  expect(
+    (
+      await act("packages", token, {
+        op: "filesystem.chown",
+        path: "/opt/cirro/pkgs/probe/1.0.0/bin/probe",
+        uid: 2000,
+        gid: 2001,
+        follow: true,
+      })
+    ).status,
+  ).toBe(403);
   expect(stat.mtimeNs).toBe("123000000000");
   const immutable = Schema.decodeUnknownSync(RunRecord)(
     await (

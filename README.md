@@ -118,6 +118,8 @@ Unreferenced blocks and disposed sandboxes are retained. Safe garbage collection
 
 `filesystem.export` takes `maxBytes` (1 byte to 24 MiB) and returns a `snapshot-export` with `source.format: "boxes-filesystem-snapshot-v1"` and `source.filesystem.entries`. Entries contain absolute paths, octal modes, UID/GID, base64 file bytes or a symlink target. It includes the root and reads one confirmed R2 manifest; it does not follow symlinks. Oversized exports fail with `EFBIG` before fetching file blocks. Unreadable files and corrupt content fail the whole operation. The operation requires a read capability and is available through guest `tools.call`.
 
+`filesystem.chown` takes `path`, unsigned 32-bit `uid`/`gid` and an explicit `follow` flag. It updates virtual inode ownership under a write capability and applies the package write guard. Changed ownership survives Worker replacement and appears in filesystem exports. `bun run ownership:proof` checks host and TypeScript agent calls against `CIRRO_URL`.
+
 `bun run export:proof` validates the public contract against `CIRRO_URL`. Importing a snapshot is not implemented.
 
 ## Inspiration

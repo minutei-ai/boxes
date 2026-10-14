@@ -342,6 +342,13 @@ export const filesystem = Effect.fn("filesystem.action")(function* (
         return { ok: true } satisfies typeof Success.Type;
       }),
     ),
+    Match.when({ op: "filesystem.chown" }, (input) =>
+      Effect.gen(function* () {
+        yield* kernelCall(() => kernel.chown(input.path, input.uid, input.gid, input.follow));
+        yield* publish(env, id, session);
+        return { ok: true } satisfies typeof Success.Type;
+      }),
+    ),
     Match.when({ op: "filesystem.chmod" }, (input) =>
       Effect.gen(function* () {
         yield* kernelCall(() => kernel.chmod(input.path, input.mode));

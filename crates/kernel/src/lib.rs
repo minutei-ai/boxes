@@ -1175,6 +1175,21 @@ impl Kernel {
         Ok(encoded)
     }
 
+    pub fn chown(&mut self, path: &str, uid: u32, gid: u32, follow: bool) -> Result<(), JsValue> {
+        let path = self.resolve(path, follow).map_err(|error| fail(&error))?;
+        self.package_writable(&path, false)
+            .map_err(|error| fail(&error))?;
+        let metadata = self
+            .state
+            .metadata
+            .get_mut(&path)
+            .ok_or_else(|| fail("ENOENT: file does not exist"))?;
+        metadata.uid = uid;
+        metadata.gid = gid;
+        metadata.ctime_ns = self.now;
+        Ok(())
+    }
+
     pub fn chmod(&mut self, path: &str, mode: u32) -> Result<(), JsValue> {
         if mode > 0o777 {
             return Err(fail("EINVAL: invalid permission mode"));
@@ -1198,6 +1213,51 @@ impl Kernel {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn ownership_preserves_identity_and_follows_only_selected_symlinks() -> Result<(), String> {
+        let mut kernel = Kernel::fresh();
+        kernel.initialize_times(10);
+        kernel
+            .symlink("/tmp", "/home/alias")
+            .map_err(|_| "link failed")?;
+        let inode = kernel
+            .state
+            .metadata
+            .get("/tmp")
+            .ok_or("missing inode")?
+            .inode;
+        kernel.set_time(20);
+        kernel
+            .chown("/home/alias", 1000, 1001, false)
+            .map_err(|_| "link ownership failed")?;
+        let target = kernel.state.metadata.get("/tmp").ok_or("missing target")?;
+        assert_eq!((target.uid, target.gid, target.ctime_ns), (0, 0, 10));
+        kernel.set_time(30);
+        kernel
+            .chown("/home/alias", u32::MAX, 1002, true)
+            .map_err(|_| "target ownership failed")?;
+        let target = kernel.state.metadata.get("/tmp").ok_or("missing target")?;
+        assert_eq!(
+            (
+                target.uid,
+                target.gid,
+                target.inode,
+                target.atime_ns,
+                target.mtime_ns,
+                target.ctime_ns
+            ),
+            (u32::MAX, 1002, inode, 10, 10, 30)
+        );
+        let link = kernel
+            .state
+            .metadata
+            .get("/home/alias")
+            .ok_or("missing link")?;
+        assert_eq!((link.uid, link.gid, link.ctime_ns), (1000, 1001, 20));
+        kernel.validate()?;
+        Ok(())
+    }
 
     #[test]
     fn timestamp_flags_preserve_identity_and_unselected_fields() -> Result<(), String> {

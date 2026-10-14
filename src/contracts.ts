@@ -37,6 +37,7 @@ export const DirectoryExclusions = Schema.Array(
   Schema.String.check(Schema.isPattern(/^[^/\0]{1,255}$/)),
 ).check(Schema.isMaxLength(128));
 
+const OwnerId = Schema.Int.check(Schema.isBetween({ minimum: 0, maximum: 4_294_967_295 }));
 export const FilesystemAction = Schema.Union([
   Schema.Struct({
     op: Schema.Literal("filesystem.export"),
@@ -91,6 +92,13 @@ export const FilesystemAction = Schema.Union([
   Schema.Struct({ op: Schema.Literal("filesystem.remove"), path: Path, recursive: Schema.Boolean }),
   Schema.Struct({ op: Schema.Literal("filesystem.symlink"), path: Path, target: Path }),
   Schema.Struct({ op: Schema.Literal("filesystem.readlink"), path: Path }),
+  Schema.Struct({
+    op: Schema.Literal("filesystem.chown"),
+    path: Path,
+    uid: OwnerId,
+    gid: OwnerId,
+    follow: Schema.Boolean,
+  }),
   Schema.Struct({
     op: Schema.Literal("filesystem.chmod"),
     path: Path,
@@ -368,8 +376,8 @@ export const FileStat = Schema.Struct({
   mode: Schema.Int,
   inode: Schema.Int,
   nlink: Schema.Int,
-  uid: Schema.Int,
-  gid: Schema.Int,
+  uid: OwnerId,
+  gid: OwnerId,
   atimeNs: Schema.String.check(Schema.isPattern(/^\d+$/)),
   mtimeNs: Schema.String.check(Schema.isPattern(/^\d+$/)),
   ctimeNs: Schema.String.check(Schema.isPattern(/^\d+$/)),
@@ -744,8 +752,8 @@ export const PackagePreparation = Schema.Struct({
         Schema.Struct({ kind: Schema.Literal("directory"), mode: Schema.Int }),
         Schema.Struct({ kind: Schema.Literal("symlink"), target: Schema.String }),
       ]),
-      uid: Schema.Int,
-      gid: Schema.Int,
+      uid: OwnerId,
+      gid: OwnerId,
       mtimeNs: Schema.String.check(Schema.isPattern(/^[0-9]+$/)),
     }),
   ),
