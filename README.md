@@ -120,7 +120,7 @@ Unreferenced blocks and disposed sandboxes are retained. Safe garbage collection
 
 `filesystem.chown` takes `path`, unsigned 32-bit `uid`/`gid` and an explicit `follow` flag. It updates virtual inode ownership under a write capability and applies the package write guard. Changed ownership survives Worker replacement and appears in filesystem exports. `bun run ownership:proof` checks host and TypeScript agent calls against `CIRRO_URL`.
 
-`bun run export:proof` validates the public contract against `CIRRO_URL`. Importing a snapshot is not implemented.
+`bun run export:proof` validates the public contract against `CIRRO_URL`. `POST /v1/sandboxes` accepts an optional `snapshot` in this exported format. Import creates a new root, validates canonical unique paths and directory parents, and restores canonical base64 bytes, modes, UID/GID and symlinks. Creation is administrator-only and publishes the R2 head once with exclusive creation. Existing IDs return 409. The request is bounded to 25,200,000 bytes; file and manifest quotas also apply. Inode identities and timestamps are initialized for the new sandbox; process state and software installation catalog remain owned by their APIs. `bun run import:proof` checks the roundtrip against `CIRRO_URL`.
 
 ## Inspiration
 

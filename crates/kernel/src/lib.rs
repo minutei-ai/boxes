@@ -6,6 +6,7 @@ use std::collections::{BTreeMap, BTreeSet};
 use wasm_bindgen::prelude::*;
 
 const MAX_NODES: usize = 16_384;
+const MAX_MANIFEST: usize = 8 * 1024 * 1024;
 const MAX_PATH: usize = 4096;
 const MAX_DEPTH: usize = 64;
 const MAX_FILE: u64 = 16 * 1024 * 1024;
@@ -613,7 +614,7 @@ impl Kernel {
     pub fn new(manifest: Option<String>) -> Result<Kernel, JsValue> {
         match manifest {
             Some(json) => {
-                if json.len() > 8 * 1024 * 1024 {
+                if json.len() > MAX_MANIFEST {
                     return Err(fail("EFBIG: manifest exceeds byte quota"));
                 }
                 let kernel = Self {
@@ -626,6 +627,21 @@ impl Kernel {
             }
             None => Ok(Self::fresh()),
         }
+    }
+
+    pub fn initialize_snapshot_root(&mut self) -> Result<(), JsValue> {
+        if self.state.generation != 0
+            || !self.state.packages.is_empty()
+            || !self.state.links.is_empty()
+        {
+            return Err(fail(
+                "EPERM: snapshot initialization requires a fresh kernel",
+            ));
+        }
+        self.state.nodes.retain(|path, _| path == "/");
+        self.state.metadata.retain(|path, _| path == "/");
+        self.state.next_inode = 2;
+        Ok(())
     }
 
     pub fn restore_manifest(&mut self, manifest: &str) -> Result<(), JsValue> {
@@ -662,7 +678,12 @@ impl Kernel {
     }
 
     pub fn manifest(&self) -> Result<String, JsValue> {
-        serde_json::to_string(&self.state).map_err(|_| fail("EIO: serialization failed"))
+        let manifest =
+            serde_json::to_string(&self.state).map_err(|_| fail("EIO: serialization failed"))?;
+        if manifest.len() > MAX_MANIFEST {
+            return Err(fail("EFBIG: manifest exceeds byte quota"));
+        }
+        Ok(manifest)
     }
 
     pub fn advance(&mut self) -> Result<(), JsValue> {

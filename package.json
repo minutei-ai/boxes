@@ -20,6 +20,7 @@
     "live": "bun tooling/live.ts",
     "software:proof": "bun tooling/software-proof.ts",
     "wasm:proof": "bun tooling/large-wasm-proof.ts",
+    "import:proof": "bun tooling/import-proof.ts",
     "ownership:proof": "bun tooling/ownership-proof.ts",
     "advice:proof": "bun tooling/advice-proof.ts",
     "host-stat:proof": "bun tooling/host-stat-proof.ts",

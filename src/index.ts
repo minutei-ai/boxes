@@ -57,7 +57,7 @@ import {
   liveOutput,
   recoveryStatus,
 } from "./process";
-import { kernelCall, open, publish, StorageFailure } from "./storage";
+import { kernelCall, open, publish, write, StorageFailure } from "./storage";
 import type { Env } from "./resources";
 
 initSync({ module: wasm });
@@ -135,7 +135,7 @@ const route = Effect.fn("api.route")(function* (request: Request, env: Env) {
   }
   if (url.pathname === "/v1/sandboxes") {
     yield* administrator(env, token);
-    const bytes = yield* readBounded(request.body, 16_384);
+    const bytes = yield* readBounded(request.body, 25_200_000);
     const input = yield* Schema.decodeUnknownEffect(Schema.fromJsonString(CreateSandbox), {
       onExcessProperty: "error",
     })(bytes.toString("utf8"));
@@ -145,6 +145,98 @@ const route = Effect.fn("api.route")(function* (request: Request, env: Env) {
       (kernel) => Effect.sync(() => kernel.free()),
     );
     yield* kernelCall(() => kernel.initialize_times(BigInt(createdAt) * 1_000_000n));
+    if (input.snapshot !== undefined) {
+      const existing = yield* Effect.tryPromise({
+        try: () => env.OBJECTS.head(`sandboxes/${input.id}/head.json`),
+        catch: (cause) => new StorageFailure({ cause }),
+      });
+      if (existing !== null)
+        return yield* new Fault({
+          code: "EEXIST",
+          status: 409,
+          message: "Sandbox ID already exists",
+        });
+      const entries = input.snapshot.source.filesystem.entries;
+      const byPath = new Map(entries.map((entry) => [entry.path, entry]));
+      if (byPath.size !== entries.length || byPath.get("/")?.type !== "directory")
+        return yield* new Fault({
+          code: "EINVAL",
+          status: 400,
+          message: "Snapshot requires one directory root and unique paths",
+        });
+      const prepared = yield* Effect.forEach(entries, (entry) =>
+        Effect.gen(function* () {
+          const canonical = yield* kernelCall(() => kernel.canonical(entry.path, "/"));
+          if (canonical !== entry.path || !entry.path.startsWith("/"))
+            return yield* new Fault({
+              code: "EINVAL",
+              status: 400,
+              message: "Snapshot paths must be absolute and canonical",
+            });
+          if (
+            entry.path !== "/" &&
+            byPath.get(entry.path.slice(0, entry.path.lastIndexOf("/")) || "/")?.type !==
+              "directory"
+          )
+            return yield* new Fault({
+              code: "EINVAL",
+              status: 400,
+              message: "Snapshot parent must be a directory entry",
+            });
+          const mode = Number.parseInt(entry.mode, 8);
+          if (mode > 0o777 || (entry.type === "symlink" && mode !== 0o777))
+            return yield* new Fault({
+              code: "EINVAL",
+              status: 400,
+              message: "Snapshot mode cannot be represented by the kernel",
+            });
+          if (entry.type === "symlink")
+            yield* kernelCall(() =>
+              kernel.canonical(
+                entry.target,
+                entry.path.slice(0, entry.path.lastIndexOf("/")) || "/",
+              ),
+            );
+          if (entry.type !== "file") return { entry, mode, data: undefined };
+          const data = Buffer.from(entry.content, "base64");
+          if (data.toString("base64") !== entry.content)
+            return yield* new Fault({
+              code: "EINVAL",
+              status: 400,
+              message: "Snapshot file content must be canonical base64",
+            });
+          if (data.byteLength > 16_777_216)
+            return yield* new Fault({
+              code: "EFBIG",
+              status: 413,
+              message: "Snapshot file exceeds 16 MiB",
+            });
+          return { entry, mode, data };
+        }),
+      );
+      yield* kernelCall(() => kernel.initialize_snapshot_root());
+      const ordered = prepared.toSorted(
+        (left, right) => left.entry.path.length - right.entry.path.length,
+      );
+      yield* Effect.forEach(ordered, ({ entry }) => {
+        if (entry.type === "directory" && entry.path !== "/")
+          return kernelCall(() => kernel.mkdir(entry.path, false));
+        return Effect.void;
+      });
+      yield* Effect.forEach(ordered, ({ entry, data }) => {
+        if (entry.type === "file" && data !== undefined)
+          return write(env, input.id, kernel, entry.path, data);
+        if (entry.type === "symlink")
+          return kernelCall(() => kernel.symlink(entry.target, entry.path));
+        return Effect.void;
+      });
+      yield* Effect.forEach(ordered.toReversed(), ({ entry, mode }) =>
+        Effect.gen(function* () {
+          yield* kernelCall(() => kernel.chown(entry.path, entry.uid, entry.gid, false));
+          if (entry.type !== "symlink") yield* kernelCall(() => kernel.chmod(entry.path, mode));
+        }),
+      );
+    }
     const manifest = yield* kernelCall(() => kernel.manifest());
     const record: typeof Head.Type = {
       version: 2,
@@ -171,8 +263,8 @@ const route = Effect.fn("api.route")(function* (request: Request, env: Env) {
     return new Response(
       Schema.encodeSync(Schema.fromJsonString(Status))({
         id: input.id,
-        generation: 0,
-        filesystemBytes: 0,
+        generation: Number(kernel.generation()),
+        filesystemBytes: Number(kernel.bytes()),
         policy: input.policy,
       }),
       { status: 201, headers: { "content-type": "application/json", "cache-control": "no-store" } },

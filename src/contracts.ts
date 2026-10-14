@@ -15,7 +15,6 @@ export const Policy = Schema.Struct({
   maxOutputBytes: Schema.Int.check(Schema.isBetween({ minimum: 1024, maximum: 1_048_576 })),
 });
 export const PolicyPatch = Policy.mapFields((fields) => Struct.map(fields, Schema.optionalKey));
-export const CreateSandbox = Schema.Struct({ id: Id, policy: Policy });
 export const Capability = Schema.Struct({
   sandboxId: Id,
   expiresAt: Schema.Int,
@@ -407,6 +406,11 @@ export const FilesystemSnapshot = Schema.Struct({
       ).check(Schema.isMaxLength(16_384)),
     }),
   }),
+});
+export const CreateSandbox = Schema.Struct({
+  id: Id,
+  policy: Policy,
+  snapshot: Schema.optionalKey(FilesystemSnapshot),
 });
 export const DirectoryEntries = Schema.Array(
   Schema.Struct({
