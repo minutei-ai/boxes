@@ -1,0 +1,23 @@
+{
+  "measuredAt": "2026-10-14T10:42:33.310Z",
+  "url": "https://cirro-sandbox-prod-rs7wexxow56rmsoz.manoel-carvalhoneto.workers.dev",
+  "sandboxId": "stdin-proof-10451272-389e-4b5e-8b79-b44dc11dff80",
+  "profile": "minutei",
+  "runtime": "standard Worker",
+  "checks": {
+    "spawn": true,
+    "retained": true,
+    "retry": true,
+    "conflict": true,
+    "eof": true,
+    "boundedPipe": true,
+    "cancel": true,
+    "lastReader": true,
+    "disposal": true
+  },
+  "allPassed": true,
+  "queuedInputRecoveryLocallyTested": true,
+  "liveInterpreterRecovery": false,
+  "pty": false,
+  "fullProcessParity": false
+}
