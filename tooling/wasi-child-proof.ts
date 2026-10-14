@@ -118,7 +118,7 @@ const report = {
   runtime: "standard Worker",
   checks,
   allPassed: Object.values(checks).every(Boolean),
-  inheritedPipes: false,
+  fullProcessParity: false,
   durableChildReceipts: false,
   packageParity: false,
 };

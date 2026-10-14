@@ -13,7 +13,7 @@
     "disposal": true
   },
   "allPassed": true,
-  "inheritedPipes": false,
+  "fullProcessParity": false,
   "durableChildReceipts": false,
   "packageParity": false
 }

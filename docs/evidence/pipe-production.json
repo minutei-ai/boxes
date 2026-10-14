@@ -12,6 +12,6 @@
     "disposal": true
   },
   "allPassed": true,
-  "processInheritance": false,
+  "fullProcessParity": false,
   "packageParity": false
 }

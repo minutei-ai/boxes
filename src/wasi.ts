@@ -1,5 +1,6 @@
 import {
   Clock,
+  Deferred,
   Duration,
   Effect,
   Exit,
@@ -119,6 +120,14 @@ export const wasi = Effect.fn("wasi.execute")(function* (
     dirty: checkpoint !== initial.head.manifest,
     checkpoint,
   };
+  const changes = { pending: Deferred.makeUnsafe<void>() };
+  const notify = Effect.fn("wasi.notify")(() =>
+    Effect.gen(function* () {
+      const previous = changes.pending;
+      changes.pending = Deferred.makeUnsafe<void>();
+      yield* Deferred.succeed(previous, undefined);
+    }),
+  );
   const semaphore = yield* Semaphore.make(1);
   const family = yield* Effect.acquireRelease(Scope.make(), (scope) =>
     Scope.close(scope, Exit.void),
@@ -139,6 +148,7 @@ export const wasi = Effect.fn("wasi.execute")(function* (
             semaphore.take(1).pipe(Effect.as({ held: true })),
             (lease) =>
               Effect.gen(function* () {
+                yield* notify();
                 if (lease.held) yield* semaphore.release(1);
               }),
           );
@@ -198,7 +208,7 @@ export const wasi = Effect.fn("wasi.execute")(function* (
             completed.push(step.output);
             return;
           }
-          if (step.kind === "poll" || step.kind === "wait") {
+          if (step.kind === "wait" || (step.kind === "poll" && !step.immediate)) {
             lease.held = false;
             yield* semaphore.release(1);
           }
@@ -254,7 +264,12 @@ export const wasi = Effect.fn("wasi.execute")(function* (
                       if (outcome._tag === "Failure") failures.push(outcome.failure);
                     }).pipe(
                       Effect.ensuring(Scope.close(childScope, Exit.void)),
-                      Effect.ensuring(Effect.sync(() => children.delete(pid))),
+                      Effect.ensuring(
+                        Effect.gen(function* () {
+                          children.delete(pid);
+                          yield* notify();
+                        }),
+                      ),
                     );
                     const fiber = yield* Scope.provide(family)(Effect.forkScoped(work));
                     children.set(pid, fiber);
@@ -649,16 +664,25 @@ export const wasi = Effect.fn("wasi.execute")(function* (
                     };
                   });
                   const readings = { realtime, monotonic };
-                  while (
-                    !input.immediate &&
-                    !deadlines.some((clock) => {
-                      const actual = Match.value(clock.clock).pipe(
-                        Match.when(0, () => readings.realtime),
-                        Match.orElse(() => readings.monotonic),
-                      );
-                      return clock.deadline <= actual;
-                    })
-                  ) {
+                  while (!input.immediate) {
+                    const wake = changes.pending;
+                    yield* semaphore.take(1);
+                    lease.held = true;
+                    const ioReady = yield* Effect.try({
+                      try: () => guest.io_ready(),
+                      catch: (cause) => new WasmFailure({ cause }),
+                    });
+                    if (
+                      ioReady ||
+                      deadlines.some((clock) => {
+                        const actual = Match.value(clock.clock).pipe(
+                          Match.when(0, () => readings.realtime),
+                          Match.orElse(() => readings.monotonic),
+                        );
+                        return clock.deadline <= actual;
+                      })
+                    )
+                      break;
                     const untilExpiry =
                       BigInt(capability.expiresAt) * 1_000_000n - readings.realtime;
                     if (untilExpiry <= 0n)
@@ -676,8 +700,11 @@ export const wasi = Effect.fn("wasi.execute")(function* (
                       if (remaining < minimum) return remaining;
                       return minimum;
                     }, untilExpiry);
-                    yield* Effect.sleep(
-                      Duration.nanos(((first + 999_999n) / 1_000_000n) * 1_000_000n),
+                    lease.held = false;
+                    yield* semaphore.release(1);
+                    yield* Effect.raceFirst(
+                      Effect.sleep(Duration.nanos(((first + 999_999n) / 1_000_000n) * 1_000_000n)),
+                      Deferred.await(wake),
                     );
                     readings.realtime = yield* Clock.currentTimeNanos;
                     readings.monotonic = yield* Clock.monotonicTimeNanos;

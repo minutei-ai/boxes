@@ -199,6 +199,31 @@ await Effect.runPromise(
       "-o",
       "dist/wasi-signal-mask.wasm",
     ]);
+    for (const role of [
+      "parent-duplex",
+      "child-duplex",
+      "parent-drain",
+      "child-drain",
+      "parent-blocked",
+    ]) {
+      yield* run([
+        "rustc",
+        "--crate-type",
+        "cdylib",
+        "--target",
+        "wasm32-unknown-unknown",
+        "-O",
+        "-A",
+        "dead_code",
+        "-C",
+        "strip=symbols",
+        "--cfg",
+        `case="${role}"`,
+        "tests/fixtures/wasi-inherited-pipe.rs",
+        "-o",
+        `dist/wasi-inherited-pipe-${role}.wasm`,
+      ]);
+    }
     for (const role of ["parent", "child", "child-rename", "denied"]) {
       yield* run([
         "rustc",

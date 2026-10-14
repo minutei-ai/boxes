@@ -201,6 +201,16 @@ enum StatProjection {
 }
 
 enum Completion {
+    PipeRead {
+        fd: u32,
+        vectors: Vec<(usize, usize)>,
+        output: usize,
+    },
+    PipeWrite {
+        fd: u32,
+        data: Vec<u8>,
+        output: usize,
+    },
     Spawn {
         pointer: usize,
         actions: Vec<SpawnAction>,
@@ -255,6 +265,7 @@ enum Completion {
         events: Vec<[u8; 32]>,
         clocks: BTreeSet<usize>,
         blocked: BTreeSet<usize>,
+        pipe_fds: BTreeMap<usize, u32>,
         pointer: usize,
         output: usize,
     },
@@ -297,6 +308,7 @@ struct ProcessTable {
     memory_bytes: usize,
     children: BTreeMap<u32, ChildStatus>,
     buffers: Vec<Weak<RefCell<FileBuffer>>>,
+    pipes: Vec<Weak<Pipe>>,
 }
 #[derive(Clone)]
 struct SpawnAction {
@@ -438,6 +450,32 @@ fn confined(base: &str, path: &str) -> Result<String, Failure> {
         return Err(Failure::Errno(37));
     }
     Ok(path)
+}
+
+fn pipe_event(state: &State, fd: u32, event: &mut [u8; 32]) -> bool {
+    let Some(pipe) = state
+        .descriptors
+        .get(&fd)
+        .and_then(|descriptor| descriptor.pipe.as_ref())
+    else {
+        event[8..10].copy_from_slice(&8u16.to_le_bytes());
+        return true;
+    };
+    let writing = event[10] == 2;
+    let length = pipe.pipe.bytes.borrow().len();
+    let available = if writing { PIPE_BYTES - length } else { length };
+    event[8..10].fill(0);
+    event[24..26].fill(0);
+    event[16..24].copy_from_slice(&(available as u64).to_le_bytes());
+    if !pipe.has_peer() {
+        if writing {
+            event[8..10].copy_from_slice(&64u16.to_le_bytes());
+        } else {
+            event[24..26].copy_from_slice(&1u16.to_le_bytes());
+        }
+        return true;
+    }
+    available > 0
 }
 
 fn buffered_bytes(state: &State) -> usize {
@@ -804,11 +842,26 @@ fn dispatch(caller: &mut Caller<'_, State>, name: &str, args: &[u64]) -> Result<
             let [reader, writer] = numbers.as_slice() else {
                 return Err(Failure::Errno(33));
             };
+            caller
+                .data()
+                .processes
+                .borrow_mut()
+                .pipes
+                .retain(|pipe| pipe.strong_count() > 0);
+            if caller.data().processes.borrow().pipes.len() >= 64 {
+                return Err(Failure::Errno(33));
+            }
             let pipe = Rc::new(Pipe {
                 bytes: RefCell::new(VecDeque::new()),
                 readers: Cell::new(1),
                 writers: Cell::new(1),
             });
+            caller
+                .data()
+                .processes
+                .borrow_mut()
+                .pipes
+                .push(Rc::downgrade(&pipe));
             let mut metadata = [0u8; 76];
             metadata[64..68].copy_from_slice(&0o10600u32.to_le_bytes());
             for (fd, read) in [(*reader, true), (*writer, false)] {
@@ -1183,14 +1236,18 @@ fn dispatch(caller: &mut Caller<'_, State>, name: &str, args: &[u64]) -> Result<
                     if descriptor.flags.get() & 4 != 0 {
                         return Err(Failure::Errno(6));
                     }
-                    suspend(
+                    return suspend(
                         caller,
                         Request::Poll {
                             clocks: Vec::new(),
                             immediate: false,
                         },
-                        Completion::Unit,
-                    )?;
+                        Completion::PipeRead {
+                            fd: a[0] as u32,
+                            vectors,
+                            output,
+                        },
+                    );
                 }
                 let mut read = 0usize;
                 for (pointer, length) in vectors {
@@ -1299,14 +1356,18 @@ fn dispatch(caller: &mut Caller<'_, State>, name: &str, args: &[u64]) -> Result<
                         if descriptor.flags.get() & 4 != 0 {
                             return Err(Failure::Errno(6));
                         }
-                        suspend(
+                        return suspend(
                             caller,
                             Request::Poll {
                                 clocks: Vec::new(),
                                 immediate: false,
                             },
-                            Completion::Unit,
-                        )?;
+                            Completion::PipeWrite {
+                                fd: a[0] as u32,
+                                data,
+                                output,
+                            },
+                        );
                     }
                     let count = data.len().min(available);
                     pipe.pipe.bytes.borrow_mut().extend(&data[..count]);
@@ -1506,6 +1567,7 @@ fn dispatch(caller: &mut Caller<'_, State>, name: &str, args: &[u64]) -> Result<
             let mut clock_indices = BTreeSet::new();
             let mut events = Vec::new();
             let mut blocked = BTreeSet::new();
+            let mut pipe_fds = BTreeMap::new();
             let state = caller.data();
             for (index, subscription) in subscriptions.as_chunks::<48>().0.iter().enumerate() {
                 let mut event = [0u8; 32];
@@ -1586,6 +1648,7 @@ fn dispatch(caller: &mut Caller<'_, State>, name: &str, args: &[u64]) -> Result<
                             } else if descriptor.directory {
                                 errno = 31;
                             } else if let Some(pipe) = &descriptor.pipe {
+                                pipe_fds.insert(index, fd);
                                 let length = pipe.pipe.bytes.borrow().len();
                                 let peer = pipe.has_peer();
                                 let available = if writing { PIPE_BYTES - length } else { length };
@@ -1634,6 +1697,7 @@ fn dispatch(caller: &mut Caller<'_, State>, name: &str, args: &[u64]) -> Result<
                     events,
                     clocks: clock_indices,
                     blocked,
+                    pipe_fds,
                     pointer: a[1],
                     output: a[3],
                 },
@@ -2318,6 +2382,7 @@ impl WasmGuest {
                     memory_bytes: memory,
                     children: BTreeMap::new(),
                     buffers: Vec::new(),
+                    pipes: Vec::new(),
                 })),
                 closed: BTreeSet::new(),
                 cloexec: BTreeSet::new(),
@@ -2471,6 +2536,36 @@ impl WasmGuest {
         self.store.data().pid
     }
 
+    pub fn io_ready(&self) -> bool {
+        let state = self.store.data();
+        let Some(pending) = &state.pending else {
+            return false;
+        };
+        match &pending.completion {
+            Completion::PipeRead { fd, .. } => state
+                .descriptors
+                .get(fd)
+                .and_then(|descriptor| descriptor.pipe.as_ref())
+                .is_some_and(|pipe| !pipe.pipe.bytes.borrow().is_empty() || !pipe.has_peer()),
+            Completion::PipeWrite { fd, data, .. } => state
+                .descriptors
+                .get(fd)
+                .and_then(|descriptor| descriptor.pipe.as_ref())
+                .is_some_and(|pipe| {
+                    let space = PIPE_BYTES - pipe.pipe.bytes.borrow().len();
+                    !pipe.has_peer()
+                        || space > 0 && (data.len() > PIPE_ATOMIC_BYTES || space >= data.len())
+                }),
+            Completion::Poll {
+                events, pipe_fds, ..
+            } => pipe_fds.iter().any(|(index, fd)| {
+                let mut event = events[*index];
+                pipe_event(state, *fd, &mut event)
+            }),
+            _ => false,
+        }
+    }
+
     pub fn finish_child(&self, failed: bool) {
         if let Some(child) = self
             .store
@@ -2572,14 +2667,6 @@ impl WasmGuest {
         }
         for fd in state.cloexec.clone() {
             close(state, fd);
-        }
-        if state
-            .descriptors
-            .values()
-            .any(|descriptor| descriptor.pipe.is_some())
-        {
-            self.respond(58, &[], "/", false, 0, &[])?;
-            return Ok(None);
         }
         let pid = table.borrow().next_pid;
         state.pid = pid;
@@ -2739,6 +2826,61 @@ impl WasmGuest {
         }
         if errno == 0 {
             match pending.completion {
+                Completion::PipeRead {
+                    fd,
+                    vectors,
+                    output,
+                } => {
+                    let pipe = self
+                        .store
+                        .data()
+                        .descriptors
+                        .get(&fd)
+                        .and_then(|descriptor| descriptor.pipe.clone())
+                        .ok_or_else(|| JsValue::from_str("Missing pipe"))?;
+                    let mut count = 0usize;
+                    let memory = self
+                        .memory
+                        .ok_or_else(|| JsValue::from_str("Missing memory"))?;
+                    for (pointer, length) in vectors {
+                        let available = pipe.pipe.bytes.borrow().len();
+                        let bytes: Vec<u8> = pipe
+                            .pipe
+                            .bytes
+                            .borrow_mut()
+                            .drain(..length.min(available))
+                            .collect();
+                        memory
+                            .write(&mut self.store, pointer, &bytes)
+                            .map_err(|error| JsValue::from_str(&error.to_string()))?;
+                        count += bytes.len();
+                        if bytes.len() < length {
+                            break;
+                        }
+                    }
+                    memory
+                        .write(&mut self.store, output, &(count as u32).to_le_bytes())
+                        .map_err(|error| JsValue::from_str(&error.to_string()))?;
+                }
+                Completion::PipeWrite { fd, data, output } => {
+                    let pipe = self
+                        .store
+                        .data()
+                        .descriptors
+                        .get(&fd)
+                        .and_then(|descriptor| descriptor.pipe.clone())
+                        .ok_or_else(|| JsValue::from_str("Missing pipe"))?;
+                    if !pipe.has_peer() {
+                        result = 64;
+                    } else {
+                        let count = data.len().min(PIPE_BYTES - pipe.pipe.bytes.borrow().len());
+                        pipe.pipe.bytes.borrow_mut().extend(&data[..count]);
+                        self.memory
+                            .ok_or_else(|| JsValue::from_str("Missing memory"))?
+                            .write(&mut self.store, output, &(count as u32).to_le_bytes())
+                            .map_err(|error| JsValue::from_str(&error.to_string()))?;
+                    }
+                }
                 Completion::Spawn { pointer, .. } => {
                     self.memory
                         .ok_or_else(|| JsValue::from_str("Missing memory"))?
@@ -3037,9 +3179,10 @@ impl WasmGuest {
                     }
                 }
                 Completion::Poll {
-                    events,
+                    mut events,
                     clocks,
-                    blocked,
+                    mut blocked,
+                    pipe_fds,
                     pointer,
                     output,
                 } => {
@@ -3051,6 +3194,13 @@ impl WasmGuest {
                         ));
                     }
                     let ready: BTreeSet<_> = ready.into_iter().collect();
+                    for (index, fd) in pipe_fds {
+                        if pipe_event(self.store.data(), fd, &mut events[index]) {
+                            blocked.remove(&index);
+                        } else {
+                            blocked.insert(index);
+                        }
+                    }
                     let bytes: Vec<u8> = events
                         .into_iter()
                         .enumerate()

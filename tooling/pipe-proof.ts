@@ -120,7 +120,7 @@ const report = {
   runtime: "standard Worker",
   checks,
   allPassed: Object.values(checks).every(Boolean),
-  processInheritance: false,
+  fullProcessParity: false,
   packageParity: false,
 };
 await Bun.write(
