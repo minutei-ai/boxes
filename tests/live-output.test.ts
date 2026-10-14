@@ -278,3 +278,24 @@ test("shell snapshots expose stderr while keeping redirected stdout out of the p
     ).toString(),
   ).toBe("WASI error stream\n");
 }, 15_000);
+
+test("WASI suspension fixture reads duration after the loader-owned argv zero", async () => {
+  const id = "live-argv";
+  const token = await setup(id);
+  const source = Buffer.from(
+    await Bun.file(join(import.meta.dir, "../dist/wasi-live-output.wasm")).arrayBuffer(),
+  ).toString("base64");
+  const response = await act(id, token, {
+    op: "process.run",
+    id: "duration",
+    language: "wasm",
+    source,
+    args: ["1"],
+  });
+  expect(response.status).toBe(200);
+  const record = Schema.decodeUnknownSync(RunRecord)(await response.json());
+  expect(record.status).toBe("exited");
+  expect(record.output?.exitCode).toBe(0);
+  expect(record.output?.stdout).toBe("WASI before suspension\nWASI after suspension\n");
+  expect(record.output?.stderr).toBe("WASI error stream\n");
+});

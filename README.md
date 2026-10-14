@@ -31,9 +31,9 @@ bun run bench
 
 `check` builds the actual Worker and Wasm, checks TypeScript, runs Rust Clippy/unit tests and executes integration tests against local workerd and real local R2. Tests include QuickJS isolation, execution and memory exhaustion, TypeScript compilation, and interpreted Rust guest execution. No Cloudflare credentials are required for local verification.
 
-The benchmark records distributions and artifact sizes in [performance-local.json](docs/evidence/performance-local.json). These are local measurements, not production latency or upstream comparisons.
+The benchmark records distributions and artifact sizes in [performance-local.json](docs/evidence/performance-local.json). These are local measurements, not production latency or upstream comparisons. `bun run bench:output` measures 4 KiB pages at three cursors with three concurrent readers; [output-local.json](docs/evidence/output-local.json) preserves the before/after observations and their limitations.
 
-Run `bun run check` for the native Rust suites, compiled SDK checks and workerd integration tests. Deployment uses the `minutei` profile. [Production evidence](docs/evidence/production.json) records implemented operations and does not establish upstream parity. Repeat it with `CIRRO_URL=<deployed-url> bun run live` and the private administrator key in `.env`.
+Run `bun run check` for the native Rust suites, compiled SDK checks and workerd integration tests. Deployment uses the `minutei` profile. [Production evidence](docs/evidence/production.json) records implemented operations and does not establish upstream parity. Repeat it with `CIRRO_URL=<deployed-url> bun run live` and the private administrator key in `.env`. The probe logs operation names, statuses and request durations without credentials or bodies. It uses separate HTTP connections after an observed Bun connection reset and never retries mutations automatically. Background exit observation continues across native `ETIMEDOUT` responses for at most three minutes, allowing Queue delivery delay while each individual wait remains bounded to 25 seconds. Its live-output fixture suspends for 60 seconds to allow remote inspection and cancellation; local fixture tests retain their six-second default.
 
 ## Deploy
 
@@ -45,7 +45,7 @@ bun run plan
 bun run deploy
 ```
 
-Alchemy provisions one ordinary Worker and one private R2 bucket. There is no Worker Loader or Dynamic Worker execution. A deployment action migrates existing sandbox policies, filesystem metadata and WASI input archives through administrator endpoints immediately after Worker upload. The stack uses local state for development and Cloudflare state for deployed stages. Never pass R2 credentials or the administrator credential to guest code.
+Alchemy provisions one ordinary Worker, one private R2 bucket and one native Queue for execution delivery. There is no Worker Loader or Dynamic Worker execution. A deployment action migrates existing sandbox policies, filesystem metadata and WASI input archives through administrator endpoints immediately after Worker upload. The stack uses local state for development and Cloudflare state for deployed stages. Never pass R2 credentials or the administrator credential to guest code.
 
 ## API
 

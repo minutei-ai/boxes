@@ -2,6 +2,7 @@ import { Config, Effect, Redacted, Schema } from "effect";
 import { join } from "node:path";
 import { commandPackage } from "../tests/fixtures/package";
 import {
+  Action,
   FileContent,
   PackagePreparation,
   SoftwareCatalog,
@@ -35,21 +36,55 @@ const policy = {
   memoryBytes: 8_388_608,
   maxOutputBytes: 1_048_576,
 };
-const post = (path: string, credential: string, body: unknown) =>
-  fetch(new URL(path, configuration.url), {
+const post = async (path: string, credential: string, body: unknown) => {
+  const startedAt = performance.now();
+  const response = await fetch(new URL(path, configuration.url), {
     method: "POST",
+    keepalive: false,
     headers: { authorization: `Bearer ${credential}`, "content-type": "application/json" },
     body: JSON.stringify(body),
     signal: AbortSignal.timeout(60_000),
   });
-const health = await fetch(new URL("/health", configuration.url));
+  console.error(
+    JSON.stringify({ path, status: response.status, elapsedMs: performance.now() - startedAt }),
+  );
+  return response;
+};
+const health = await fetch(new URL("/health", configuration.url), {
+  keepalive: false,
+  signal: AbortSignal.timeout(60_000),
+});
+await health.text();
 const created = await post("/v1/sandboxes", Redacted.value(configuration.key), { id, policy });
 const minted = await post(`/v1/sandboxes/${id}/capabilities`, Redacted.value(configuration.key), {
   permissions: ["read", "write", "execute", "network", "manage"],
   expiresInSeconds: 3600,
 });
 const token = Schema.decodeUnknownSync(TokenResponse)(await minted.json()).token;
-const action = (input: unknown) => post(`/v1/sandboxes/${id}/action`, token, input);
+const action = (input: typeof Action.Type) => {
+  console.error(JSON.stringify({ operation: input.op, sandboxId: id }));
+  return post(`/v1/sandboxes/${id}/action`, token, input);
+};
+const awaitExit = async (runId: string) => {
+  const deadline = performance.now() + 180_000;
+  while (performance.now() < deadline) {
+    const remaining = Math.max(0, Math.floor(deadline - performance.now()));
+    const response = await action({
+      op: "process.wait",
+      id: runId,
+      timeoutMs: Math.min(25_000, remaining),
+    });
+    if (response.status === 200) return Schema.decodeUnknownSync(RunRecord)(await response.json());
+    const failure = Schema.decodeUnknownSync(ErrorResponse)(await response.json());
+    if (response.status === 408 && failure.error === "ETIMEDOUT") continue;
+    console.error(
+      JSON.stringify({ operation: "process.wait", id: runId, status: response.status, failure }),
+    );
+    process.exit(1);
+  }
+  console.error(JSON.stringify({ operation: "process.wait", id: runId, observationExpired: true }));
+  process.exit(1);
+};
 const write = await action({
   op: "filesystem.writeFile",
   path: "/tmp/from-client",
@@ -164,9 +199,7 @@ const backgroundStarted = Schema.decodeUnknownSync(RunRecord)(
     })
   ).json(),
 );
-const backgroundObserved = Schema.decodeUnknownSync(RunRecord)(
-  await (await action({ op: "process.wait", id: "background", timeoutMs: 25_000 })).json(),
-);
+const backgroundObserved = await awaitExit("background");
 const backgroundContent = Schema.decodeUnknownSync(FileContent)(
   await (await action({ op: "filesystem.readFile", path: "/tmp/background-proof" })).json(),
 );
@@ -194,9 +227,7 @@ const longStarted = Schema.decodeUnknownSync(RunRecord)(
   ).json(),
 );
 const earlyLong = await action({ op: "process.wait", id: "long-background", timeoutMs: 25_000 });
-const longCompleted = Schema.decodeUnknownSync(RunRecord)(
-  await (await action({ op: "process.wait", id: "long-background", timeoutMs: 25_000 })).json(),
-);
+const longCompleted = await awaitExit("long-background");
 const repaired = await post(
   "/v1/maintenance/process-dispatch",
   Redacted.value(configuration.key),
@@ -655,6 +686,7 @@ const liveOutputStarted = Schema.decodeUnknownSync(RunRecord)(
         op: "process.run",
         id: "live-output-proof",
         language: "wasm",
+        args: ["60"],
         source: Buffer.from(
           await Bun.file(join(import.meta.dir, "../dist/wasi-live-output.wasm")).arrayBuffer(),
         ).toString("base64"),
@@ -663,7 +695,8 @@ const liveOutputStarted = Schema.decodeUnknownSync(RunRecord)(
   ).json(),
 );
 const liveCheckpoints: (typeof LiveOutputPage.Type)[] = [];
-for (const attempt of Array.from({ length: 20 }, (_, index) => index)) {
+const checkpointDeadline = performance.now() + 45_000;
+while (performance.now() < checkpointDeadline) {
   const checkpoint = Schema.decodeUnknownSync(LiveOutputPage)(
     await (
       await action({
@@ -990,6 +1023,7 @@ const report = {
   measuredAt: new Date().toISOString(),
   url: configuration.url,
   profile: "minutei",
+  client: { runtime: "Bun", version: Bun.version, connectionReuse: false },
   runtime: "standard-worker-rust-quickjs-wasmi-rustpython",
   parityComplete: false,
   scope: "Implemented operations, native Python, isolation and resource limits",
