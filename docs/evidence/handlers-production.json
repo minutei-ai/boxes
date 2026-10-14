@@ -1,7 +1,7 @@
 {
-  "measuredAt": "2026-10-14T08:37:52.675Z",
+  "measuredAt": "2026-10-14T08:55:58.233Z",
   "url": "https://cirro-sandbox-prod-rs7wexxow56rmsoz.manoel-carvalhoneto.workers.dev",
-  "sandboxId": "handlers-proof-999a9fcf-5e71-4ad3-9e13-6e5f5561c5c3",
+  "sandboxId": "handlers-proof-8d476e24-cb94-4e3d-bcc1-4ec6b61994f7",
   "profile": "minutei",
   "runtime": "standard Worker",
   "receipts": [
@@ -78,6 +78,30 @@
       "passed": true
     },
     {
+      "mode": "autoreap-ignore",
+      "passed": true
+    },
+    {
+      "mode": "autoreap-default",
+      "passed": true
+    },
+    {
+      "mode": "autoreap-user",
+      "passed": true
+    },
+    {
+      "mode": "autoreap-late",
+      "passed": true
+    },
+    {
+      "mode": "autoreap-many",
+      "passed": true
+    },
+    {
+      "mode": "autoreap-multi",
+      "passed": true
+    },
+    {
       "mode": "cont-handler",
       "passed": true
     },
@@ -102,6 +126,7 @@
   ],
   "disposal": true,
   "allPassed": true,
-  "altStackAndAutoReap": false,
+  "automaticChildReaping": true,
+  "alternateSignalStack": false,
   "fullProcessParity": false
 }
