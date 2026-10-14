@@ -28,6 +28,7 @@ import {
   WasmConfiguration,
 } from "./contracts";
 import type { open } from "./storage";
+import { initializeInput, readInput, finishInput } from "./input";
 import { kernelCall, publish, read, write, StorageFailure } from "./storage";
 import type { Kernel } from "../dist/kernel/cirro_kernel";
 import type { OutputCapture } from "./output";
@@ -90,6 +91,7 @@ export const wasi = Effect.fn("wasi.execute")(function* (
   program: typeof WasmProgram.Type,
   initial: Effect.Success<ReturnType<typeof open>>,
   capture: OutputCapture | null,
+  inputId: string | null,
 ) {
   const policy = initial.head.policy;
   const guest = yield* Effect.acquireRelease(
@@ -97,6 +99,10 @@ export const wasi = Effect.fn("wasi.execute")(function* (
       try: () => {
         const bindings = createBindings();
         bindings.initSync({ module: wasm });
+        const stdin = Match.value(inputId).pipe(
+          Match.when(null, () => Buffer.from(program.stdin, "base64")),
+          Match.orElse(() => Buffer.alloc(0)),
+        );
         return new bindings.WasmGuest(
           Buffer.from(program.source, "base64"),
           Schema.encodeSync(
@@ -104,7 +110,7 @@ export const wasi = Effect.fn("wasi.execute")(function* (
               WasmConfiguration.mapFields((fields) => Struct.omit(fields, ["stdin"])),
             ),
           )(program),
-          Buffer.from(program.stdin, "base64"),
+          stdin,
           policy.memoryBytes,
           BigInt(policy.interruptBudget) * 1000n,
           policy.maxOutputBytes,
@@ -114,6 +120,18 @@ export const wasi = Effect.fn("wasi.execute")(function* (
     }),
     (guest) => Effect.sync(() => guest.free()),
   );
+  if (inputId !== null) {
+    yield* initializeInput(
+      env,
+      capability.sandboxId,
+      inputId,
+      Buffer.from(program.stdin, "base64"),
+    );
+    yield* Effect.try({
+      try: () => guest.enable_stdin(),
+      catch: (cause) => new WasmFailure({ cause }),
+    });
+  }
   const kernel = initial.kernel;
   const checkpoint = yield* kernelCall(() => kernel.manifest());
   const state = {
@@ -224,6 +242,47 @@ export const wasi = Effect.fn("wasi.execute")(function* (
   );
   const children = new Map<number, Fiber.Fiber<void>>();
   const failures: (WasmFailure | Fault | StorageFailure | Schema.SchemaError)[] = [];
+  if (inputId !== null) {
+    const reader = Effect.gen(function* () {
+      while (true) {
+        const wake = changes.pending;
+        if (!guest.stdin_has_reader()) {
+          yield* finishInput(env, capability.sandboxId, inputId);
+          return;
+        }
+        const capacity = guest.stdin_capacity();
+        if (capacity > 0) {
+          const offset = guest.input_offset();
+          const received = yield* readInput(env, capability.sandboxId, inputId, offset, capacity);
+          if (received.data.length > 0 || received.closed) {
+            yield* semaphore.withPermits(1)(
+              Effect.try({
+                try: () =>
+                  guest.feed_stdin(
+                    received.data,
+                    received.closed && offset + received.data.length === received.total,
+                  ),
+                catch: (cause) => new WasmFailure({ cause }),
+              }),
+            );
+            yield* notify();
+            if (received.closed && offset + received.data.length === received.total) return;
+            continue;
+          }
+        }
+        yield* Effect.raceFirst(Effect.sleep(1000), Deferred.await(wake));
+      }
+    }).pipe(
+      Effect.catch((cause) =>
+        Effect.gen(function* () {
+          failures.push(cause);
+          yield* notify();
+        }),
+      ),
+    );
+    yield* Scope.provide(family)(Effect.forkScoped(reader));
+  }
+
   const runGuest: (
     guest: InstanceType<ReturnType<typeof createBindings>["WasmGuest"]>,
   ) => Effect.Effect<
@@ -918,6 +977,8 @@ export const wasi = Effect.fn("wasi.execute")(function* (
                   }
                   const readings = { realtime, monotonic };
                   while (!input.immediate) {
+                    const failed = failures[0];
+                    if (failed !== undefined) return yield* Effect.fail(failed);
                     const wake = changes.pending;
                     yield* semaphore.take(1);
                     lease.held = true;

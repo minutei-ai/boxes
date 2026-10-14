@@ -22,6 +22,7 @@ import {
 } from "./contracts";
 import { load } from "./modules";
 import { archive, restore } from "./code";
+import { initializeInput, finishInput } from "./input";
 import { execute } from "./execution";
 import { head, open, StorageFailure } from "./storage";
 import type { Env } from "./resources";
@@ -33,10 +34,17 @@ const reserve = Effect.fn("process.reserve")(function* (
   capability: typeof Capability.Type,
   action: typeof RunAction.Type,
   detached: boolean,
+  stdinMode: typeof StoredRun.Type.stdinMode,
 ) {
   yield* requirePermission(capability, "execute");
   const session = yield* open(env, capability.sandboxId);
   const program = yield* load(env, capability, session.kernel, action);
+  if (stdinMode === "pipe" && program.language !== "wasm")
+    return yield* new Fault({
+      code: "UNSUPPORTED_RUNTIME",
+      status: 501,
+      message: "Interactive stdin currently requires a WASI process",
+    });
   const startedAt = yield* Clock.currentTimeMillis;
   const key = `processes/${capability.sandboxId}/${action.id}.json`;
   if (
@@ -65,13 +73,19 @@ const reserve = Effect.fn("process.reserve")(function* (
     finishedAt: null,
     output: null,
   };
-  const stored = { ...record, output: null, authority: launch.authority, deadlineAt: null };
+  const stored = {
+    ...record,
+    output: null,
+    authority: launch.authority,
+    deadlineAt: null,
+    stdinMode,
+  };
   const receipt = yield* Effect.tryPromise({
     try: () =>
       env.OBJECTS.put(key, Schema.encodeSync(Schema.fromJsonString(StoredRun))(stored), {
         onlyIf: { etagDoesNotMatch: "*" },
         customMetadata: Schema.encodeSync(StoredRunMetadata)({
-          format: "run-v3",
+          format: "run-v4",
           summary: Struct.omit(record, ["output"]),
         }),
       }),
@@ -83,9 +97,17 @@ const reserve = Effect.fn("process.reserve")(function* (
       status: 409,
       message: "Execution ID already exists; use process.get to inspect its confirmed state",
     });
+  if (stdinMode === "pipe" && program.language === "wasm")
+    yield* initializeInput(
+      env,
+      capability.sandboxId,
+      record.id,
+      Buffer.from(program.stdin, "base64"),
+    );
   const prepared: ReturnType<typeof restore> = Effect.succeed(program);
   return {
     record,
+    stdinMode,
     program: prepared,
     etag: receipt.etag,
     deadlineAt: Schema.decodeUnknownSync(Schema.NullOr(Schema.Int))(null),
@@ -152,6 +174,7 @@ const complete = Effect.fn("process.complete")(function* (
       ...record,
       authority: null,
       deadlineAt: reservation.deadlineAt,
+      stdinMode: reservation.stdinMode,
       output: archived,
     };
     const written = yield* Effect.tryPromise({
@@ -159,7 +182,7 @@ const complete = Effect.fn("process.complete")(function* (
         env.OBJECTS.put(key, Schema.encodeSync(Schema.fromJsonString(StoredRun))(stored), {
           onlyIf: { etagMatches: publication.etag },
           customMetadata: Schema.encodeSync(StoredRunMetadata)({
-            format: "run-v3",
+            format: "run-v4",
             summary: Struct.omit(record, ["output"]),
           }),
         }),
@@ -215,7 +238,17 @@ const complete = Effect.fn("process.complete")(function* (
           outcome: yield* shell(env, capability, program.source, capture).pipe(Effect.result),
         };
       const session = yield* open(env, capability.sandboxId);
-      return yield* execute(env, capability, program, session, capture);
+      return yield* execute(
+        env,
+        capability,
+        program,
+        session,
+        capture,
+        yield* Effect.sync(() => {
+          if (reservation.stdinMode === "pipe") return record.id;
+          return null;
+        }),
+      );
     }),
   );
   const cancellation = Effect.gen(function* () {
@@ -274,6 +307,7 @@ const complete = Effect.fn("process.complete")(function* (
 
     return { ...snapshot, status: "failed" as const, finishedAt, output: snapshots[0] ?? null };
   });
+  if (reservation.stdinMode === "pipe") yield* finishInput(env, capability.sandboxId, record.id);
   const settledOutput = yield* Effect.gen(function* () {
     if (finished.output === null) return null;
     return yield* archiveOutput(env, capability.sandboxId, finished.output, retained[0] ?? null);
@@ -309,11 +343,12 @@ const complete = Effect.fn("process.complete")(function* (
             output: settledOutput,
             authority: null,
             deadlineAt: null,
+            stdinMode: reservation.stdinMode,
           }),
           {
             onlyIf: { etagMatches: current.etag },
             customMetadata: Schema.encodeSync(StoredRunMetadata)({
-              format: "run-v3",
+              format: "run-v4",
               summary: Struct.omit(finished, ["output"]),
             }),
           },
@@ -340,7 +375,7 @@ export const run = Effect.fn("process.run")(function* (
   capability: typeof Capability.Type,
   action: typeof RunAction.Type,
 ) {
-  const reservation = yield* Effect.scoped(reserve(env, capability, action, false));
+  const reservation = yield* Effect.scoped(reserve(env, capability, action, false, "closed"));
   return yield* complete(env, capability, reservation, null);
 });
 
@@ -372,7 +407,7 @@ export const inspect = Effect.fn("process.inspect")(function* (
   id: string,
 ) {
   const stored = yield* readReceipt(env, capability, id);
-  const record = Struct.omit(stored, ["authority", "deadlineAt"]);
+  const record = Struct.omit(stored, ["authority", "deadlineAt", "stdinMode"]);
   if (stored.output === null) return { ...record, output: null };
   return { ...record, output: yield* restoreOutput(env, capability.sandboxId, stored.output) };
 });
@@ -423,7 +458,7 @@ export const wait = Effect.fn("process.wait")(function* (
     if (capability.expiresAt <= observedAt)
       return yield* new Fault({ code: "UNAUTHORIZED", status: 401, message: "Capability expired" });
     if (record.status === "exited") {
-      const summary = Struct.omit(record, ["authority", "deadlineAt"]);
+      const summary = Struct.omit(record, ["authority", "deadlineAt", "stdinMode"]);
       if (record.output === null) return { ...summary, output: null };
       const output = yield* restoreOutput(env, capability.sandboxId, record.output);
       yield* requirePermission(capability, "read");
@@ -505,8 +540,8 @@ export const dispatch = Effect.fn("process.dispatch")(function* (env: Env, body:
         env.OBJECTS.put(event.key, Schema.encodeSync(Schema.fromJsonString(StoredRun))(failed), {
           onlyIf: { etagMatches: object.etag },
           customMetadata: Schema.encodeSync(StoredRunMetadata)({
-            format: "run-v3",
-            summary: Struct.omit(failed, ["output", "authority", "deadlineAt"]),
+            format: "run-v4",
+            summary: Struct.omit(failed, ["output", "authority", "deadlineAt", "stdinMode"]),
           }),
         }),
       catch: (cause) => new StorageFailure({ cause }),
@@ -529,14 +564,17 @@ export const dispatch = Effect.fn("process.dispatch")(function* (env: Env, body:
       env.OBJECTS.put(event.key, Schema.encodeSync(Schema.fromJsonString(StoredRun))(running), {
         onlyIf: { etagMatches: object.etag },
         customMetadata: Schema.encodeSync(StoredRunMetadata)({
-          format: "run-v3",
-          summary: Struct.omit(running, ["output", "authority", "deadlineAt"]),
+          format: "run-v4",
+          summary: Struct.omit(running, ["output", "authority", "deadlineAt", "stdinMode"]),
         }),
       }),
     catch: (cause) => new StorageFailure({ cause }),
   });
   if (claimed === null) return;
-  const record = { ...Struct.omit(running, ["authority", "deadlineAt"]), output: null };
+  const record = {
+    ...Struct.omit(running, ["authority", "deadlineAt", "stdinMode"]),
+    output: null,
+  };
   yield* complete(
     env,
     capability,
@@ -544,6 +582,7 @@ export const dispatch = Effect.fn("process.dispatch")(function* (env: Env, body:
       record,
       etag: claimed.etag,
       deadlineAt: running.deadlineAt,
+      stdinMode: running.stdinMode,
       program: restore(env, capability.sandboxId, running.sourceHash),
     },
     840_000,
@@ -558,8 +597,9 @@ export const spawn = Effect.fn("process.spawn")(function* (
   env: Env,
   capability: typeof Capability.Type,
   action: typeof RunAction.Type,
+  stdinMode: typeof StoredRun.Type.stdinMode,
 ) {
-  const reservation = yield* Effect.scoped(reserve(env, capability, action, true));
+  const reservation = yield* Effect.scoped(reserve(env, capability, action, true, stdinMode));
   yield* Effect.tryPromise({
     try: () =>
       env.EVENTS.send(
@@ -666,7 +706,7 @@ export const cancel = Effect.fn("process.cancel")(function* (
   });
   const stored = yield* Schema.decodeUnknownEffect(Schema.fromJsonString(StoredRun))(text);
   if (stored.status !== "queued" && stored.status !== "running")
-    return Struct.omit(stored, ["authority", "deadlineAt", "output"]);
+    return Struct.omit(stored, ["authority", "deadlineAt", "output", "stdinMode"]);
   const now = yield* Clock.currentTimeMillis;
   if (capability.expiresAt <= now)
     return yield* new Fault({ code: "UNAUTHORIZED", status: 401, message: "Capability expired" });
@@ -687,8 +727,8 @@ export const cancel = Effect.fn("process.cancel")(function* (
       env.OBJECTS.put(key, Schema.encodeSync(Schema.fromJsonString(StoredRun))(updated), {
         onlyIf: { etagMatches: object.etag },
         customMetadata: Schema.encodeSync(StoredRunMetadata)({
-          format: "run-v3",
-          summary: Struct.omit(updated, ["output", "authority", "deadlineAt"]),
+          format: "run-v4",
+          summary: Struct.omit(updated, ["output", "authority", "deadlineAt", "stdinMode"]),
         }),
       }),
     catch: (cause) => new StorageFailure({ cause }),
@@ -699,7 +739,7 @@ export const cancel = Effect.fn("process.cancel")(function* (
       status: 409,
       message: "Execution changed during cancellation; inspect process.get",
     });
-  return Struct.omit(updated, ["authority", "deadlineAt", "output"]);
+  return Struct.omit(updated, ["authority", "deadlineAt", "output", "stdinMode"]);
 });
 
 export const output = Effect.fn("process.output")(function* (

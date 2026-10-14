@@ -459,7 +459,7 @@ test("inline receipt migration preserves grants, deadlines, observed output and 
     expect(stored.authority).toEqual(grant);
     expect(stored.deadlineAt).toBe(123456);
     expect(Schema.decodeUnknownSync(StoredRunMetadata)(object.customMetadata).format).toBe(
-      "run-v3",
+      "run-v4",
     );
     const record = Schema.decodeUnknownSync(RunRecord)(
       await (await act("output-migration", token, { op: "process.get", id: status })).json(),
@@ -528,4 +528,42 @@ test("historical receipt migration remains resumable after fencing and a conflic
     await (await act("output-fence", token, { op: "process.get", id: "saved" })).json(),
   );
   expect(restored).toEqual(record);
+});
+test("version 3 chunked receipts migrate to explicit closed stdin without rewriting output blocks", async () => {
+  const token = await setup(mf, "input-migration");
+  const response = await post(mf, "/v1/sandboxes/input-migration/action", token, {
+    op: "process.run",
+    id: "old",
+    language: "javascript",
+    source: 'export default ()=>{console.log("retained");return 7;}',
+  });
+  expect(response.status).toBe(200);
+  const bucket = await mf.getR2Bucket("OBJECTS");
+  const key = "processes/input-migration/old.json";
+  const object = await bucket.get(key);
+  expect(object).not.toBeNull();
+  if (object === null) return;
+  const record = Schema.decodeUnknownSync(Schema.fromJsonString(StoredRun))(await object.text());
+  const metadata = Schema.decodeUnknownSync(StoredRunMetadata)(object.customMetadata);
+  await bucket.put(key, JSON.stringify(Struct.omit(record, ["stdinMode"])), {
+    customMetadata: { format: "run-v3", summary: JSON.stringify(metadata.summary) },
+  });
+  const migrated = await post(
+    mf,
+    "/v1/migrations/output-chunks-v1",
+    "cirro-local-test-credential",
+    {},
+  );
+  expect(migrated.status).toBe(200);
+  const current = await bucket.get(key);
+  expect(current).not.toBeNull();
+  if (current === null) return;
+  const updated = Schema.decodeUnknownSync(Schema.fromJsonString(StoredRun))(await current.text());
+  expect(updated.stdinMode).toBe("closed");
+  expect(updated.output).toEqual(record.output);
+  expect(updated.sourceHash).toBe(record.sourceHash);
+  expect(Schema.decodeUnknownSync(StoredRunMetadata)(current.customMetadata).format).toBe("run-v4");
+  expect(
+    (await post(mf, "/v1/migrations/output-chunks-v1", "cirro-local-test-credential", {})).status,
+  ).toBe(200);
 });

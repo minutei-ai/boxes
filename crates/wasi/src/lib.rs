@@ -427,6 +427,8 @@ struct State {
     stdio_flags: [Rc<Cell<u16>>; 3],
     argv: Vec<Vec<u8>>,
     environment: Vec<Vec<u8>>,
+    stdin_pipe: Option<Rc<Pipe>>,
+    stdin_writer: Rc<RefCell<Option<Rc<PipeEndpoint>>>>,
     stdin: Rc<Vec<u8>>,
     stdin_offset: Rc<Cell<usize>>,
     directories: BTreeMap<u32, Vec<DirectoryEntry>>,
@@ -3248,6 +3250,8 @@ impl WasmGuest {
                 stdio_flags: std::array::from_fn(|_| Rc::new(Cell::new(0))),
                 argv,
                 environment,
+                stdin_pipe: None,
+                stdin_writer: Rc::new(RefCell::new(None)),
                 stdin: Rc::new(stdin.to_vec()),
                 stdin_offset: Rc::new(Cell::new(0)),
                 directories: BTreeMap::new(),
@@ -3267,6 +3271,8 @@ impl WasmGuest {
             state.cloexec = previous.cloexec.clone();
             state.stdout = previous.stdout.clone();
             state.stderr = previous.stderr.clone();
+            state.stdin_pipe = previous.stdin_pipe.clone();
+            state.stdin_writer = previous.stdin_writer.clone();
             state.stdin = previous.stdin.clone();
             state.stdin_offset = previous.stdin_offset.clone();
             state.stdio_flags = previous.stdio_flags.clone();
@@ -4101,6 +4107,8 @@ impl WasmGuest {
         state.cloexec = resources.cloexec;
         state.stdout = parent.stdout.clone();
         state.stderr = parent.stderr.clone();
+        state.stdin_pipe = parent.stdin_pipe.clone();
+        state.stdin_writer = parent.stdin_writer.clone();
         state.stdin = parent.stdin.clone();
         state.stdin_offset = parent.stdin_offset.clone();
         state.stdio_flags = parent.stdio_flags.clone();
@@ -4214,6 +4222,78 @@ impl WasmGuest {
     }
     pub fn buffered_bytes(&self) -> usize {
         buffered_bytes(self.store.data())
+    }
+
+    pub fn enable_stdin(&mut self) -> Result<(), JsValue> {
+        let state = self.store.data_mut();
+        if state.stdin_pipe.is_some() {
+            return Err(JsValue::from_str("Stdin pipe is already initialized"));
+        }
+        let pipe = Rc::new(Pipe {
+            bytes: RefCell::new(VecDeque::new()),
+            readers: Cell::new(1),
+            writers: Cell::new(1),
+        });
+        let mut descriptor = duplicate_source(state, 0)
+            .map_err(|_| JsValue::from_str("Missing stdin descriptor"))?;
+        descriptor.stdio = None;
+        descriptor.rights |= 1 << 21;
+        descriptor.metadata[64..68].copy_from_slice(&0o10600u32.to_le_bytes());
+        descriptor.pipe = Some(Rc::new(PipeEndpoint {
+            pipe: pipe.clone(),
+            reading: true,
+        }));
+        state.descriptors.insert(0, descriptor);
+        *state.stdin_writer.borrow_mut() = Some(Rc::new(PipeEndpoint {
+            pipe: pipe.clone(),
+            reading: false,
+        }));
+        state
+            .processes
+            .borrow_mut()
+            .pipes
+            .push(Rc::downgrade(&pipe));
+        state.stdin_pipe = Some(pipe);
+        Ok(())
+    }
+    pub fn input_offset(&self) -> usize {
+        self.store.data().stdin_offset.get()
+    }
+    pub fn stdin_capacity(&self) -> usize {
+        self.store
+            .data()
+            .stdin_pipe
+            .as_ref()
+            .map(|pipe| PIPE_BYTES - pipe.bytes.borrow().len())
+            .unwrap_or(0)
+    }
+    pub fn stdin_has_reader(&self) -> bool {
+        self.store
+            .data()
+            .stdin_pipe
+            .as_ref()
+            .is_some_and(|pipe| pipe.readers.get() > 0)
+    }
+    pub fn feed_stdin(&mut self, data: &[u8], closed: bool) -> Result<(), JsValue> {
+        let state = self.store.data_mut();
+        let pipe = state
+            .stdin_pipe
+            .as_ref()
+            .ok_or_else(|| JsValue::from_str("Missing stdin pipe"))?;
+        if data.len() > PIPE_BYTES - pipe.bytes.borrow().len()
+            || state.stdin_writer.borrow().is_none()
+        {
+            return Err(JsValue::from_str("Stdin pipe cannot accept data"));
+        }
+        pipe.bytes.borrow_mut().extend(data.iter().copied());
+        state
+            .stdin_offset
+            .set(state.stdin_offset.get() + data.len());
+        if closed {
+            state.stdin_writer.borrow_mut().take();
+        }
+        state.readiness_notification = true;
+        Ok(())
     }
 
     pub fn file_metadata(&self, fd: u32) -> Result<Vec<u8>, JsValue> {

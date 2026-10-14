@@ -5,6 +5,7 @@ import { HttpFailure, readBounded } from "./http";
 import { inspect, list, wait, cancel, output, liveOutput, spawn } from "./process";
 import { open } from "./storage";
 import { fetchAuthorized } from "./network";
+import { input } from "./input";
 import { software } from "./software";
 import type { Env } from "./resources";
 
@@ -16,7 +17,14 @@ export const guestAction = Effect.fn("guest.action")(function* (
   const now = yield* Clock.currentTimeMillis;
   if (capability.expiresAt <= now)
     return yield* new Fault({ code: "UNAUTHORIZED", status: 401, message: "Capability expired" });
-  if (action.op === "process.spawn") return yield* spawn(env, capability, action.execution);
+  if (action.op === "process.spawn")
+    return yield* spawn(env, capability, action.execution, action.stdinMode ?? "closed");
+  if (
+    action.op === "process.stdin.write" ||
+    action.op === "process.stdin.close" ||
+    action.op === "process.stdin.status"
+  )
+    return yield* input(env, capability, action);
   if (action.op === "process.output.readLive") return yield* liveOutput(env, capability, action);
   if (action.op === "process.output.read") return yield* output(env, capability, action);
   if (action.op === "process.cancel") return yield* cancel(env, capability, action);

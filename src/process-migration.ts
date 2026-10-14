@@ -55,6 +55,7 @@ export const migrateProcesses = Effect.fn("migration.processReceipts")(function*
             output,
             authority: null,
             deadlineAt: null,
+            stdinMode: "closed",
           });
           const fenced = yield* Effect.tryPromise({
             try: () =>
@@ -78,7 +79,7 @@ export const migrateProcesses = Effect.fn("migration.processReceipts")(function*
               env.OBJECTS.put(key, encoded, {
                 onlyIf: { etagDoesNotMatch: "*" },
                 customMetadata: Schema.encodeSync(StoredRunMetadata)({
-                  format: "run-v3",
+                  format: "run-v4",
                   summary: Struct.omit(record, ["output"]),
                 }),
               }),
@@ -121,7 +122,12 @@ const InlineMetadata = RunMetadata.mapFields((fields) => ({
   ...fields,
   format: Schema.Literal("run-v2"),
 }));
-const MigrationMetadata = Schema.Union([StoredRunMetadata, InlineMetadata]);
+const PreviousStoredRun = StoredRun.mapFields((fields) => Struct.omit(fields, ["stdinMode"]));
+const PreviousMetadata = StoredRunMetadata.mapFields((fields) => ({
+  ...fields,
+  format: Schema.Literal("run-v3"),
+}));
+const MigrationMetadata = Schema.Union([StoredRunMetadata, PreviousMetadata, InlineMetadata]);
 
 export const migrateOutput = Effect.fn("migration.outputChunks")(function* (env: Env) {
   const cursors: (string | undefined)[] = [undefined];
@@ -145,7 +151,7 @@ export const migrateOutput = Effect.fn("migration.outputChunks")(function* (env:
           const metadata = yield* Schema.decodeUnknownEffect(MigrationMetadata)(
             object.customMetadata,
           );
-          if (metadata.format === "run-v3") return;
+          if (metadata.format === "run-v4") return;
           const parts = object.key.split("/");
           const sandboxId = yield* Schema.decodeUnknownEffect(Id)(parts[1]);
           if (
@@ -166,23 +172,39 @@ export const migrateOutput = Effect.fn("migration.outputChunks")(function* (env:
             try: () => stored.text(),
             catch: (cause) => new StorageFailure({ cause }),
           });
-          const record = yield* Schema.decodeUnknownEffect(Schema.fromJsonString(InlineRun))(text);
-          if (record.id !== metadata.summary.id)
-            return yield* new StorageFailure({ cause: "Process body does not match its identity" });
-          const output = yield* Effect.gen(function* () {
-            if (record.output === null) return null;
-            return yield* archiveOutput(env, sandboxId, record.output, null);
+          const converted = yield* Effect.gen(function* () {
+            if (metadata.format === "run-v3") {
+              const record = yield* Schema.decodeUnknownEffect(
+                Schema.fromJsonString(PreviousStoredRun),
+              )(text);
+              return { ...record, stdinMode: "closed" as const };
+            }
+            const record = yield* Schema.decodeUnknownEffect(Schema.fromJsonString(InlineRun))(
+              text,
+            );
+            const output = yield* Effect.gen(function* () {
+              if (record.output === null) return null;
+              return yield* archiveOutput(env, sandboxId, record.output, null);
+            });
+            return { ...record, output, stdinMode: "closed" as const };
           });
+          if (converted.id !== metadata.summary.id)
+            return yield* new StorageFailure({ cause: "Process body does not match its identity" });
           const receipt = yield* Effect.tryPromise({
             try: () =>
               env.OBJECTS.put(
                 object.key,
-                Schema.encodeSync(Schema.fromJsonString(StoredRun))({ ...record, output }),
+                Schema.encodeSync(Schema.fromJsonString(StoredRun))(converted),
                 {
                   onlyIf: { etagMatches: stored.etag },
                   customMetadata: Schema.encodeSync(StoredRunMetadata)({
-                    format: "run-v3",
-                    summary: Struct.omit(record, ["output", "authority", "deadlineAt"]),
+                    format: "run-v4",
+                    summary: Struct.omit(converted, [
+                      "output",
+                      "authority",
+                      "deadlineAt",
+                      "stdinMode",
+                    ]),
                   }),
                 },
               ),

@@ -130,6 +130,37 @@ export const ProcessWaitAction = Schema.Struct({
   timeoutMs: Schema.Int.check(Schema.isBetween({ minimum: 0, maximum: 25_000 })),
 });
 export const ProcessCancelAction = Schema.Struct({ op: Schema.Literal("process.cancel"), id: Id });
+export const ProcessInputAction = Schema.Union([
+  Schema.Struct({
+    op: Schema.Literal("process.stdin.write"),
+    id: Id,
+    offset: Schema.Int.check(Schema.isBetween({ minimum: 0, maximum: 16_777_216 })),
+    content: Schema.String.check(Schema.isMinLength(1), Schema.isMaxLength(87_384)),
+    encoding: ContentEncoding,
+  }),
+  Schema.Struct({
+    op: Schema.Literal("process.stdin.close"),
+    id: Id,
+    offset: Schema.Int.check(Schema.isBetween({ minimum: 0, maximum: 16_777_216 })),
+  }),
+  Schema.Struct({ op: Schema.Literal("process.stdin.status"), id: Id }),
+]);
+export const InputReceipt = Schema.Struct({
+  offset: Schema.Int,
+  total: Schema.Int,
+  closed: Schema.Boolean,
+});
+export const InputHead = Schema.Struct({
+  version: Schema.Literal(1),
+  size: Schema.Int.check(Schema.isBetween({ minimum: 0, maximum: 16_777_216 })),
+  closed: Schema.Boolean,
+  chunks: Schema.Array(
+    Schema.Struct({
+      hash: Schema.String.check(Schema.isPattern(/^[a-f0-9]{64}$/)),
+      size: Schema.Int.check(Schema.isBetween({ minimum: 1, maximum: 65_536 })),
+    }),
+  ).check(Schema.isMaxLength(1024)),
+});
 export const ProcessOutputAction = Schema.Struct({
   op: Schema.Literal("process.output.read"),
   id: Id,
@@ -269,6 +300,7 @@ export const RunAction = Schema.Union([
 export const SpawnAction = Schema.Struct({
   op: Schema.Literal("process.spawn"),
   execution: RunAction,
+  stdinMode: Schema.optionalKey(Schema.Literals(["closed", "pipe"])),
 });
 export const GuestAction = Schema.Union([
   SpawnAction,
@@ -276,6 +308,7 @@ export const GuestAction = Schema.Union([
   NetworkAction,
   ProcessReadAction,
   ProcessCancelAction,
+  ProcessInputAction,
   SoftwareAction,
 ]);
 export const ModuleImports = Schema.Array(Schema.String.check(Schema.isMaxLength(4096))).check(
@@ -552,10 +585,11 @@ export const StoredRun = RunRecord.mapFields((fields) => ({
   output: Schema.NullOr(StoredOutput),
   authority: Schema.NullOr(Capability),
   deadlineAt: Schema.NullOr(Schema.Int),
+  stdinMode: Schema.Literals(["closed", "pipe"]),
 }));
 export const StoredRunMetadata = RunMetadata.mapFields((fields) => ({
   ...fields,
-  format: Schema.Literal("run-v3"),
+  format: Schema.Literal("run-v4"),
 }));
 export const DispatchReceipt = Schema.Struct({ notifications: Schema.Int });
 export const ProcessDelivery = Schema.Struct({ key: Schema.String, eTag: Schema.String });

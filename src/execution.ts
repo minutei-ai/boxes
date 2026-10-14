@@ -37,6 +37,7 @@ export const execute = Effect.fn("execution.run")(function* (
   program: typeof Program.Type,
   session: Effect.Success<ReturnType<typeof open>>,
   capture: OutputCapture | null,
+  inputId: string | null,
 ) {
   const policy = session.head.policy;
   if (program.language === "python")
@@ -46,7 +47,9 @@ export const execute = Effect.fn("execution.run")(function* (
       changed: false,
     };
   if (program.language === "wasm") {
-    const outcome = yield* wasi(env, capability, program, session, capture).pipe(Effect.result);
+    const outcome = yield* wasi(env, capability, program, session, capture, inputId).pipe(
+      Effect.result,
+    );
     return { outcome, program, changed: false };
   }
   if (!("modules" in program))

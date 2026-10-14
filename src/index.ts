@@ -28,10 +28,12 @@ import {
   ProcessPage,
   ProcessOutputPage,
   LiveOutputPage,
+  InputReceipt,
   Status,
   Success,
   TokenResponse,
 } from "./contracts";
+import { input } from "./input";
 import { guestAction } from "./capabilities";
 import { migrate } from "./migration";
 import { migrateFilesystem } from "./filesystem-migration";
@@ -217,9 +219,18 @@ const route = Effect.fn("api.route")(function* (request: Request, env: Env) {
         ),
     ),
     Match.when({ op: "process.spawn" }, (action) =>
-      spawn(env, capability, action.execution).pipe(
+      spawn(env, capability, action.execution, action.stdinMode ?? "closed").pipe(
         Effect.map((record) => Schema.encodeSync(Schema.fromJsonString(RunRecord))(record)),
       ),
+    ),
+    Match.whenOr(
+      { op: "process.stdin.write" },
+      { op: "process.stdin.close" },
+      { op: "process.stdin.status" },
+      (action) =>
+        input(env, capability, action).pipe(
+          Effect.map((value) => Schema.encodeSync(Schema.fromJsonString(InputReceipt))(value)),
+        ),
     ),
     Match.when({ op: "process.output.readLive" }, (action) =>
       liveOutput(env, capability, action).pipe(
