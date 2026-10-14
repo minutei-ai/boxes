@@ -1,7 +1,7 @@
 {
-  "measuredAt": "2026-10-14T04:15:58.934Z",
+  "measuredAt": "2026-10-14T05:13:42.483Z",
   "url": "https://cirro-sandbox-prod-rs7wexxow56rmsoz.manoel-carvalhoneto.workers.dev",
-  "sandboxId": "wasi-slices-proof-10a85b4d-a564-4fb8-9127-1ba2f7a48b48",
+  "sandboxId": "wasi-slices-proof-dae3719f-1598-4f49-9092-225be57c88e9",
   "profile": "minutei",
   "runtime": "standard Worker",
   "checks": {
@@ -19,6 +19,6 @@
     "finalStatus": "cancelled"
   },
   "allPassed": true,
-  "processInheritance": false,
+  "fullProcessParity": false,
   "packageParity": false
 }
