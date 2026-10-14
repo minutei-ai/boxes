@@ -35,6 +35,7 @@ test("native driver preserves callbacks, void values, context reuse and disposal
   expect(response.status).toBe(200);
   const proof = Schema.decodeUnknownSync(DriverProof)(await response.json());
   expect(proof.values).toEqual(["confirmed", true]);
+  expect(proof.scratch).toEqual({ content: "Mgo=", encoding: "base64", size: 2 });
   expect(proof.voidResult).toBe(true);
   expect(proof.writes).toEqual(["confirmed"]);
   expect(proof.closed).toBe(true);

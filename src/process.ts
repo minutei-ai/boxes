@@ -493,7 +493,10 @@ export const run = Effect.fn("process.run")(function* (
   action: typeof RunAction.Type,
   host: HostBridge | null = null,
   timeoutMs: number | null = null,
-) {
+): Effect.fn.Return<
+  typeof RunRecord.Type,
+  Fault | StorageFailure | Schema.SchemaError | QueueFailure
+> {
   const reservation = yield* Effect.scoped(reserve(env, capability, action, false, "closed"));
   return yield* complete(env, capability, reservation, timeoutMs, host);
 });

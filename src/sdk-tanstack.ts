@@ -61,7 +61,7 @@ export const createBoxesIsolateDriver = (
               }).pipe(Effect.orDie),
           );
           const grant = yield* administrator.mintCapability(id, {
-            permissions: ["read", "execute", "manage"],
+            permissions: ["read", "write", "execute", "manage"],
             expiresInSeconds: 600,
           });
           return yield* makeAgentBinding(binding, Redacted.make(grant.token));

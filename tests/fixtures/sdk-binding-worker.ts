@@ -21,6 +21,7 @@ export const RpcProbe = Schema.Struct({
   denied: Schema.NullOr(Schema.Int),
 });
 export const DriverProof = Schema.Struct({
+  scratch: FileContent,
   values: Schema.Array(Schema.Json),
   voidResult: Schema.Boolean,
   writes: Schema.Array(Schema.String),
@@ -157,6 +158,11 @@ export default {
           const second = yield* Effect.tryPromise(() =>
             context.execute("return (await external_void()) === undefined;"),
           );
+          const scratch = yield* Effect.tryPromise(() =>
+            context.execute(
+              'await tools.call({op:"filesystem.writeFile",path:"/tmp/work",content:"a\\nb\\n",encoding:"utf8"}); await tools.call({op:"process.run",id:"filter",language:"shell",source:"wc -l < /tmp/work > /tmp/count"}); return await tools.call({op:"filesystem.readFile",path:"/tmp/count"});',
+            ),
+          );
           const empty = yield* Effect.tryPromise(() => context.execute("await external_void();"));
           yield* Effect.tryPromise(() => context.dispose());
           const closed = yield* Effect.tryPromise(() =>
@@ -165,6 +171,7 @@ export default {
           yield* boxes.action(id, { op: "vm.dispose" });
           return new Response(
             Schema.encodeSync(Schema.fromJsonString(DriverProof))({
+              scratch: Schema.decodeUnknownSync(FileContent)(scratch.value),
               values: [
                 Schema.decodeUnknownSync(Schema.Json)(first.value),
                 Schema.decodeUnknownSync(Schema.Json)(second.value),

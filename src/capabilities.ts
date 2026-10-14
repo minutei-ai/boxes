@@ -2,7 +2,17 @@ import { Clock, Effect } from "effect";
 import { Capability, Fault, GuestAction, NetworkResult } from "./contracts";
 import { filesystem } from "./filesystem";
 import { HttpFailure, readBounded } from "./http";
-import { inspect, list, wait, cancel, output, liveOutput, spawn, recoveryStatus } from "./process";
+import {
+  inspect,
+  list,
+  wait,
+  cancel,
+  output,
+  liveOutput,
+  spawn,
+  recoveryStatus,
+  run,
+} from "./process";
 import { open } from "./storage";
 import { fetchAuthorized } from "./network";
 import { input } from "./input";
@@ -25,6 +35,7 @@ export const guestAction = Effect.fn("guest.action")(function* (
     action.op === "cron.cancel"
   )
     return yield* cron(env, capability, action);
+  if (action.op === "process.run") return yield* run(env, capability, action);
   if (action.op === "process.spawn")
     return yield* spawn(env, capability, action.execution, action.stdinMode ?? "closed");
   if (

@@ -433,6 +433,7 @@ export const CronPage = Schema.Struct({
   cursor: Schema.NullOr(Schema.String),
 });
 export const GuestAction = Schema.Union([
+  InlineRun.mapFields((fields) => ({ ...fields, language: Schema.Literal("shell") })),
   CronAction,
   SpawnAction,
   FilesystemAction,
