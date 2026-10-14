@@ -308,6 +308,8 @@ struct ChildStatus {
     parent: u32,
     group: u32,
     session: u32,
+    pending_signals: Rc<Cell<u64>>,
+    signal: u32,
     code: Option<i32>,
     failed: bool,
 }
@@ -315,6 +317,7 @@ struct ProcessTable {
     next_pid: u32,
     root_group: u32,
     root_session: u32,
+    root_pending_signals: Rc<Cell<u64>>,
     memory_bytes: usize,
     children: BTreeMap<u32, ChildStatus>,
     buffers: Vec<Weak<RefCell<FileBuffer>>>,
@@ -370,6 +373,8 @@ struct State {
     closed: BTreeSet<u32>,
     cloexec: BTreeSet<u32>,
     signal_mask: u64,
+    pending_signals: Rc<Cell<u64>>,
+    delivered_signal: u32,
     stdio_flags: [Rc<Cell<u16>>; 3],
     argv: Vec<Vec<u8>>,
     environment: Vec<Vec<u8>>,
@@ -385,6 +390,22 @@ enum Failure {
     Errno(i32),
     Suspend,
     Budget,
+    Signal(u32),
+}
+
+fn deliver_signal(state: &mut State) -> Option<u32> {
+    let available = state.pending_signals.get() & !state.signal_mask;
+    if available == 0 {
+        return None;
+    }
+    let signal = if available & (1 << 8) != 0 {
+        9
+    } else {
+        available.trailing_zeros() + 1
+    };
+    state.pending_signals.set(0);
+    state.delivered_signal = signal;
+    Some(signal)
 }
 
 fn memory(caller: &Caller<'_, State>) -> Result<Memory, Failure> {
@@ -722,6 +743,64 @@ fn dispatch(caller: &mut Caller<'_, State>, name: &str, args: &[u64]) -> Result<
             };
             put(caller, a[0], &pid.to_le_bytes())?;
         }
+        "proc_kill" => {
+            let pid = a[0] as u32 as i32;
+            let signal = a[1] as u32;
+            if signal > 64 {
+                return Err(Failure::Errno(28));
+            }
+            let table = caller.data().processes.borrow();
+            let targets: Vec<Rc<Cell<u64>>> = if pid <= 0 {
+                let group = if pid < 0 {
+                    pid.unsigned_abs()
+                } else if caller.data().pid == 1 {
+                    table.root_group
+                } else {
+                    table
+                        .children
+                        .get(&caller.data().pid)
+                        .ok_or(Failure::Errno(71))?
+                        .group
+                };
+                let mut targets: Vec<_> = table
+                    .children
+                    .values()
+                    .filter(|child| child.group == group)
+                    .map(|child| child.pending_signals.clone())
+                    .collect();
+                if table.root_group == group {
+                    targets.push(table.root_pending_signals.clone());
+                }
+                targets
+            } else if pid == 1 {
+                vec![table.root_pending_signals.clone()]
+            } else {
+                vec![
+                    table
+                        .children
+                        .get(&(pid as u32))
+                        .ok_or(Failure::Errno(71))?
+                        .pending_signals
+                        .clone(),
+                ]
+            };
+            drop(table);
+            if targets.is_empty() {
+                return Err(Failure::Errno(71));
+            }
+            if signal == 0 || matches!(signal, 17 | 23 | 28) {
+                return Ok(0);
+            }
+            if matches!(signal, 18..=22) {
+                return Err(Failure::Errno(58));
+            }
+            for target in targets {
+                target.set(target.get() | (1u64 << (signal - 1)));
+            }
+            if let Some(signal) = deliver_signal(caller.data_mut()) {
+                return Err(Failure::Signal(signal));
+            }
+        }
         "proc_getpgid" => {
             bytes(caller, a[1], 4)?;
             let requested = a[0] as u32;
@@ -921,8 +1000,12 @@ fn dispatch(caller: &mut Caller<'_, State>, name: &str, args: &[u64]) -> Result<
                     path: path.into(),
                 });
             }
-            let mask = (u64::from(a[13] as u32) | (u64::from(a[14] as u32) << 32))
-                & !((1 << 8) | (1 << 18));
+            let mask = if a[10] & 8 != 0 {
+                (u64::from(a[13] as u32) | (u64::from(a[14] as u32) << 32))
+                    & !((1 << 8) | (1 << 18))
+            } else {
+                caller.data().signal_mask
+            };
             suspend(
                 caller,
                 Request::Spawn {
@@ -972,14 +1055,14 @@ fn dispatch(caller: &mut Caller<'_, State>, name: &str, args: &[u64]) -> Result<
                 .children
                 .iter()
                 .find(|(id, child)| pids.contains(id) && (child.code.is_some() || child.failed))
-                .map(|(id, child)| (*id, child.code, child.failed));
-            if let Some((pid, code, failed)) = ready {
+                .map(|(id, child)| (*id, child.code, child.failed, child.signal));
+            if let Some((pid, code, failed, signal)) = ready {
                 caller.data().processes.borrow_mut().children.remove(&pid);
                 if failed {
                     return Err(Failure::Errno(29));
                 }
                 let code = code.ok_or(Failure::Errno(29))?;
-                for (pointer, value) in pointers.into_iter().zip([code as u32, 0, pid, 0]) {
+                for (pointer, value) in pointers.into_iter().zip([code as u32, signal, pid, 0]) {
                     put(caller, pointer, &value.to_le_bytes())?;
                 }
                 return Ok(0);
@@ -1015,6 +1098,9 @@ fn dispatch(caller: &mut Caller<'_, State>, name: &str, args: &[u64]) -> Result<
                 1 => previous & !requested,
                 _ => requested,
             };
+            if let Some(signal) = deliver_signal(caller.data_mut()) {
+                return Err(Failure::Signal(signal));
+            }
         }
         "fd_pipe" => {
             bytes(caller, a[0], 4)?;
@@ -2360,6 +2446,7 @@ fn linker(engine: &Engine) -> Result<Linker<State>, String> {
                     Err(Failure::Errno(errno)) => Ok(errno),
                     Err(Failure::Suspend) => Err(Error::new("Cirro host request")),
                     Err(Failure::Budget) => Err(Error::new("WASI host request budget exceeded")),
+                    Err(Failure::Signal(signal)) => Err(Error::i32_exit(128 + signal as i32)),
                 }
             }).map_err(|error|error.to_string())?;
         }
@@ -2402,6 +2489,7 @@ fn linker(engine: &Engine) -> Result<Linker<State>, String> {
     bind!("wasi_snapshot_preview1","clock_res_get",a:i32,b:i32);
     bind!("wasi_snapshot_preview1", "sched_yield");
     bind!("host_process","proc_getpid",a:i32);
+    bind!("host_process","proc_kill",a:i32,b:i32);
     bind!("host_process","proc_getpgid",a:i32,b:i32);
     bind!("host_process","proc_setpgid",a:i32,b:i32);
     bind!("host_process","proc_getppid",a:i32);
@@ -2421,6 +2509,9 @@ fn linker(engine: &Engine) -> Result<Linker<State>, String> {
                     Err(Failure::Suspend) => return Err(Error::new("Cirro host request")),
                     Err(Failure::Budget) => {
                         return Err(Error::new("WASI host request budget exceeded"));
+                    }
+                    Err(Failure::Signal(signal)) => {
+                        return Err(Error::i32_exit(128 + signal as i32));
                     }
                 });
                 Ok(())
@@ -2444,6 +2535,7 @@ fn linker(engine: &Engine) -> Result<Linker<State>, String> {
                     Err(Failure::Errno(_)) => Ok($failure),
                     Err(Failure::Suspend) => Err(Error::new("Cirro host request")),
                     Err(Failure::Budget) => Err(Error::new("WASI host request budget exceeded")),
+                    Err(Failure::Signal(signal)) => Err(Error::i32_exit(128 + signal as i32)),
                 }
             }).map_err(|error|error.to_string())?;
         }
@@ -2573,6 +2665,7 @@ impl WasmGuest {
             linked: true,
             metadata: [0; 76],
         };
+        let pending_signals = Rc::new(Cell::new(0));
         let mut store = Store::new(
             &engine,
             State {
@@ -2591,6 +2684,7 @@ impl WasmGuest {
                     next_pid: 2,
                     root_group: 1,
                     root_session: 1,
+                    root_pending_signals: pending_signals.clone(),
                     memory_bytes: memory,
                     children: BTreeMap::new(),
                     buffers: Vec::new(),
@@ -2599,6 +2693,8 @@ impl WasmGuest {
                 closed: BTreeSet::new(),
                 cloexec: BTreeSet::new(),
                 signal_mask: 0,
+                pending_signals,
+                delivered_signal: 0,
                 stdio_flags: std::array::from_fn(|_| Rc::new(Cell::new(0))),
                 argv,
                 environment,
@@ -2654,6 +2750,22 @@ impl WasmGuest {
             outputs,
             done: None,
         })
+    }
+
+    fn observe_signal(&mut self) -> bool {
+        if self.done.is_some() {
+            return false;
+        }
+        if let Some(signal) = deliver_signal(self.store.data_mut()) {
+            self.done = Some(128 + signal as i32);
+            self.outputs.clear();
+            self.invocation = None;
+            self.exhaustion = None;
+            self.response = None;
+            self.store.data_mut().pending = None;
+            return true;
+        }
+        false
     }
 
     fn advance(&mut self) -> Result<(), String> {
@@ -2766,7 +2878,15 @@ impl WasmGuest {
         self.store.data().pid
     }
 
+    pub fn signal_ready(&self) -> bool {
+        let state = self.store.data();
+        self.done.is_none() && state.pending_signals.get() & !state.signal_mask != 0
+    }
+
     pub fn io_ready(&self) -> bool {
+        if self.signal_ready() {
+            return true;
+        }
         let state = self.store.data();
         let Some(pending) = &state.pending else {
             return false;
@@ -2806,6 +2926,10 @@ impl WasmGuest {
             .get_mut(&self.store.data().pid)
         {
             child.code = self.done;
+            child.signal = self.store.data().delivered_signal;
+            if child.signal != 0 {
+                child.code = Some(0);
+            }
             child.failed = failed || self.done.is_none();
         }
     }
@@ -3130,6 +3254,8 @@ impl WasmGuest {
                 parent: parent.pid,
                 group,
                 session,
+                pending_signals: state.pending_signals.clone(),
+                signal: 0,
                 code: None,
                 failed: false,
             },
@@ -3139,6 +3265,7 @@ impl WasmGuest {
     }
 
     pub fn step(&mut self) -> Result<String, JsValue> {
+        self.observe_signal();
         if self.store.data().pending.is_none() && self.done.is_none() {
             self.advance().map_err(|error| JsValue::from_str(&error))?;
         }
@@ -3225,6 +3352,9 @@ impl WasmGuest {
         value: u64,
         metadata: &[u8],
     ) -> Result<(), JsValue> {
+        if self.observe_signal() {
+            return Ok(());
+        }
         let pending = self
             .store
             .data_mut()
@@ -3350,8 +3480,8 @@ impl WasmGuest {
                         .find(|(pid, child)| {
                             pids.contains(pid) && (child.code.is_some() || child.failed)
                         })
-                        .map(|(pid, child)| (*pid, child.code, child.failed));
-                    if let Some((pid, code, failed)) = ready {
+                        .map(|(pid, child)| (*pid, child.code, child.failed, child.signal));
+                    if let Some((pid, code, failed, signal)) = ready {
                         self.store
                             .data()
                             .processes
@@ -3363,7 +3493,7 @@ impl WasmGuest {
                         } else {
                             for (pointer, value) in pointers.into_iter().zip([
                                 code.ok_or_else(|| JsValue::from_str("Missing child exit"))? as u32,
-                                0,
+                                signal,
                                 pid,
                                 0,
                             ]) {

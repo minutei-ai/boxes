@@ -259,6 +259,7 @@ export const wasi = Effect.fn("wasi.execute")(function* (
           const step = yield* Schema.decodeUnknownEffect(Schema.fromJsonString(WasmStep), {
             onExcessProperty: "error",
           })(raw);
+          yield* notify();
           if (
             capture !== null &&
             step.kind !== "done" &&
@@ -500,13 +501,21 @@ export const wasi = Effect.fn("wasi.execute")(function* (
               ),
               Match.when({ kind: "wait" }, (input) =>
                 Effect.gen(function* () {
-                  const waiting = input.pids.flatMap((pid) => {
-                    const fiber = children.get(pid);
-                    if (fiber === undefined) return [];
-                    return [Fiber.await(fiber)];
-                  });
-                  if (waiting.length === input.pids.length && waiting.length > 0)
-                    yield* Effect.raceAllFirst(waiting);
+                  while (true) {
+                    const wake = changes.pending;
+                    const interrupted = yield* Effect.try({
+                      try: () => guest.signal_ready(),
+                      catch: (cause) => new WasmFailure({ cause }),
+                    });
+                    if (interrupted) break;
+                    const waiting = input.pids.flatMap((pid) => {
+                      const fiber = children.get(pid);
+                      if (fiber === undefined) return [];
+                      return [Fiber.await(fiber).pipe(Effect.asVoid)];
+                    });
+                    if (waiting.length !== input.pids.length || waiting.length === 0) break;
+                    yield* Effect.raceAllFirst([...waiting, Deferred.await(wake)]);
+                  }
                   return { data: Buffer.alloc(0), path: "/", directory: false, value: 0n };
                 }),
               ),
