@@ -20,6 +20,7 @@ export const RpcProbe = Schema.Struct({
   denied: Schema.NullOr(Schema.Int),
 });
 const RpcCase = Schema.Literals([
+  "disposal",
   "error",
   "timeout",
   "credentials",
@@ -68,6 +69,11 @@ export default {
               'export default async ({tools}) => tools.call({op:"host.call",name:"lookup",input:{}}).catch(error => error.code)',
           };
           if (mode === "timeout") input.timeoutMs = 25;
+          if (mode === "disposal") {
+            input.maxToolCalls = 2;
+            input.source =
+              'export default async ({tools}) => { await tools.call({op:"host.call",name:"lookup",input:{}}); return tools.call({op:"host.call",name:"lookup",input:{}}).catch(error => error.code); }';
+          }
           const result = yield* Effect.gen(function* () {
             if (mode === "queue")
               return yield* boxes.action(id, {
@@ -85,6 +91,10 @@ export default {
             });
             return yield* agent.runWithTools(sandbox, input, async () => {
               calls.count += 1;
+              if (mode === "disposal") {
+                await Effect.runPromise(boxes.action(id, { op: "vm.dispose" }));
+                return { ok: true, value: "disposed" };
+              }
               if (mode === "error") return { ok: false, message: "declared callback failure" };
               if (mode === "timeout")
                 return Effect.runPromise(
@@ -105,7 +115,8 @@ export default {
               }),
             );
           }
-          if (mode !== "queue") yield* boxes.action(id, { op: "vm.dispose" });
+          if (mode !== "queue" && mode !== "disposal")
+            yield* boxes.action(id, { op: "vm.dispose" });
           return new Response(
             Schema.encodeSync(Schema.fromJsonString(RpcProbe))({
               record: result.success,

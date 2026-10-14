@@ -56,7 +56,7 @@ import {
   liveOutput,
   recoveryStatus,
 } from "./process";
-import { kernelCall, open, publish, StorageFailure } from "./storage";
+import { head, kernelCall, open, publish, StorageFailure } from "./storage";
 import type { Env } from "./resources";
 
 initSync({ module: wasm });
@@ -469,6 +469,7 @@ export class Agent extends AgentProtocol<Env> {
                 status: 429,
                 message: "Host tool budget exhausted",
               });
+            yield* head(bindings, capability.sandboxId);
             calls.count += 1;
             const reply = yield* Effect.acquireUseRelease(
               Effect.tryPromise({
