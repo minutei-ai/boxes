@@ -22,6 +22,7 @@
     "handlers:proof": "bun tooling/handlers-proof.ts",
     "signals:proof": "bun tooling/signals-proof.ts",
     "groups:proof": "bun tooling/groups-proof.ts",
+    "exec:proof": "bun tooling/exec-proof.ts",
     "cwd:proof": "bun tooling/cwd-proof.ts",
     "inherited-pipe:proof": "bun tooling/inherited-pipe-proof.ts",
     "wasi-child:proof": "bun tooling/wasi-child-proof.ts",

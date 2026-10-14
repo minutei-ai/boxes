@@ -97,6 +97,13 @@ struct PollClock {
     rename_all_fields = "camelCase"
 )]
 enum Request {
+    Exec {
+        path: Option<String>,
+        fd: Option<u32>,
+        cwd: String,
+        argv: Vec<String>,
+        env: BTreeMap<String, String>,
+    },
     Spawn {
         path: String,
         argv: Vec<String>,
@@ -207,6 +214,9 @@ enum StatProjection {
 }
 
 enum Completion {
+    Exec {
+        closed: BTreeSet<u32>,
+    },
     PipeRead {
         fd: u32,
         vectors: Vec<(usize, usize)>,
@@ -301,7 +311,7 @@ enum Completion {
     },
 }
 
-#[derive(Deserialize)]
+#[derive(Clone, Deserialize)]
 #[serde(deny_unknown_fields)]
 struct DirectoryEntry {
     name: String,
@@ -1109,6 +1119,81 @@ fn dispatch(caller: &mut Caller<'_, State>, name: &str, args: &[u64]) -> Result<
                     .ok_or(Failure::Errno(71))?
                     .group = group;
             }
+        }
+        "proc_exec" | "proc_fexec" => {
+            let shift = usize::from(name == "proc_exec");
+            let (path, fd) = if name == "proc_exec" {
+                let raw = bytes(caller, a[0], a[1])?;
+                if raw.is_empty() {
+                    return Err(Failure::Errno(44));
+                }
+                if raw.len() > 4096 || raw.contains(&0) {
+                    return Err(Failure::Errno(28));
+                }
+                (
+                    Some(
+                        std::str::from_utf8(&raw)
+                            .map_err(|_| Failure::Errno(25))?
+                            .into(),
+                    ),
+                    None,
+                )
+            } else {
+                let fd = a[0] as u32;
+                let descriptor = caller
+                    .data()
+                    .descriptors
+                    .get(&fd)
+                    .ok_or(Failure::Errno(8))?;
+                if descriptor.directory || descriptor.cache.is_none() {
+                    return Err(Failure::Errno(8));
+                }
+                let cache = descriptor.cache.ok_or(Failure::Errno(8))?;
+                let file = caller
+                    .data()
+                    .files
+                    .get(&cache)
+                    .ok_or(Failure::Errno(8))?
+                    .borrow();
+                if u32::from_le_bytes(file.metadata[64..68].try_into().unwrap()) & 0o111 == 0 {
+                    return Err(Failure::Errno(2));
+                }
+                (None, Some(fd))
+            };
+            let argv = spawn_strings(caller, a[1 + shift], a[2 + shift])?;
+            let envp = spawn_strings(caller, a[3 + shift], a[4 + shift])?;
+            if argv.len() > 129 || envp.len() > 128 {
+                return Err(Failure::Errno(22));
+            }
+            let mut env = BTreeMap::new();
+            for entry in envp {
+                let (key, value) = entry.split_once('=').ok_or(Failure::Errno(28))?;
+                if key.is_empty() || key.chars().count() > 128 {
+                    return Err(Failure::Errno(28));
+                }
+                env.insert(key.to_string(), value.to_string());
+            }
+            if a[6 + shift] > MAX_FILES {
+                return Err(Failure::Errno(28));
+            }
+            let list = bytes(caller, a[5 + shift], a[6 + shift] * 4)?;
+            let closed = list
+                .as_chunks::<4>()
+                .0
+                .iter()
+                .map(|part| u32::from_le_bytes(*part))
+                .collect();
+            suspend(
+                caller,
+                Request::Exec {
+                    path,
+                    fd,
+                    cwd: caller.data().cwd.clone(),
+                    argv,
+                    env,
+                },
+                Completion::Exec { closed },
+            )?;
         }
         "proc_spawn_v4" => {
             bytes(caller, a[20], 4)?;
@@ -2866,6 +2951,8 @@ fn linker(engine: &Engine) -> Result<Linker<State>, String> {
     bind!("host_process","proc_getpgid",a:i32,b:i32);
     bind!("host_process","proc_setpgid",a:i32,b:i32);
     bind!("host_process","proc_getppid",a:i32);
+    bind!("host_process","proc_exec",a:i32,b:i32,c:i32,d:i32,e:i32,f:i32,g:i32,h:i32);
+    bind!("host_process","proc_fexec",a:i32,b:i32,c:i32,d:i32,e:i32,f:i32,g:i32);
     for (name, count) in [("proc_spawn_v3", 17), ("proc_spawn_v4", 21)] {
         linker
             .func_new(
@@ -2942,6 +3029,7 @@ fn linker(engine: &Engine) -> Result<Linker<State>, String> {
 pub struct WasmGuest {
     store: Store<State>,
     trampoline: Option<Func>,
+    entry: Option<(Func, Vec<Val>)>,
     parameters: Vec<Val>,
     handlers: Vec<HandlerFrame>,
     function: Func,
@@ -2956,11 +3044,75 @@ pub struct WasmGuest {
     done: Option<i32>,
 }
 
+enum GuestInitialization<'a> {
+    Fresh(&'a [u8]),
+    Replacement {
+        state: &'a State,
+        closed: &'a BTreeSet<u32>,
+    },
+}
+
+fn resumable_start(bytes: &[u8]) -> Result<Option<(Vec<u8>, String)>, String> {
+    use wasm_encoder::reencode::Reencode;
+    let mut start = None;
+    let mut names = BTreeSet::new();
+    for payload in wasmparser::Parser::new(0).parse_all(bytes) {
+        match payload.map_err(|error| error.to_string())? {
+            wasmparser::Payload::StartSection { func, .. } => start = Some(func),
+            wasmparser::Payload::ExportSection(reader) => {
+                for export in reader {
+                    names.insert(export.map_err(|error| error.to_string())?.name.to_string());
+                }
+            }
+            _ => {}
+        }
+    }
+    let Some(start) = start else {
+        return Ok(None);
+    };
+    let name = (0..=names.len())
+        .map(|index| format!("__cirro_start_{index}"))
+        .find(|name| !names.contains(name))
+        .ok_or("No available start export")?;
+    let mut module = wasm_encoder::Module::new();
+    let mut exported = false;
+    for payload in wasmparser::Parser::new(0).parse_all(bytes) {
+        let payload = payload.map_err(|error| error.to_string())?;
+        match payload {
+            wasmparser::Payload::ExportSection(reader) => {
+                let mut exports = wasm_encoder::ExportSection::new();
+                wasm_encoder::reencode::RoundtripReencoder
+                    .parse_export_section(&mut exports, reader)
+                    .map_err(|error| error.to_string())?;
+                exports.export(&name, wasm_encoder::ExportKind::Func, start);
+                module.section(&exports);
+                exported = true;
+            }
+            wasmparser::Payload::StartSection { .. } => {
+                if !exported {
+                    let mut exports = wasm_encoder::ExportSection::new();
+                    exports.export(&name, wasm_encoder::ExportKind::Func, start);
+                    module.section(&exports);
+                }
+            }
+            _ => {
+                if let Some((id, range)) = payload.as_section() {
+                    module.section(&wasm_encoder::RawSection {
+                        id,
+                        data: &bytes[range],
+                    });
+                }
+            }
+        }
+    }
+    Ok(Some((module.finish(), name)))
+}
+
 impl WasmGuest {
     fn create(
         bytes: &[u8],
         configuration: &str,
-        stdin: &[u8],
+        initialization: GuestInitialization<'_>,
         memory: usize,
         fuel: u64,
         max_output: usize,
@@ -2974,6 +3126,10 @@ impl WasmGuest {
         {
             return Err("Invalid Wasm execution limits".into());
         }
+        let stdin = match initialization {
+            GuestInitialization::Fresh(stdin) => stdin,
+            GuestInitialization::Replacement { .. } => &[],
+        };
         if configuration.len() > 65_536 || stdin.len() > 1_048_576 {
             return Err("WASI input budget exceeded".into());
         }
@@ -3019,7 +3175,12 @@ impl WasmGuest {
         config.compilation_mode(CompilationMode::Eager);
         config.wasm_tail_call(false);
         let engine = Engine::new(&config);
-        let module = Module::new(&engine, bytes).map_err(|error| error.to_string())?;
+        let prepared = resumable_start(bytes)?;
+        let image = prepared
+            .as_ref()
+            .map(|(bytes, _)| bytes.as_slice())
+            .unwrap_or(bytes);
+        let module = Module::new(&engine, image).map_err(|error| error.to_string())?;
         let limits = StoreLimitsBuilder::new()
             .memory_size(memory)
             .table_elements(4096)
@@ -3094,6 +3255,48 @@ impl WasmGuest {
                 open_direct: false,
             },
         );
+        if let GuestInitialization::Replacement {
+            state: previous,
+            closed,
+        } = &initialization
+        {
+            let state = store.data_mut();
+            state.descriptors = previous.descriptors.clone();
+            state.files = previous.files.clone();
+            state.closed = previous.closed.clone();
+            state.cloexec = previous.cloexec.clone();
+            state.stdout = previous.stdout.clone();
+            state.stderr = previous.stderr.clone();
+            state.stdin = previous.stdin.clone();
+            state.stdin_offset = previous.stdin_offset.clone();
+            state.stdio_flags = previous.stdio_flags.clone();
+            state.requests = previous.requests.clone();
+            state.pid = previous.pid;
+            state.parent_pid = previous.parent_pid;
+            state.cwd = previous.cwd.clone();
+            state.signal_mask = previous.signal_mask;
+            state.pending_signals = previous.pending_signals.clone();
+            state.stopped = previous.stopped.clone();
+            state.transitions = previous.transitions.clone();
+            state.directories = previous.directories.clone();
+            state.processes = previous.processes.clone();
+            *state.dispositions.borrow_mut() = previous
+                .dispositions
+                .borrow()
+                .iter()
+                .filter(|(_, disposition)| disposition.action == 1)
+                .map(|(signal, disposition)| (*signal, disposition.clone()))
+                .collect();
+            for fd in state
+                .cloexec
+                .clone()
+                .union(closed)
+                .copied()
+                .collect::<Vec<_>>()
+            {
+                close(state, fd);
+            }
+        }
         store.limiter(|state| &mut state.limits);
         store.set_fuel(fuel).map_err(|error| error.to_string())?;
         let linker = linker(&engine)?;
@@ -3122,12 +3325,35 @@ impl WasmGuest {
             .iter()
             .map(|ty| Val::default_for_ty(*ty))
             .collect();
+        let initializer = prepared
+            .as_ref()
+            .map(|(_, name)| {
+                instance
+                    .get_func(&store, name)
+                    .ok_or("Missing start export")
+            })
+            .transpose()?;
+        if let Some(initializer) = initializer {
+            let ty = initializer.ty(&store);
+            if !ty.params().is_empty() || !ty.results().is_empty() {
+                return Err("Invalid Wasm start signature".into());
+            }
+        }
+        let (function, outputs, entry) = if let Some(initializer) = initializer {
+            (initializer, Vec::new(), Some((function, outputs)))
+        } else {
+            (function, outputs, None)
+        };
         let memory_limit = memory;
         let memory = instance.get_memory(&store, "memory");
         let available = store.get_fuel().map_err(|error| error.to_string())?;
         store.set_fuel(0).map_err(|error| error.to_string())?;
         let trampoline = instance.get_func(&store, "__wasi_signal_trampoline");
+        if matches!(initialization, GuestInitialization::Replacement { .. }) {
+            store.data().processes.borrow_mut().memory_bytes += memory_limit;
+        }
         Ok(Self {
+            entry,
             trampoline,
             parameters: Vec::new(),
             handlers: Vec::new(),
@@ -3307,7 +3533,13 @@ impl WasmGuest {
         match call {
             Ok(ResumableCall::Finished) => {
                 if self.handlers.is_empty() {
-                    self.done = Some(0);
+                    if let Some((function, outputs)) = self.entry.take() {
+                        self.function = function;
+                        self.outputs = outputs;
+                        self.parameters.clear();
+                    } else {
+                        self.done = Some(0);
+                    }
                 } else {
                     self.finish_handler()?;
                 }
@@ -3377,8 +3609,16 @@ impl WasmGuest {
         fuel: u64,
         max_output: usize,
     ) -> Result<WasmGuest, JsValue> {
-        Self::create(bytes, configuration, stdin, memory, fuel, max_output, None)
-            .map_err(|error| JsValue::from_str(&error))
+        Self::create(
+            bytes,
+            configuration,
+            GuestInitialization::Fresh(stdin),
+            memory,
+            fuel,
+            max_output,
+            None,
+        )
+        .map_err(|error| JsValue::from_str(&error))
     }
 
     #[wasm_bindgen(getter)]
@@ -3714,6 +3954,55 @@ impl WasmGuest {
             .map_err(|error| JsValue::from_str(&error.to_string()))
     }
 
+    pub fn replace_image(&mut self, bytes: &[u8], configuration: &str) -> Result<(), JsValue> {
+        let closed = match self
+            .store
+            .data()
+            .pending
+            .as_ref()
+            .map(|pending| &pending.completion)
+        {
+            Some(Completion::Exec { closed }) => closed.clone(),
+            _ => return Err(JsValue::from_str("No pending exec")),
+        };
+        if self
+            .store
+            .data()
+            .processes
+            .borrow()
+            .memory_bytes
+            .saturating_add(self.memory_limit)
+            > 67_108_864
+        {
+            return self.respond(48, &[], "/", false, 0, &[]);
+        }
+        let replacement = Self::create(
+            bytes,
+            configuration,
+            GuestInitialization::Replacement {
+                state: self.store.data(),
+                closed: &closed,
+            },
+            self.memory_limit,
+            self.budget.get(),
+            self.store.data().max_output,
+            Some(self.budget.clone()),
+        );
+        let mut replacement = match replacement {
+            Ok(replacement) => replacement,
+            Err(_) => return self.respond(45, &[], "/", false, 0, &[]),
+        };
+        replacement.fuel_limit = self.fuel_limit;
+        let state = replacement.store.data();
+        if state.pid == 1 {
+            state.processes.borrow_mut().root_dispositions = state.dispositions.clone();
+        } else if let Some(child) = state.processes.borrow_mut().children.get_mut(&state.pid) {
+            child.dispositions = state.dispositions.clone();
+        }
+        *self = replacement;
+        Ok(())
+    }
+
     pub fn spawn_child(
         &mut self,
         bytes: &[u8],
@@ -3789,7 +4078,7 @@ impl WasmGuest {
         let mut child = match Self::create(
             bytes,
             configuration,
-            &[],
+            GuestInitialization::Fresh(&[]),
             self.memory_limit,
             available,
             self.store.data().max_output,
@@ -4455,7 +4744,7 @@ impl WasmGuest {
                         .write(&mut self.store, output, &count.to_le_bytes())
                         .map_err(|error| JsValue::from_str(&error.to_string()))?;
                 }
-                Completion::Unit => {}
+                Completion::Unit | Completion::Exec { .. } => {}
                 Completion::Remove => detach(self.store.data_mut(), path),
                 Completion::Rename => {
                     let to = std::str::from_utf8(data)
@@ -4561,7 +4850,7 @@ mod tests {
             WasmGuest::create(
                 b"invalid",
                 r#"{"argv":[],"env":{}}"#,
-                &[],
+                GuestInitialization::Fresh(&[]),
                 8_388_608,
                 1000,
                 1024,
@@ -4577,15 +4866,31 @@ mod tests {
             110, 0, 0, 10, 5, 1, 3, 0, 0, 11,
         ];
         let configuration = r#"{"argv":[],"env":{}}"#;
-        let mut root =
-            WasmGuest::create(&module, configuration, &[], 8_388_608, 100_000, 1024, None).unwrap();
+        let mut root = WasmGuest::create(
+            &module,
+            configuration,
+            GuestInitialization::Fresh(&[]),
+            8_388_608,
+            100_000,
+            1024,
+            None,
+        )
+        .unwrap();
         assert_eq!(
             root.advance().unwrap_err(),
             "wasm `unreachable` instruction executed"
         );
         assert_eq!(root.done, None);
-        let mut child =
-            WasmGuest::create(&module, configuration, &[], 8_388_608, 100_000, 1024, None).unwrap();
+        let mut child = WasmGuest::create(
+            &module,
+            configuration,
+            GuestInitialization::Fresh(&[]),
+            8_388_608,
+            100_000,
+            1024,
+            None,
+        )
+        .unwrap();
         child.store.data_mut().pid = 2;
         child.advance().unwrap();
         assert_eq!(child.done, Some(1));
@@ -4595,10 +4900,26 @@ mod tests {
     fn inherited_pipe_endpoints_survive_other_stores_and_release_on_guest_drop() {
         let module = include_bytes!("../../../dist/wasi-pipe-blocked.wasm");
         let configuration = r#"{"argv":[],"env":{}}"#;
-        let mut parent =
-            WasmGuest::create(module, configuration, &[], 8_388_608, 100_000, 1024, None).unwrap();
-        let mut child =
-            WasmGuest::create(module, configuration, &[], 8_388_608, 100_000, 1024, None).unwrap();
+        let mut parent = WasmGuest::create(
+            module,
+            configuration,
+            GuestInitialization::Fresh(&[]),
+            8_388_608,
+            100_000,
+            1024,
+            None,
+        )
+        .unwrap();
+        let mut child = WasmGuest::create(
+            module,
+            configuration,
+            GuestInitialization::Fresh(&[]),
+            8_388_608,
+            100_000,
+            1024,
+            None,
+        )
+        .unwrap();
         parent.advance().unwrap();
         child.advance().unwrap();
         assert!(matches!(
@@ -4663,8 +4984,16 @@ mod tests {
                 .unwrap()
                 .has_peer()
         );
-        let mut receiver =
-            WasmGuest::create(module, configuration, &[], 8_388_608, 100_000, 1024, None).unwrap();
+        let mut receiver = WasmGuest::create(
+            module,
+            configuration,
+            GuestInitialization::Fresh(&[]),
+            8_388_608,
+            100_000,
+            1024,
+            None,
+        )
+        .unwrap();
         receiver.advance().unwrap();
         close(parent.store.data_mut(), reader);
         parent.store.data_mut().descriptors.insert(
@@ -4696,7 +5025,7 @@ mod tests {
             let mut parent = WasmGuest::create(
                 include_bytes!("../../../dist/wasi-shared-file-parent.wasm"),
                 configuration,
-                &[],
+                GuestInitialization::Fresh(&[]),
                 8_388_608,
                 100_000,
                 1024,
@@ -4706,7 +5035,7 @@ mod tests {
             let mut child = WasmGuest::create(
                 include_bytes!("../../../dist/wasi-shared-file-child.wasm"),
                 configuration,
-                &[],
+                GuestInitialization::Fresh(&[]),
                 8_388_608,
                 100_000,
                 1024,
@@ -4766,7 +5095,7 @@ mod tests {
         let mut guest = WasmGuest::create(
             include_bytes!("../../../dist/wasi-slices-finite.wasm"),
             configuration,
-            &[],
+            GuestInitialization::Fresh(&[]),
             8_388_608,
             100_000_000,
             1024,
@@ -4791,7 +5120,7 @@ mod tests {
         let mut guest = WasmGuest::create(
             include_bytes!("../../../dist/wasi-slices-infinite.wasm"),
             configuration,
-            &[],
+            GuestInitialization::Fresh(&[]),
             8_388_608,
             500_000,
             1024,

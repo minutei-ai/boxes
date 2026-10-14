@@ -256,7 +256,9 @@ dependencies = [
  "serde",
  "serde_json",
  "wasm-bindgen",
+ "wasm-encoder",
  "wasmi",
+ "wasmparser 0.245.1",
 ]
 
 [[package]]

@@ -25,6 +25,22 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         .generate_name_section(false)
         .generate_producers_section(false)
         .parse_file(input)?;
+    if let Some(mode) = args.get(3) {
+        if mode != "--start" || args.len() != 5 {
+            return Err("Expected --start and an exported function name".into());
+        }
+        let export = module
+            .exports
+            .iter()
+            .find(|export| export.name == args[4])
+            .ok_or("Start export not found")?;
+        let walrus::ExportItem::Function(function) = export.item else {
+            return Err("Start export is not a function".into());
+        };
+        module.start = Some(function);
+        module.emit_wasm_file(output)?;
+        return Ok(());
+    }
     let memories: Vec<_> = module.memories.iter().map(|memory| memory.id()).collect();
     if memories.len() != 1 {
         return Err("Meter requires exactly one memory".into());

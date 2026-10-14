@@ -331,6 +331,61 @@ export const wasi = Effect.fn("wasi.execute")(function* (
           }
           const response = yield* Match.value(step)
             .pipe(
+              Match.when({ kind: "exec" }, (input) =>
+                Effect.gen(function* () {
+                  yield* requirePermission(capability, "execute");
+                  yield* requirePermission(capability, "read");
+                  const bytes = yield* Effect.gen(function* () {
+                    if (input.fd !== null) {
+                      const fd = input.fd;
+                      return yield* Effect.try({
+                        try: () => guest.file_data(fd),
+                        catch: (cause) => new WasmFailure({ cause }),
+                      });
+                    }
+                    if (input.path === null)
+                      return yield* new Fault({
+                        code: "EINVAL",
+                        status: 400,
+                        message: "Missing exec image",
+                      });
+                    const image = input.path;
+                    const path = Match.value(image.startsWith("/")).pipe(
+                      Match.when(true, () => image),
+                      Match.orElse(() => `${input.cwd}/${image}`),
+                    );
+                    const stat = yield* kernelCall(() => kernel.stat(path, true)).pipe(
+                      Effect.flatMap(Schema.decodeUnknownEffect(Schema.fromJsonString(FileStat))),
+                    );
+                    if (stat.kind !== "file" || (stat.mode & 0o111) === 0)
+                      return yield* new Fault({
+                        code: "EACCES",
+                        status: 403,
+                        message: "Exec image is not executable",
+                      });
+                    if (stat.size > wasmModuleBytes)
+                      return yield* new Fault({
+                        code: "EFBIG",
+                        status: 413,
+                        message: "Exec image exceeds the Wasm module limit",
+                      });
+                    return yield* read(env, capability.sandboxId, kernel, stat.path);
+                  });
+                  yield* Effect.try({
+                    try: () =>
+                      guest.replace_image(
+                        bytes,
+                        Schema.encodeSync(
+                          Schema.fromJsonString(
+                            WasmConfiguration.mapFields((fields) => Struct.omit(fields, ["stdin"])),
+                          ),
+                        )({ argv: input.argv, env: { ...input.env, PWD: input.cwd } }),
+                      ),
+                    catch: (cause) => new WasmFailure({ cause }),
+                  });
+                  return { data: Buffer.alloc(0), path: "/", directory: false, value: 0n };
+                }),
+              ),
               Match.when({ kind: "spawn" }, (input) =>
                 Effect.gen(function* () {
                   yield* requirePermission(capability, "execute");
@@ -972,6 +1027,7 @@ export const wasi = Effect.fn("wasi.execute")(function* (
               Effect.result,
             );
           if (response._tag === "Success") {
+            if (step.kind === "exec") return;
             if (step.kind === "spawn") return;
             const value = response.success;
             const metadata = yield* Effect.gen(function* () {

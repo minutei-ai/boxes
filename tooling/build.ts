@@ -248,6 +248,59 @@ await Effect.runPromise(
         `dist/wasi-cwd-${mode}.wasm`,
       ]);
     }
+    for (const mode of [
+      "image",
+      "path",
+      "fexec",
+      "signal",
+      "pending",
+      "missing",
+      "invalid",
+      "denied",
+      "badfd",
+      "start",
+      "start-trap",
+      "loop",
+      "child",
+      "children",
+      "leaf",
+    ]) {
+      yield* run([
+        "rustc",
+        "--crate-type",
+        "cdylib",
+        "--target",
+        "wasm32-unknown-unknown",
+        "-O",
+        "-A",
+        "dead_code",
+        "-C",
+        "strip=symbols",
+        "--cfg",
+        `case="${mode}"`,
+        "tests/fixtures/wasi-exec.rs",
+        "-o",
+        `dist/wasi-exec-${mode}.wasm`,
+      ]);
+    }
+    for (const [mode, entry] of [
+      ["start", "bootstrap"],
+      ["start-trap", "bootstrap_trap"],
+    ] as const) {
+      yield* run([
+        "cargo",
+        "run",
+        "-p",
+        "cirro-wasm-meter",
+        "--release",
+        "--locked",
+        "--",
+        "dist/wasi-exec-image.wasm",
+        `dist/wasi-exec-image-${mode}.wasm`,
+        "--start",
+        entry,
+      ]);
+    }
     for (const role of [
       "parent-duplex",
       "child-duplex",
