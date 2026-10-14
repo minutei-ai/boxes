@@ -21,7 +21,7 @@ Boxes does not currently provide Linux compatibility, a complete POSIX shell, np
 
 ## Effect SDK
 
-Use [`@minutei-ai/boxes`](docs/sdk.md) from Effect 4 applications and Cloudflare Workers. The SDK shares the server contracts, infers results per operation and uses the native Effect HttpClient with scoped redacted credentials.
+Use [`@minutei-ai/boxes`](docs/sdk.md) from Effect 4 applications and Cloudflare Workers. The SDK shares the server contracts, infers results per operation and calls a native Cloudflare service binding through `makeBinding(env.BOXES, token)`, with scoped redacted credentials and native Effect HttpClient lifetimes.
 
 ## Install and verify
 

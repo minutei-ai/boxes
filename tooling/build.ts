@@ -985,6 +985,7 @@ await Effect.runPromise(
       ["tests/fixtures/checkpoint-worker.ts", "dist/checkpoint-worker"],
       ["tests/fixtures/clock-worker.ts", "dist/clock-worker"],
       ["tests/fixtures/origin-worker.ts", "dist/origin-worker"],
+      ["tests/fixtures/sdk-binding-worker.ts", "dist/sdk-binding-worker"],
     ] as const) {
       const result = yield* Effect.promise(() =>
         Bun.build({
@@ -1017,6 +1018,7 @@ await Effect.runPromise(
       );
       if (!result.success)
         return yield* new BuildFailure({ message: "Worker bundle failed", cause: result.logs });
+      if (directory === "dist/sdk-binding-worker") continue;
       yield* Effect.forEach(["kernel", "guest", "compiler", "wasi", "python"], (name) =>
         Effect.promise(() =>
           Bun.write(

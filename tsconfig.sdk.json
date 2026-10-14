@@ -6,7 +6,7 @@
     "emitDeclarationOnly": true,
     "rootDir": "src",
     "outDir": "dist/sdk",
-    "types": []
+    "types": ["@cloudflare/workers-types"]
   },
   "include": ["src/sdk.ts", "src/contracts.ts"],
   "exclude": []

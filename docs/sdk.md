@@ -1,6 +1,6 @@
 # Effect SDK
 
-The `@minutei-ai/boxes` SDK targets Effect 4 and ordinary Cloudflare Workers. It uses the native Effect HttpClient supplied by the caller. The package contains generated ESM and TypeScript declarations; Rust, Alchemy, server bindings and credentials are excluded. All request/response Schemas come from the same owner as the server. Schema exports are available from `@minutei-ai/boxes/contracts`.
+The `@minutei-ai/boxes` SDK targets Effect 4 and ordinary Cloudflare Workers. Its primary transport is a native Cloudflare service binding. Effect HttpClient owns request construction, interruption and transport errors. The package contains generated ESM and TypeScript declarations; Rust, Alchemy, server bindings and credentials are excluded. All request/response Schemas come from the same owner as the server. Schema exports are available from `@minutei-ai/boxes/contracts`.
 
 Install the SDK archive attached to the GitHub SDK release:
 
@@ -8,29 +8,40 @@ Install the SDK archive attached to the GitHub SDK release:
 bun add https://github.com/minutei-ai/boxes/releases/download/sdk-v0.1.0/minutei-ai-boxes-0.1.0.tgz
 ```
 
-Use your application's existing HttpClient Layer, or the native fetch transport in a Worker:
+Use the service binding from the Minutei Worker environment:
 
 ```ts
 import { Effect, Redacted } from "effect";
-import { FetchHttpClient } from "effect/http";
-import { make } from "@minutei-ai/boxes";
+import { makeBinding } from "@minutei-ai/boxes";
 
 const readFile = Effect.gen(function* () {
-  const boxes = yield* make({
-    url: "https://your-boxes-worker.example",
-    token: Redacted.make(scopedCapabilityToken),
-  });
+  const boxes = yield* makeBinding(env.BOXES, Redacted.make(scopedCapabilityToken));
   return yield* boxes.action(sandboxId, {
     op: "filesystem.readFile",
     path: "/workspace/result.txt",
   });
-}).pipe(Effect.provide(FetchHttpClient.layer));
+});
 ```
 
-`make` captures the caller's native HttpClient and validated configuration. It exposes `create(input)`, `mintCapability(sandboxId, input)` and `action(sandboxId, action)`. Action results are inferred from their operation discriminator. The complete existing API, including process pagination, wait deadlines, stdin offsets, output cursors, snapshots and policy changes, uses its original contract. Explicitly unsupported server behavior remains unsupported.
+`makeBinding` acquires a native binding transport and captures the scoped redacted credential. It calls `binding.fetch` directly; the internal request URL supplies the API path and does not resolve a public host. Cloudflare Worker globals must be enabled in TypeScript through `@cloudflare/workers-types`. It exposes `create(input)`, `mintCapability(sandboxId, input)` and `action(sandboxId, action)`. Action results are inferred from their operation discriminator. The complete existing API, including process pagination, wait deadlines, stdin offsets, output cursors, snapshots and policy changes, uses its original contract. Explicitly unsupported server behavior remains unsupported.
 
-In Minutei, acquire the client in the Layer that owns sandbox orchestration and provide the existing HttpClient Layer there. Keep scoped capability clients with their request/run owner; never put actor credentials in a process singleton. The administrator credential belongs only to the control plane; agents receive scoped tokens. Native `FetchHttpClient.Fetch` can supply a Cloudflare service binding's fetch implementation when the deployable provisions that binding. The SDK never provisions infrastructure.
+At the existing Minutei Alchemy Stack, resolve the deployed Worker through its native resource reference:
+
+```ts
+import * as Cloudflare from "alchemy/Cloudflare";
+
+const boxes =
+  yield *
+  Cloudflare.Worker.ref("Sandbox", {
+    stack: "cirro",
+    stage: "prod",
+  });
+```
+
+Add `BOXES: boxes` to the existing Worker resource's `env` so `Cloudflare.InferEnv` owns the binding type. The stack retains its current physical identity `cirro` to preserve deployed storage. Use the authorized `minutei` profile when applying that Stack change.
+
+In Minutei, acquire the client in the Layer that owns sandbox orchestration. Keep scoped capability clients with their request/run owner; never put actor credentials in a process singleton. The administrator credential belongs only to the control plane; agents receive scoped tokens. The SDK never provisions infrastructure. `make({ url, token })` remains available for external clients and requires a caller-provided native HttpClient Layer.
 
 API failures are `BoxesError` with the server's `status`, `error` code and `message`. Use `Effect.catchTag("BoxesError", ...)` to handle declared remote failures. Invalid input and invalid response shapes preserve native Schema/HttpBody errors; transport failures preserve native HttpClient errors. Native Effect interruption cancels the HTTP request. Cancellation of a client request does not cancel a durable sandbox process; explicitly send `process.cancel` for that behavior.
 
-There are no automatic retries, polling loops or local copies of process state. After a lost mutation response or `409`, read current state before deciding whether to resubmit. Compose deadlines and schedules through Effect at the calling domain owner. SDK tests use real Alchemy workerd/R2, plus a native origin Worker for malformed responses and interruption. `bun run build:sdk` generates the distributable and `bun run sdk:proof` verifies the compiled SDK against the authenticated deployed Worker. The package is distributed through GitHub; npm registry publication and direct Minutei integration are separate steps.
+There are no automatic retries, polling loops or local copies of process state. After a lost mutation response or `409`, read current state before deciding whether to resubmit. Compose deadlines and schedules through Effect at the calling domain owner. SDK tests use real Alchemy workerd/R2, a second Worker connected through `Service.local`, and a native origin Worker for malformed responses and interruption. `bun run build:sdk` generates the distributable and `bun run sdk:proof` verifies the compiled SDK against the authenticated deployed Worker. The package is distributed through GitHub; npm registry publication and direct Minutei integration are separate steps.

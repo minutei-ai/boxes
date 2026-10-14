@@ -1,5 +1,5 @@
-import { Effect, Schema } from "effect";
-import { HttpClient, HttpClientRequest, HttpClientResponse } from "effect/http";
+import { Effect, Redacted, Schema } from "effect";
+import { HttpClient, HttpClientError, HttpClientRequest, HttpClientResponse } from "effect/http";
 import {
   Action,
   ActionResponses,
@@ -67,4 +67,36 @@ export const make = Effect.fn("boxes.client.make")(function* (
       return yield* post(`/v1/sandboxes/${sandboxId}/action`, Action, response, input);
     }),
   };
+});
+
+export const makeBinding = Effect.fn("boxes.client.makeBinding")(function* (
+  binding: Pick<Fetcher, "fetch">,
+  token: Redacted.Redacted<string>,
+): Effect.fn.Return<
+  Effect.Success<ReturnType<typeof make>>,
+  Effect.Error<ReturnType<typeof make>>
+> {
+  const client = HttpClient.make((request, _url, signal) =>
+    HttpClientRequest.toWeb(request, { signal }).pipe(
+      Effect.mapError(
+        (cause) =>
+          new HttpClientError.HttpClientError({
+            reason: new HttpClientError.InvalidUrlError({ request, cause }),
+          }),
+      ),
+      Effect.flatMap((web) =>
+        Effect.tryPromise({
+          try: () => binding.fetch(web),
+          catch: (cause) =>
+            new HttpClientError.HttpClientError({
+              reason: new HttpClientError.TransportError({ request, cause }),
+            }),
+        }),
+      ),
+      Effect.map((response) => HttpClientResponse.fromWeb(request, response)),
+    ),
+  );
+  return yield* make({ url: "https://boxes.internal", token }).pipe(
+    Effect.provide(HttpClient.layerMergedContext(Effect.succeed(client))),
+  );
 });

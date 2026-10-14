@@ -18,9 +18,14 @@ import type { Control } from "../tests/fixtures/clock-worker";
 class NetworkOrigin extends Plugin.Service<NetworkOrigin>()(
   "cloudflare-runtime/plugin/BoxesOrigin",
 ) {}
-const Endpoints = Schema.Struct({ app: Schema.String, origin: Schema.UndefinedOr(Schema.String) });
+const Endpoints = Schema.Struct({
+  app: Schema.String,
+  origin: Schema.UndefinedOr(Schema.String),
+  binding: Schema.UndefinedOr(Schema.String),
+});
 type TestEnv = Env & { ENDPOINTS: typeof Endpoints.Type; CONTROL: Fetcher<Control> };
 const Options = Schema.Struct({
+  binding: Schema.optionalKey(Schema.Boolean),
   origin: Schema.optionalKey(Schema.Struct({ delay: Schema.Int, body: Schema.String })),
   advance: Schema.optionalKey(Schema.Int),
   clockStart: Schema.optionalKey(Schema.Int),
@@ -114,7 +119,35 @@ export const runtime = (persist: string, options: typeof Options.Type = {}) => {
           queueConsumers: consumers,
         })
         .pipe(Effect.provideService(NetworkOrigin, outbound), Effect.orDie);
-      return yield* Json.local("ENDPOINTS", { app: url.href, origin: origin?.href });
+      const binding = yield* Effect.gen(function* () {
+        if (options.binding !== true) return undefined;
+        return yield* workerRuntime
+          .start({
+            name: `${name}-sdk`,
+            compatibilityDate: "2026-10-06",
+            compatibilityFlags: ["nodejs_compat", "enable_request_signal"],
+            bindings: [
+              Service.local({ binding: "BOXES", scriptName: name }),
+              Text.local("TOKEN", "cirro-local-test-credential"),
+            ],
+            modules: [
+              {
+                name: "index.js",
+                type: "ESModule",
+                content: readFileSync(
+                  join(import.meta.dir, "../dist/sdk-binding-worker/index.js"),
+                  "utf8",
+                ),
+              },
+            ],
+          })
+          .pipe(Effect.orDie);
+      });
+      return yield* Json.local("ENDPOINTS", {
+        app: url.href,
+        origin: origin?.href,
+        binding: binding?.href,
+      });
     }),
     Service.local({ binding: "CONTROL", scriptName: name, entrypoint: "Control" }),
   ];
@@ -132,6 +165,12 @@ export const runtime = (persist: string, options: typeof Options.Type = {}) => {
         if (value.env.ENDPOINTS.origin === undefined)
           return Promise.reject(new Error("Network fixture requires an origin"));
         return new URL(value.env.ENDPOINTS.origin);
+      }),
+    binding: () =>
+      ready.then((value) => {
+        if (value.env.ENDPOINTS.binding === undefined)
+          return Promise.reject(new Error("SDK fixture requires binding mode"));
+        return new URL(value.env.ENDPOINTS.binding);
       }),
     objects: ready.then((value) => value.env.OBJECTS),
     control: ready.then((value) => value.env.CONTROL),

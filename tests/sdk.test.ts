@@ -5,11 +5,14 @@ import { join } from "node:path";
 import { Effect, Exit, Fiber, Layer, Redacted, Schema } from "effect";
 import { FetchHttpClient } from "effect/http";
 import { make } from "../src/sdk";
+import { BindingProof } from "./fixtures/sdk-binding-worker";
+import { Id } from "../src/contracts";
 import { runtime } from "../tooling/worker-test";
 
 const directory = await mkdtemp(join(tmpdir(), "boxes-sdk-"));
 const worker = runtime(directory, {
   controlled: false,
+  binding: true,
   origin: { delay: 100, body: '{"unexpected":true}' },
 });
 const transport = FetchHttpClient.layer.pipe(
@@ -103,4 +106,17 @@ test("protocol failures stay typed and native fiber interruption does not replay
   expect(Exit.hasInterrupts(interrupted)).toBe(true);
   const after = await (await fetch(new URL("/count", origin))).json();
   expect(after).toBe(before + 1);
+});
+
+test("SDK calls another Worker through its native service binding", async () => {
+  const response = await fetch(await worker.binding(), {
+    method: "POST",
+    body: Schema.encodeSync(Schema.fromJsonString(Id))("binding-sdk"),
+  });
+  expect(response.status).toBe(200);
+  const proof = Schema.decodeUnknownSync(BindingProof)(await response.json());
+  expect(Buffer.from(proof.file.content, proof.file.encoding).toString()).toBe("native binding");
+  expect(proof.run.status).toBe("exited");
+  expect(proof.run.output?.result).toBe(42);
+  expect(proof.denied).toBe(401);
 });
