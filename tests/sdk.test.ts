@@ -116,6 +116,10 @@ test("SDK calls another Worker through its native service binding", async () => 
   expect(response.status).toBe(200);
   const proof = Schema.decodeUnknownSync(BindingProof)(await response.json());
   expect(Buffer.from(proof.file.content, proof.file.encoding).toString()).toBe("native binding");
+  expect([proof.stat.atimeNs, proof.stat.mtimeNs]).toEqual([
+    "9007199254740993",
+    "18446744073709551615",
+  ]);
   expect(proof.run.status).toBe("exited");
   expect(proof.run.output?.result).toBe(42);
   expect(proof.denied).toBe(401);

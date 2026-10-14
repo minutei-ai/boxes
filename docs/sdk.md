@@ -5,7 +5,7 @@ The `@minutei-ai/boxes` SDK targets Effect 4 and ordinary Cloudflare Workers. It
 Install the SDK archive attached to the GitHub SDK release:
 
 ```sh
-bun add https://github.com/minutei-ai/boxes/releases/download/sdk-v0.1.0/minutei-ai-boxes-0.1.0.tgz
+bun add https://github.com/minutei-ai/boxes/releases/download/sdk-v0.2.0/minutei-ai-boxes-0.2.0.tgz
 ```
 
 Use the service binding from the Minutei Worker environment:
@@ -45,3 +45,5 @@ In Minutei, acquire the client in the Layer that owns sandbox orchestration. Kee
 API failures are `BoxesError` with the server's `status`, `error` code and `message`. Use `Effect.catchTag("BoxesError", ...)` to handle declared remote failures. Invalid input and invalid response shapes preserve native Schema/HttpBody errors; transport failures preserve native HttpClient errors. Native Effect interruption cancels the HTTP request. Cancellation of a client request does not cancel a durable sandbox process; explicitly send `process.cancel` for that behavior.
 
 There are no automatic retries, polling loops or local copies of process state. After a lost mutation response or `409`, read current state before deciding whether to resubmit. Compose deadlines and schedules through Effect at the calling domain owner. SDK tests use real Alchemy workerd/R2, a second Worker connected through `Service.local`, and a native origin Worker for malformed responses and interruption. `bun run build:sdk` generates the distributable and `bun run sdk:proof` verifies the compiled SDK against the authenticated deployed Worker. The package is distributed through GitHub; npm registry publication and direct Minutei integration are separate steps.
+
+`filesystem.utimes` sets both timestamps exactly. SDK inputs use `bigint` values for `atimeNs` and `mtimeNs`; JSON clients send canonical unsigned decimal strings within uint64. `follow: false` updates a symlink itself and `follow: true` updates its target. The operation requires `write`, keeps inode identity and bytes unchanged, and sets ctime from the server clock.

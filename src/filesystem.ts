@@ -61,6 +61,13 @@ export const filesystem = Effect.fn("filesystem.action")(function* (
   const kernel = session.kernel;
   const now = yield* Clock.currentTimeNanos;
   yield* kernelCall(() => kernel.set_time(now));
+  if (action.op === "filesystem.utimes") {
+    yield* kernelCall(() =>
+      kernel.set_times(action.path, action.follow, action.atimeNs, action.mtimeNs, 5),
+    );
+    yield* publish(env, id, session);
+    return { ok: true } satisfies typeof Success.Type;
+  }
   return yield* Match.value(action).pipe(
     Match.when({ op: "filesystem.export" }, (input) =>
       Effect.gen(function* () {
@@ -130,7 +137,10 @@ export const filesystem = Effect.fn("filesystem.action")(function* (
             }),
           { concurrency: 4 },
         );
-        return { ...snapshot, source: { ...snapshot.source, filesystem: { entries: completed } } };
+        return {
+          ...snapshot,
+          source: { ...snapshot.source, filesystem: { entries: completed } },
+        };
       }),
     ),
     Match.when({ op: "filesystem.readFiles" }, (input) =>

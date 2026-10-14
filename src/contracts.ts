@@ -37,7 +37,17 @@ export const DirectoryExclusions = Schema.Array(
 ).check(Schema.isMaxLength(128));
 
 const OwnerId = Schema.Int.check(Schema.isBetween({ minimum: 0, maximum: 4_294_967_295 }));
+const Nanoseconds = Schema.String.check(Schema.isPattern(/^(0|[1-9][0-9]{0,19})$/))
+  .pipe(Schema.decodeTo(Schema.BigIntFromString))
+  .check(Schema.isBetweenBigInt({ minimum: 0n, maximum: 18_446_744_073_709_551_615n }));
 export const FilesystemAction = Schema.Union([
+  Schema.Struct({
+    op: Schema.Literal("filesystem.utimes"),
+    path: Path,
+    atimeNs: Nanoseconds,
+    mtimeNs: Nanoseconds,
+    follow: Schema.Boolean,
+  }),
   Schema.Struct({
     op: Schema.Literal("filesystem.export"),
     maxBytes: Schema.Int.check(Schema.isBetween({ minimum: 1, maximum: 25_165_824 })),
@@ -854,6 +864,7 @@ export const ExecutionCheckpoint = Schema.Struct({
 });
 
 export const ActionResponses = {
+  "filesystem.utimes": Success,
   "filesystem.export": FilesystemSnapshot,
   "filesystem.readFiles": BatchReadResults,
   "filesystem.writeFiles": BatchWriteResults,

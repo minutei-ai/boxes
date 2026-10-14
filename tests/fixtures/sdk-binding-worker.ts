@@ -1,9 +1,10 @@
 import { Effect, Redacted, Schema } from "effect";
 import { makeBinding } from "../../src/sdk";
-import { FileContent, Id, RunRecord } from "../../src/contracts";
+import { FileContent, FileStat, Id, RunRecord } from "../../src/contracts";
 
 export const BindingProof = Schema.Struct({
   file: FileContent,
+  stat: FileStat,
   run: RunRecord,
   denied: Schema.Int,
 });
@@ -34,6 +35,18 @@ export default {
           encoding: "utf8",
         });
         const file = yield* boxes.action(id, { op: "filesystem.readFile", path: "/binding" });
+        yield* boxes.action(id, {
+          op: "filesystem.utimes",
+          path: "/binding",
+          atimeNs: 9007199254740993n,
+          mtimeNs: 18446744073709551615n,
+          follow: true,
+        });
+        const stat = yield* boxes.action(id, {
+          op: "filesystem.stat",
+          path: "/binding",
+          follow: true,
+        });
         const run = yield* boxes.action(id, {
           op: "typescript.evaluate",
           id: "binding-run",
@@ -45,6 +58,7 @@ export default {
         return new Response(
           Schema.encodeSync(Schema.fromJsonString(BindingProof))({
             file,
+            stat,
             run,
             denied: denied.status,
           }),
