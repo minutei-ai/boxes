@@ -24,6 +24,7 @@ const migrate = Alchemy.Action(
           "/v1/migrations/filesystem-v3",
           "/v1/migrations/wasm-inputs-v1",
           "/v1/migrations/process-receipts-v2",
+          "/v1/migrations/output-chunks-v1",
         ],
         (path) =>
           Effect.gen(function* () {

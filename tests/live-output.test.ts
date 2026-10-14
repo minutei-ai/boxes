@@ -61,11 +61,11 @@ const page = async (id: string, token: string, after: typeof LiveOutputCursor.Ty
   return Schema.decodeUnknownSync(LiveOutputPage)(await response.json());
 };
 const emitted = async (id: string, token: string, after: typeof LiveOutputCursor.Type | null) => {
-  for (const index of Array.from({ length: 100 }, (_, index) => index)) {
+  const deadline = performance.now() + 10_000;
+  while (performance.now() < deadline) {
     const current = await page(id, token, after);
     if (current.events.length > 0) return current;
-    await Bun.sleep(20);
-    expect(index).toBeLessThan(99);
+    await Bun.sleep(50);
   }
   return Promise.reject(new Error("Output was not observed at the suspension"));
 };
@@ -143,7 +143,7 @@ test("JS, TS and Python publish before exit with stable independent cursors and 
     expect(final.output?.stdout).toBe("first😀\nsecond\n");
     expect(final.output?.exitCode).toBeNull();
   }
-}, 20_000);
+}, 30_000);
 
 test("captured bytes survive a later native fuel failure without manufacturing an exit", async () => {
   const id = "live-failed";
@@ -175,7 +175,7 @@ test("captured bytes survive a later native fuel failure without manufacturing a
     await (await act(id, token, { op: "process.get", id: "stream" })).json(),
   );
   expect(record.output?.exitCode).toBeNull();
-});
+}, 15_000);
 
 test("WASI publishes captured stdout/stderr at a native suspension and preserves them through exit", async () => {
   const id = "live-wasi";

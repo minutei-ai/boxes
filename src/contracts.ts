@@ -479,14 +479,26 @@ export const RunRecord = Schema.Struct({
 });
 export const RunSummary = RunRecord.mapFields((fields) => Struct.omit(fields, ["output"]));
 export const RunMetadata = Schema.Struct({ summary: Schema.fromJsonString(RunSummary) });
+export const StdioRef = Schema.Struct({
+  size: Schema.Int.check(Schema.isBetween({ minimum: 0, maximum: 2_097_152 })),
+  chunks: Schema.Array(Schema.String.check(Schema.isPattern(/^[a-f0-9]{64}$/))).check(
+    Schema.isMaxLength(32),
+  ),
+});
+export const StoredOutput = ObservedOutput.mapFields((fields) => ({
+  ...fields,
+  stdout: StdioRef,
+  stderr: StdioRef,
+}));
 export const StoredRun = RunRecord.mapFields((fields) => ({
   ...fields,
+  output: Schema.NullOr(StoredOutput),
   authority: Schema.NullOr(Capability),
   deadlineAt: Schema.NullOr(Schema.Int),
 }));
 export const StoredRunMetadata = RunMetadata.mapFields((fields) => ({
   ...fields,
-  format: Schema.Literal("run-v2"),
+  format: Schema.Literal("run-v3"),
 }));
 export const DispatchReceipt = Schema.Struct({ notifications: Schema.Int });
 export const ProcessDelivery = Schema.Struct({ key: Schema.String, eTag: Schema.String });

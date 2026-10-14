@@ -1,0 +1,76 @@
+{
+  "baselineRevision": "63a32584ae25462227df8b508541562d33984a60",
+  "change": "Immutable 64 KiB stdio blocks and ranged page reads",
+  "limitations": [
+    "Local workerd; warm requests; shared development host.",
+    "Three concurrent page readers; 25 samples per cursor after one warm-up.",
+    "Repetitive fixture allows content deduplication; stored block bytes do not represent an arbitrary workload.",
+    "No production latency, request billing or total-cost claim."
+  ],
+  "before": {
+    "measuredAt": "2026-10-14T00:37:13.299Z",
+    "runtime": "local workerd via Miniflare",
+    "production": false,
+    "concurrentPageReaders": 3,
+    "stdoutBytes": 600001,
+    "receiptBytes": 600303,
+    "immutableBlocks": 0,
+    "storedBlockBytes": 0,
+    "measurements": [
+      {
+        "after": 0,
+        "returnedBytes": 4096,
+        "samples": 25,
+        "p50Ms": 35.86597800000004,
+        "p95Ms": 46.94888900000001
+      },
+      {
+        "after": 299999,
+        "returnedBytes": 4096,
+        "samples": 25,
+        "p50Ms": 35.59190000000012,
+        "p95Ms": 47.172342999999955
+      },
+      {
+        "after": 590000,
+        "returnedBytes": 4096,
+        "samples": 25,
+        "p50Ms": 35.34366799999998,
+        "p95Ms": 44.138520999999855
+      }
+    ]
+  },
+  "after": {
+    "measuredAt": "2026-10-14T00:38:00.052Z",
+    "runtime": "local workerd via Miniflare",
+    "production": false,
+    "concurrentPageReaders": 3,
+    "stdoutBytes": 600001,
+    "receiptBytes": 1065,
+    "immutableBlocks": 3,
+    "storedBlockBytes": 75729,
+    "measurements": [
+      {
+        "after": 0,
+        "returnedBytes": 4096,
+        "samples": 25,
+        "p50Ms": 18.266196000000036,
+        "p95Ms": 26.978137999999944
+      },
+      {
+        "after": 299999,
+        "returnedBytes": 4096,
+        "samples": 25,
+        "p50Ms": 19.988679000000047,
+        "p95Ms": 29.68704099999991
+      },
+      {
+        "after": 590000,
+        "returnedBytes": 4096,
+        "samples": 25,
+        "p50Ms": 19.902649999999994,
+        "p95Ms": 26.817633999999998
+      }
+    ]
+  }
+}

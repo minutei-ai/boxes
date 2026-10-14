@@ -15,6 +15,7 @@ import {
   ProcessOutputPage,
   CapturedStdio,
   ObservedOutput,
+  StoredOutput,
   ProcessLiveOutputAction,
   LiveOutputPage,
   ProcessCancelAction,
@@ -25,6 +26,7 @@ import { execute } from "./execution";
 import { head, open, StorageFailure } from "./storage";
 import type { Env } from "./resources";
 import { shell } from "./shell";
+import { archiveOutput, restoreOutput, readOutputRange } from "./output";
 
 const reserve = Effect.fn("process.reserve")(function* (
   env: Env,
@@ -63,13 +65,13 @@ const reserve = Effect.fn("process.reserve")(function* (
     finishedAt: null,
     output: null,
   };
-  const stored = { ...record, authority: launch.authority, deadlineAt: null };
+  const stored = { ...record, output: null, authority: launch.authority, deadlineAt: null };
   const receipt = yield* Effect.tryPromise({
     try: () =>
       env.OBJECTS.put(key, Schema.encodeSync(Schema.fromJsonString(StoredRun))(stored), {
         onlyIf: { etagDoesNotMatch: "*" },
         customMetadata: Schema.encodeSync(StoredRunMetadata)({
-          format: "run-v2",
+          format: "run-v3",
           summary: Struct.omit(record, ["output"]),
         }),
       }),
@@ -102,6 +104,7 @@ const complete = Effect.fn("process.complete")(function* (
   const key = `processes/${capability.sandboxId}/${record.id}.json`;
   const publication = { etag };
   const snapshots: (typeof ObservedOutput.Type)[] = [];
+  const retained: (typeof StoredOutput.Type)[] = [];
   const capture = Effect.fn("process.capture")(function* (stdio: typeof CapturedStdio.Type) {
     const previous = snapshots[0];
     if (
@@ -121,18 +124,19 @@ const complete = Effect.fn("process.complete")(function* (
       return;
     if (previous === undefined && stdio.stdout.length === 0 && stdio.stderr.length === 0) return;
     const pending = { ...stdio, exitCode: null, result: null };
+    const archived = yield* archiveOutput(env, capability.sandboxId, pending, retained[0] ?? null);
     const stored = {
       ...record,
       authority: null,
       deadlineAt: reservation.deadlineAt,
-      output: pending,
+      output: archived,
     };
     const written = yield* Effect.tryPromise({
       try: () =>
         env.OBJECTS.put(key, Schema.encodeSync(Schema.fromJsonString(StoredRun))(stored), {
           onlyIf: { etagMatches: publication.etag },
           customMetadata: Schema.encodeSync(StoredRunMetadata)({
-            format: "run-v2",
+            format: "run-v3",
             summary: Struct.omit(record, ["output"]),
           }),
         }),
@@ -162,6 +166,7 @@ const complete = Effect.fn("process.complete")(function* (
     }
     publication.etag = written.etag;
     snapshots.splice(0, snapshots.length, pending);
+    retained.splice(0, retained.length, archived);
   });
   const execution = Effect.scoped(
     Effect.gen(function* () {
@@ -255,6 +260,10 @@ const complete = Effect.fn("process.complete")(function* (
 
     return { ...snapshot, status: "failed" as const, finishedAt, output: snapshots[0] ?? null };
   });
+  const settledOutput = yield* Effect.gen(function* () {
+    if (finished.output === null) return null;
+    return yield* archiveOutput(env, capability.sandboxId, finished.output, retained[0] ?? null);
+  });
   for (const attempt of [0, 1]) {
     const current = yield* Effect.tryPromise({
       try: () => env.OBJECTS.head(key),
@@ -283,13 +292,14 @@ const complete = Effect.fn("process.complete")(function* (
           key,
           Schema.encodeSync(Schema.fromJsonString(StoredRun))({
             ...finished,
+            output: settledOutput,
             authority: null,
             deadlineAt: null,
           }),
           {
             onlyIf: { etagMatches: current.etag },
             customMetadata: Schema.encodeSync(StoredRunMetadata)({
-              format: "run-v2",
+              format: "run-v3",
               summary: Struct.omit(finished, ["output"]),
             }),
           },
@@ -320,7 +330,7 @@ export const run = Effect.fn("process.run")(function* (
   return yield* complete(env, capability, reservation, null);
 });
 
-export const inspect = Effect.fn("process.inspect")(function* (
+const readReceipt = Effect.fn("process.readReceipt")(function* (
   env: Env,
   capability: typeof Capability.Type,
   id: string,
@@ -338,9 +348,19 @@ export const inspect = Effect.fn("process.inspect")(function* (
     catch: (cause) => new StorageFailure({ cause }),
   });
   return yield* Schema.decodeUnknownEffect(Schema.fromJsonString(StoredRun))(text).pipe(
-    Effect.map((stored) => Struct.omit(stored, ["authority", "deadlineAt"])),
     Effect.mapError((cause) => new StorageFailure({ cause })),
   );
+});
+
+export const inspect = Effect.fn("process.inspect")(function* (
+  env: Env,
+  capability: typeof Capability.Type,
+  id: string,
+) {
+  const stored = yield* readReceipt(env, capability, id);
+  const record = Struct.omit(stored, ["authority", "deadlineAt"]);
+  if (stored.output === null) return { ...record, output: null };
+  return { ...record, output: yield* restoreOutput(env, capability.sandboxId, stored.output) };
 });
 
 export const list = Effect.fn("process.list")(function* (
@@ -384,11 +404,17 @@ export const wait = Effect.fn("process.wait")(function* (
     const now = yield* Clock.currentTimeMillis;
     if (capability.expiresAt <= now)
       return yield* new Fault({ code: "UNAUTHORIZED", status: 401, message: "Capability expired" });
-    const record = yield* Effect.scoped(inspect(env, capability, action.id));
+    const record = yield* readReceipt(env, capability, action.id);
     const observedAt = yield* Clock.currentTimeMillis;
     if (capability.expiresAt <= observedAt)
       return yield* new Fault({ code: "UNAUTHORIZED", status: 401, message: "Capability expired" });
-    if (record.status === "exited") return record;
+    if (record.status === "exited") {
+      const summary = Struct.omit(record, ["authority", "deadlineAt"]);
+      if (record.output === null) return { ...summary, output: null };
+      const output = yield* restoreOutput(env, capability.sandboxId, record.output);
+      yield* requirePermission(capability, "read");
+      return { ...summary, output };
+    }
     if (record.status === "cancelled")
       return yield* new Fault({
         code: "ECANCELED",
@@ -465,7 +491,7 @@ export const dispatch = Effect.fn("process.dispatch")(function* (env: Env, body:
         env.OBJECTS.put(event.key, Schema.encodeSync(Schema.fromJsonString(StoredRun))(failed), {
           onlyIf: { etagMatches: object.etag },
           customMetadata: Schema.encodeSync(StoredRunMetadata)({
-            format: "run-v2",
+            format: "run-v3",
             summary: Struct.omit(failed, ["output", "authority", "deadlineAt"]),
           }),
         }),
@@ -489,14 +515,14 @@ export const dispatch = Effect.fn("process.dispatch")(function* (env: Env, body:
       env.OBJECTS.put(event.key, Schema.encodeSync(Schema.fromJsonString(StoredRun))(running), {
         onlyIf: { etagMatches: object.etag },
         customMetadata: Schema.encodeSync(StoredRunMetadata)({
-          format: "run-v2",
+          format: "run-v3",
           summary: Struct.omit(running, ["output", "authority", "deadlineAt"]),
         }),
       }),
     catch: (cause) => new StorageFailure({ cause }),
   });
   if (claimed === null) return;
-  const record = Struct.omit(running, ["authority", "deadlineAt"]);
+  const record = { ...Struct.omit(running, ["authority", "deadlineAt"]), output: null };
   yield* complete(
     env,
     capability,
@@ -647,7 +673,7 @@ export const cancel = Effect.fn("process.cancel")(function* (
       env.OBJECTS.put(key, Schema.encodeSync(Schema.fromJsonString(StoredRun))(updated), {
         onlyIf: { etagMatches: object.etag },
         customMetadata: Schema.encodeSync(StoredRunMetadata)({
-          format: "run-v2",
+          format: "run-v3",
           summary: Struct.omit(updated, ["output", "authority", "deadlineAt"]),
         }),
       }),
@@ -667,7 +693,7 @@ export const output = Effect.fn("process.output")(function* (
   capability: typeof Capability.Type,
   action: typeof ProcessOutputAction.Type,
 ) {
-  const record = yield* inspect(env, capability, action.id);
+  const record = yield* readReceipt(env, capability, action.id);
   const position = action.after ?? 0;
   if (record.output === null) {
     if (position !== 0)
@@ -704,15 +730,38 @@ export const output = Effect.fn("process.output")(function* (
       status: 409,
       message: "Use process.output.readLive for output checkpoints while running",
     });
-  const stdout = Buffer.from(record.output.stdout, "utf8");
-  const stderr = Buffer.from(record.output.stderr, "utf8");
-  const total = stdout.byteLength + stderr.byteLength;
+  const stdoutSize = record.output.stdout.size;
+  const stderrSize = record.output.stderr.size;
+  const total = stdoutSize + stderrSize;
   if (position > total)
     return yield* new Fault({
       code: "EINVAL",
       status: 400,
       message: "Output cursor is beyond retained bytes",
     });
+  const budget = Math.min(action.maxBytes, action.maxEvents * 4096);
+  const stdoutOffset = Math.min(position, stdoutSize);
+  const stdoutLength = Math.min(stdoutSize - stdoutOffset, budget);
+  const stdout = yield* readOutputRange(
+    env,
+    capability.sandboxId,
+    record.output.stdout,
+    stdoutOffset,
+    stdoutLength,
+  );
+  const stderrOffset = Math.max(0, position - stdoutSize);
+  const stderrBudget = Math.min(
+    action.maxBytes - stdoutLength,
+    (action.maxEvents - Math.ceil(stdoutLength / 4096)) * 4096,
+  );
+  const stderrLength = Math.min(stderrSize - stderrOffset, stderrBudget);
+  const stderr = yield* readOutputRange(
+    env,
+    capability.sandboxId,
+    record.output.stderr,
+    stderrOffset,
+    stderrLength,
+  );
   const events: (typeof ProcessOutputPage.Type.events)[number][] = [];
   const progress = { position, bytes: 0 };
   while (
@@ -721,21 +770,23 @@ export const output = Effect.fn("process.output")(function* (
     events.length < action.maxEvents
   ) {
     const stream = yield* Effect.sync(() => {
-      if (progress.position < stdout.byteLength)
-        return { name: "stdout" as const, data: stdout, start: 0 };
-      return { name: "stderr" as const, data: stderr, start: stdout.byteLength };
+      if (progress.position < stdoutSize)
+        return { name: "stdout" as const, data: stdout, start: 0, loadedAt: stdoutOffset };
+      return { name: "stderr" as const, data: stderr, start: stdoutSize, loadedAt: stderrOffset };
     });
     const offset = progress.position - stream.start;
     const length = Math.min(
       4096,
       action.maxBytes - progress.bytes,
-      stream.data.byteLength - offset,
+      stream.data.byteLength - (offset - stream.loadedAt),
     );
     events.push({
       stream: stream.name,
       offset,
       cursor: progress.position,
-      data: stream.data.subarray(offset, offset + length).toString("base64"),
+      data: stream.data
+        .subarray(offset - stream.loadedAt, offset - stream.loadedAt + length)
+        .toString("base64"),
       encoding: "base64",
     });
     progress.position += length;
@@ -756,26 +807,52 @@ export const liveOutput = Effect.fn("process.liveOutput")(function* (
   capability: typeof Capability.Type,
   action: typeof ProcessLiveOutputAction.Type,
 ) {
-  const record = yield* inspect(env, capability, action.id);
+  const record = yield* readReceipt(env, capability, action.id);
   const progress = {
     stdout: action.after?.stdout ?? 0,
     stderr: action.after?.stderr ?? 0,
     bytes: 0,
   };
-  const buffers = {
-    stdout: Buffer.from(record.output?.stdout ?? "", "utf8"),
-    stderr: Buffer.from(record.output?.stderr ?? "", "utf8"),
+  const sizes = {
+    stdout: record.output?.stdout.size ?? 0,
+    stderr: record.output?.stderr.size ?? 0,
   };
-  if (progress.stdout > buffers.stdout.byteLength || progress.stderr > buffers.stderr.byteLength)
+  if (progress.stdout > sizes.stdout || progress.stderr > sizes.stderr)
     return yield* new Fault({
       code: "EINVAL",
       status: 400,
       message: "Output cursor is beyond captured bytes",
     });
+  const budget = Math.min(action.maxBytes, action.maxEvents * 4096);
+  const loadedAt = { stdout: progress.stdout, stderr: progress.stderr };
+  const stdoutLength = Math.min(sizes.stdout - progress.stdout, budget);
+  const stderrBudget = Math.min(
+    action.maxBytes - stdoutLength,
+    (action.maxEvents - Math.ceil(stdoutLength / 4096)) * 4096,
+  );
+  const stderrLength = Math.min(sizes.stderr - progress.stderr, stderrBudget);
+  const buffers = yield* Effect.gen(function* () {
+    if (record.output === null) return { stdout: Buffer.alloc(0), stderr: Buffer.alloc(0) };
+    const stdout = yield* readOutputRange(
+      env,
+      capability.sandboxId,
+      record.output.stdout,
+      progress.stdout,
+      stdoutLength,
+    );
+    const stderr = yield* readOutputRange(
+      env,
+      capability.sandboxId,
+      record.output.stderr,
+      progress.stderr,
+      stderrLength,
+    );
+    return { stdout, stderr };
+  });
   const events: (typeof LiveOutputPage.Type.events)[number][] = [];
   for (const stream of ["stdout", "stderr"] as const) {
     while (
-      progress[stream] < buffers[stream].byteLength &&
+      progress[stream] < sizes[stream] &&
       progress.bytes < action.maxBytes &&
       events.length < action.maxEvents
     ) {
@@ -783,13 +860,15 @@ export const liveOutput = Effect.fn("process.liveOutput")(function* (
       const length = Math.min(
         4096,
         action.maxBytes - progress.bytes,
-        buffers[stream].byteLength - offset,
+        buffers[stream].byteLength - (offset - loadedAt[stream]),
       );
       events.push({
         stream,
         offset,
         cursor: offset,
-        data: buffers[stream].subarray(offset, offset + length).toString("base64"),
+        data: buffers[stream]
+          .subarray(offset - loadedAt[stream], offset - loadedAt[stream] + length)
+          .toString("base64"),
         encoding: "base64",
       });
       progress[stream] += length;
@@ -807,8 +886,7 @@ export const liveOutput = Effect.fn("process.liveOutput")(function* (
     availability,
     events,
     nextCursor: { stdout: progress.stdout, stderr: progress.stderr },
-    hasMore:
-      progress.stdout < buffers.stdout.byteLength || progress.stderr < buffers.stderr.byteLength,
+    hasMore: progress.stdout < sizes.stdout || progress.stderr < sizes.stderr,
     truncated: false as const,
   };
 });

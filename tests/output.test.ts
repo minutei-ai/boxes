@@ -2,8 +2,16 @@ import { afterAll, expect, test } from "bun:test";
 import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { Schema } from "effect";
-import { ProcessOutputPage, RunRecord, TokenResponse } from "../src/contracts";
+import { Schema, Struct } from "effect";
+import {
+  ProcessOutputPage,
+  RunRecord,
+  TokenResponse,
+  StoredRun,
+  StoredRunMetadata,
+  Capability,
+  MigrationReceipt,
+} from "../src/contracts";
 import { runtime } from "../tooling/runtime";
 
 const directory = await mkdtemp(join(tmpdir(), "cirro-output-"));
@@ -335,4 +343,144 @@ test("queued output is pending and completed replay survives replacing the Worke
   expect(restored).toEqual(original);
   await second.dispose();
   await rm(persisted, { recursive: true, force: true });
+});
+
+test("output pages read only addressed immutable blocks and reject corrupted addressed bytes", async () => {
+  const token = await setup(mf, "output-blocks");
+  const result = Schema.decodeUnknownSync(RunRecord)(
+    await (
+      await act("output-blocks", token, {
+        op: "process.run",
+        id: "blocks",
+        language: "javascript",
+        source:
+          'export default ({console}) => { console.log("A".repeat(65536) + "😀" + "B".repeat(65536) + "C".repeat(30000)); return 42; }',
+      })
+    ).json(),
+  );
+  const bucket = await mf.getR2Bucket("OBJECTS");
+  const object = await bucket.get("processes/output-blocks/blocks.json");
+  if (object === null) return expect(object).not.toBeNull();
+  expect(object.size).toBeLessThan(1000);
+  const stored = Schema.decodeUnknownSync(Schema.fromJsonString(StoredRun))(await object.text());
+  if (stored.output === null) return expect(stored.output).not.toBeNull();
+  expect(stored.output.stdout.chunks).toHaveLength(3);
+  const hash = stored.output.stdout.chunks[1];
+  const key = `sandboxes/output-blocks/stdio/${hash}`;
+  const block = await bucket.get(key);
+  if (block === null) return expect(block).not.toBeNull();
+  const bytes = await block.arrayBuffer();
+  await bucket.put(key, Buffer.alloc(bytes.byteLength, 88));
+  const initial = await read("output-blocks", token, "blocks", 0, 4096, 1);
+  expect(Buffer.from(initial.events[0]?.data ?? "", "base64").toString()).toBe("A".repeat(4096));
+  const corrupt = await act("output-blocks", token, {
+    op: "process.output.read",
+    id: "blocks",
+    after: 65536,
+    maxBytes: 1,
+    maxEvents: 1,
+  });
+  expect(corrupt.status).toBe(500);
+  await bucket.put(key, bytes);
+  const boundary = await read("output-blocks", token, "blocks", 65535, 6, 1);
+  expect(Buffer.from(boundary.events[0]?.data ?? "", "base64")).toEqual(
+    Buffer.from(result.output?.stdout ?? "").subarray(65535, 65541),
+  );
+  const restored = Schema.decodeUnknownSync(RunRecord)(
+    await (await act("output-blocks", token, { op: "process.get", id: "blocks" })).json(),
+  );
+  expect(restored).toEqual(result);
+});
+
+test("inline receipt migration preserves grants, deadlines, observed output and all process states", async () => {
+  const token = await setup(mf, "output-migration");
+  const bucket = await mf.getR2Bucket("OBJECTS");
+  const Inline = RunRecord.mapFields((fields) => ({
+    ...fields,
+    authority: Schema.NullOr(Capability),
+    deadlineAt: Schema.NullOr(Schema.Int),
+  }));
+  const grant = {
+    sandboxId: "output-migration",
+    permissions: ["read", "execute"] as const,
+    expiresAt: Date.now() + 60000,
+  };
+  for (const status of [
+    "queued",
+    "running",
+    "cancelling",
+    "cancelled",
+    "failed",
+    "exited",
+  ] as const) {
+    const record = {
+      id: status,
+      status,
+      sourceHash: "0".repeat(64),
+      language: "javascript" as const,
+      startedAt: 10,
+      finishedAt: null,
+      output: { stdout: "😀".repeat(20000), stderr: "retained", result: null, exitCode: null },
+      authority: grant,
+      deadlineAt: 123456,
+    };
+    await bucket.put(
+      `processes/output-migration/${status}.json`,
+      Schema.encodeSync(Schema.fromJsonString(Inline))(record),
+      {
+        customMetadata: {
+          format: "run-v2",
+          summary: Schema.encodeSync(
+            Schema.fromJsonString(RunRecord.mapFields((fields) => Struct.omit(fields, ["output"]))),
+          )(Struct.omit(record, ["output", "authority", "deadlineAt"])),
+        },
+      },
+    );
+  }
+  const migrate = await post(
+    mf,
+    "/v1/migrations/output-chunks-v1",
+    "cirro-local-test-credential",
+    {},
+  );
+  expect(migrate.status).toBe(200);
+  expect(Schema.decodeUnknownSync(MigrationReceipt)(await migrate.json())).toEqual({ migrated: 6 });
+  for (const status of [
+    "queued",
+    "running",
+    "cancelling",
+    "cancelled",
+    "failed",
+    "exited",
+  ] as const) {
+    const object = await bucket.get(`processes/output-migration/${status}.json`);
+    if (object === null) return expect(object).not.toBeNull();
+    const stored = Schema.decodeUnknownSync(Schema.fromJsonString(StoredRun))(await object.text());
+    expect(stored.authority).toEqual(grant);
+    expect(stored.deadlineAt).toBe(123456);
+    expect(Schema.decodeUnknownSync(StoredRunMetadata)(object.customMetadata).format).toBe(
+      "run-v3",
+    );
+    const record = Schema.decodeUnknownSync(RunRecord)(
+      await (await act("output-migration", token, { op: "process.get", id: status })).json(),
+    );
+    expect(record.status).toBe(status);
+    expect(record.output).toEqual({
+      stdout: "😀".repeat(20000),
+      stderr: "retained",
+      result: null,
+      exitCode: null,
+    });
+  }
+  const repeated = await post(
+    mf,
+    "/v1/migrations/output-chunks-v1",
+    "cirro-local-test-credential",
+    {},
+  );
+  expect(repeated.status).toBe(200);
+  expect(Schema.decodeUnknownSync(MigrationReceipt)(await repeated.json())).toEqual({
+    migrated: 0,
+  });
+  expect((await post(mf, "/v1/migrations/output-chunks-v1", token, {})).status).toBe(401);
 });

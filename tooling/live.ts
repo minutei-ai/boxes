@@ -745,9 +745,43 @@ const replayEof = Schema.decodeUnknownSync(ProcessOutputPage)(
     })
   ).json(),
 );
+const chunkedOutput = Schema.decodeUnknownSync(RunRecord)(
+  await (
+    await action({
+      op: "process.run",
+      id: "chunked-proof",
+      language: "javascript",
+      source:
+        'export default ({console}) => { console.log("😀".repeat(20000)); console.error("retained"); return 42; }',
+    })
+  ).json(),
+);
+const chunkedBoundary = Schema.decodeUnknownSync(ProcessOutputPage)(
+  await (
+    await action({
+      op: "process.output.read",
+      id: "chunked-proof",
+      after: 65535,
+      maxBytes: 8,
+      maxEvents: 1,
+    })
+  ).json(),
+);
+const chunkedInspection = Schema.decodeUnknownSync(RunRecord)(
+  await (await action({ op: "process.get", id: "chunked-proof" })).json(),
+);
 const disposed = await action({ op: "vm.dispose" });
 const afterDispose = await action({ op: "vm.status" });
 const checks = {
+  outputBlockBoundary:
+    Buffer.concat(chunkedBoundary.events.map((event) => Buffer.from(event.data, "base64"))).equals(
+      Buffer.from(chunkedOutput.output?.stdout ?? "").subarray(65535, 65543),
+    ) && chunkedBoundary.nextCursor === 65543,
+  outputBlockReconstruction:
+    chunkedInspection.output?.stdout === chunkedOutput.output?.stdout &&
+    chunkedInspection.output?.stderr === "retained\n" &&
+    chunkedInspection.output.exitCode === 0,
+
   liveOutputCheckpoint:
     liveOutputStarted.status === "queued" &&
     liveCheckpoints[0]?.state === "running" &&

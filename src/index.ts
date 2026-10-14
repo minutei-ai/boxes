@@ -35,7 +35,7 @@ import {
 import { guestAction } from "./capabilities";
 import { migrate } from "./migration";
 import { migrateFilesystem } from "./filesystem-migration";
-import { migrateProcesses } from "./process-migration";
+import { migrateProcesses, migrateOutput } from "./process-migration";
 import { migrateWasm } from "./wasm-migration";
 import { readBounded } from "./http";
 import {
@@ -97,6 +97,13 @@ const route = Effect.fn("api.route")(function* (request: Request, env: Env) {
   if (url.pathname === "/v1/migrations/process-receipts-v2") {
     yield* administrator(env, token);
     const receipt = yield* migrateProcesses(env);
+    return new Response(Schema.encodeSync(Schema.fromJsonString(MigrationReceipt))(receipt), {
+      headers: { "content-type": "application/json", "cache-control": "no-store" },
+    });
+  }
+  if (url.pathname === "/v1/migrations/output-chunks-v1") {
+    yield* administrator(env, token);
+    const receipt = yield* migrateOutput(env);
     return new Response(Schema.encodeSync(Schema.fromJsonString(MigrationReceipt))(receipt), {
       headers: { "content-type": "application/json", "cache-control": "no-store" },
     });

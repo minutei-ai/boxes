@@ -1,7 +1,8 @@
 import { Effect, Schema, Struct } from "effect";
-import { RunRecord, StoredRun, StoredRunMetadata, Id } from "./contracts";
+import { RunRecord, RunMetadata, StoredRun, StoredRunMetadata, Id, Capability } from "./contracts";
 import { StorageFailure } from "./storage";
 import type { Env } from "./resources";
+import { archiveOutput } from "./output";
 
 export const migrateProcesses = Effect.fn("migration.processReceipts")(function* (env: Env) {
   const cursors: (string | undefined)[] = [undefined];
@@ -45,8 +46,13 @@ export const migrateProcesses = Effect.fn("migration.processReceipts")(function*
             return yield* new StorageFailure({
               cause: "Legacy queued receipt lacks durable authority",
             });
+          const output = yield* Effect.gen(function* () {
+            if (record.output === null) return null;
+            return yield* archiveOutput(env, sandboxId, record.output, null);
+          });
           const encoded = Schema.encodeSync(Schema.fromJsonString(StoredRun))({
             ...record,
+            output,
             authority: null,
             deadlineAt: null,
           });
@@ -64,7 +70,7 @@ export const migrateProcesses = Effect.fn("migration.processReceipts")(function*
               env.OBJECTS.put(key, encoded, {
                 onlyIf: { etagDoesNotMatch: "*" },
                 customMetadata: Schema.encodeSync(StoredRunMetadata)({
-                  format: "run-v2",
+                  format: "run-v3",
                   summary: Struct.omit(record, ["output"]),
                 }),
               }),
@@ -96,4 +102,91 @@ export const migrateProcesses = Effect.fn("migration.processReceipts")(function*
     if (page.truncated) cursors.push(page.cursor);
   }
   return { migrated: migrated.count };
+});
+
+const InlineRun = RunRecord.mapFields((fields) => ({
+  ...fields,
+  authority: Schema.NullOr(Capability),
+  deadlineAt: Schema.NullOr(Schema.Int),
+}));
+const InlineMetadata = RunMetadata.mapFields((fields) => ({
+  ...fields,
+  format: Schema.Literal("run-v2"),
+}));
+const MigrationMetadata = Schema.Union([StoredRunMetadata, InlineMetadata]);
+
+export const migrateOutput = Effect.fn("migration.outputChunks")(function* (env: Env) {
+  const cursors: (string | undefined)[] = [undefined];
+  const progress = { migrated: 0 };
+  while (cursors.length > 0) {
+    const cursor = cursors.shift();
+    const page = yield* Effect.tryPromise({
+      try: () =>
+        env.OBJECTS.list({
+          prefix: "processes/",
+          cursor,
+          limit: 1000,
+          include: ["customMetadata"],
+        }),
+      catch: (cause) => new StorageFailure({ cause }),
+    });
+    yield* Effect.forEach(
+      page.objects,
+      (object) =>
+        Effect.gen(function* () {
+          const metadata = yield* Schema.decodeUnknownEffect(MigrationMetadata)(
+            object.customMetadata,
+          );
+          if (metadata.format === "run-v3") return;
+          const parts = object.key.split("/");
+          const sandboxId = yield* Schema.decodeUnknownEffect(Id)(parts[1]);
+          if (
+            parts.length !== 3 ||
+            parts[0] !== "processes" ||
+            parts[2] !== `${metadata.summary.id}.json`
+          )
+            return yield* new StorageFailure({
+              cause: "Process migration key does not match its identity",
+            });
+          const stored = yield* Effect.tryPromise({
+            try: () => env.OBJECTS.get(object.key, { onlyIf: { etagMatches: object.etag } }),
+            catch: (cause) => new StorageFailure({ cause }),
+          });
+          if (stored === null || !("body" in stored) || stored.size > 8_388_608)
+            return yield* new StorageFailure({ cause: "Process changed during output migration" });
+          const text = yield* Effect.tryPromise({
+            try: () => stored.text(),
+            catch: (cause) => new StorageFailure({ cause }),
+          });
+          const record = yield* Schema.decodeUnknownEffect(Schema.fromJsonString(InlineRun))(text);
+          if (record.id !== metadata.summary.id)
+            return yield* new StorageFailure({ cause: "Process body does not match its identity" });
+          const output = yield* Effect.gen(function* () {
+            if (record.output === null) return null;
+            return yield* archiveOutput(env, sandboxId, record.output, null);
+          });
+          const receipt = yield* Effect.tryPromise({
+            try: () =>
+              env.OBJECTS.put(
+                object.key,
+                Schema.encodeSync(Schema.fromJsonString(StoredRun))({ ...record, output }),
+                {
+                  onlyIf: { etagMatches: stored.etag },
+                  customMetadata: Schema.encodeSync(StoredRunMetadata)({
+                    format: "run-v3",
+                    summary: Struct.omit(record, ["output", "authority", "deadlineAt"]),
+                  }),
+                },
+              ),
+            catch: (cause) => new StorageFailure({ cause }),
+          });
+          if (receipt === null)
+            return yield* new StorageFailure({ cause: "Process changed during output migration" });
+          progress.migrated += 1;
+        }),
+      { concurrency: 4 },
+    );
+    if (page.truncated) cursors.push(page.cursor);
+  }
+  return progress;
 });
