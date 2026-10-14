@@ -4,6 +4,7 @@ import { createBindings } from "../dist/wasi/bindings";
 import { requirePermission } from "./auth";
 import {
   Capability,
+  CapturedStdio,
   Fault,
   FileStat,
   DirectoryEntries,
@@ -15,6 +16,7 @@ import {
 import type { open } from "./storage";
 import { kernelCall, publish, read, write } from "./storage";
 import type { Kernel } from "../dist/kernel/cirro_kernel";
+import type { OutputCapture } from "./output";
 import type { Env } from "./resources";
 
 export class WasmFailure extends Schema.TaggedError<WasmFailure>()("WasmFailure", {
@@ -63,6 +65,7 @@ export const wasi = Effect.fn("wasi.execute")(function* (
   capability: typeof Capability.Type,
   program: typeof WasmProgram.Type,
   initial: Effect.Success<ReturnType<typeof open>>,
+  capture: OutputCapture | null,
 ) {
   const policy = initial.head.policy;
   const guest = yield* Effect.acquireRelease(
@@ -107,6 +110,16 @@ export const wasi = Effect.fn("wasi.execute")(function* (
       const step = yield* Schema.decodeUnknownEffect(Schema.fromJsonString(WasmStep), {
         onExcessProperty: "error",
       })(raw);
+      if (capture !== null && step.kind !== "done") {
+        const rawStdio = yield* Effect.try({
+          try: () => guest.stdio(),
+          catch: (cause) => new WasmFailure({ cause }),
+        });
+        const stdio = yield* Schema.decodeUnknownEffect(Schema.fromJsonString(CapturedStdio))(
+          rawStdio,
+        );
+        yield* capture(stdio);
+      }
       const authorizedAt = yield* Clock.currentTimeMillis;
       if (capability.expiresAt <= authorizedAt)
         return yield* new Fault({

@@ -246,6 +246,17 @@ await Effect.runPromise(
       "-O",
       "-C",
       "strip=symbols",
+      "tests/fixtures/wasi-live-output.rs",
+      "-o",
+      "dist/wasi-live-output.wasm",
+    ]);
+    yield* run([
+      "rustc",
+      "--target",
+      "wasm32-wasip1",
+      "-O",
+      "-C",
+      "strip=symbols",
       "tests/fixtures/wasi-poll.rs",
       "-o",
       "dist/wasi-poll.wasm",

@@ -24,6 +24,7 @@ delete globalThis.__call;
 delete globalThis.__finish;
 delete globalThis.__maxOutput;
 const output = { stdout: "", stderr: "", result: null, exitCode: 0 };
+globalThis.__capture = () => JSON.stringify({ stdout: output.stdout, stderr: output.stderr });
 const append = (stream, values) => {
   const line =
     values

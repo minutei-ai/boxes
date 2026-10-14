@@ -216,6 +216,18 @@ impl PythonGuest {
         }
         Ok(step)
     }
+    pub fn stdio(&self) -> Result<String, JsValue> {
+        let state = &*self.state;
+        state
+            .interpreter
+            .enter(|vm| {
+                let (stdout, stderr) = state.capture(vm)?;
+                serde_json::to_string(&serde_json::json!({"stdout":stdout,"stderr":stderr}))
+                    .map_err(|error| error.to_string())
+            })
+            .map_err(|error: String| JsValue::from_str(&error))
+    }
+
     pub fn respond(&mut self, response: &str, rejected: bool) -> Result<(), JsValue> {
         let state = &mut *self.state;
         if state.coroutine.is_none() || state.response.is_some() {

@@ -27,6 +27,7 @@ import {
   RunSummary,
   ProcessPage,
   ProcessOutputPage,
+  LiveOutputPage,
   Status,
   Success,
   TokenResponse,
@@ -37,7 +38,18 @@ import { migrateFilesystem } from "./filesystem-migration";
 import { migrateProcesses } from "./process-migration";
 import { migrateWasm } from "./wasm-migration";
 import { readBounded } from "./http";
-import { inspect, list, run, spawn, dispatch, reconcile, wait, cancel, output } from "./process";
+import {
+  inspect,
+  list,
+  run,
+  spawn,
+  dispatch,
+  reconcile,
+  wait,
+  cancel,
+  output,
+  liveOutput,
+} from "./process";
 import { kernelCall, open, publish, StorageFailure } from "./storage";
 import type { Env } from "./resources";
 
@@ -200,6 +212,11 @@ const route = Effect.fn("api.route")(function* (request: Request, env: Env) {
     Match.when({ op: "process.spawn" }, (action) =>
       spawn(env, capability, action.execution).pipe(
         Effect.map((record) => Schema.encodeSync(Schema.fromJsonString(RunRecord))(record)),
+      ),
+    ),
+    Match.when({ op: "process.output.readLive" }, (action) =>
+      liveOutput(env, capability, action).pipe(
+        Effect.map((page) => Schema.encodeSync(Schema.fromJsonString(LiveOutputPage))(page)),
       ),
     ),
     Match.when({ op: "process.output.read" }, (action) =>

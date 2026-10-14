@@ -15,12 +15,14 @@ import {
 import { kernelCall, open, publish, read, write } from "./storage";
 import { load } from "./modules";
 import { wasi } from "./wasi";
+import type { OutputCapture } from "./output";
 import type { Env } from "./resources";
 
 export const shell = Effect.fn("shell.execute")(function* (
   env: Env,
   capability: typeof Capability.Type,
   source: string,
+  capture: OutputCapture,
 ) {
   const session = yield* open(env, capability.sandboxId);
   const kernel = session.kernel;
@@ -81,7 +83,26 @@ export const shell = Effect.fn("shell.execute")(function* (
                 stdin: { content: input, encoding: "utf8" },
               }).pipe(Effect.flatMap(Schema.decodeUnknownEffect(WasmProgram)));
               const before = session.etag;
-              return yield* wasi(env, capability, program, session).pipe(
+              const commandCapture: OutputCapture = (stdio) => {
+                const stdout = Match.value(command.pipe || command.output !== null).pipe(
+                  Match.when(true, () => state.stdout),
+                  Match.orElse(() => state.stdout + stdio.stdout),
+                );
+                const stderr = state.stderr + stdio.stderr;
+                if (
+                  Buffer.byteLength(stdout) + Buffer.byteLength(stderr) >
+                  session.head.policy.maxOutputBytes
+                )
+                  return Effect.fail(
+                    new Fault({
+                      code: "EFBIG",
+                      status: 413,
+                      message: "Shell output limit exceeded",
+                    }),
+                  );
+                return capture({ stdout, stderr });
+              };
+              return yield* wasi(env, capability, program, session, commandCapture).pipe(
                 Effect.ensuring(
                   Effect.sync(() => {
                     if (session.etag !== before) dirty.clear();
@@ -274,7 +295,11 @@ export const shell = Effect.fn("shell.execute")(function* (
           return result;
         }).pipe(
           Effect.catchTag("Fault", (fault) => {
-            if (fault.code === "CONFLICT" || fault.code === "UNAUTHORIZED")
+            if (
+              fault.code === "CONFLICT" ||
+              fault.code === "UNAUTHORIZED" ||
+              fault.code === "ECANCELED"
+            )
               return Effect.fail(fault);
             const exitCode = Match.value(fault.code).pipe(
               Match.when("ENOENT", () => 127),
@@ -316,6 +341,7 @@ export const shell = Effect.fn("shell.execute")(function* (
           Match.when(true, () => outcome.stdout),
           Match.orElse(() => ""),
         );
+        yield* capture({ stdout, stderr });
         return { cwd: nextCwd, stdout, stderr, exitCode: outcome.exitCode, pipe };
       }),
   );

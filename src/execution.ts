@@ -3,6 +3,7 @@ import guestWasm from "cirro:guest";
 import { initSync, Guest } from "../dist/guest/cirro_guest";
 import {
   Capability,
+  CapturedStdio,
   GuestResponse,
   Program,
   ScriptProgram,
@@ -17,6 +18,7 @@ import { dynamic } from "./modules";
 import { wasi } from "./wasi";
 import { python } from "./python";
 import type { open } from "./storage";
+import type { OutputCapture } from "./output";
 import type { Env } from "./resources";
 
 initSync({ module: guestWasm });
@@ -34,16 +36,17 @@ export const execute = Effect.fn("execution.run")(function* (
   capability: typeof Capability.Type,
   program: typeof Program.Type,
   session: Effect.Success<ReturnType<typeof open>>,
+  capture: OutputCapture | null,
 ) {
   const policy = session.head.policy;
   if (program.language === "python")
     return {
-      outcome: yield* python(env, capability, program, session).pipe(Effect.result),
+      outcome: yield* python(env, capability, program, session, capture).pipe(Effect.result),
       program,
       changed: false,
     };
   if (program.language === "wasm") {
-    const outcome = yield* wasi(env, capability, program, session).pipe(Effect.result);
+    const outcome = yield* wasi(env, capability, program, session, capture).pipe(Effect.result);
     return { outcome, program, changed: false };
   }
   if (!("modules" in program))
@@ -71,6 +74,16 @@ export const execute = Effect.fn("execution.run")(function* (
       const step = yield* Schema.decodeUnknownEffect(Schema.fromJsonString(Step), {
         onExcessProperty: "error",
       })(raw);
+      if (capture !== null && step.kind !== "done") {
+        const rawStdio = yield* Effect.try({
+          try: () => guest.stdio(),
+          catch: (cause) => new InterpreterFailure({ cause }),
+        });
+        const stdio = yield* Schema.decodeUnknownEffect(Schema.fromJsonString(CapturedStdio))(
+          rawStdio,
+        );
+        yield* capture(stdio);
+      }
       if (step.kind === "done") {
         completed.push(step.output);
       } else if (step.kind === "module") {

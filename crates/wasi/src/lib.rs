@@ -1678,6 +1678,11 @@ impl WasmGuest {
             .map_err(|error| JsValue::from_str(&error.to_string()))
     }
 
+    pub fn stdio(&self) -> Result<String, JsValue> {
+        let state = self.store.data();
+        serde_json::to_string(&serde_json::json!({"stdout":String::from_utf8_lossy(&state.stdout),"stderr":String::from_utf8_lossy(&state.stderr)})).map_err(|error| JsValue::from_str(&error.to_string()))
+    }
+
     pub fn has_file(&self, path: &str) -> bool {
         self.store
             .data()

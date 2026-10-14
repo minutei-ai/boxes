@@ -13,6 +13,7 @@ import {
   NetworkResult,
   ProcessPage,
   ProcessOutputPage,
+  LiveOutputPage,
   RunRecord,
   RunSummary,
   ErrorResponse,
@@ -646,6 +647,60 @@ const hostFs = Schema.decodeUnknownSync(RunRecord)(
   ).json(),
 );
 
+const liveOutputStarted = Schema.decodeUnknownSync(RunRecord)(
+  await (
+    await action({
+      op: "process.spawn",
+      execution: {
+        op: "process.run",
+        id: "live-output-proof",
+        language: "wasm",
+        source: Buffer.from(
+          await Bun.file(join(import.meta.dir, "../dist/wasi-live-output.wasm")).arrayBuffer(),
+        ).toString("base64"),
+      },
+    })
+  ).json(),
+);
+const liveCheckpoints: (typeof LiveOutputPage.Type)[] = [];
+for (const attempt of Array.from({ length: 20 }, (_, index) => index)) {
+  const checkpoint = Schema.decodeUnknownSync(LiveOutputPage)(
+    await (
+      await action({
+        op: "process.output.readLive",
+        id: "live-output-proof",
+        after: null,
+        maxBytes: 65_536,
+        maxEvents: 128,
+      })
+    ).json(),
+  );
+  if (checkpoint.events.length > 0) {
+    liveCheckpoints.push(checkpoint);
+    break;
+  }
+  await Bun.sleep(100);
+}
+const liveOutputBefore = Schema.decodeUnknownSync(RunRecord)(
+  await (await action({ op: "process.get", id: "live-output-proof" })).json(),
+);
+const liveOutputStopped = await action({ op: "process.cancel", id: "live-output-proof" });
+const liveOutputObserved = await action({
+  op: "process.wait",
+  id: "live-output-proof",
+  timeoutMs: 10_000,
+});
+const liveOutputRetained = Schema.decodeUnknownSync(LiveOutputPage)(
+  await (
+    await action({
+      op: "process.output.readLive",
+      id: "live-output-proof",
+      after: null,
+      maxBytes: 65_536,
+      maxEvents: 128,
+    })
+  ).json(),
+);
 const replaySource = Schema.decodeUnknownSync(RunRecord)(
   await (
     await action({
@@ -693,6 +748,26 @@ const replayEof = Schema.decodeUnknownSync(ProcessOutputPage)(
 const disposed = await action({ op: "vm.dispose" });
 const afterDispose = await action({ op: "vm.status" });
 const checks = {
+  liveOutputCheckpoint:
+    liveOutputStarted.status === "queued" &&
+    liveCheckpoints[0]?.state === "running" &&
+    liveOutputBefore.output?.exitCode === null &&
+    liveOutputBefore.output.stdout === "WASI before suspension\n",
+  liveOutputRetention:
+    liveOutputStopped.status === 200 &&
+    liveOutputObserved.status === 409 &&
+    liveOutputRetained.state === "cancelled" &&
+    Buffer.concat(
+      liveOutputRetained.events
+        .filter((event) => event.stream === "stdout")
+        .map((event) => Buffer.from(event.data, "base64")),
+    ).toString() === "WASI before suspension\n" &&
+    Buffer.concat(
+      liveOutputRetained.events
+        .filter((event) => event.stream === "stderr")
+        .map((event) => Buffer.from(event.data, "base64")),
+    ).toString() === "WASI error stream\n",
+
   outputReplay:
     replayFirst.availability === "retained" &&
     replayFirst.nextCursor === 3 &&

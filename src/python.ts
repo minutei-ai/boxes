@@ -3,6 +3,7 @@ import wasm from "cirro:python";
 import { createBindings } from "../dist/python/bindings";
 import {
   Capability,
+  CapturedStdio,
   ErrorResponse,
   Fault,
   GuestResponse,
@@ -11,6 +12,7 @@ import {
   ToolStep,
 } from "./contracts";
 import { guestAction } from "./capabilities";
+import type { OutputCapture } from "./output";
 import type { Env } from "./resources";
 import type { open } from "./storage";
 
@@ -22,6 +24,7 @@ export const python = Effect.fn("python.execute")(function* (
   capability: typeof Capability.Type,
   program: typeof PythonProgram.Type,
   session: Effect.Success<ReturnType<typeof open>>,
+  capture: OutputCapture | null,
 ) {
   const policy = session.head.policy;
   const started = yield* Clock.currentTimeMillis;
@@ -63,6 +66,16 @@ export const python = Effect.fn("python.execute")(function* (
     const step = yield* Schema.decodeUnknownEffect(Schema.fromJsonString(ToolStep), {
       onExcessProperty: "error",
     })(raw);
+    if (capture !== null && step.kind !== "done") {
+      const rawStdio = yield* Effect.try({
+        try: () => resource.stdio(),
+        catch: (cause) => new PythonFailure({ cause }),
+      });
+      const stdio = yield* Schema.decodeUnknownEffect(Schema.fromJsonString(CapturedStdio))(
+        rawStdio,
+      );
+      yield* capture(stdio);
+    }
     const authorizedAt = yield* Clock.currentTimeMillis;
     if (capability.expiresAt <= authorizedAt)
       return yield* new Fault({ code: "UNAUTHORIZED", status: 401, message: "Capability expired" });

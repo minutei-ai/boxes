@@ -47,11 +47,13 @@ pub struct Guest {
     pending: Rc<RefCell<VecDeque<Request>>>,
     active: Option<Request>,
     output: Rc<RefCell<Option<String>>>,
+    capture: Persistent<Function<'static>>,
     registry: Rc<RefCell<modules::Registry>>,
     context: Context,
     runtime: Runtime,
     fuel: Rc<Cell<usize>>,
     jobs: usize,
+    max_output: usize,
 }
 
 fn failure(ctx: &Ctx<'_>, error: rquickjs::Error) -> String {
@@ -103,7 +105,7 @@ impl Guest {
         let module_requests = Rc::clone(&requests);
         let module_queue = Rc::downgrade(&pending);
         let module_registry = Rc::downgrade(&registry);
-        context.with(|ctx| {
+        let capture = context.with(|ctx| {
             let call = Function::new(ctx.clone(), move |ctx: Ctx<'_>, action: String| {
                 if action.len() > 1_048_576 || requests.get() >= 256 {
                     return Err(Exception::throw_message(
@@ -186,17 +188,26 @@ impl Guest {
                 .map_err(|error| failure(&ctx, error))?;
             Module::evaluate(ctx.clone(), "entry", include_str!("bootstrap.js"))
                 .map_err(|error| failure(&ctx, error))?;
-            Ok::<_, String>(())
+            let capture = ctx
+                .globals()
+                .get::<_, Function>("__capture")
+                .map_err(|error| failure(&ctx, error))?;
+            ctx.globals()
+                .remove("__capture")
+                .map_err(|error| failure(&ctx, error))?;
+            Ok::<_, String>(Persistent::save(&ctx, capture))
         })?;
         Ok(Self {
             pending,
             active: None,
             output,
+            capture,
             registry,
             context,
             runtime,
             fuel,
             jobs: 0,
+            max_output,
         })
     }
 
@@ -347,6 +358,22 @@ impl Guest {
     pub fn respond_module(&mut self, value: &str) -> Result<(), JsValue> {
         self.settle_module(value)
             .map_err(|error| JsValue::from_str(&error))
+    }
+
+    pub fn stdio(&self) -> Result<String, JsValue> {
+        let value = self.context.with(|ctx| {
+            self.capture
+                .clone()
+                .restore(&ctx)
+                .and_then(|capture| capture.call::<_, String>(()))
+                .map_err(|error| JsValue::from_str(&failure(&ctx, error)))
+        })?;
+        if value.len() > self.max_output {
+            return Err(JsValue::from_str(
+                "Serialized standard output budget exceeded",
+            ));
+        }
+        Ok(value)
     }
 
     pub fn program(&self) -> Result<String, JsValue> {

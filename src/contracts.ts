@@ -136,7 +136,19 @@ export const ProcessOutputAction = Schema.Struct({
   maxBytes: Schema.Int.check(Schema.isBetween({ minimum: 1, maximum: 65_536 })),
   maxEvents: Schema.Int.check(Schema.isBetween({ minimum: 1, maximum: 128 })),
 });
+export const LiveOutputCursor = Schema.Struct({
+  stdout: Schema.Int.check(Schema.isBetween({ minimum: 0, maximum: 2_097_152 })),
+  stderr: Schema.Int.check(Schema.isBetween({ minimum: 0, maximum: 2_097_152 })),
+});
+export const ProcessLiveOutputAction = Schema.Struct({
+  op: Schema.Literal("process.output.readLive"),
+  id: Id,
+  after: Schema.NullOr(LiveOutputCursor),
+  maxBytes: ProcessOutputAction.fields.maxBytes,
+  maxEvents: ProcessOutputAction.fields.maxEvents,
+});
 export const ProcessReadAction = Schema.Union([
+  ProcessLiveOutputAction,
   ProcessOutputAction,
   ProcessWaitAction,
   Schema.Struct({ op: Schema.Literal("process.get"), id: Id }),
@@ -355,6 +367,13 @@ export const RunResult = Schema.Struct({
   result: Schema.Unknown,
   exitCode: Schema.Int,
 });
+export const CapturedStdio = RunResult.mapFields((fields) =>
+  Struct.pick(fields, ["stdout", "stderr"]),
+);
+export const ObservedOutput = RunResult.mapFields((fields) => ({
+  ...fields,
+  exitCode: Schema.NullOr(fields.exitCode),
+}));
 export const ToolStep = Schema.Union([
   Schema.Struct({ kind: Schema.Literal("request"), action: Schema.fromJsonString(GuestAction) }),
   Schema.Struct({ kind: Schema.Literal("done"), output: Schema.fromJsonString(RunResult) }),
@@ -456,7 +475,7 @@ export const RunRecord = Schema.Struct({
   language: Schema.Literals(["javascript", "typescript", "python", "shell", "wasm"]),
   startedAt: Schema.Int,
   finishedAt: Schema.NullOr(Schema.Int),
-  output: Schema.NullOr(RunResult),
+  output: Schema.NullOr(ObservedOutput),
 });
 export const RunSummary = RunRecord.mapFields((fields) => Struct.omit(fields, ["output"]));
 export const RunMetadata = Schema.Struct({ summary: Schema.fromJsonString(RunSummary) });
@@ -491,6 +510,10 @@ export const ProcessOutputPage = Schema.Struct({
   hasMore: Schema.Boolean,
   truncated: Schema.Literal(false),
 });
+export const LiveOutputPage = ProcessOutputPage.mapFields((fields) => ({
+  ...fields,
+  nextCursor: LiveOutputCursor,
+}));
 export const FileContent = Schema.Struct({
   content: Schema.String,
   encoding: Schema.Literal("base64"),
@@ -591,6 +614,7 @@ export const PackageInstallation = PackagePreparation.mapFields((fields) =>
 );
 
 export const GuestResponse = Schema.Union([
+  LiveOutputPage,
   ProcessOutputPage,
   PackagePreparation.fields.installed,
   SoftwareCatalog,

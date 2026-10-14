@@ -13,6 +13,10 @@ import {
   ProcessWaitAction,
   ProcessOutputAction,
   ProcessOutputPage,
+  CapturedStdio,
+  ObservedOutput,
+  ProcessLiveOutputAction,
+  LiveOutputPage,
   ProcessCancelAction,
 } from "./contracts";
 import { load } from "./modules";
@@ -78,7 +82,12 @@ const reserve = Effect.fn("process.reserve")(function* (
       message: "Execution ID already exists; use process.get to inspect its confirmed state",
     });
   const prepared: ReturnType<typeof restore> = Effect.succeed(program);
-  return { record, program: prepared, etag: receipt.etag };
+  return {
+    record,
+    program: prepared,
+    etag: receipt.etag,
+    deadlineAt: Schema.decodeUnknownSync(Schema.NullOr(Schema.Int))(null),
+  };
 });
 
 class ProcessCancelled extends Schema.TaggedError<ProcessCancelled>()("ProcessCancelled", {}) {}
@@ -91,6 +100,69 @@ const complete = Effect.fn("process.complete")(function* (
 ) {
   const { record, etag } = reservation;
   const key = `processes/${capability.sandboxId}/${record.id}.json`;
+  const publication = { etag };
+  const snapshots: (typeof ObservedOutput.Type)[] = [];
+  const capture = Effect.fn("process.capture")(function* (stdio: typeof CapturedStdio.Type) {
+    const previous = snapshots[0];
+    if (
+      previous !== undefined &&
+      (!stdio.stdout.startsWith(previous.stdout) || !stdio.stderr.startsWith(previous.stderr))
+    )
+      return yield* new Fault({
+        code: "EINVAL",
+        status: 400,
+        message: "Captured standard output was rewound",
+      });
+    if (
+      previous !== undefined &&
+      previous.stdout === stdio.stdout &&
+      previous.stderr === stdio.stderr
+    )
+      return;
+    if (previous === undefined && stdio.stdout.length === 0 && stdio.stderr.length === 0) return;
+    const pending = { ...stdio, exitCode: null, result: null };
+    const stored = {
+      ...record,
+      authority: null,
+      deadlineAt: reservation.deadlineAt,
+      output: pending,
+    };
+    const written = yield* Effect.tryPromise({
+      try: () =>
+        env.OBJECTS.put(key, Schema.encodeSync(Schema.fromJsonString(StoredRun))(stored), {
+          onlyIf: { etagMatches: publication.etag },
+          customMetadata: Schema.encodeSync(StoredRunMetadata)({
+            format: "run-v2",
+            summary: Struct.omit(record, ["output"]),
+          }),
+        }),
+      catch: (cause) => new StorageFailure({ cause }),
+    });
+    if (written === null) {
+      const current = yield* Effect.tryPromise({
+        try: () => env.OBJECTS.head(key),
+        catch: (cause) => new StorageFailure({ cause }),
+      });
+      if (current !== null) {
+        const metadata = yield* Schema.decodeUnknownEffect(StoredRunMetadata)(
+          current.customMetadata,
+        ).pipe(Effect.mapError((cause) => new StorageFailure({ cause })));
+        if (metadata.summary.status === "cancelling")
+          return yield* new Fault({
+            code: "ECANCELED",
+            status: 409,
+            message: "Execution cancellation requested",
+          });
+      }
+      return yield* new Fault({
+        code: "CONFLICT",
+        status: 409,
+        message: "Execution changed during output publication",
+      });
+    }
+    publication.etag = written.etag;
+    snapshots.splice(0, snapshots.length, pending);
+  });
   const execution = Effect.scoped(
     Effect.gen(function* () {
       const now = yield* Clock.currentTimeMillis;
@@ -112,10 +184,10 @@ const complete = Effect.fn("process.complete")(function* (
         return {
           program,
           changed: false,
-          outcome: yield* shell(env, capability, program.source).pipe(Effect.result),
+          outcome: yield* shell(env, capability, program.source, capture).pipe(Effect.result),
         };
       const session = yield* open(env, capability.sandboxId);
-      return yield* execute(env, capability, program, session);
+      return yield* execute(env, capability, program, session, capture);
     }),
   );
   const cancellation = Effect.gen(function* () {
@@ -152,7 +224,24 @@ const complete = Effect.fn("process.complete")(function* (
   const finishedAt = yield* Clock.currentTimeMillis;
   const finished = yield* Effect.sync(() => {
     if (output._tag === "Failure" && output.failure._tag === "ProcessCancelled")
-      return { ...snapshot, status: "cancelled" as const, finishedAt, output: null };
+      return {
+        ...snapshot,
+        status: "cancelled" as const,
+        finishedAt,
+        output: snapshots[0] ?? null,
+      };
+    if (
+      output._tag === "Success" &&
+      output.success.outcome._tag === "Failure" &&
+      output.success.outcome.failure._tag === "Fault" &&
+      output.success.outcome.failure.code === "ECANCELED"
+    )
+      return {
+        ...snapshot,
+        status: "cancelled" as const,
+        finishedAt,
+        output: snapshots[0] ?? null,
+      };
     if (output._tag === "Success") {
       if (output.success.outcome._tag === "Success")
         return {
@@ -164,7 +253,7 @@ const complete = Effect.fn("process.complete")(function* (
       console.error("Cirro guest failed", output.success.outcome.failure);
     } else console.error("Cirro guest failed", output.failure);
 
-    return { ...snapshot, status: "failed" as const, finishedAt, output: null };
+    return { ...snapshot, status: "failed" as const, finishedAt, output: snapshots[0] ?? null };
   });
   for (const attempt of [0, 1]) {
     const current = yield* Effect.tryPromise({
@@ -175,7 +264,7 @@ const complete = Effect.fn("process.complete")(function* (
       return yield* new StorageFailure({ cause: "Execution disappeared before settlement" });
     const metadata = yield* Schema.decodeUnknownEffect(StoredRunMetadata)(current.customMetadata);
     if (
-      current.etag !== etag &&
+      current.etag !== publication.etag &&
       (metadata.summary.status !== "cancelling" ||
         metadata.summary.id !== record.id ||
         metadata.summary.sourceHash !== record.sourceHash ||
@@ -369,7 +458,7 @@ export const dispatch = Effect.fn("process.dispatch")(function* (env: Env, body:
       authority: null,
       deadlineAt: null,
       finishedAt: now,
-      output: null,
+      output: stored.output,
     };
     yield* Effect.tryPromise({
       try: () =>
@@ -411,7 +500,12 @@ export const dispatch = Effect.fn("process.dispatch")(function* (env: Env, body:
   yield* complete(
     env,
     capability,
-    { record, etag: claimed.etag, program: restore(env, capability.sandboxId, running.sourceHash) },
+    {
+      record,
+      etag: claimed.etag,
+      deadlineAt: running.deadlineAt,
+      program: restore(env, capability.sandboxId, running.sourceHash),
+    },
     840_000,
   );
 });
@@ -600,6 +694,16 @@ export const output = Effect.fn("process.output")(function* (
       truncated: false as const,
     };
   }
+  if (
+    record.output.exitCode === null &&
+    record.status !== "failed" &&
+    record.status !== "cancelled"
+  )
+    return yield* new Fault({
+      code: "OUTPUT_PENDING",
+      status: 409,
+      message: "Use process.output.readLive for output checkpoints while running",
+    });
   const stdout = Buffer.from(record.output.stdout, "utf8");
   const stderr = Buffer.from(record.output.stderr, "utf8");
   const total = stdout.byteLength + stderr.byteLength;
@@ -643,6 +747,68 @@ export const output = Effect.fn("process.output")(function* (
     events,
     nextCursor: progress.position,
     hasMore: progress.position < total,
+    truncated: false as const,
+  };
+});
+
+export const liveOutput = Effect.fn("process.liveOutput")(function* (
+  env: Env,
+  capability: typeof Capability.Type,
+  action: typeof ProcessLiveOutputAction.Type,
+) {
+  const record = yield* inspect(env, capability, action.id);
+  const progress = {
+    stdout: action.after?.stdout ?? 0,
+    stderr: action.after?.stderr ?? 0,
+    bytes: 0,
+  };
+  const buffers = {
+    stdout: Buffer.from(record.output?.stdout ?? "", "utf8"),
+    stderr: Buffer.from(record.output?.stderr ?? "", "utf8"),
+  };
+  if (progress.stdout > buffers.stdout.byteLength || progress.stderr > buffers.stderr.byteLength)
+    return yield* new Fault({
+      code: "EINVAL",
+      status: 400,
+      message: "Output cursor is beyond captured bytes",
+    });
+  const events: (typeof LiveOutputPage.Type.events)[number][] = [];
+  for (const stream of ["stdout", "stderr"] as const) {
+    while (
+      progress[stream] < buffers[stream].byteLength &&
+      progress.bytes < action.maxBytes &&
+      events.length < action.maxEvents
+    ) {
+      const offset = progress[stream];
+      const length = Math.min(
+        4096,
+        action.maxBytes - progress.bytes,
+        buffers[stream].byteLength - offset,
+      );
+      events.push({
+        stream,
+        offset,
+        cursor: offset,
+        data: buffers[stream].subarray(offset, offset + length).toString("base64"),
+        encoding: "base64",
+      });
+      progress[stream] += length;
+      progress.bytes += length;
+    }
+  }
+  const availability = yield* Effect.sync(() => {
+    if (record.output !== null) return "retained" as const;
+    if (record.status === "queued" || record.status === "running" || record.status === "cancelling")
+      return "pending" as const;
+    return "unobserved" as const;
+  });
+  return {
+    state: record.status,
+    availability,
+    events,
+    nextCursor: { stdout: progress.stdout, stderr: progress.stderr },
+    hasMore:
+      progress.stdout < buffers.stdout.byteLength || progress.stderr < buffers.stderr.byteLength,
     truncated: false as const,
   };
 });
