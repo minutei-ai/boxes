@@ -9,6 +9,6 @@
     "outDir": "dist/sdk",
     "types": ["@cloudflare/workers-types"]
   },
-  "include": ["src/sdk.ts", "src/sdk-rpc.ts", "src/contracts.ts"],
+  "include": ["src/sdk.ts", "src/sdk-rpc.ts", "src/sdk-tanstack.ts", "src/contracts.ts"],
   "exclude": []
 }

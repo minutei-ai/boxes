@@ -1,6 +1,7 @@
 import { Clock, Effect, Redacted, Schema } from "effect";
 import { makeBinding } from "../../src/sdk";
 import { makeAgentBinding } from "../../src/sdk-rpc";
+import { createBoxesIsolateDriver } from "../../src/sdk-tanstack";
 import type { AgentProtocol } from "../../src/rpc-protocol";
 import { CronRecord, FileContent, FileStat, Id, RunRecord } from "../../src/contracts";
 
@@ -18,6 +19,17 @@ export const RpcProbe = Schema.Struct({
   record: Schema.NullOr(RunRecord),
   calls: Schema.Int,
   denied: Schema.NullOr(Schema.Int),
+});
+export const DriverProof = Schema.Struct({
+  values: Schema.Array(Schema.Json),
+  voidResult: Schema.Boolean,
+  writes: Schema.Array(Schema.String),
+  closed: Schema.Boolean,
+});
+export const DriverAbortProof = Schema.Struct({
+  preflight: Schema.String,
+  cancelled: Schema.String,
+  writes: Schema.Array(Schema.String),
 });
 const RpcCase = Schema.Literals([
   "undefined",
@@ -52,6 +64,117 @@ export default {
           expiresInSeconds: 600,
         });
         const boxes = yield* makeBinding(env.BOXES, Redacted.make(capability.token));
+        if (new URL(request.url).searchParams.has("driver")) {
+          const driver = createBoxesIsolateDriver(env.BOXES_AGENT, Redacted.make(env.TOKEN));
+          if (new URL(request.url).searchParams.get("driver") === "abort") {
+            const stopped = yield* Effect.tryPromise({
+              try: async () =>
+                await driver.createContext({ abortSignal: AbortSignal.abort(), bindings: {} }),
+              catch: (cause) => cause,
+            }).pipe(Effect.result);
+            if (stopped._tag !== "Failure")
+              return yield* Effect.die("Cancelled context was acquired");
+            const preflight = yield* Schema.decodeUnknownEffect(
+              Schema.Struct({ name: Schema.String }),
+            )(stopped.failure);
+            const controller = new AbortController();
+            const writes: string[] = [];
+            const context = yield* Effect.tryPromise(() =>
+              driver.createContext({
+                memoryLimit: 16,
+                timeout: 1000,
+                abortSignal: controller.signal,
+                bindings: {
+                  external_save: {
+                    name: "save",
+                    description: "save",
+                    inputSchema: {},
+                    execute: async () => {
+                      writes.push("confirmed");
+                      return "confirmed";
+                    },
+                  },
+                  external_wait: {
+                    name: "wait",
+                    description: "wait",
+                    inputSchema: {},
+                    execute: async () => {
+                      controller.abort();
+                      return Effect.runPromise(Effect.sleep("5 seconds"), {
+                        signal: controller.signal,
+                      });
+                    },
+                  },
+                },
+              }),
+            );
+            const result = yield* Effect.tryPromise(() =>
+              context.execute(
+                "await external_save({}); await external_wait({}); return external_save({});",
+              ),
+            );
+            yield* Effect.tryPromise(() => context.dispose());
+            yield* boxes.action(id, { op: "vm.dispose" });
+            if (result.error === undefined) return yield* Effect.die("Abort result missing");
+            return new Response(
+              Schema.encodeSync(Schema.fromJsonString(DriverAbortProof))({
+                preflight: preflight.name,
+                cancelled: result.error.name,
+                writes,
+              }),
+            );
+          }
+          const writes: string[] = [];
+          const context = yield* Effect.tryPromise(() =>
+            driver.createContext({
+              memoryLimit: 16,
+              timeout: 1000,
+              bindings: {
+                external_save: {
+                  name: "save",
+                  description: "save",
+                  inputSchema: {},
+                  execute: async (input) => {
+                    const value = Schema.decodeUnknownSync(Schema.String)(input);
+                    writes.push(value);
+                    return value;
+                  },
+                },
+                external_void: {
+                  name: "void",
+                  description: "void",
+                  inputSchema: {},
+                  execute: async () => undefined,
+                },
+              },
+            }),
+          );
+          const first = yield* Effect.tryPromise(() =>
+            context.execute(
+              'const value = await external_save("confirmed"); console.log(value); return value;',
+            ),
+          );
+          const second = yield* Effect.tryPromise(() =>
+            context.execute("return (await external_void()) === undefined;"),
+          );
+          const empty = yield* Effect.tryPromise(() => context.execute("await external_void();"));
+          yield* Effect.tryPromise(() => context.dispose());
+          const closed = yield* Effect.tryPromise(() =>
+            context.execute('return external_save("late");'),
+          );
+          yield* boxes.action(id, { op: "vm.dispose" });
+          return new Response(
+            Schema.encodeSync(Schema.fromJsonString(DriverProof))({
+              values: [
+                Schema.decodeUnknownSync(Schema.Json)(first.value),
+                Schema.decodeUnknownSync(Schema.Json)(second.value),
+              ],
+              voidResult: empty.success && empty.value === undefined,
+              writes,
+              closed: !closed.success,
+            }),
+          );
+        }
         const rpcCase = new URL(request.url).searchParams.get("rpc");
         if (rpcCase !== null) {
           const mode = yield* Schema.decodeUnknownEffect(RpcCase)(rpcCase);

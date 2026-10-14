@@ -2,7 +2,7 @@ import { mkdir, rm } from "node:fs/promises";
 await rm("dist/sdk", { recursive: true, force: true });
 await mkdir("dist/sdk", { recursive: true });
 const result = await Bun.build({
-  entrypoints: ["src/sdk.ts", "src/sdk-rpc.ts", "src/contracts.ts"],
+  entrypoints: ["src/sdk.ts", "src/sdk-rpc.ts", "src/sdk-tanstack.ts", "src/contracts.ts"],
   outdir: "dist/sdk",
   target: "browser",
   format: "esm",

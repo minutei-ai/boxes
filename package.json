@@ -1,6 +1,6 @@
 {
   "name": "@minutei-ai/boxes",
-  "version": "0.6.0",
+  "version": "0.7.0",
   "license": "Apache-2.0",
   "repository": {
     "type": "git",
@@ -25,6 +25,10 @@
     "./rpc": {
       "types": "./dist/sdk/sdk-rpc.d.ts",
       "import": "./dist/sdk/sdk-rpc.js"
+    },
+    "./tanstack": {
+      "types": "./dist/sdk/sdk-tanstack.d.ts",
+      "import": "./dist/sdk/sdk-tanstack.js"
     }
   },
   "scripts": {
@@ -75,6 +79,7 @@
     "@cloudflare/workers-types": "5.20261003.1",
     "@effect/platform-bun": "4.0.4",
     "@effect/platform-node": "4.0.4",
+    "@tanstack/ai-code-mode": "0.5.2",
     "@types/bun": "1.4.2",
     "alchemy": "2.0.0-beta.83",
     "effect": "4.0.4",
@@ -82,6 +87,12 @@
     "typescript": "6.0.3"
   },
   "peerDependencies": {
+    "@tanstack/ai-code-mode": "^0.5.2",
     "effect": "^4.0.0"
+  },
+  "peerDependenciesMeta": {
+    "@tanstack/ai-code-mode": {
+      "optional": true
+    }
   }
 }
