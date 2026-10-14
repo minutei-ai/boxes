@@ -248,6 +248,7 @@ struct State {
     requests: usize,
     closed: BTreeSet<u32>,
     cloexec: BTreeSet<u32>,
+    signal_mask: u64,
     stdio_flags: [Rc<Cell<u16>>; 3],
     argv: Vec<Vec<u8>>,
     environment: Vec<Vec<u8>>,
@@ -522,6 +523,26 @@ fn dispatch(caller: &mut Caller<'_, State>, name: &str, args: &[u64]) -> Result<
         return Err(Failure::Errno(8));
     }
     match name {
+        "proc_signal_mask_v2" => {
+            if a[0] > 3 {
+                return Err(Failure::Errno(28));
+            }
+            bytes(caller, a[3], 4)?;
+            bytes(caller, a[4], 4)?;
+            let previous = caller.data().signal_mask;
+            put(caller, a[3], &(previous as u32).to_le_bytes())?;
+            put(caller, a[4], &((previous >> 32) as u32).to_le_bytes())?;
+            if a[0] == 3 {
+                return Ok(0);
+            }
+            let requested =
+                (u64::from(a[1] as u32) | (u64::from(a[2] as u32) << 32)) & !((1 << 8) | (1 << 18));
+            caller.data_mut().signal_mask = match a[0] {
+                0 => previous | requested,
+                1 => previous & !requested,
+                _ => requested,
+            };
+        }
         "fd_pipe" => {
             bytes(caller, a[0], 4)?;
             bytes(caller, a[1], 4)?;
@@ -1830,6 +1851,7 @@ fn linker(engine: &Engine) -> Result<Linker<State>, String> {
     bind!("wasi_snapshot_preview1","clock_time_get",a:i32,b:i64,c:i32);
     bind!("wasi_snapshot_preview1","clock_res_get",a:i32,b:i32);
     bind!("wasi_snapshot_preview1", "sched_yield");
+    bind!("host_process","proc_signal_mask_v2",a:i32,b:i32,c:i32,d:i32,e:i32);
     bind!("host_process","fd_pipe",a:i32,b:i32);
     bind!("host_process","fd_dup",a:i32,b:i32);
     bind!("host_process","fd_dup2",a:i32,b:i32);
@@ -1980,6 +2002,7 @@ impl WasmGuest {
                 requests: 0,
                 closed: BTreeSet::new(),
                 cloexec: BTreeSet::new(),
+                signal_mask: 0,
                 stdio_flags: std::array::from_fn(|_| Rc::new(Cell::new(0))),
                 argv,
                 environment,
