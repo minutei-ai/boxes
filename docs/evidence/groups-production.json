@@ -1,0 +1,25 @@
+{
+  "measuredAt": "2026-10-14T06:38:25.699Z",
+  "url": "https://cirro-sandbox-prod-rs7wexxow56rmsoz.manoel-carvalhoneto.workers.dev",
+  "sandboxId": "groups-proof-2126ca06-cc9e-4abf-91aa-9231825e3833",
+  "profile": "minutei",
+  "runtime": "standard Worker",
+  "receipts": [
+    {
+      "mode": "new",
+      "passed": true
+    },
+    {
+      "mode": "join",
+      "passed": true
+    },
+    {
+      "mode": "inherit",
+      "passed": true
+    }
+  ],
+  "disposal": true,
+  "allPassed": true,
+  "sessionsAndGroupSignals": false,
+  "fullProcessParity": false
+}
