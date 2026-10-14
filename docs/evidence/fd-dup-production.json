@@ -1,7 +1,7 @@
 {
-  "measuredAt": "2026-10-14T03:27:58.528Z",
+  "measuredAt": "2026-10-14T03:50:40.906Z",
   "url": "https://cirro-sandbox-prod-rs7wexxow56rmsoz.manoel-carvalhoneto.workers.dev",
-  "sandboxId": "fd-dup-proof-7af1ede4-ab67-4429-90e2-3d3f780ec875",
+  "sandboxId": "fd-dup-proof-ef6695a8-7dc4-494c-8ec3-82d1d8ac781f",
   "profile": "minutei",
   "runtime": "standard Worker",
   "checks": {
