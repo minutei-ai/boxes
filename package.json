@@ -17,6 +17,7 @@
     "wasm:proof": "bun tooling/large-wasm-proof.ts",
     "host-stat:proof": "bun tooling/host-stat-proof.ts",
     "fd-dup:proof": "bun tooling/fd-dup-proof.ts",
+    "guest-spawn:proof": "bun tooling/guest-spawn-proof.ts",
     "signal-mask:proof": "bun tooling/signal-mask-proof.ts",
     "pipe:proof": "bun tooling/pipe-proof.ts",
     "format": "oxfmt . && cargo fmt --all && rustfmt tests/fixtures/*.rs",

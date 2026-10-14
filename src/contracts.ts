@@ -179,13 +179,6 @@ export const SoftwareAction = Schema.Union([
     alias: Schema.optionalKey(CommandName),
   }),
 ]);
-export const GuestAction = Schema.Union([
-  FilesystemAction,
-  NetworkAction,
-  ProcessReadAction,
-  ProcessCancelAction,
-  SoftwareAction,
-]);
 const InlineRun = Schema.Struct({
   op: Schema.Literal("process.run"),
   id: Id,
@@ -277,6 +270,14 @@ export const SpawnAction = Schema.Struct({
   op: Schema.Literal("process.spawn"),
   execution: RunAction,
 });
+export const GuestAction = Schema.Union([
+  SpawnAction,
+  FilesystemAction,
+  NetworkAction,
+  ProcessReadAction,
+  ProcessCancelAction,
+  SoftwareAction,
+]);
 export const ModuleImports = Schema.Array(Schema.String.check(Schema.isMaxLength(4096))).check(
   Schema.isMaxLength(128),
 );
@@ -310,7 +311,6 @@ export const Program = Schema.Union([
   Schema.Struct({ language: Schema.Literal("shell"), source: ScriptSource }),
 ]);
 export const Action = Schema.Union([
-  SpawnAction,
   GuestAction,
   RunAction,
   Schema.Struct({ op: Schema.Literal("config.get") }),

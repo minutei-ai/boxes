@@ -303,8 +303,7 @@ test("guest tools can wait on a background process without acquiring host lifecy
         op: "process.run",
         id: "not-authorized",
         language: "javascript",
-        source:
-          'export default async ({tools}) => await tools.call({op:"process.spawn",execution:{op:"process.run",id:"escape",language:"shell",source:"true"}})',
+        source: 'export default async ({tools}) => await tools.call({op:"vm.dispose"})',
       })
     ).json(),
   );
@@ -645,4 +644,49 @@ test("queued work survives a stopped consumer and archived corruption settles be
   ).toBe(500);
   await second.dispose();
   await rm(persisted, { recursive: true, force: true });
+});
+
+test("guest spawn uses the same sandbox authority and native durable queue from JavaScript, TypeScript and Python", async () => {
+  const token = await setup("guest-spawn");
+  for (const language of ["javascript", "typescript", "python"] as const) {
+    const child = {
+      op: "process.run",
+      id: `child-${language}`,
+      language: "shell",
+      source: "echo guest child",
+    };
+    const spawn = JSON.stringify({ op: "process.spawn", execution: child });
+    const sources = {
+      python: `(await tools.call(${spawn}))["id"]`,
+      javascript: `export default async ({tools}) => (await tools.call(${spawn})).id`,
+      typescript: `export default async ({tools}) => (await tools.call(${spawn})).id`,
+    };
+    const source = sources[language];
+    const response = await action("guest-spawn", token, {
+      op: "process.run",
+      id: `parent-${language}`,
+      language,
+      source,
+    });
+    expect(response.status).toBe(200);
+    const parent = Schema.decodeUnknownSync(RunRecord)(await response.json());
+    expect(parent.output?.exitCode).toBe(0);
+    expect(parent.output?.result).toBe(child.id);
+    const record = await observed("guest-spawn", token, child.id);
+    expect(record.output?.exitCode).toBe(0);
+    expect(record.output?.stdout).toBe("guest child\n");
+  }
+  const limited = await mint("guest-spawn", ["execute"]);
+  const response = await action("guest-spawn", limited, {
+    op: "process.run",
+    id: "limited-parent",
+    language: "javascript",
+    source:
+      'export default async ({tools}) => { await tools.call({op:"process.spawn",execution:{op:"wasm.executeFile",id:"denied-child",path:"/tmp/private.wasm"}}); }',
+  });
+  const parent = Schema.decodeUnknownSync(RunRecord)(await response.json());
+  expect(parent.output?.exitCode).not.toBe(0);
+  expect(
+    (await action("guest-spawn", token, { op: "process.get", id: "denied-child" })).status,
+  ).toBe(404);
 });
