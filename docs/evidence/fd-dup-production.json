@@ -1,0 +1,16 @@
+{
+  "measuredAt": "2026-10-14T02:30:51.824Z",
+  "url": "https://cirro-sandbox-prod-rs7wexxow56rmsoz.manoel-carvalhoneto.workers.dev",
+  "sandboxId": "fd-dup-proof-580e6c9c-93ae-4783-b8b3-5f14b11fd3c1",
+  "profile": "minutei",
+  "runtime": "standard Worker",
+  "checks": {
+    "setup": true,
+    "aliasesAndQuota": true,
+    "stdio": true,
+    "persistedWrites": true,
+    "disposal": true
+  },
+  "allPassed": true,
+  "packageParity": false
+}
