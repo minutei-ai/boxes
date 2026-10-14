@@ -1,0 +1,17 @@
+{
+  "measuredAt": "2026-10-14T03:34:49.459Z",
+  "url": "https://cirro-sandbox-prod-rs7wexxow56rmsoz.manoel-carvalhoneto.workers.dev",
+  "sandboxId": "guest-spawn-proof-f0302436-3b21-4ad3-a66a-517e554fcc36",
+  "profile": "minutei",
+  "runtime": "standard Worker",
+  "checks": {
+    "javascript": true,
+    "typescript": true,
+    "python": true,
+    "disposal": true
+  },
+  "allPassed": true,
+  "posixChildren": false,
+  "processInheritance": false,
+  "packageParity": false
+}
