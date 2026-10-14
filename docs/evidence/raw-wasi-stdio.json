@@ -1,0 +1,54 @@
+{
+  "target": "https://cirro-sandbox-prod-rs7wexxow56rmsoz.manoel-carvalhoneto.workers.dev",
+  "measuredAt": 1792017879959,
+  "fixtureSha256": "95d56b6b094f07f40920621c4da64022b5f8de7458dfa2694da508cba220bebf",
+  "cases": [
+    {
+      "mode": "success",
+      "exitCode": 0,
+      "stdoutBytes": 70003,
+      "stderrBytes": 6,
+      "pages": 2
+    },
+    {
+      "mode": "failure",
+      "exitCode": 7,
+      "stdoutBytes": 70003,
+      "stderrBytes": 6,
+      "pages": 2
+    }
+  ],
+  "disposal": true,
+  "sourceCommit": "773f6a39ede569188f5e3fa78a037c13507bb045",
+  "deployment": {
+    "provider": "native Alchemy",
+    "profile": "minutei",
+    "stage": "prod",
+    "worker": "cirro-sandbox-prod-rs7wexxow56rmsoz",
+    "migrations": "completed"
+  },
+  "transport": "Effect HttpClient SDK against deployed ordinary Cloudflare Worker",
+  "localProof": {
+    "outputTests": 13,
+    "result": "passed",
+    "coverage": [
+      "invalid UTF-8",
+      "null bytes",
+      "64 KiB block crossings",
+      "live pagination",
+      "cancellation",
+      "fresh Worker reading retained R2 data",
+      "raw byte quota"
+    ]
+  },
+  "limitations": [
+    "Original cross-stream order and binary shell pipelines remain open.",
+    "This does not prove remote RPC or the Minutei binding deployment.",
+    "The benchmark does not establish production latency or cost compared with AgentOS."
+  ],
+  "ci": {
+    "run": "https://github.com/minutei-ai/boxes/actions/runs/38649391954",
+    "sourceCommit": "773f6a39ede569188f5e3fa78a037c13507bb045",
+    "result": "passed"
+  }
+}
