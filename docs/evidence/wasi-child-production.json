@@ -1,7 +1,7 @@
 {
-  "measuredAt": "2026-10-14T05:13:08.440Z",
+  "measuredAt": "2026-10-14T06:20:23.986Z",
   "url": "https://cirro-sandbox-prod-rs7wexxow56rmsoz.manoel-carvalhoneto.workers.dev",
-  "sandboxId": "wasi-child-proof-a5d7d95b-dc44-4cbc-9c05-44eca1d482ad",
+  "sandboxId": "wasi-child-proof-0ee8b545-96fc-4448-a80e-9bdce31e7138",
   "profile": "minutei",
   "runtime": "standard Worker",
   "checks": {
@@ -10,8 +10,19 @@
     "stdioOrder": true,
     "persistedWrite": true,
     "inheritedInodeAfterRename": true,
+    "childTrapIsolation": true,
     "disposal": true
   },
+  "trapped": [
+    {
+      "mode": "child-trap",
+      "passed": true
+    },
+    {
+      "mode": "child-oob",
+      "passed": true
+    }
+  ],
   "allPassed": true,
   "fullProcessParity": false,
   "durableChildReceipts": false,
