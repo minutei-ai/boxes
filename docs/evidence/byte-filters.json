@@ -1,0 +1,100 @@
+{
+  "target": "https://cirro-sandbox-prod-rs7wexxow56rmsoz.manoel-carvalhoneto.workers.dev",
+  "measuredAt": 1792021401362,
+  "checks": [
+    {
+      "name": "pipe",
+      "bytes": 70003,
+      "exitCode": 0
+    },
+    {
+      "name": "append",
+      "bytes": 140006,
+      "exitCode": 0
+    },
+    {
+      "name": "failure",
+      "bytes": 70003,
+      "exitCode": 7
+    },
+    {
+      "name": "trap",
+      "bytes": 70003,
+      "exitCode": 126
+    },
+    {
+      "name": "head-lines",
+      "bytes": 5,
+      "exitCode": 0
+    },
+    {
+      "name": "tail-lines",
+      "bytes": 4,
+      "exitCode": 0
+    },
+    {
+      "name": "head-bytes",
+      "bytes": 3,
+      "exitCode": 0
+    },
+    {
+      "name": "tail-bytes",
+      "bytes": 4,
+      "exitCode": 0
+    },
+    {
+      "name": "wc-bytes",
+      "bytes": 3,
+      "exitCode": 0
+    },
+    {
+      "name": "sort",
+      "bytes": 16,
+      "exitCode": 0
+    },
+    {
+      "name": "uniq",
+      "bytes": 13,
+      "exitCode": 0
+    },
+    {
+      "name": "grep",
+      "bytes": 5,
+      "exitCode": 0
+    }
+  ],
+  "disposal": true,
+  "sourceCommit": "bd7856adf4a8ba5e2f88900b45c9133c9b465ba9",
+  "ci": {
+    "run": "https://github.com/minutei-ai/boxes/actions/runs/38655437062",
+    "result": "passed",
+    "tests": 304
+  },
+  "deployment": {
+    "provider": "native Alchemy",
+    "profile": "minutei",
+    "stage": "prod",
+    "migrations": "completed",
+    "kernelSha256": "9d31ef1f63c7789aab5efb8e1e6b2deedf7f4d5967c0c9c4954907936a79d104"
+  },
+  "guestWork": {
+    "target": "https://cirro-sandbox-prod-rs7wexxow56rmsoz.manoel-carvalhoneto.workers.dev",
+    "measuredAt": 1792021324460,
+    "lines": 2,
+    "words": 2,
+    "readonlyDenied": true,
+    "disposal": true
+  },
+  "transport": "Remote Effect SDK over HTTP; local native RPC/service binding tests are separate.",
+  "nativeCoverage": [
+    "Byte-preserving Rust filters against locale C system tools; word oracle normalizes non-separator bytes for older GNU versions.",
+    "Vertical tab separates byte words.",
+    "Code Mode scratch files, synchronous shell, callbacks, void values, context reuse, interruption and disposal."
+  ],
+  "limitations": [
+    "Complete POSIX options and locale behavior remain open.",
+    "Code Mode files and processes belong to one context; cross-turn artifacts need a consumer-owned lifecycle.",
+    "Remote RPC, Minutei deployment and real model behavior remain unverified.",
+    "No production AgentOS latency or cost comparison is established."
+  ]
+}
