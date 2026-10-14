@@ -1,0 +1,43 @@
+{
+  "measuredAt": "2026-10-14T20:37:51.986563+00:00",
+  "deployedCommit": "25a4b2b2da1ecd56a1a8b217e3e8896125576d47",
+  "profile": "minutei",
+  "local": {
+    "tests": 297,
+    "failures": 0,
+    "assertions": 2731,
+    "seconds": 160.6,
+    "typesPassed": true,
+    "clippyPassed": true,
+    "rustTestsPassed": true,
+    "formatPassed": true
+  },
+  "sdk": {
+    "version": "0.5.0",
+    "effectConsumerVersion": "4.0.0",
+    "packedNativeWorkerTests": 9,
+    "packedNativeWorkerFailures": 0,
+    "packedNativeWorkerSeconds": 3.47,
+    "archiveSha256": "5f546d6b587e12b4b7f020ee973880d129b8a92f9e1060dfba49bee582f71faf"
+  },
+  "rpcWorkerd": {
+    "nativeFunctionCallbacks": true,
+    "credentialAndSandboxIsolation": true,
+    "nameAndCountGrants": true,
+    "responseByteLimit": true,
+    "declaredHostErrors": true,
+    "timeout": true,
+    "deniesCallbacksAfterDisposal": true,
+    "deniesDetachedCallbacks": true,
+    "nativeDisposers": true
+  },
+  "production": {
+    "httpSdkRegressionChecks": 6,
+    "failures": 0,
+    "namedAgentDeployed": true,
+    "remoteRpcInvoked": false
+  },
+  "ci": "https://github.com/minutei-ai/boxes/actions/runs/38633196731",
+  "minuteiConsumerApplied": false,
+  "fullParity": false
+}
