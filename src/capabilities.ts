@@ -2,7 +2,7 @@ import { Clock, Effect } from "effect";
 import { Capability, Fault, GuestAction, NetworkResult } from "./contracts";
 import { filesystem } from "./filesystem";
 import { HttpFailure, readBounded } from "./http";
-import { inspect, list, wait, cancel, output, liveOutput, spawn } from "./process";
+import { inspect, list, wait, cancel, output, liveOutput, spawn, recoveryStatus } from "./process";
 import { open } from "./storage";
 import { fetchAuthorized } from "./network";
 import { input } from "./input";
@@ -25,6 +25,8 @@ export const guestAction = Effect.fn("guest.action")(function* (
     action.op === "process.stdin.status"
   )
     return yield* input(env, capability, action);
+  if (action.op === "process.recovery.status")
+    return yield* recoveryStatus(env, capability, action);
   if (action.op === "process.output.readLive") return yield* liveOutput(env, capability, action);
   if (action.op === "process.output.read") return yield* output(env, capability, action);
   if (action.op === "process.cancel") return yield* cancel(env, capability, action);

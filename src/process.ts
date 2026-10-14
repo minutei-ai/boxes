@@ -19,6 +19,7 @@ import {
   ProcessLiveOutputAction,
   LiveOutputPage,
   ProcessCancelAction,
+  ProcessRecoveryAction,
 } from "./contracts";
 import { load } from "./modules";
 import { archive, restore } from "./code";
@@ -79,13 +80,15 @@ const reserve = Effect.fn("process.reserve")(function* (
     authority: launch.authority,
     deadlineAt: null,
     stdinMode,
+    checkpoint: null,
+    checkpointCount: 0,
   };
   const receipt = yield* Effect.tryPromise({
     try: () =>
       env.OBJECTS.put(key, Schema.encodeSync(Schema.fromJsonString(StoredRun))(stored), {
         onlyIf: { etagDoesNotMatch: "*" },
         customMetadata: Schema.encodeSync(StoredRunMetadata)({
-          format: "run-v4",
+          format: "run-v5",
           summary: Struct.omit(record, ["output"]),
         }),
       }),
@@ -108,6 +111,9 @@ const reserve = Effect.fn("process.reserve")(function* (
   return {
     record,
     stdinMode,
+    checkpointCount: 0,
+    checkpoint: Schema.decodeUnknownSync(StoredRun.fields.checkpoint)(null),
+    retainedOutput: Schema.decodeUnknownSync(StoredRun.fields.output)(null),
     program: prepared,
     etag: receipt.etag,
     deadlineAt: Schema.decodeUnknownSync(Schema.NullOr(Schema.Int))(null),
@@ -122,9 +128,11 @@ const complete = Effect.fn("process.complete")(function* (
 ) {
   const { record, etag } = reservation;
   const key = `processes/${capability.sandboxId}/${record.id}.json`;
-  const publication = { etag };
+  const publication = { etag, cancelled: false };
   const snapshots: (typeof ObservedOutput.Type)[] = [];
   const retained: (typeof StoredOutput.Type)[] = [];
+  if (record.output !== null) snapshots.push(record.output);
+  if (reservation.retainedOutput !== null) retained.push(reservation.retainedOutput);
   const observeCancellation = Effect.fn("process.observeCancellation")(function* () {
     const current = yield* Effect.tryPromise({
       try: () => env.OBJECTS.head(key),
@@ -175,6 +183,8 @@ const complete = Effect.fn("process.complete")(function* (
       authority: null,
       deadlineAt: reservation.deadlineAt,
       stdinMode: reservation.stdinMode,
+      checkpoint: null,
+      checkpointCount: reservation.checkpointCount,
       output: archived,
     };
     const written = yield* Effect.tryPromise({
@@ -182,7 +192,7 @@ const complete = Effect.fn("process.complete")(function* (
         env.OBJECTS.put(key, Schema.encodeSync(Schema.fromJsonString(StoredRun))(stored), {
           onlyIf: { etagMatches: publication.etag },
           customMetadata: Schema.encodeSync(StoredRunMetadata)({
-            format: "run-v4",
+            format: "run-v5",
             summary: Struct.omit(record, ["output"]),
           }),
         }),
@@ -248,6 +258,8 @@ const complete = Effect.fn("process.complete")(function* (
           if (reservation.stdinMode === "pipe") return record.id;
           return null;
         }),
+        reservation.checkpoint,
+        reservation.deadlineAt !== null,
       );
     }),
   );
@@ -262,6 +274,60 @@ const complete = Effect.fn("process.complete")(function* (
     if (timeoutMs === null) return yield* supervised;
     return yield* supervised.pipe(Effect.timeout(timeoutMs));
   }).pipe(Effect.result);
+  if (
+    output._tag === "Success" &&
+    output.success.outcome._tag === "Failure" &&
+    output.success.outcome.failure._tag === "CheckpointReady"
+  ) {
+    const paused = output.success.outcome.failure;
+    const saved = yield* Effect.tryPromise({
+      try: () =>
+        env.OBJECTS.put(
+          key,
+          Schema.encodeSync(Schema.fromJsonString(StoredRun))({
+            ...record,
+            status: "queued",
+            authority: capability,
+            deadlineAt: reservation.deadlineAt,
+            stdinMode: reservation.stdinMode,
+            checkpoint: paused.reference,
+            checkpointCount: reservation.checkpointCount + 1,
+            output: retained[0] ?? null,
+          }),
+          {
+            onlyIf: { etagMatches: publication.etag },
+            customMetadata: Schema.encodeSync(StoredRunMetadata)({
+              format: "run-v5",
+              summary: Struct.omit({ ...record, status: "queued" as const }, ["output"]),
+            }),
+          },
+        ),
+      catch: (cause) => new StorageFailure({ cause }),
+    });
+    if (saved !== null) {
+      yield* Effect.tryPromise({
+        try: () => env.EVENTS.send(Schema.encodeSync(ProcessDelivery)({ key, eTag: saved.etag })),
+        catch: (cause) => new QueueFailure({ cause }),
+      });
+      return { ...record, status: "queued" as const };
+    }
+    const current = yield* Effect.tryPromise({
+      try: () => env.OBJECTS.head(key),
+      catch: (cause) => new StorageFailure({ cause }),
+    });
+    if (current === null)
+      return yield* new StorageFailure({
+        cause: "Process disappeared during checkpoint publication",
+      });
+    const metadata = yield* Schema.decodeUnknownEffect(StoredRunMetadata)(current.customMetadata);
+    if (metadata.summary.status !== "cancelling")
+      return yield* new Fault({
+        code: "CONFLICT",
+        status: 409,
+        message: "Process changed during checkpoint publication",
+      });
+    publication.cancelled = true;
+  }
   const snapshot = yield* Effect.gen(function* () {
     if (output._tag === "Success" && output.success.changed) {
       const hash = yield* archive(env, capability.sandboxId, output.success.program);
@@ -271,6 +337,13 @@ const complete = Effect.fn("process.complete")(function* (
   });
   const finishedAt = yield* Clock.currentTimeMillis;
   const finished = yield* Effect.sync(() => {
+    if (publication.cancelled)
+      return {
+        ...snapshot,
+        status: "cancelled" as const,
+        finishedAt,
+        output: snapshots[0] ?? null,
+      };
     if (
       output._tag === "Failure" &&
       output.failure._tag === "Fault" &&
@@ -344,11 +417,13 @@ const complete = Effect.fn("process.complete")(function* (
             authority: null,
             deadlineAt: null,
             stdinMode: reservation.stdinMode,
+            checkpoint: null,
+            checkpointCount: reservation.checkpointCount,
           }),
           {
             onlyIf: { etagMatches: current.etag },
             customMetadata: Schema.encodeSync(StoredRunMetadata)({
-              format: "run-v4",
+              format: "run-v5",
               summary: Struct.omit(finished, ["output"]),
             }),
           },
@@ -401,13 +476,33 @@ const readReceipt = Effect.fn("process.readReceipt")(function* (
   );
 });
 
+export const recoveryStatus = Effect.fn("process.recoveryStatus")(function* (
+  env: Env,
+  capability: typeof Capability.Type,
+  action: typeof ProcessRecoveryAction.Type,
+) {
+  const record = yield* readReceipt(env, capability, action.id);
+  return {
+    state: record.status,
+    checkpoints: record.checkpointCount,
+    resumable: record.status === "queued" && record.checkpoint !== null,
+    deadlineAt: record.deadlineAt,
+  };
+});
+
 export const inspect = Effect.fn("process.inspect")(function* (
   env: Env,
   capability: typeof Capability.Type,
   id: string,
 ) {
   const stored = yield* readReceipt(env, capability, id);
-  const record = Struct.omit(stored, ["authority", "deadlineAt", "stdinMode"]);
+  const record = Struct.omit(stored, [
+    "authority",
+    "deadlineAt",
+    "stdinMode",
+    "checkpoint",
+    "checkpointCount",
+  ]);
   if (stored.output === null) return { ...record, output: null };
   return { ...record, output: yield* restoreOutput(env, capability.sandboxId, stored.output) };
 });
@@ -458,7 +553,13 @@ export const wait = Effect.fn("process.wait")(function* (
     if (capability.expiresAt <= observedAt)
       return yield* new Fault({ code: "UNAUTHORIZED", status: 401, message: "Capability expired" });
     if (record.status === "exited") {
-      const summary = Struct.omit(record, ["authority", "deadlineAt", "stdinMode"]);
+      const summary = Struct.omit(record, [
+        "authority",
+        "deadlineAt",
+        "stdinMode",
+        "checkpoint",
+        "checkpointCount",
+      ]);
       if (record.output === null) return { ...summary, output: null };
       const output = yield* restoreOutput(env, capability.sandboxId, record.output);
       yield* requirePermission(capability, "read");
@@ -516,8 +617,10 @@ export const dispatch = Effect.fn("process.dispatch")(function* (env: Env, body:
     return yield* new StorageFailure({ cause: "Process identity mismatch" });
   const now = yield* Clock.currentTimeMillis;
   if (
-    (stored.status === "running" || stored.status === "cancelling") &&
-    stored.deadlineAt !== null
+    stored.deadlineAt !== null &&
+    (stored.status === "running" ||
+      stored.status === "cancelling" ||
+      (stored.status === "queued" && now >= stored.deadlineAt))
   ) {
     if (now < stored.deadlineAt)
       return yield* new ExecutionPending({
@@ -540,8 +643,15 @@ export const dispatch = Effect.fn("process.dispatch")(function* (env: Env, body:
         env.OBJECTS.put(event.key, Schema.encodeSync(Schema.fromJsonString(StoredRun))(failed), {
           onlyIf: { etagMatches: object.etag },
           customMetadata: Schema.encodeSync(StoredRunMetadata)({
-            format: "run-v4",
-            summary: Struct.omit(failed, ["output", "authority", "deadlineAt", "stdinMode"]),
+            format: "run-v5",
+            summary: Struct.omit(failed, [
+              "output",
+              "authority",
+              "deadlineAt",
+              "stdinMode",
+              "checkpoint",
+              "checkpointCount",
+            ]),
           }),
         }),
       catch: (cause) => new StorageFailure({ cause }),
@@ -555,25 +665,45 @@ export const dispatch = Effect.fn("process.dispatch")(function* (env: Env, body:
   const running = {
     ...stored,
     status: "running" as const,
-    startedAt: now,
+    startedAt: yield* Effect.sync(() => {
+      if (stored.checkpoint !== null) return stored.startedAt;
+      return now;
+    }),
     authority: null,
-    deadlineAt: now + 900_000,
+    checkpoint: null,
+    deadlineAt: stored.deadlineAt ?? now + 900_000,
   };
   const claimed = yield* Effect.tryPromise({
     try: () =>
       env.OBJECTS.put(event.key, Schema.encodeSync(Schema.fromJsonString(StoredRun))(running), {
         onlyIf: { etagMatches: object.etag },
         customMetadata: Schema.encodeSync(StoredRunMetadata)({
-          format: "run-v4",
-          summary: Struct.omit(running, ["output", "authority", "deadlineAt", "stdinMode"]),
+          format: "run-v5",
+          summary: Struct.omit(running, [
+            "output",
+            "authority",
+            "deadlineAt",
+            "stdinMode",
+            "checkpoint",
+            "checkpointCount",
+          ]),
         }),
       }),
     catch: (cause) => new StorageFailure({ cause }),
   });
   if (claimed === null) return;
   const record = {
-    ...Struct.omit(running, ["authority", "deadlineAt", "stdinMode"]),
-    output: null,
+    ...Struct.omit(running, [
+      "authority",
+      "deadlineAt",
+      "stdinMode",
+      "checkpoint",
+      "checkpointCount",
+    ]),
+    output: yield* Effect.gen(function* () {
+      if (running.output === null) return null;
+      return yield* restoreOutput(env, capability.sandboxId, running.output);
+    }),
   };
   yield* complete(
     env,
@@ -583,9 +713,12 @@ export const dispatch = Effect.fn("process.dispatch")(function* (env: Env, body:
       etag: claimed.etag,
       deadlineAt: running.deadlineAt,
       stdinMode: running.stdinMode,
+      checkpoint: stored.checkpoint,
+      checkpointCount: stored.checkpointCount,
+      retainedOutput: running.output,
       program: restore(env, capability.sandboxId, running.sourceHash),
     },
-    840_000,
+    Math.max(1, Math.min(840_000, running.deadlineAt - now - 1000)),
   );
 });
 
@@ -706,7 +839,14 @@ export const cancel = Effect.fn("process.cancel")(function* (
   });
   const stored = yield* Schema.decodeUnknownEffect(Schema.fromJsonString(StoredRun))(text);
   if (stored.status !== "queued" && stored.status !== "running")
-    return Struct.omit(stored, ["authority", "deadlineAt", "output", "stdinMode"]);
+    return Struct.omit(stored, [
+      "authority",
+      "deadlineAt",
+      "output",
+      "stdinMode",
+      "checkpoint",
+      "checkpointCount",
+    ]);
   const now = yield* Clock.currentTimeMillis;
   if (capability.expiresAt <= now)
     return yield* new Fault({ code: "UNAUTHORIZED", status: 401, message: "Capability expired" });
@@ -718,7 +858,8 @@ export const cancel = Effect.fn("process.cancel")(function* (
         authority: null,
         deadlineAt: null,
         finishedAt: now,
-        output: null,
+        output: stored.output,
+        checkpoint: null,
       };
     return { ...stored, status: "cancelling" as const };
   });
@@ -727,8 +868,15 @@ export const cancel = Effect.fn("process.cancel")(function* (
       env.OBJECTS.put(key, Schema.encodeSync(Schema.fromJsonString(StoredRun))(updated), {
         onlyIf: { etagMatches: object.etag },
         customMetadata: Schema.encodeSync(StoredRunMetadata)({
-          format: "run-v4",
-          summary: Struct.omit(updated, ["output", "authority", "deadlineAt", "stdinMode"]),
+          format: "run-v5",
+          summary: Struct.omit(updated, [
+            "output",
+            "authority",
+            "deadlineAt",
+            "stdinMode",
+            "checkpoint",
+            "checkpointCount",
+          ]),
         }),
       }),
     catch: (cause) => new StorageFailure({ cause }),
@@ -739,7 +887,14 @@ export const cancel = Effect.fn("process.cancel")(function* (
       status: 409,
       message: "Execution changed during cancellation; inspect process.get",
     });
-  return Struct.omit(updated, ["authority", "deadlineAt", "output", "stdinMode"]);
+  return Struct.omit(updated, [
+    "authority",
+    "deadlineAt",
+    "output",
+    "stdinMode",
+    "checkpoint",
+    "checkpointCount",
+  ]);
 });
 
 export const output = Effect.fn("process.output")(function* (

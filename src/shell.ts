@@ -102,7 +102,16 @@ export const shell = Effect.fn("shell.execute")(function* (
                   );
                 return capture({ stdout, stderr }, observeCancellation);
               };
-              return yield* wasi(env, capability, program, session, commandCapture, null).pipe(
+              return yield* wasi(
+                env,
+                capability,
+                program,
+                session,
+                commandCapture,
+                null,
+                null,
+                false,
+              ).pipe(
                 Effect.ensuring(
                   Effect.sync(() => {
                     if (session.etag !== before) dirty.clear();

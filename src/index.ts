@@ -27,6 +27,7 @@ import {
   NetworkResult,
   RunRecord,
   RunSummary,
+  RecoveryStatus,
   ProcessPage,
   ProcessOutputPage,
   LiveOutputPage,
@@ -53,6 +54,7 @@ import {
   cancel,
   output,
   liveOutput,
+  recoveryStatus,
 } from "./process";
 import { kernelCall, open, publish, StorageFailure } from "./storage";
 import type { Env } from "./resources";
@@ -237,6 +239,11 @@ const route = Effect.fn("api.route")(function* (request: Request, env: Env) {
         input(env, capability, action).pipe(
           Effect.map((value) => Schema.encodeSync(Schema.fromJsonString(InputReceipt))(value)),
         ),
+    ),
+    Match.when({ op: "process.recovery.status" }, (action) =>
+      recoveryStatus(env, capability, action).pipe(
+        Effect.map((value) => Schema.encodeSync(Schema.fromJsonString(RecoveryStatus))(value)),
+      ),
     ),
     Match.when({ op: "process.output.readLive" }, (action) =>
       liveOutput(env, capability, action).pipe(

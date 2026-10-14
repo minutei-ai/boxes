@@ -460,7 +460,7 @@ test("inline receipt migration preserves grants, deadlines, observed output and 
     expect(stored.authority).toEqual(grant);
     expect(stored.deadlineAt).toBe(123456);
     expect(Schema.decodeUnknownSync(StoredRunMetadata)(object.customMetadata).format).toBe(
-      "run-v4",
+      "run-v5",
     );
     const record = Schema.decodeUnknownSync(RunRecord)(
       await (await act("output-migration", token, { op: "process.get", id: status })).json(),
@@ -546,7 +546,7 @@ test("version 3 chunked receipts migrate to explicit closed stdin without rewrit
   if (object === null) return;
   const record = Schema.decodeUnknownSync(Schema.fromJsonString(StoredRun))(await object.text());
   const metadata = Schema.decodeUnknownSync(StoredRunMetadata)(object.customMetadata);
-  await bucket.put(key, JSON.stringify(Struct.omit(record, ["stdinMode"])), {
+  await bucket.put(key, JSON.stringify(Struct.omit(record, ["stdinMode", "checkpoint"])), {
     customMetadata: { format: "run-v3", summary: JSON.stringify(metadata.summary) },
   });
   const migrated = await post(
@@ -563,7 +563,7 @@ test("version 3 chunked receipts migrate to explicit closed stdin without rewrit
   expect(updated.stdinMode).toBe("closed");
   expect(updated.output).toEqual(record.output);
   expect(updated.sourceHash).toBe(record.sourceHash);
-  expect(Schema.decodeUnknownSync(StoredRunMetadata)(current.customMetadata).format).toBe("run-v4");
+  expect(Schema.decodeUnknownSync(StoredRunMetadata)(current.customMetadata).format).toBe("run-v5");
   expect(
     (await post(mf, "/v1/migrations/output-chunks-v1", "cirro-local-test-credential", {})).status,
   ).toBe(200);
@@ -616,7 +616,7 @@ test("receipt migration returns bounded page cursors and skips confirmed convers
   expect(progress.pages).toBe(3);
   expect(progress.migrated).toBe(101);
   const last = await bucket.get("processes/paged/old-100.json");
-  expect(last?.customMetadata?.format).toBe("run-v4");
+  expect(last?.customMetadata?.format).toBe("run-v5");
   const retry = await post(
     instance,
     "/v1/migrations/output-chunks-v1",

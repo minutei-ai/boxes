@@ -4288,6 +4288,9 @@ impl WasmGuest {
         state.stdin_pipe = Some(pipe);
         Ok(())
     }
+    pub fn fuel_used(&self) -> u64 {
+        self.fuel_limit - self.budget.get()
+    }
     pub fn input_offset(&self) -> usize {
         self.store.data().stdin_offset.get()
     }

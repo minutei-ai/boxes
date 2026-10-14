@@ -800,6 +800,34 @@ await Effect.runPromise(
           `dist/wasi-${name}.wasm`,
         ]),
     );
+    yield* run([
+      "rustc",
+      "--crate-type",
+      "cdylib",
+      "--target",
+      "wasm32-unknown-unknown",
+      "-O",
+      "-C",
+      "strip=symbols",
+      "tests/fixtures/wasi-recovery.rs",
+      "-o",
+      "dist/wasi-recovery.wasm",
+    ]);
+    yield* run([
+      "rustc",
+      "--crate-type",
+      "cdylib",
+      "--target",
+      "wasm32-unknown-unknown",
+      "-O",
+      "-C",
+      "strip=symbols",
+      "--cfg",
+      'case="unsynced"',
+      "tests/fixtures/wasi-recovery.rs",
+      "-o",
+      "dist/wasi-recovery-unsynced.wasm",
+    ]);
     for (const [entry, directory] of [
       ["src/index.ts", "dist/worker"],
       ["tests/fixtures/checkpoint-worker.ts", "dist/checkpoint-worker"],

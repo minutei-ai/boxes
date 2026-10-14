@@ -2,7 +2,7 @@ import { Effect, Schema } from "effect";
 import wasm from "cirro:wasi";
 import revision from "../dist/wasi/revision.json";
 import { createBindings } from "../dist/wasi/bindings";
-import { Fault, HeapSnapshot } from "./contracts";
+import { Fault, HeapSnapshot, ExecutionCheckpoint } from "./contracts";
 import { StorageFailure } from "./storage";
 import type { Env } from "./resources";
 
@@ -123,4 +123,51 @@ export const restoreHeap = Effect.fn("checkpoint.restoreHeap")(function* (
     { concurrency: 4, discard: true },
   );
   return { bindings, exports, handles: snapshot.handles };
+});
+
+export class CheckpointReady extends Schema.TaggedError<CheckpointReady>()("CheckpointReady", {
+  reference: Schema.String,
+}) {}
+export const saveExecutionCheckpoint = Effect.fn("checkpoint.saveExecution")(function* (
+  objects: Env["OBJECTS"],
+  sandboxId: string,
+  checkpoint: typeof ExecutionCheckpoint.Type,
+) {
+  const bytes = Buffer.from(
+    Schema.encodeSync(Schema.fromJsonString(ExecutionCheckpoint))(checkpoint),
+  );
+  if (bytes.length > 16_777_216)
+    return yield* new StorageFailure({ cause: "Execution checkpoint exceeds its metadata limit" });
+  const digest = yield* Effect.promise(() => crypto.subtle.digest("SHA-256", bytes));
+  const hash = Buffer.from(digest).toString("hex");
+  yield* Effect.tryPromise({
+    try: () =>
+      objects.put(`sandboxes/${sandboxId}/execution-checkpoints/${hash}.json`, bytes, {
+        onlyIf: { etagDoesNotMatch: "*" },
+      }),
+    catch: (cause) => new StorageFailure({ cause }),
+  });
+  return hash;
+});
+export const restoreExecutionCheckpoint = Effect.fn("checkpoint.restoreExecution")(function* (
+  objects: Env["OBJECTS"],
+  sandboxId: string,
+  hash: string,
+) {
+  const object = yield* Effect.tryPromise({
+    try: () => objects.get(`sandboxes/${sandboxId}/execution-checkpoints/${hash}.json`),
+    catch: (cause) => new StorageFailure({ cause }),
+  });
+  if (object === null || object.size > 16_777_216)
+    return yield* new StorageFailure({ cause: "Missing or oversized execution checkpoint" });
+  const bytes = yield* Effect.tryPromise({
+    try: () => object.arrayBuffer(),
+    catch: (cause) => new StorageFailure({ cause }),
+  });
+  const digest = yield* Effect.promise(() => crypto.subtle.digest("SHA-256", bytes));
+  if (Buffer.from(digest).toString("hex") !== hash)
+    return yield* new StorageFailure({ cause: "Execution checkpoint digest mismatch" });
+  return yield* Schema.decodeUnknownEffect(Schema.fromJsonString(ExecutionCheckpoint))(
+    Buffer.from(bytes).toString(),
+  );
 });

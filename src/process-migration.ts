@@ -56,6 +56,8 @@ export const migrateProcesses = Effect.fn("migration.processReceipts")(function*
             authority: null,
             deadlineAt: null,
             stdinMode: "closed",
+            checkpoint: null,
+            checkpointCount: 0,
           });
           const fenced = yield* Effect.tryPromise({
             try: () =>
@@ -79,7 +81,7 @@ export const migrateProcesses = Effect.fn("migration.processReceipts")(function*
               env.OBJECTS.put(key, encoded, {
                 onlyIf: { etagDoesNotMatch: "*" },
                 customMetadata: Schema.encodeSync(StoredRunMetadata)({
-                  format: "run-v4",
+                  format: "run-v5",
                   summary: Struct.omit(record, ["output"]),
                 }),
               }),
@@ -122,12 +124,26 @@ const InlineMetadata = RunMetadata.mapFields((fields) => ({
   ...fields,
   format: Schema.Literal("run-v2"),
 }));
-const PreviousStoredRun = StoredRun.mapFields((fields) => Struct.omit(fields, ["stdinMode"]));
+const PreviousStoredRun = StoredRun.mapFields((fields) =>
+  Struct.omit(fields, ["stdinMode", "checkpoint", "checkpointCount"]),
+);
 const PreviousMetadata = StoredRunMetadata.mapFields((fields) => ({
   ...fields,
   format: Schema.Literal("run-v3"),
 }));
-const MigrationMetadata = Schema.Union([StoredRunMetadata, PreviousMetadata, InlineMetadata]);
+const VersionFourStoredRun = StoredRun.mapFields((fields) =>
+  Struct.omit(fields, ["checkpoint", "checkpointCount"]),
+);
+const VersionFourMetadata = StoredRunMetadata.mapFields((fields) => ({
+  ...fields,
+  format: Schema.Literal("run-v4"),
+}));
+const MigrationMetadata = Schema.Union([
+  StoredRunMetadata,
+  VersionFourMetadata,
+  PreviousMetadata,
+  InlineMetadata,
+]);
 
 export const migrateOutput = Effect.fn("migration.outputChunks")(function* (
   env: Env,
@@ -151,7 +167,7 @@ export const migrateOutput = Effect.fn("migration.outputChunks")(function* (
         const metadata = yield* Schema.decodeUnknownEffect(MigrationMetadata)(
           object.customMetadata,
         );
-        if (metadata.format === "run-v4") return;
+        if (metadata.format === "run-v5") return;
         const parts = object.key.split("/");
         const sandboxId = yield* Schema.decodeUnknownEffect(Id)(parts[1]);
         if (
@@ -173,18 +189,35 @@ export const migrateOutput = Effect.fn("migration.outputChunks")(function* (
           catch: (cause) => new StorageFailure({ cause }),
         });
         const converted = yield* Effect.gen(function* () {
+          if (metadata.format === "run-v4") {
+            const record = yield* Schema.decodeUnknownEffect(
+              Schema.fromJsonString(VersionFourStoredRun),
+            )(text);
+            return { ...record, checkpoint: null, checkpointCount: 0 };
+          }
           if (metadata.format === "run-v3") {
             const record = yield* Schema.decodeUnknownEffect(
               Schema.fromJsonString(PreviousStoredRun),
             )(text);
-            return { ...record, stdinMode: "closed" as const };
+            return {
+              ...record,
+              stdinMode: "closed" as const,
+              checkpoint: null,
+              checkpointCount: 0,
+            };
           }
           const record = yield* Schema.decodeUnknownEffect(Schema.fromJsonString(InlineRun))(text);
           const output = yield* Effect.gen(function* () {
             if (record.output === null) return null;
             return yield* archiveOutput(env, sandboxId, record.output, null);
           });
-          return { ...record, output, stdinMode: "closed" as const };
+          return {
+            ...record,
+            output,
+            stdinMode: "closed" as const,
+            checkpoint: null,
+            checkpointCount: 0,
+          };
         });
         if (converted.id !== metadata.summary.id)
           return yield* new StorageFailure({ cause: "Process body does not match its identity" });
@@ -196,12 +229,14 @@ export const migrateOutput = Effect.fn("migration.outputChunks")(function* (
               {
                 onlyIf: { etagMatches: stored.etag },
                 customMetadata: Schema.encodeSync(StoredRunMetadata)({
-                  format: "run-v4",
+                  format: "run-v5",
                   summary: Struct.omit(converted, [
                     "output",
                     "authority",
                     "deadlineAt",
                     "stdinMode",
+                    "checkpoint",
+                    "checkpointCount",
                   ]),
                 }),
               },

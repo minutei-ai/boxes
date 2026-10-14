@@ -179,7 +179,12 @@ export const ProcessLiveOutputAction = Schema.Struct({
   maxBytes: ProcessOutputAction.fields.maxBytes,
   maxEvents: ProcessOutputAction.fields.maxEvents,
 });
+export const ProcessRecoveryAction = Schema.Struct({
+  op: Schema.Literal("process.recovery.status"),
+  id: Id,
+});
 export const ProcessReadAction = Schema.Union([
+  ProcessRecoveryAction,
   ProcessLiveOutputAction,
   ProcessOutputAction,
   ProcessWaitAction,
@@ -586,10 +591,18 @@ export const StoredRun = RunRecord.mapFields((fields) => ({
   authority: Schema.NullOr(Capability),
   deadlineAt: Schema.NullOr(Schema.Int),
   stdinMode: Schema.Literals(["closed", "pipe"]),
+  checkpointCount: Schema.Int.check(Schema.isBetween({ minimum: 0, maximum: 1_000_000 })),
+  checkpoint: Schema.NullOr(Schema.String.check(Schema.isPattern(/^[a-f0-9]{64}$/))),
+}));
+export const RecoveryStatus = StoredRun.mapFields((fields) => ({
+  state: fields.status,
+  checkpoints: fields.checkpointCount,
+  resumable: Schema.Boolean,
+  deadlineAt: fields.deadlineAt,
 }));
 export const StoredRunMetadata = RunMetadata.mapFields((fields) => ({
   ...fields,
-  format: Schema.Literal("run-v4"),
+  format: Schema.Literal("run-v5"),
 }));
 export const DispatchReceipt = Schema.Struct({ notifications: Schema.Int });
 export const ProcessDelivery = Schema.Struct({ key: Schema.String, eTag: Schema.String });
@@ -782,4 +795,17 @@ export const HeapSnapshot = Schema.Struct({
       handle: Schema.Int.check(Schema.isBetween({ minimum: 1, maximum: 4294967295 })),
     }),
   ).check(Schema.isMinLength(1), Schema.isMaxLength(9)),
+});
+
+export const ExecutionCheckpoint = Schema.Struct({
+  version: Schema.Literal(1),
+  heap: Schema.String.check(Schema.isPattern(/^[a-f0-9]{64}$/)),
+  manifest: Schema.String.check(Schema.isMaxLength(8_388_608)),
+  head: Head,
+  etag: Schema.String,
+  dirty: Schema.Boolean,
+  checkpointManifest: Schema.String.check(Schema.isMaxLength(8_388_608)),
+  monotonic: Schema.String.check(Schema.isPattern(/^[0-9]+$/)),
+  savedAt: Schema.Int,
+  fuelUsed: Schema.Int.check(Schema.isBetween({ minimum: 0, maximum: 100_000_000 })),
 });

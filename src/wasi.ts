@@ -28,6 +28,13 @@ import {
   WasmConfiguration,
 } from "./contracts";
 import type { open } from "./storage";
+import {
+  CheckpointReady,
+  saveHeap,
+  restoreHeap,
+  saveExecutionCheckpoint,
+  restoreExecutionCheckpoint,
+} from "./checkpoint";
 import { initializeInput, readInput, finishInput } from "./input";
 import { kernelCall, publish, read, write, StorageFailure } from "./storage";
 import type { Kernel } from "../dist/kernel/cirro_kernel";
@@ -92,18 +99,40 @@ export const wasi = Effect.fn("wasi.execute")(function* (
   initial: Effect.Success<ReturnType<typeof open>>,
   capture: OutputCapture | null,
   inputId: string | null,
+  checkpointReference: string | null,
+  canHandover: boolean,
 ) {
+  const leaseStartedAt = yield* Clock.currentTimeMillis;
   const policy = initial.head.policy;
+  const restored = yield* Effect.gen(function* () {
+    if (checkpointReference === null) return null;
+    return yield* restoreExecutionCheckpoint(
+      env.OBJECTS,
+      capability.sandboxId,
+      checkpointReference,
+    );
+  });
+  const native = yield* Effect.gen(function* () {
+    if (restored !== null)
+      return yield* restoreHeap(env.OBJECTS, capability.sandboxId, restored.heap);
+    const bindings = createBindings();
+    const exports = bindings.initSync({ module: wasm });
+    return { bindings, exports, handles: [] };
+  });
+  const transferred = new WeakSet<InstanceType<ReturnType<typeof createBindings>["WasmGuest"]>>();
+  const parking = { active: false };
+  const rootHandle = native.handles.find((item) => item.pid === 1);
+  if (restored !== null && rootHandle === undefined)
+    return yield* new WasmFailure({ cause: "Checkpoint has no root handle" });
   const guest = yield* Effect.acquireRelease(
     Effect.try({
       try: () => {
-        const bindings = createBindings();
-        bindings.initSync({ module: wasm });
+        if (rootHandle !== undefined) return native.bindings.WasmGuest.resume(rootHandle.handle);
         const stdin = Match.value(inputId).pipe(
           Match.when(null, () => Buffer.from(program.stdin, "base64")),
           Match.orElse(() => Buffer.alloc(0)),
         );
-        return new bindings.WasmGuest(
+        return new native.bindings.WasmGuest(
           Buffer.from(program.source, "base64"),
           Schema.encodeSync(
             Schema.fromJsonString(
@@ -118,9 +147,27 @@ export const wasi = Effect.fn("wasi.execute")(function* (
       },
       catch: (cause) => new WasmFailure({ cause }),
     }),
-    (guest) => Effect.sync(() => guest.free()),
+    (guest) =>
+      Effect.sync(() => {
+        if (!transferred.has(guest)) guest.free();
+      }),
   );
-  if (inputId !== null) {
+  const live = new Map<number, InstanceType<ReturnType<typeof createBindings>["WasmGuest"]>>([
+    [1, guest],
+  ]);
+  const clocks = { offset: 0n };
+  if (restored !== null) {
+    yield* kernelCall(() => initial.kernel.restore_manifest(restored.manifest));
+    initial.head = restored.head;
+    initial.etag = restored.etag;
+    const now = yield* Clock.currentTimeMillis;
+    const monotonic = yield* Clock.monotonicTimeNanos;
+    clocks.offset =
+      BigInt(restored.monotonic) +
+      BigInt(Math.max(0, now - restored.savedAt)) * 1_000_000n -
+      monotonic;
+  }
+  if (inputId !== null && restored === null) {
     yield* initializeInput(
       env,
       capability.sandboxId,
@@ -136,10 +183,17 @@ export const wasi = Effect.fn("wasi.execute")(function* (
   const checkpoint = yield* kernelCall(() => kernel.manifest());
   const state = {
     checkpointFuel: 0,
+    resumeFuel: 0,
     session: initial,
     dirty: checkpoint !== initial.head.manifest,
     checkpoint,
   };
+  if (restored !== null) {
+    state.dirty = restored.dirty;
+    state.checkpoint = restored.checkpointManifest;
+    state.resumeFuel = restored.fuelUsed;
+    state.checkpointFuel = restored.fuelUsed;
+  }
   const openFile = Effect.fn("wasi.openFile")(function* (
     input: typeof WasiOpen.Type,
     guest: InstanceType<ReturnType<typeof createBindings>["WasmGuest"]>,
@@ -241,10 +295,42 @@ export const wasi = Effect.fn("wasi.execute")(function* (
     Scope.close(scope, Exit.void),
   );
   const children = new Map<number, Fiber.Fiber<void>>();
-  const failures: (WasmFailure | Fault | StorageFailure | Schema.SchemaError)[] = [];
+  const failures: (WasmFailure | Fault | StorageFailure | Schema.SchemaError | CheckpointReady)[] =
+    [];
+  const handover = Effect.fn("wasi.handover")(function* (fuelUsed: number) {
+    parking.active = true;
+    const manifest = yield* kernelCall(() => kernel.manifest());
+    const monotonic = (yield* Clock.monotonicTimeNanos) + clocks.offset;
+    const savedAt = yield* Clock.currentTimeMillis;
+    const handles = [];
+    for (const [pid, active] of live) {
+      transferred.add(active);
+      const handle = yield* Effect.try({
+        try: () => active.park(),
+        catch: (cause) => new WasmFailure({ cause }),
+      });
+      handles.push({ pid, handle });
+    }
+    yield* Scope.close(family, Exit.void);
+    const heap = yield* saveHeap(env.OBJECTS, capability.sandboxId, native.exports.memory, handles);
+    const reference = yield* saveExecutionCheckpoint(env.OBJECTS, capability.sandboxId, {
+      version: 1,
+      heap,
+      manifest,
+      head: state.session.head,
+      etag: state.session.etag,
+      dirty: state.dirty,
+      checkpointManifest: state.checkpoint,
+      monotonic: monotonic.toString(),
+      savedAt,
+      fuelUsed,
+    });
+    return yield* new CheckpointReady({ reference });
+  });
   if (inputId !== null) {
     const reader = Effect.gen(function* () {
       while (true) {
+        if (parking.active) return;
         const wake = changes.pending;
         if (!guest.stdin_has_reader()) {
           yield* finishInput(env, capability.sandboxId, inputId);
@@ -287,7 +373,7 @@ export const wasi = Effect.fn("wasi.execute")(function* (
     guest: InstanceType<ReturnType<typeof createBindings>["WasmGuest"]>,
   ) => Effect.Effect<
     typeof RunResult.Type,
-    WasmFailure | Fault | StorageFailure | Schema.SchemaError
+    WasmFailure | Fault | StorageFailure | Schema.SchemaError | CheckpointReady
   > = Effect.fn("wasi.runGuest")(function* (guest) {
     const completed: (typeof RunResult.Type)[] = [];
     while (completed.length === 0) {
@@ -348,6 +434,8 @@ export const wasi = Effect.fn("wasi.execute")(function* (
               message: "Capability expired",
             });
           if (step.kind === "yield") {
+            if (canHandover && guest.pid === 1 && step.fuelUsed - state.resumeFuel >= 50_000_000)
+              return yield* handover(step.fuelUsed);
             yield* Effect.sleep(1);
             return;
           }
@@ -355,6 +443,15 @@ export const wasi = Effect.fn("wasi.execute")(function* (
             lease.held = false;
             yield* semaphore.release(1);
             while (true) {
+              if (
+                canHandover &&
+                guest.pid === 1 &&
+                (yield* Clock.currentTimeMillis) - leaseStartedAt >= 30_000
+              ) {
+                yield* semaphore.take(1);
+                lease.held = true;
+                return yield* handover(Number(guest.fuel_used()));
+              }
               const wake = changes.pending;
               const stopped = yield* Effect.try({
                 try: () => guest.is_stopped(),
@@ -643,26 +740,17 @@ export const wasi = Effect.fn("wasi.execute")(function* (
                           ),
                         catch: (cause) => new WasmFailure({ cause }),
                       }),
-                      (child) => Effect.sync(() => child?.free()),
+                      (child) =>
+                        Effect.sync(() => {
+                          if (child !== undefined && !transferred.has(child)) {
+                            live.delete(child.pid);
+                            child.free();
+                          }
+                        }),
                     ),
                   );
                   if (child !== undefined) {
-                    const pid = child.pid;
-                    const work = Effect.gen(function* () {
-                      const outcome = yield* runGuest(child).pipe(Effect.result);
-                      yield* Effect.sync(() => child.finish_child(outcome._tag === "Failure"));
-                      if (outcome._tag === "Failure") failures.push(outcome.failure);
-                    }).pipe(
-                      Effect.ensuring(Scope.close(childScope, Exit.void)),
-                      Effect.ensuring(
-                        Effect.gen(function* () {
-                          children.delete(pid);
-                          yield* notify();
-                        }),
-                      ),
-                    );
-                    const fiber = yield* Scope.provide(family)(Effect.forkScoped(work));
-                    children.set(pid, fiber);
+                    yield* startChild(childScope, child);
                   } else yield* Scope.close(childScope, Exit.void);
                   return { data: Buffer.alloc(0), path: "/", directory: false, value: 0n };
                 }),
@@ -951,7 +1039,7 @@ export const wasi = Effect.fn("wasi.execute")(function* (
               Match.when({ kind: "poll" }, (input) =>
                 Effect.gen(function* () {
                   const realtime = yield* Clock.currentTimeNanos;
-                  const monotonic = yield* Clock.monotonicTimeNanos;
+                  const monotonic = (yield* Clock.monotonicTimeNanos) + clocks.offset;
                   const deadlines = input.clocks.map((clock) => {
                     const now = Match.value(clock.clock).pipe(
                       Match.when(0, () => realtime),
@@ -982,6 +1070,12 @@ export const wasi = Effect.fn("wasi.execute")(function* (
                     const wake = changes.pending;
                     yield* semaphore.take(1);
                     lease.held = true;
+                    if (
+                      canHandover &&
+                      guest.pid === 1 &&
+                      (yield* Clock.currentTimeMillis) - leaseStartedAt >= 30_000
+                    )
+                      return yield* handover(Number(guest.fuel_used()));
                     const ioReady = yield* Effect.try({
                       try: () => guest.io_ready(),
                       catch: (cause) => new WasmFailure({ cause }),
@@ -1016,12 +1110,18 @@ export const wasi = Effect.fn("wasi.execute")(function* (
                     }, untilExpiry);
                     lease.held = false;
                     yield* semaphore.release(1);
+                    const pause = Match.value(
+                      canHandover && guest.pid === 1 && first > 1_000_000_000n,
+                    ).pipe(
+                      Match.when(true, () => 1_000_000_000n),
+                      Match.orElse(() => first),
+                    );
                     yield* Effect.raceFirst(
-                      Effect.sleep(Duration.nanos(((first + 999_999n) / 1_000_000n) * 1_000_000n)),
+                      Effect.sleep(Duration.nanos(pause)),
                       Deferred.await(wake),
                     );
                     readings.realtime = yield* Clock.currentTimeNanos;
-                    readings.monotonic = yield* Clock.monotonicTimeNanos;
+                    readings.monotonic = (yield* Clock.monotonicTimeNanos) + clocks.offset;
                   }
                   const now = yield* Clock.currentTimeMillis;
                   if (capability.expiresAt <= now)
@@ -1080,7 +1180,7 @@ export const wasi = Effect.fn("wasi.execute")(function* (
                       value: BigInt(now) * 1_000_000n,
                     };
                   }
-                  const nanos = yield* Clock.monotonicTimeNanos;
+                  const nanos = (yield* Clock.monotonicTimeNanos) + clocks.offset;
                   return { data: Buffer.alloc(0), path: "/", directory: false, value: nanos };
                 }),
               ),
@@ -1147,6 +1247,50 @@ export const wasi = Effect.fn("wasi.execute")(function* (
     }
     return completed[0];
   });
+  const startChild = Effect.fn("wasi.startChild")(function* (
+    scope: Effect.Success<ReturnType<typeof Scope.make>>,
+    child: InstanceType<ReturnType<typeof createBindings>["WasmGuest"]>,
+  ) {
+    const pid = child.pid;
+    live.set(pid, child);
+    const work = Effect.gen(function* () {
+      const outcome = yield* runGuest(child).pipe(Effect.result);
+      if (transferred.has(child)) return;
+      yield* Effect.sync(() => child.finish_child(outcome._tag === "Failure"));
+      if (outcome._tag === "Failure") failures.push(outcome.failure);
+    }).pipe(
+      Effect.ensuring(Scope.close(scope, Exit.void)),
+      Effect.ensuring(
+        Effect.gen(function* () {
+          children.delete(pid);
+          yield* notify();
+        }),
+      ),
+    );
+    const fiber = yield* Scope.provide(family)(Effect.forkScoped(work));
+    children.set(pid, fiber);
+  });
+  for (const item of native.handles.filter((item) => item.pid !== 1)) {
+    const scope = yield* Scope.provide(family)(
+      Effect.acquireRelease(Scope.make(), (scope) => Scope.close(scope, Exit.void)),
+    );
+    const child = yield* Scope.provide(scope)(
+      Effect.acquireRelease(
+        Effect.try({
+          try: () => native.bindings.WasmGuest.resume(item.handle),
+          catch: (cause) => new WasmFailure({ cause }),
+        }),
+        (child) =>
+          Effect.sync(() => {
+            if (!transferred.has(child)) {
+              live.delete(item.pid);
+              child.free();
+            }
+          }),
+      ),
+    );
+    yield* startChild(scope, child);
+  }
   return yield* Effect.gen(function* () {
     yield* runGuest(guest);
     while (children.size > 0) yield* Fiber.awaitAll(Array.from(children.values()));
