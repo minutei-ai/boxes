@@ -3,7 +3,7 @@
   "configVersion": 1,
   "workspaces": {
     "": {
-      "name": "cirro",
+      "name": "boxes",
       "dependencies": {
         "alchemy": "2.0.0-beta.83",
         "effect": "4.0.4",

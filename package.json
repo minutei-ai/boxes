@@ -1,5 +1,5 @@
 {
-  "name": "cirro",
+  "name": "boxes",
   "version": "0.1.0",
   "private": true,
   "type": "module",
@@ -45,5 +45,10 @@
     "miniflare": "5.20261006.1-alpha",
     "oxfmt": "0.71.0",
     "typescript": "6.0.3"
+  },
+  "license": "Apache-2.0",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/minutei-ai/boxes.git"
   }
 }

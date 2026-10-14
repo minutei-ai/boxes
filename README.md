@@ -1,8 +1,10 @@
-# Cirro
+# Boxes
 
 Rust/Wasm agent sandboxes inside Cloudflare Workers. Effect owns validated requests and operation lifetimes; Alchemy owns infrastructure. R2, through its native Worker binding, owns persistent files, code, configuration and execution receipts. The object layout is compatible with S3 storage; an arbitrary external S3 transport is not implemented.
 
 **Experimental. AgentOS parity is the target and is not achieved.** See [the operation inventory](docs/parity.md) before choosing this runtime for a workload.
+
+Licensed under [Apache 2.0](LICENSE). Maintained by [Minutei AI](https://github.com/minutei-ai).
 
 ## What runs today
 
@@ -15,7 +17,7 @@ Rust/Wasm agent sandboxes inside Cloudflare Workers. Effect owns validated reque
 - Persistent execution IDs, code digests, completed or failed results, and paginated process summaries.
 - Conditional R2 publication: concurrent filesystem changes either commit together or report a conflict.
 
-Cirro does not currently provide Linux compatibility, a complete POSIX shell, npm/pip installation, interactive terminals or reliable background processes. Python runs in a fresh RustPython Wasm instance with native instruction and memory limits. JavaScript uses QuickJS without Node modules; use `tools.call` for durable files. Python uses `await tools.call(...)`; synchronous filesystem imports and pip remain pending.
+Boxes does not currently provide Linux compatibility, a complete POSIX shell, npm/pip installation, interactive terminals or reliable background processes. Python runs in a fresh RustPython Wasm instance with native instruction and memory limits. JavaScript uses QuickJS without Node modules; use `tools.call` for durable files. Python uses `await tools.call(...)`; synchronous filesystem imports and pip remain pending.
 
 ## Install and verify
 
@@ -112,7 +114,7 @@ Unreferenced blocks and disposed sandboxes are retained. Safe garbage collection
 
 ## Inspiration
 
-Inspired by [rivet-dev/agentos](https://github.com/rivet-dev/agentos), inspected at `4d48628304c1ddedafc9d55f60752093fcf6f3d2`. Cirro is an independent implementation; the upstream native sidecar, V8 embedding and Unix socket transport are not used.
+Boxes is inspired by Rivet’s [AgentOS](https://github.com/rivet-dev/agentos), inspected at `4d48628304c1ddedafc9d55f60752093fcf6f3d2`. Boxes is an independent implementation; the upstream native sidecar, V8 embedding and Unix socket transport are not used.
 
 ## Command packages
 
