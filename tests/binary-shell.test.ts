@@ -168,6 +168,65 @@ test("binary shell preserves cat, WASI pipes, redirections, failure output and d
         expect(
           (yield* client.action(id, { op: "filesystem.exists", path: "/tmp/over-quota" })).exists,
         ).toBe(false);
+        const filterInput = Buffer.from([
+          65, 255, 0, 13, 10, 98, 128, 10, 98, 128, 10, 195, 169, 32, 120,
+        ]);
+        yield* client.action(id, {
+          op: "filesystem.writeFile",
+          path: "/tmp/filter-input",
+          content: filterInput.toString("base64"),
+          encoding: "base64",
+        });
+        const filters = [
+          { name: "head-lines", command: "head", args: ["-n", "2"], source: "head -n 2" },
+          { name: "tail-lines", command: "tail", args: ["-n", "2"], source: "tail -n 2" },
+          { name: "head-bytes", command: "head", args: ["-c", "3"], source: "head -c 3" },
+          { name: "tail-bytes", command: "tail", args: ["-c", "4"], source: "tail -c 4" },
+          { name: "head-zero", command: "head", args: ["-n", "0"], source: "head -n 0" },
+          { name: "tail-zero", command: "tail", args: ["-n", "0"], source: "tail -n 0" },
+          { name: "wc-bytes", command: "wc", args: ["-c"], source: "wc -c" },
+          { name: "wc-lines", command: "wc", args: ["-l"], source: "wc -l" },
+          { name: "wc-words", command: "wc", args: ["-w"], source: "wc -w" },
+          { name: "sort", command: "sort", args: [], source: "sort" },
+          { name: "uniq", command: "uniq", args: [], source: "uniq" },
+          { name: "grep", command: "grep", args: ["-a", "^A"], source: "grep '^A'" },
+        ];
+        yield* Effect.forEach(filters, (item) =>
+          Effect.gen(function* () {
+            const oracle = yield* Effect.sync(() =>
+              Bun.spawnSync({
+                cmd: [`/usr/bin/${item.command}`, ...item.args],
+                stdin: filterInput,
+                stdout: "pipe",
+                stderr: "pipe",
+                env: { LC_ALL: "C" },
+              }),
+            );
+            expect(oracle.exitCode).toBe(0);
+            const record = yield* client.action(id, {
+              op: "process.run",
+              id: item.name,
+              language: "shell",
+              source: `${item.source} < /tmp/filter-input > /tmp/filter-output`,
+            });
+            expect(record.output?.exitCode).toBe(0);
+            const file = yield* client.action(id, {
+              op: "filesystem.readFile",
+              path: "/tmp/filter-output",
+            });
+            const actual = Buffer.from(file.content, file.encoding);
+            if (item.command === "wc")
+              expect(actual.toString().trim()).toBe(Buffer.from(oracle.stdout).toString().trim());
+            else expect(actual).toEqual(Buffer.from(oracle.stdout));
+          }),
+        );
+        const invalid = yield* client.action(id, {
+          op: "process.run",
+          id: "invalid-filter",
+          language: "shell",
+          source: "wc -c ignored < /tmp/filter-input",
+        });
+        expect(invalid.output?.exitCode).toBe(2);
         yield* client.action(id, { op: "vm.dispose" });
       }),
     ).pipe(Effect.provide(FetchHttpClient.layer)),

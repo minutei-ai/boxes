@@ -3,7 +3,6 @@ import { requirePermission } from "./auth";
 import {
   Capability,
   CommandArguments,
-  CommandOutput,
   DirectoryEntries,
   Fault,
   FileStat,
@@ -309,18 +308,25 @@ export const shell = Effect.fn("shell.execute")(function* (
                 }),
               ),
               Match.orElse(() =>
-                Effect.gen(function* () {
-                  const json = yield* kernelCall(() =>
-                    kernel.text_command(
-                      name,
-                      Schema.encodeSync(Schema.fromJsonString(CommandArguments))(args),
-                      input.toString("utf8"),
-                    ),
-                  );
-                  return yield* Schema.decodeUnknownEffect(Schema.fromJsonString(CommandOutput))(
-                    json,
-                  );
-                }),
+                Effect.scoped(
+                  Effect.gen(function* () {
+                    const result = yield* Effect.acquireRelease(
+                      kernelCall(() =>
+                        kernel.byte_command(
+                          name,
+                          Schema.encodeSync(Schema.fromJsonString(CommandArguments))(args),
+                          input,
+                        ),
+                      ),
+                      (result) => Effect.sync(() => result.free()),
+                    );
+                    return {
+                      stdout: result.stdout,
+                      stderr: result.stderr,
+                      exitCode: result.exitCode,
+                    };
+                  }),
+                ),
               ),
             );
           });

@@ -120,6 +120,29 @@ struct TreeEntry {
 }
 
 #[wasm_bindgen]
+pub struct CommandResult {
+    output: shell::Output,
+}
+
+#[wasm_bindgen]
+impl CommandResult {
+    #[wasm_bindgen(getter)]
+    pub fn stdout(&self) -> Vec<u8> {
+        self.output.stdout.clone()
+    }
+
+    #[wasm_bindgen(getter)]
+    pub fn stderr(&self) -> Vec<u8> {
+        self.output.stderr.clone()
+    }
+
+    #[wasm_bindgen(getter, js_name = exitCode)]
+    pub fn exit_code(&self) -> i32 {
+        self.output.exit_code
+    }
+}
+
+#[wasm_bindgen]
 #[derive(Debug)]
 pub struct Kernel {
     state: Manifest,
@@ -697,14 +720,20 @@ impl Kernel {
         }
     }
 
-    pub fn text_command(&self, name: &str, args: &str, stdin: &str) -> Result<String, JsValue> {
+    pub fn byte_command(
+        &self,
+        name: &str,
+        args: &str,
+        stdin: &[u8],
+    ) -> Result<CommandResult, JsValue> {
         if args.len() > 1_048_576 || stdin.len() > 2_097_152 {
             return Err(fail("EFBIG: command input exceeds byte quota"));
         }
         let args: Vec<String> =
             serde_json::from_str(args).map_err(|_| fail("EINVAL: invalid command arguments"))?;
-        let output = shell::text_command(name, &args, stdin);
-        serde_json::to_string(&output).map_err(|_| fail("EIO: serialization failed"))
+        Ok(CommandResult {
+            output: shell::byte_command(name, &args, stdin),
+        })
     }
 
     pub fn shell_plan(&self, source: &str) -> Result<String, JsValue> {

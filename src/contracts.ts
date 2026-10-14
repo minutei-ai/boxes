@@ -895,11 +895,6 @@ export const ShellPlan = Schema.Array(
     append: Schema.Boolean,
   }),
 );
-export const CommandOutput = Schema.Struct({
-  stdout: Schema.String,
-  stderr: Schema.String,
-  exitCode: Schema.Int,
-});
 export const CommandArguments = Schema.Array(Schema.String);
 
 export const OutputMigrationInput = Schema.Struct({

@@ -55,6 +55,15 @@ const report = await Effect.runPromise(
         encoding: "base64",
       });
       yield* client.action(id, { op: "software.install", source: { path: "/tmp/package" } });
+      const filterInput = Buffer.from([
+        65, 255, 0, 13, 10, 98, 128, 10, 98, 128, 10, 195, 169, 32, 120,
+      ]);
+      yield* client.action(id, {
+        op: "filesystem.writeFile",
+        path: "/tmp/filter-input",
+        content: filterInput.toString("base64"),
+        encoding: "base64",
+      });
       const cases = [
         {
           name: "pipe",
@@ -84,6 +93,66 @@ const report = await Effect.runPromise(
           path: "/tmp/trap",
           bytes: input,
           exitCode: 126,
+        },
+        {
+          name: "head-lines",
+          source: "head -n 1 < /tmp/filter-input > /tmp/head",
+          path: "/tmp/head",
+          bytes: filterInput.subarray(0, 5),
+          exitCode: 0,
+        },
+        {
+          name: "tail-lines",
+          source: "tail -n 1 < /tmp/filter-input > /tmp/tail",
+          path: "/tmp/tail",
+          bytes: filterInput.subarray(11),
+          exitCode: 0,
+        },
+        {
+          name: "head-bytes",
+          source: "head -c 3 < /tmp/filter-input > /tmp/head-bytes",
+          path: "/tmp/head-bytes",
+          bytes: filterInput.subarray(0, 3),
+          exitCode: 0,
+        },
+        {
+          name: "tail-bytes",
+          source: "tail -c 4 < /tmp/filter-input > /tmp/tail-bytes",
+          path: "/tmp/tail-bytes",
+          bytes: filterInput.subarray(11),
+          exitCode: 0,
+        },
+        {
+          name: "wc-bytes",
+          source: "wc -c < /tmp/filter-input > /tmp/wc",
+          path: "/tmp/wc",
+          bytes: Buffer.from("15\n"),
+          exitCode: 0,
+        },
+        {
+          name: "sort",
+          source: "sort < /tmp/filter-input > /tmp/sort",
+          path: "/tmp/sort",
+          bytes: Buffer.concat([filterInput, Buffer.from("\n")]),
+          exitCode: 0,
+        },
+        {
+          name: "uniq",
+          source: "uniq < /tmp/filter-input > /tmp/uniq",
+          path: "/tmp/uniq",
+          bytes: Buffer.concat([
+            filterInput.subarray(0, 8),
+            filterInput.subarray(11),
+            Buffer.from("\n"),
+          ]),
+          exitCode: 0,
+        },
+        {
+          name: "grep",
+          source: "grep '^A' < /tmp/filter-input > /tmp/grep",
+          path: "/tmp/grep",
+          bytes: filterInput.subarray(0, 5),
+          exitCode: 0,
         },
       ];
       const checks = yield* Effect.forEach(cases, (item) =>

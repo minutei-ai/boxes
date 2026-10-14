@@ -195,158 +195,201 @@ mod tests {
             assert!(parse(source).is_err(), "{source}");
         }
     }
+    #[test]
+    fn empty_and_unterminated_byte_filters_preserve_boundaries() {
+        for name in ["head", "tail", "sort", "uniq"] {
+            assert!(byte_command(name, &[], b"").stdout.is_empty());
+        }
+        let args = vec!["-n".into(), "1".into()];
+        assert_eq!(byte_command("tail", &args, b"a\n\xff\0").stdout, b"\xff\0");
+        assert_eq!(
+            byte_command("tail", &args, b"a\n\xff\0\n").stdout,
+            b"\xff\0\n"
+        );
+        assert_eq!(
+            byte_command("head", &args, b"\xff\0\nlast").stdout,
+            b"\xff\0\n"
+        );
+    }
+
+    #[test]
+    fn byte_counts_use_ascii_word_boundaries_without_utf8_replacement() {
+        let input = b"\xff\0 \xc3\xa9\n";
+        assert_eq!(byte_command("wc", &["-c".into()], input).stdout, b"6\n");
+        assert_eq!(byte_command("wc", &["-w".into()], input).stdout, b"2\n");
+        assert_eq!(byte_command("wc", &["-l".into()], input).stdout, b"1\n");
+        assert_eq!(
+            byte_command("wc", &["-c".into(), "ignored".into()], input).exit_code,
+            2
+        );
+    }
+
+    #[test]
+    fn invalid_filter_arguments_do_not_produce_partial_stdout() {
+        for args in [
+            vec!["-n".into(), "invalid".into()],
+            vec!["-n".into(), "+1".into()],
+            vec!["-c".into(), "1000001".into()],
+            vec!["-n".into(), "1".into(), "extra".into()],
+        ] {
+            for name in ["head", "tail"] {
+                let result = byte_command(name, &args, b"\xff\n");
+                assert_eq!(result.exit_code, 2);
+                assert!(result.stdout.is_empty());
+            }
+        }
+        assert_eq!(byte_command("grep", &["[".into()], b"x\n").exit_code, 2);
+        assert_eq!(
+            byte_command("grep", &["unmatched".into()], b"\xff\n").exit_code,
+            1
+        );
+    }
 }
 
-#[derive(Debug, Serialize)]
-#[serde(rename_all = "camelCase")]
+#[derive(Debug)]
 pub struct Output {
-    stdout: String,
-    stderr: String,
-    exit_code: i32,
+    pub stdout: Vec<u8>,
+    pub stderr: Vec<u8>,
+    pub exit_code: i32,
 }
 
-pub fn text_command(name: &str, args: &[String], stdin: &str) -> Output {
-    let success = |stdout: String| Output {
+fn error(message: &str, exit_code: i32) -> Output {
+    Output {
+        stdout: Vec::new(),
+        stderr: message.as_bytes().to_vec(),
+        exit_code,
+    }
+}
+
+pub fn byte_command(name: &str, args: &[String], stdin: &[u8]) -> Output {
+    let success = |stdout: Vec<u8>| Output {
         stdout,
-        stderr: String::new(),
+        stderr: Vec::new(),
         exit_code: 0,
     };
     match name {
-        "true" => success(String::new()),
-        "false" => Output {
-            stdout: String::new(),
-            stderr: String::new(),
-            exit_code: 1,
-        },
+        "true" => success(Vec::new()),
+        "false" => error("", 1),
         "echo" => {
             if args.first().is_some_and(|a| a == "-n") {
-                success(args.get(1..).unwrap_or_default().join(" "))
+                success(args.get(1..).unwrap_or_default().join(" ").into_bytes())
             } else {
-                success(format!("{}\n", args.join(" ")))
+                success(format!("{}\n", args.join(" ")).into_bytes())
             }
         }
-        "cat" => success(stdin.into()),
+        "cat" => success(stdin.to_vec()),
         "head" | "tail" => {
-            if !args.is_empty() && !(args.len() == 2 && args[0] == "-n") {
-                return Output {
-                    stdout: String::new(),
-                    stderr: "unsupported line filter arguments\n".into(),
-                    exit_code: 2,
+            if !args.is_empty() && !(args.len() == 2 && matches!(args[0].as_str(), "-n" | "-c")) {
+                return error("unsupported line filter arguments\n", 2);
+            }
+            let count = if args.is_empty() {
+                10
+            } else {
+                if args[1].is_empty() || !args[1].bytes().all(|byte| byte.is_ascii_digit()) {
+                    return error("invalid filter count\n", 2);
+                }
+                match args[1].parse::<usize>() {
+                    Ok(n) if n <= 1_000_000 => n,
+                    _ => return error("invalid filter count\n", 2),
+                }
+            };
+            if args.first().is_some_and(|a| a == "-c") {
+                return if name == "head" {
+                    success(stdin[..count.min(stdin.len())].to_vec())
+                } else {
+                    success(stdin[stdin.len().saturating_sub(count)..].to_vec())
                 };
             }
-            let count = if args.first().is_some_and(|a| a == "-n") {
-                match args.get(1).and_then(|n| n.parse::<usize>().ok()) {
-                    Some(n) if n <= 1_000_000 => n,
-                    _ => {
-                        return Output {
-                            stdout: String::new(),
-                            stderr: "invalid line count\n".into(),
-                            exit_code: 2,
-                        };
-                    }
-                }
-            } else {
-                10
-            };
-            let lines: Vec<_> = stdin.split_inclusive('\n').collect();
-            let output = if name == "head" {
-                lines.iter().take(count).copied().collect::<String>()
-            } else {
-                lines
+            if count == 0 {
+                return success(Vec::new());
+            }
+            if name == "head" {
+                let end = stdin
                     .iter()
-                    .skip(lines.len().saturating_sub(count))
-                    .copied()
-                    .collect::<String>()
-            };
-            success(output)
+                    .enumerate()
+                    .filter(|(_, byte)| **byte == b'\n')
+                    .nth(count - 1)
+                    .map(|(index, _)| index + 1)
+                    .unwrap_or(stdin.len());
+                return success(stdin[..end].to_vec());
+            }
+            let end = stdin
+                .len()
+                .saturating_sub(usize::from(stdin.last() == Some(&b'\n')));
+            let start = stdin[..end]
+                .iter()
+                .enumerate()
+                .rev()
+                .filter(|(_, byte)| **byte == b'\n')
+                .nth(count - 1)
+                .map(|(index, _)| index + 1)
+                .unwrap_or(0);
+            success(stdin[start..].to_vec())
         }
         "wc" => {
-            let lines = stdin.bytes().filter(|b| *b == b'\n').count();
-            let words = stdin.split_whitespace().count();
+            if args.len() > 1 {
+                return error("unsupported wc arguments\n", 2);
+            }
+            let lines = stdin.iter().filter(|b| **b == b'\n').count();
+            let words = stdin
+                .split(|b| b.is_ascii_whitespace())
+                .filter(|word| !word.is_empty())
+                .count();
             let bytes = stdin.len();
-            match args.first().map(String::as_str) {
-                Some("-l") => success(format!("{lines}\n")),
-                Some("-w") => success(format!("{words}\n")),
-                Some("-c") => success(format!("{bytes}\n")),
-                None => success(format!("{lines} {words} {bytes}\n")),
-                _ => Output {
-                    stdout: String::new(),
-                    stderr: "unsupported wc option\n".into(),
-                    exit_code: 2,
-                },
-            }
+            let output = match args.first().map(String::as_str) {
+                Some("-l") => format!("{lines}\n"),
+                Some("-w") => format!("{words}\n"),
+                Some("-c") => format!("{bytes}\n"),
+                None => format!("{lines} {words} {bytes}\n"),
+                _ => return error("unsupported wc option\n", 2),
+            };
+            success(output.into_bytes())
         }
-        "sort" => {
+        "sort" | "uniq" => {
             if !args.is_empty() {
-                return Output {
-                    stdout: String::new(),
-                    stderr: "unsupported sort option\n".into(),
-                    exit_code: 2,
-                };
+                return error("unsupported sort or uniq option\n", 2);
             }
-            let mut lines: Vec<_> = stdin.lines().collect();
-            lines.sort_unstable();
-            if lines.is_empty() {
-                success(String::new())
+            let mut lines: Vec<&[u8]> = stdin
+                .split_inclusive(|b| *b == b'\n')
+                .map(|line| line.strip_suffix(b"\n").unwrap_or(line))
+                .collect();
+            if name == "sort" {
+                lines.sort_unstable();
             } else {
-                success(format!("{}\n", lines.join("\n")))
+                lines.dedup();
             }
-        }
-        "uniq" => {
-            if !args.is_empty() {
-                return Output {
-                    stdout: String::new(),
-                    stderr: "unsupported uniq option\n".into(),
-                    exit_code: 2,
-                };
+            let mut output = Vec::with_capacity(stdin.len().saturating_add(1));
+            for line in lines {
+                output.extend_from_slice(line);
+                output.push(b'\n');
             }
-            let mut lines: Vec<_> = stdin.lines().collect();
-            lines.dedup();
-            if lines.is_empty() {
-                success(String::new())
-            } else {
-                success(format!("{}\n", lines.join("\n")))
-            }
+            success(output)
         }
         "grep" => {
             if args.len() != 1 {
-                return Output {
-                    stdout: String::new(),
-                    stderr: "grep requires one pattern\n".into(),
-                    exit_code: 2,
-                };
+                return error("grep requires one pattern\n", 2);
             }
-            let pattern = match regex::RegexBuilder::new(&args[0])
+            let pattern = match regex::bytes::RegexBuilder::new(&args[0])
                 .size_limit(1_048_576)
                 .build()
             {
                 Ok(regex) => regex,
-                Err(_) => {
-                    return Output {
-                        stdout: String::new(),
-                        stderr: "invalid or oversized grep pattern\n".into(),
-                        exit_code: 2,
-                    };
-                }
+                Err(_) => return error("invalid or oversized grep pattern\n", 2),
             };
-            let lines: Vec<_> = stdin
-                .lines()
-                .filter(|line| pattern.is_match(line))
-                .collect();
-            if lines.is_empty() {
-                Output {
-                    stdout: String::new(),
-                    stderr: String::new(),
-                    exit_code: 1,
+            let mut output = Vec::new();
+            for line in stdin.split_inclusive(|b| *b == b'\n') {
+                let text = line.strip_suffix(b"\n").unwrap_or(line);
+                if pattern.is_match(text) {
+                    output.extend_from_slice(text);
+                    output.push(b'\n');
                 }
+            }
+            if output.is_empty() {
+                error("", 1)
             } else {
-                success(format!("{}\n", lines.join("\n")))
+                success(output)
             }
         }
-        _ => Output {
-            stdout: String::new(),
-            stderr: format!("{name}: command not found\n"),
-            exit_code: 127,
-        },
+        _ => error(&format!("{name}: command not found\n"), 127),
     }
 }
