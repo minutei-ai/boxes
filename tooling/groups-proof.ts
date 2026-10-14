@@ -46,8 +46,27 @@ const action = (input: typeof Action.Type) =>
     Schema.encodeSync(Schema.fromJsonString(Action))(input),
   );
 const receipts = await Effect.runPromise(
-  Effect.forEach(["new", "join", "inherit"] as const, (mode) =>
+  Effect.forEach(["new", "join", "inherit", "session"] as const, (mode) =>
     Effect.tryPromise(async () => {
+      if (mode === "session") {
+        const grandchild = Buffer.from(
+          await Bun.file(
+            join(import.meta.dir, "../dist/wasi-groups-grandchild-session.wasm"),
+          ).arrayBuffer(),
+        ).toString("base64");
+        const uploaded = await action({
+          op: "filesystem.writeFile",
+          path: "/tmp/grandchild.wasm",
+          content: grandchild,
+          encoding: "base64",
+        });
+        const executable = await action({
+          op: "filesystem.chmod",
+          path: "/tmp/grandchild.wasm",
+          mode: 493,
+        });
+        if (uploaded.status !== 200 || executable.status !== 200) return { mode, passed: false };
+      }
       const child = Buffer.from(
         await Bun.file(
           join(import.meta.dir, `../dist/wasi-groups-child-${mode}.wasm`),
@@ -94,7 +113,8 @@ const report = {
   receipts,
   disposal: disposed.status === 200,
   allPassed: receipts.every((receipt) => receipt.passed) && disposed.status === 200,
-  sessionsAndGroupSignals: false,
+  sessionSeparation: true,
+  groupSignals: false,
   fullProcessParity: false,
 };
 await Bun.write(

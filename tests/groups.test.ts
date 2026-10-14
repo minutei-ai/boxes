@@ -37,8 +37,28 @@ afterAll(async () => {
   await rm(directory, { recursive: true, force: true });
 });
 
-for (const mode of ["new", "join", "inherit"] as const) {
+for (const mode of ["new", "join", "inherit", "session"] as const) {
   test(`virtual process groups ${mode} obey spawn options, group membership and errno contracts`, async () => {
+    if (mode === "session") {
+      const grandchild = Buffer.from(
+        await Bun.file(
+          join(import.meta.dir, "../dist/wasi-groups-grandchild-session.wasm"),
+        ).arrayBuffer(),
+      ).toString("base64");
+      expect(
+        (
+          await act({
+            op: "filesystem.writeFile",
+            path: "/tmp/grandchild.wasm",
+            content: grandchild,
+            encoding: "base64",
+          })
+        ).status,
+      ).toBe(200);
+      expect(
+        (await act({ op: "filesystem.chmod", path: "/tmp/grandchild.wasm", mode: 493 })).status,
+      ).toBe(200);
+    }
     const child = Buffer.from(
       await Bun.file(join(import.meta.dir, `../dist/wasi-groups-child-${mode}.wasm`)).arrayBuffer(),
     ).toString("base64");

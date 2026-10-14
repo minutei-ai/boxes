@@ -34,12 +34,21 @@ unsafe extern "C" {
 unsafe extern "C" {
     fn proc_exit(code: u32) -> !;
 }
-#[cfg(any(case = "child-new", case = "child-join", case = "child-inherit"))]
+#[cfg(any(
+    case = "child-new",
+    case = "child-join",
+    case = "child-inherit",
+    case = "child-session"
+))]
 #[unsafe(no_mangle)]
 pub extern "C" fn _start() {
     unsafe {
         let mut group = 91;
-        let expected = if cfg!(case = "child-new") { 2 } else { 1 };
+        let expected = if cfg!(case = "child-new") || cfg!(case = "child-session") {
+            2
+        } else {
+            1
+        };
         if proc_getpgid(0, &mut group) != 0 || group != expected {
             proc_exit(40);
         }
@@ -48,6 +57,76 @@ pub extern "C" fn _start() {
         }
         if proc_setpgid(0, 99) != 63 || proc_getpgid(0, &mut group) != 0 || group != expected {
             proc_exit(42);
+        }
+        if cfg!(case = "child-session") {
+            if proc_setpgid(0, 1) != 63 || proc_getpgid(0, &mut group) != 0 || group != 2 {
+                proc_exit(45);
+            }
+            let path = b"/tmp/grandchild.wasm";
+            let mut pid = 91;
+            if proc_spawn_v3(
+                path.as_ptr(),
+                path.len() as u32,
+                std::ptr::null(),
+                0,
+                std::ptr::null(),
+                0,
+                std::ptr::null(),
+                0,
+                std::ptr::null(),
+                0,
+                2,
+                0,
+                0,
+                0,
+                0,
+                1,
+                &mut pid,
+            ) != 63
+                || pid != 91
+            {
+                proc_exit(46);
+            }
+            if proc_spawn_v3(
+                path.as_ptr(),
+                path.len() as u32,
+                std::ptr::null(),
+                0,
+                std::ptr::null(),
+                0,
+                std::ptr::null(),
+                0,
+                std::ptr::null(),
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                &mut pid,
+            ) != 0
+                || pid != 3
+            {
+                proc_exit(47);
+            }
+            let mut code = 91;
+            let mut signal = 91;
+            let mut waited = 91;
+            let mut core = 91;
+            if proc_waitpid_v2(pid, 0, &mut code, &mut signal, &mut waited, &mut core) != 0
+                || code != 7
+                || signal != 0
+                || waited != pid
+                || core != 0
+            {
+                proc_exit(48);
+            }
+            if proc_getpgid(pid, &mut group) != 71 || proc_getpgid(0, &mut group) != 0 || group != 2
+            {
+                proc_exit(49);
+            }
+            proc_exit(7);
         }
         if proc_setpgid(0, 1) != 0 || proc_getpgid(2, &mut group) != 0 || group != 1 {
             proc_exit(43);
@@ -58,7 +137,33 @@ pub extern "C" fn _start() {
         proc_exit(7);
     }
 }
-#[cfg(not(any(case = "child-new", case = "child-join", case = "child-inherit")))]
+#[cfg(case = "grandchild-session")]
+#[unsafe(no_mangle)]
+pub extern "C" fn _start() {
+    unsafe {
+        let mut group = 91;
+        if proc_getpgid(0, &mut group) != 0 || group != 2 {
+            proc_exit(50);
+        }
+        if proc_setpgid(0, 1) != 63 || proc_setpgid(0, 2) != 0 {
+            proc_exit(51);
+        }
+        if proc_setpgid(0, 0) != 0 || proc_getpgid(0, &mut group) != 0 || group != 3 {
+            proc_exit(52);
+        }
+        if proc_setpgid(0, 2) != 0 || proc_getpgid(0, &mut group) != 0 || group != 2 {
+            proc_exit(53);
+        }
+        proc_exit(7);
+    }
+}
+#[cfg(not(any(
+    case = "child-new",
+    case = "child-join",
+    case = "child-inherit",
+    case = "child-session",
+    case = "grandchild-session"
+)))]
 #[unsafe(no_mangle)]
 pub extern "C" fn run() -> i32 {
     unsafe {
@@ -89,7 +194,7 @@ pub extern "C" fn run() -> i32 {
         }
         let path = b"/tmp/group.wasm";
         let mut pid = 91;
-        for (flags, group, expected) in [(2, 99, 63), (2, u32::MAX, 28), (0, 1, 28)] {
+        for (flags, group, expected) in [(2, 99, 63), (2, u32::MAX, 28), (0, 1, 28), (130, 0, 63)] {
             if proc_spawn_v3(
                 path.as_ptr(),
                 path.len() as u32,
@@ -114,7 +219,13 @@ pub extern "C" fn run() -> i32 {
                 return 5;
             }
         }
-        let flags = if cfg!(case = "parent-inherit") { 0 } else { 2 };
+        let flags = if cfg!(case = "parent-session") {
+            128
+        } else if cfg!(case = "parent-inherit") {
+            0
+        } else {
+            2
+        };
         let requested = if cfg!(case = "parent-join") { 1 } else { 0 };
         if proc_spawn_v3(
             path.as_ptr(),

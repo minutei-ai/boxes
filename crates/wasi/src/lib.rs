@@ -220,6 +220,7 @@ enum Completion {
         actions: Vec<SpawnAction>,
         mask: u64,
         group: Option<u32>,
+        new_session: bool,
     },
     Wait {
         pids: Vec<u32>,
@@ -306,12 +307,14 @@ struct Pending {
 struct ChildStatus {
     parent: u32,
     group: u32,
+    session: u32,
     code: Option<i32>,
     failed: bool,
 }
 struct ProcessTable {
     next_pid: u32,
     root_group: u32,
+    root_session: u32,
     memory_bytes: usize,
     children: BTreeMap<u32, ChildStatus>,
     buffers: Vec<Weak<RefCell<FileBuffer>>>,
@@ -756,12 +759,19 @@ fn dispatch(caller: &mut Caller<'_, State>, name: &str, args: &[u64]) -> Result<
             } else {
                 requested_group
             };
+            let session = if pid == 1 {
+                table.root_session
+            } else {
+                table.children.get(&pid).ok_or(Failure::Errno(71))?.session
+            };
             if group != pid
-                && group != table.root_group
-                && !table
-                    .children
-                    .values()
-                    .any(|child| child.group == group && child.code.is_none() && !child.failed)
+                && !((group == table.root_group && session == table.root_session)
+                    || table.children.values().any(|child| {
+                        child.group == group
+                            && child.session == session
+                            && child.code.is_none()
+                            && !child.failed
+                    }))
             {
                 return Err(Failure::Errno(63));
             }
@@ -777,8 +787,12 @@ fn dispatch(caller: &mut Caller<'_, State>, name: &str, args: &[u64]) -> Result<
         }
         "proc_spawn_v3" => {
             bytes(caller, a[16], 4)?;
-            if a[10] & !10 != 0 || a[11] != 0 || a[12] != 0 {
+            if a[10] & !138 != 0 || a[11] != 0 || a[12] != 0 {
                 return Err(Failure::Errno(58));
+            }
+            let new_session = a[10] & 128 != 0;
+            if new_session && a[10] & 2 != 0 {
+                return Err(Failure::Errno(63));
             }
             let group = if a[10] & 2 != 0 {
                 if a[15] as u32 > i32::MAX as u32 {
@@ -924,6 +938,7 @@ fn dispatch(caller: &mut Caller<'_, State>, name: &str, args: &[u64]) -> Result<
                     actions,
                     mask,
                     group,
+                    new_session,
                 },
             )?;
         }
@@ -2575,6 +2590,7 @@ impl WasmGuest {
                 processes: Rc::new(RefCell::new(ProcessTable {
                     next_pid: 2,
                     root_group: 1,
+                    root_session: 1,
                     memory_bytes: memory,
                     children: BTreeMap::new(),
                     buffers: Vec::new(),
@@ -3009,7 +3025,7 @@ impl WasmGuest {
         configuration: &str,
         cwd: &str,
     ) -> Result<Option<WasmGuest>, JsValue> {
-        let (resources, mask, requested_group) = match self
+        let (resources, mask, requested_group, new_session) = match self
             .store
             .data()
             .pending
@@ -3020,8 +3036,9 @@ impl WasmGuest {
                 resources,
                 mask,
                 group,
+                new_session,
                 ..
-            }) => (resources.clone(), *mask, *group),
+            }) => (resources.clone(), *mask, *group, *new_session),
             _ => return Err(JsValue::from_str("No pending spawn")),
         };
         let table = self.store.data().processes.clone();
@@ -3032,29 +3049,36 @@ impl WasmGuest {
             return Ok(None);
         }
         let pid = table.borrow().next_pid;
-        let inherited_group = if self.store.data().pid == 1 {
-            table.borrow().root_group
+        let (inherited_group, inherited_session) = if self.store.data().pid == 1 {
+            let table = table.borrow();
+            (table.root_group, table.root_session)
         } else {
-            table
-                .borrow()
+            let table = table.borrow();
+            let parent = table
                 .children
                 .get(&self.store.data().pid)
-                .ok_or_else(|| JsValue::from_str("Missing parent process"))?
-                .group
+                .ok_or_else(|| JsValue::from_str("Missing parent process"))?;
+            (parent.group, parent.session)
         };
-        let group = match requested_group {
-            Some(0) => pid,
-            Some(group) => group,
-            None => inherited_group,
+        let session = if new_session { pid } else { inherited_session };
+        let group = if new_session {
+            pid
+        } else {
+            match requested_group {
+                Some(0) => pid,
+                Some(group) => group,
+                None => inherited_group,
+            }
         };
         if requested_group.is_some()
             && group != pid
-            && group != table.borrow().root_group
-            && !table
-                .borrow()
-                .children
-                .values()
-                .any(|child| child.group == group && child.code.is_none() && !child.failed)
+            && !((group == table.borrow().root_group && session == table.borrow().root_session)
+                || table.borrow().children.values().any(|child| {
+                    child.group == group
+                        && child.session == session
+                        && child.code.is_none()
+                        && !child.failed
+                }))
         {
             self.respond(63, &[], "/", false, 0, &[])?;
             return Ok(None);
@@ -3105,6 +3129,7 @@ impl WasmGuest {
             ChildStatus {
                 parent: parent.pid,
                 group,
+                session,
                 code: None,
                 failed: false,
             },

@@ -263,7 +263,7 @@ await Effect.runPromise(
         `dist/wasi-inherited-pipe-${role}.wasm`,
       ]);
     }
-    for (const mode of ["new", "join", "inherit"] as const) {
+    for (const mode of ["new", "join", "inherit", "session"] as const) {
       for (const role of ["parent", "child"] as const) {
         yield* run([
           "rustc",
@@ -284,6 +284,23 @@ await Effect.runPromise(
         ]);
       }
     }
+    yield* run([
+      "rustc",
+      "--crate-type",
+      "cdylib",
+      "--target",
+      "wasm32-unknown-unknown",
+      "-O",
+      "-A",
+      "dead_code",
+      "-C",
+      "strip=symbols",
+      "--cfg",
+      'case="grandchild-session"',
+      "tests/fixtures/wasi-groups.rs",
+      "-o",
+      "dist/wasi-groups-grandchild-session.wasm",
+    ]);
     for (const role of [
       "parent",
       "child",
