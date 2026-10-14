@@ -720,10 +720,12 @@ fn dispatch(caller: &mut Caller<'_, State>, name: &str, args: &[u64]) -> Result<
                 return Err(Failure::Errno(28));
             }
             let mut actions = Vec::new();
-            for chunk in encoded.chunks_exact(24) {
+            for chunk in encoded.as_chunks::<24>().0 {
                 let fields: Vec<u32> = chunk
-                    .chunks_exact(4)
-                    .map(|word| u32::from_le_bytes(word.try_into().unwrap()))
+                    .as_chunks::<4>()
+                    .0
+                    .iter()
+                    .map(|word| u32::from_le_bytes(*word))
                     .collect();
                 if fields[0] != 1 && fields[0] != 2 {
                     return Err(Failure::Errno(58));
