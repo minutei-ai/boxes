@@ -18,7 +18,7 @@
         "result": null,
         "exitCode": 0
       },
-      "elapsedMs": 2829.327736,
+      "elapsedMs": 3340.151947999999,
       "ok": true
     },
     {
@@ -29,7 +29,7 @@
         "result": null,
         "exitCode": 0
       },
-      "elapsedMs": 2450.5673979999992,
+      "elapsedMs": 3774.096207999999,
       "ok": true
     },
     {
@@ -40,7 +40,7 @@
         "result": null,
         "exitCode": 0
       },
-      "elapsedMs": 2752.83807,
+      "elapsedMs": 3802.395252999999,
       "ok": true
     },
     {
@@ -51,12 +51,14 @@
         "result": null,
         "exitCode": 0
       },
-      "elapsedMs": 3109.6478160000006,
+      "elapsedMs": 3914.9765499999994,
       "ok": true
     }
   ],
+  "measuredAt": "2026-10-14T04:16:29.662964+00:00",
+  "codeCommit": "6e89a738cbacc651e09b452ab3f7ce6a279a37dd",
   "environment": {
-    "runtime": "Cloudflare Worker + R2 + RustPython",
+    "runtime": "Cloudflare Worker + R2 + Wasmi",
     "production": true,
     "url": "https://cirro-sandbox-prod-rs7wexxow56rmsoz.manoel-carvalhoneto.workers.dev"
   }

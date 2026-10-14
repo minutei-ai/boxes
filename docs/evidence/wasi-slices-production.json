@@ -1,0 +1,24 @@
+{
+  "measuredAt": "2026-10-14T04:15:58.934Z",
+  "url": "https://cirro-sandbox-prod-rs7wexxow56rmsoz.manoel-carvalhoneto.workers.dev",
+  "sandboxId": "wasi-slices-proof-10a85b4d-a564-4fb8-9127-1ba2f7a48b48",
+  "profile": "minutei",
+  "runtime": "standard Worker",
+  "checks": {
+    "resumption": true,
+    "runningCheckpoint": true,
+    "cancellation": true,
+    "retainedOutput": true,
+    "disposal": true
+  },
+  "receipts": {
+    "observationStatus": 408,
+    "cancelStatus": 200,
+    "waitStatus": 409,
+    "waitError": "ECANCELED",
+    "finalStatus": "cancelled"
+  },
+  "allPassed": true,
+  "processInheritance": false,
+  "packageParity": false
+}
