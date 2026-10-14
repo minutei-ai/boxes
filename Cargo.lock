@@ -127,6 +127,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "boxes-wasm-bench"
+version = "0.1.0"
+dependencies = [
+ "serde_json",
+ "sha2",
+ "wasmi",
+]
+
+[[package]]
 name = "bstr"
 version = "1.13.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"

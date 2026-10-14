@@ -436,7 +436,7 @@ export const wasi = Effect.fn("wasi.execute")(function* (
           if (step.kind === "yield") {
             if (canHandover && guest.pid === 1 && step.fuelUsed - state.resumeFuel >= 50_000_000)
               return yield* handover(step.fuelUsed);
-            yield* Effect.sleep(1);
+            yield* Effect.yieldNow;
             return;
           }
           if (step.kind === "stopped") {

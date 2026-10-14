@@ -376,80 +376,82 @@ const route = Effect.fn("api.route")(function* (request: Request, env: Env) {
   });
 });
 
+export const consume = Effect.fn("worker.consume")((batch: MessageBatch<unknown>, env: Env) =>
+  Effect.scoped(
+    Effect.forEach(
+      batch.messages,
+      (message) =>
+        dispatch(env, message.body).pipe(
+          Effect.tap(() => Effect.sync(() => message.ack())),
+          Effect.catchTag("ExecutionPending", (failure) =>
+            Effect.sync(() => message.retry({ delaySeconds: failure.retryAfterSeconds })),
+          ),
+          Effect.catchCause((cause) =>
+            Effect.sync(() => {
+              console.error("Cirro dispatch failed", Cause.pretty(cause));
+              message.retry({ delaySeconds: 30 });
+            }),
+          ),
+        ),
+      { concurrency: 1 },
+    ),
+  ),
+);
+export const handleRequest = Effect.fn("worker.request")((request: Request, env: Env) =>
+  Effect.scoped(route(request, env)).pipe(
+    Effect.catchTag("Fault", (fault) =>
+      Effect.succeed(
+        new Response(
+          Schema.encodeSync(Schema.fromJsonString(ErrorResponse))({
+            error: fault.code,
+            message: fault.message,
+          }),
+          {
+            status: fault.status,
+            headers: { "content-type": "application/json", "cache-control": "no-store" },
+          },
+        ),
+      ),
+    ),
+    Effect.catchTag("SchemaError", () =>
+      Effect.succeed(
+        new Response(
+          Schema.encodeSync(Schema.fromJsonString(ErrorResponse))({
+            error: "INVALID_INPUT",
+            message: "Request does not match the API contract",
+          }),
+          {
+            status: 400,
+            headers: { "content-type": "application/json", "cache-control": "no-store" },
+          },
+        ),
+      ),
+    ),
+    Effect.catchCause((cause) => {
+      console.error(Cause.pretty(cause));
+      return Effect.succeed(
+        new Response(
+          Schema.encodeSync(Schema.fromJsonString(ErrorResponse))({
+            error: "INTERNAL",
+            message: "Operation failed; inspect persisted state before retrying a write",
+          }),
+          {
+            status: 500,
+            headers: { "content-type": "application/json", "cache-control": "no-store" },
+          },
+        ),
+      );
+    }),
+  ),
+);
 export default {
   scheduled(_controller: ScheduledController, env: Env) {
     return Effect.runPromise(Effect.scoped(reconcile(env)));
   },
   queue(batch: MessageBatch<unknown>, env: Env) {
-    return Effect.runPromise(
-      Effect.scoped(
-        Effect.forEach(
-          batch.messages,
-          (message) =>
-            dispatch(env, message.body).pipe(
-              Effect.tap(() => Effect.sync(() => message.ack())),
-              Effect.catchTag("ExecutionPending", (failure) =>
-                Effect.sync(() => message.retry({ delaySeconds: failure.retryAfterSeconds })),
-              ),
-              Effect.catchCause((cause) =>
-                Effect.sync(() => {
-                  console.error("Cirro dispatch failed", Cause.pretty(cause));
-                  message.retry({ delaySeconds: 30 });
-                }),
-              ),
-            ),
-          { concurrency: 1 },
-        ),
-      ),
-    );
+    return Effect.runPromise(consume(batch, env));
   },
   fetch(request: Request, env: Env) {
-    return Effect.runPromise(
-      Effect.scoped(route(request, env)).pipe(
-        Effect.catchTag("Fault", (fault) =>
-          Effect.succeed(
-            new Response(
-              Schema.encodeSync(Schema.fromJsonString(ErrorResponse))({
-                error: fault.code,
-                message: fault.message,
-              }),
-              {
-                status: fault.status,
-                headers: { "content-type": "application/json", "cache-control": "no-store" },
-              },
-            ),
-          ),
-        ),
-        Effect.catchTag("SchemaError", () =>
-          Effect.succeed(
-            new Response(
-              Schema.encodeSync(Schema.fromJsonString(ErrorResponse))({
-                error: "INVALID_INPUT",
-                message: "Request does not match the API contract",
-              }),
-              {
-                status: 400,
-                headers: { "content-type": "application/json", "cache-control": "no-store" },
-              },
-            ),
-          ),
-        ),
-        Effect.catchCause((cause) => {
-          console.error(Cause.pretty(cause));
-          return Effect.succeed(
-            new Response(
-              Schema.encodeSync(Schema.fromJsonString(ErrorResponse))({
-                error: "INTERNAL",
-                message: "Operation failed; inspect persisted state before retrying a write",
-              }),
-              {
-                status: 500,
-                headers: { "content-type": "application/json", "cache-control": "no-store" },
-              },
-            ),
-          );
-        }),
-      ),
-    );
+    return Effect.runPromise(handleRequest(request, env));
   },
 };

@@ -4,9 +4,9 @@ use std::collections::{BTreeMap, BTreeSet, VecDeque};
 use std::rc::{Rc, Weak};
 use wasm_bindgen::prelude::*;
 use wasmi::{
-    Caller, CompilationMode, Config, Engine, Error, Func, Linker, Memory, Module, ResumableCall,
-    ResumableCallHostTrap, ResumableCallOutOfFuel, Store, StoreLimits, StoreLimitsBuilder,
-    TrapCode, Val,
+    Caller, CompilationMode, Config, CustomFuelCosts, Engine, Error, Func, Linker, Memory, Module,
+    ResumableCall, ResumableCallHostTrap, ResumableCallOutOfFuel, Store, StoreLimits,
+    StoreLimitsBuilder, TrapCode, Val,
 };
 
 #[derive(Deserialize)]
@@ -3174,7 +3174,12 @@ impl WasmGuest {
             .collect();
         let mut config = Config::default();
         config.consume_fuel(true);
-        config.compilation_mode(CompilationMode::Eager);
+        config.compilation_mode(CompilationMode::LazyTranslation);
+        config.fuel_cost(CustomFuelCosts {
+            bytes_copied_per_fuel: 64,
+            fuel_per_bytes_translated: 0,
+            fuel_per_bytes_validated: 0,
+        });
         config.wasm_tail_call(false);
         let engine = Engine::new(&config);
         let prepared = resumable_start(bytes)?;

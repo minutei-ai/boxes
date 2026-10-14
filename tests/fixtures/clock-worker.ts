@@ -1,0 +1,61 @@
+import { env, WorkerEntrypoint } from "cloudflare:workers";
+import { Clock, Effect, Fiber, Schema, Schedule } from "effect";
+import * as TestClock from "effect/testing/TestClock";
+import type { Fetcher } from "@cloudflare/workers-types/experimental";
+import { consume, handleRequest } from "../../src/index";
+import { ProcessDelivery, StoredRun } from "../../src/contracts";
+import type { Env } from "../../src/resources";
+
+type TestEnv = Env & { SELF: Fetcher };
+export class Control extends WorkerEntrypoint<TestEnv> {
+  deliver(queue: string, messages: Parameters<Fetcher["queue"]>[1]) {
+    return this.env.SELF.queue(queue, messages);
+  }
+}
+export default {
+  fetch(request: Request, bindings: TestEnv) {
+    return Effect.runPromise(handleRequest(request, bindings));
+  },
+  queue(batch: MessageBatch<unknown>, bindings: TestEnv) {
+    return Effect.runPromise(
+      Effect.scoped(
+        Effect.gen(function* () {
+          const start = yield* Schema.decodeUnknownEffect(Schema.Int)(env.CLOCK_START);
+          const advance = yield* Schema.decodeUnknownEffect(Schema.Int)(env.CLOCK_ADVANCE);
+          const clock = yield* TestClock.make();
+          yield* clock.setTime(start);
+          const delivery = yield* consume(batch, bindings).pipe(
+            Effect.provideService(Clock.Clock, clock),
+            Effect.forkChild,
+          );
+          if (advance === 0 || batch.messages.length === 0) return yield* Fiber.join(delivery);
+          const event = yield* Schema.decodeUnknownEffect(ProcessDelivery)(batch.messages[0].body);
+          const drive = Effect.gen(function* () {
+            yield* Effect.gen(function* () {
+              const object = yield* Effect.promise(() => bindings.OBJECTS.get(event.key));
+              if (object === null) return undefined;
+              const text = yield* Effect.promise(() => object.text());
+              return yield* Schema.decodeUnknownEffect(Schema.fromJsonString(StoredRun))(text);
+            }).pipe(
+              Effect.repeat({
+                until: (record) => record?.status === "running" && record.output !== null,
+                schedule: Schedule.spaced("1 millis"),
+              }),
+            );
+            yield* clock.adjust(advance);
+            return yield* Fiber.join(delivery);
+          });
+          return yield* Effect.raceFirst(Fiber.join(delivery), drive);
+        }),
+      ),
+    );
+  },
+};
+declare global {
+  namespace Cloudflare {
+    interface Env {
+      CLOCK_START: number;
+      CLOCK_ADVANCE: number;
+    }
+  }
+}

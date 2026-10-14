@@ -1,0 +1,56 @@
+{
+  "environment": {
+    "runtime": "local workerd through native Alchemy; Rust compilation benchmark runs natively on Linux x64",
+    "production": false,
+    "alchemy": "2.0.0-beta.83",
+    "bun": "1.4.3"
+  },
+  "recovery": {
+    "tests": 8,
+    "assertions": 141,
+    "beforeSeconds": 110.66,
+    "afterSeconds": 28.57,
+    "realQueueDelivery": true,
+    "realWorkerReplacement": true,
+    "clock": "Effect TestClock advanced within the Queue request"
+  },
+  "warmBuild": {
+    "beforeMs": 28139,
+    "afterMs": 11136,
+    "before": "direct rustc fixtures",
+    "after": "native Cargo incremental fixtures"
+  },
+  "wasmiCompilation": {
+    "artifactBytes": 6886300,
+    "artifactSha256": "a10975451aedc973d2286514198eba53e080899da0abcd7dc9481242af4f6711",
+    "measurements": [
+      {
+        "mode": "eager",
+        "p50Us": 301273,
+        "p95Us": 350740,
+        "samples": 12
+      },
+      {
+        "mode": "lazyTranslation",
+        "p50Us": 79510,
+        "p95Us": 87017,
+        "samples": 12
+      }
+    ],
+    "production": false,
+    "runtime": "native Rust/Wasmi; validation and translation only"
+  },
+  "allTestsMigrated": false,
+  "productionPerformanceProven": false,
+  "cpythonExecutionProven": false,
+  "fullSuite": {
+    "tests": 270,
+    "failures": 0,
+    "assertions": 2533,
+    "seconds": 168.11,
+    "rustTestsPassed": true,
+    "typesPassed": true,
+    "clippyPassed": true,
+    "formatPassed": true
+  }
+}

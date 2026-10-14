@@ -1,4 +1,4 @@
-import { Effect, Schema } from "effect";
+import { Effect, Match, Schema } from "effect";
 import { join } from "node:path";
 import { homedir } from "node:os";
 
@@ -8,6 +8,93 @@ class BuildFailure extends Schema.TaggedError<BuildFailure>()("BuildFailure", {
 }) {}
 const root = join(import.meta.dir, "..");
 const run = Effect.fn("build.command")(function* (args: string[]) {
+  if (args[0] === "rustc") {
+    const source = args.find((argument) => argument.endsWith(".rs"));
+    const outputIndex = args.indexOf("-o");
+    const targetIndex = args.indexOf("--target");
+    if (source === undefined || outputIndex < 0 || targetIndex < 0)
+      return yield* new BuildFailure({
+        message: "Rust fixture requires source, target and output",
+        cause: args,
+      });
+    const recipe = new Bun.CryptoHasher("sha256")
+      .update(JSON.stringify(args))
+      .digest("hex")
+      .slice(0, 16);
+    const name = `boxes-fixture-${recipe}`;
+    const directory = join(root, "target/fixtures", recipe);
+    const library = args.includes("cdylib");
+    const manifest = [
+      "[package]",
+      `name = "${name}"`,
+      'version = "0.0.0"',
+      'edition = "2015"',
+      'build = "build.rs"',
+      "[workspace]",
+      "[profile.release]",
+      'strip = "symbols"',
+      'panic = "abort"',
+    ];
+    if (library)
+      manifest.push(
+        "[lib]",
+        `path = ${JSON.stringify(join(root, source))}`,
+        'crate-type = ["cdylib"]',
+      );
+    else
+      manifest.push("[[bin]]", `name = "${name}"`, `path = ${JSON.stringify(join(root, source))}`);
+    const configuration = args.flatMap((argument, index) => {
+      if (argument === "--cfg")
+        return [`println!(${JSON.stringify(`cargo:rustc-cfg=${args[index + 1]}`)});`];
+      if (argument === "-C" && args[index + 1]?.startsWith("link-arg="))
+        return [`println!(${JSON.stringify(`cargo:rustc-link-arg=${args[index + 1].slice(9)}`)});`];
+      return [];
+    });
+    const generated = [
+      [join(directory, "Cargo.toml"), manifest.join("\n") + "\n"],
+      [
+        join(directory, "build.rs"),
+        `fn main() { println!("cargo:rustc-check-cfg=cfg(case, values(any()))"); ${configuration.join(" ")} }\n`,
+      ],
+    ];
+    yield* Effect.forEach(generated, ([path, source]) =>
+      Effect.promise(async () => {
+        const file = Bun.file(path);
+        if ((await file.exists()) && (await file.text()) === source) return;
+        await Bun.write(path, source);
+      }),
+    );
+    const target = args[targetIndex + 1];
+    const child = Bun.spawn(
+      [
+        "cargo",
+        "build",
+        "--manifest-path",
+        join(directory, "Cargo.toml"),
+        "--target-dir",
+        join(root, "target/fixtures-build"),
+        "--target",
+        target,
+        "--release",
+      ],
+      { cwd: root, stdout: "inherit", stderr: "inherit" },
+    );
+    const code = yield* Effect.promise(() => child.exited);
+    if (code !== 0)
+      return yield* new BuildFailure({ message: "Rust fixture build failed", cause: code });
+    const artifact = name.replaceAll("-", "_");
+    const built = Match.value(library).pipe(
+      Match.when(true, () => artifact),
+      Match.orElse(() => name),
+    );
+    yield* Effect.promise(() =>
+      Bun.write(
+        join(root, args[outputIndex + 1]),
+        Bun.file(join(root, "target/fixtures-build", target, "release", `${built}.wasm`)),
+      ),
+    );
+    return;
+  }
   const child = Bun.spawn(args, {
     cwd: root,
     stdout: "inherit",
@@ -872,6 +959,7 @@ await Effect.runPromise(
     for (const [entry, directory] of [
       ["src/index.ts", "dist/worker"],
       ["tests/fixtures/checkpoint-worker.ts", "dist/checkpoint-worker"],
+      ["tests/fixtures/clock-worker.ts", "dist/clock-worker"],
     ] as const) {
       const result = yield* Effect.promise(() =>
         Bun.build({

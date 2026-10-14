@@ -14,7 +14,7 @@ import {
   StoredRunMetadata,
   RecoveryStatus,
 } from "../src/contracts";
-import { runtime } from "../tooling/runtime";
+import { runtime } from "../tooling/worker-test";
 const post = async (
   instance: ReturnType<typeof runtime>,
   path: string,
@@ -37,7 +37,7 @@ for (const mode of ["synced", "unsynced"] as const) {
       await Bun.file(join(import.meta.dir, `../dist/${artifact}`)).arrayBuffer(),
     ).toString("base64");
     const directory = await mkdtemp(join(tmpdir(), "cirro-process-recovery-"));
-    const first = runtime(directory, undefined, 1, false);
+    const first = runtime(directory);
     expect(
       (
         await post(first, "/v1/sandboxes", "cirro-local-test-credential", {
@@ -65,13 +65,13 @@ for (const mode of ["synced", "unsynced"] as const) {
       execution: { op: "process.run", id: "job", language: "wasm", source },
     });
     expect([200, 500]).toContain(spawned.status);
-    const bucket = await first.getR2Bucket("OBJECTS");
+    const bucket = await first.objects;
     const key = "processes/recover/job.json";
     const queued = await bucket.head(key);
     expect(queued).not.toBeNull();
     if (queued === null) return;
-    const worker = await first.getWorker("cirro");
-    await worker.queue("executions", [
+    const worker = await first.control;
+    await worker.deliver("executions", [
       {
         id: "first",
         timestamp: new Date(),
@@ -107,13 +107,13 @@ for (const mode of ["synced", "unsynced"] as const) {
       expect(Buffer.from(firstFile.content, firstFile.encoding).toString()).toBe("A");
     } else expect(observedFirst.status).toBe(404);
     await first.dispose();
-    const second = runtime(directory, undefined, 1, false);
-    const current = await (await second.getR2Bucket("OBJECTS")).head(key);
+    const second = runtime(directory);
+    const current = await (await second.objects).head(key);
     expect(current).not.toBeNull();
     if (current === null) return;
-    const secondWorker = await second.getWorker("cirro");
+    const secondWorker = await second.control;
     const resume = () =>
-      secondWorker.queue("executions", [
+      secondWorker.deliver("executions", [
         {
           id: "resume",
           timestamp: new Date(),
@@ -145,7 +145,7 @@ for (const mode of ["synced", "unsynced"] as const) {
       ).json(),
     );
     expect(Buffer.from(file.content, file.encoding).toString()).toBe("AB");
-    await secondWorker.queue("executions", [
+    await secondWorker.deliver("executions", [
       {
         id: "duplicate",
         timestamp: new Date(),
@@ -169,7 +169,7 @@ for (const mode of ["synced", "unsynced"] as const) {
 for (const role of ["root", "family", "stopped"] as const) {
   test(`${role} blocked stdin checkpoints and resumes with buffered bytes and EOF after Worker replacement`, async () => {
     const directory = await mkdtemp(join(tmpdir(), "cirro-idle-recovery-"));
-    const first = runtime(directory, undefined, 1, false);
+    const first = runtime(directory, 30000);
     expect(
       (
         await post(first, "/v1/sandboxes", "cirro-local-test-credential", {
@@ -240,14 +240,14 @@ for (const role of ["root", "family", "stopped"] as const) {
       },
     });
     expect([200, 500]).toContain(spawned.status);
-    const bucket = await first.getR2Bucket("OBJECTS");
+    const bucket = await first.objects;
     const key = "processes/idle/job.json";
     const original = await bucket.head(key);
     expect(original).not.toBeNull();
     if (original === null) return;
     await (
-      await first.getWorker("cirro")
-    ).queue("executions", [
+      await first.control
+    ).deliver("executions", [
       {
         id: "idle-start",
         timestamp: new Date(),
@@ -297,14 +297,15 @@ for (const role of ["root", "family", "stopped"] as const) {
     expect(
       (await post(first, path, token, { op: "process.stdin.close", id: "job", offset: 12 })).status,
     ).toBe(200);
+    const time = first.time;
     await first.dispose();
-    const second = runtime(directory, undefined, 1, false);
-    const current = await (await second.getR2Bucket("OBJECTS")).head(key);
+    const second = runtime(directory, 0, time);
+    const current = await (await second.objects).head(key);
     expect(current).not.toBeNull();
     if (current === null) return;
     await (
-      await second.getWorker("cirro")
-    ).queue("executions", [
+      await second.control
+    ).deliver("executions", [
       {
         id: "idle-resume",
         timestamp: new Date(),
@@ -324,7 +325,7 @@ for (const role of ["root", "family", "stopped"] as const) {
 }
 const prepareGuard = async () => {
   const directory = await mkdtemp(join(tmpdir(), "cirro-recovery-guard-"));
-  const first = runtime(directory, undefined, 1, false);
+  const first = runtime(directory);
   expect(
     (
       await post(first, "/v1/sandboxes", "cirro-local-test-credential", {
@@ -355,13 +356,13 @@ const prepareGuard = async () => {
     execution: { op: "process.run", id: "job", language: "wasm", source },
   });
   expect([200, 500]).toContain(response.status);
-  const bucket = await first.getR2Bucket("OBJECTS");
+  const bucket = await first.objects;
   const key = "processes/guard/job.json";
   const before = await bucket.head(key);
   expect(before).not.toBeNull();
   if (before === null) return;
-  const worker = await first.getWorker("cirro");
-  await worker.queue("executions", [
+  const worker = await first.control;
+  await worker.deliver("executions", [
     {
       id: "prepare",
       timestamp: new Date(),
@@ -400,7 +401,7 @@ for (const mode of ["expired", "cancelled", "corrupt"] as const) {
         context.key,
         Schema.encodeSync(Schema.fromJsonString(StoredRun))({
           ...context.paused,
-          authority: { ...authority, expiresAt: Date.now() - 1 },
+          authority: { ...authority, expiresAt: 0 },
         }),
         {
           customMetadata: Schema.encodeSync(StoredRunMetadata)({
@@ -425,7 +426,7 @@ for (const mode of ["expired", "cancelled", "corrupt"] as const) {
     const object = await context.bucket.head(context.key);
     expect(object).not.toBeNull();
     if (object === null) return;
-    await context.worker.queue("executions", [
+    await context.worker.deliver("executions", [
       {
         id: "guard",
         timestamp: new Date(),

@@ -6,6 +6,7 @@ members = [
   "crates/wasi",
   "crates/python",
   "tooling/wasm-meter",
+  "tooling/wasm-bench",
 ]
 resolver = "3"
 
