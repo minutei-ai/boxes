@@ -1,0 +1,21 @@
+{
+  "measuredAt": "2026-10-14T01:52:59.919Z",
+  "url": "https://cirro-sandbox-prod-rs7wexxow56rmsoz.manoel-carvalhoneto.workers.dev",
+  "sandboxId": "large-wasm-proof-66303d51-f7a9-4908-b897-84d7451c9925",
+  "profile": "minutei",
+  "runtime": "standard Worker",
+  "moduleBytes": 2113535,
+  "moduleLimitBytes": 4194304,
+  "guestMemoryBytes": 8388608,
+  "inlineMs": 4386.587847000001,
+  "fileMs": 5060.890541000001,
+  "checks": {
+    "largeFixture": true,
+    "inline": true,
+    "file": true,
+    "admission": true,
+    "disposal": true
+  },
+  "allPassed": true,
+  "packageParity": false
+}
