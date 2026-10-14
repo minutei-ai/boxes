@@ -1,0 +1,26 @@
+{
+  "measuredAt": "2026-10-14T12:25:00.888Z",
+  "url": "https://cirro-sandbox-prod-rs7wexxow56rmsoz.manoel-carvalhoneto.workers.dev",
+  "sandboxId": "recovery-proof-2581051f-fe24-4f73-9110-d50c1e33bf94",
+  "profile": "minutei",
+  "runtime": "standard Worker",
+  "status": {
+    "state": "exited",
+    "checkpoints": 1,
+    "resumable": false,
+    "deadlineAt": null
+  },
+  "checks": {
+    "spawn": true,
+    "completed": true,
+    "checkpointConfirmed": true,
+    "entryOnce": true,
+    "fuelContinuation": true,
+    "fileEffectsOnce": true,
+    "disposal": true
+  },
+  "allPassed": true,
+  "handoverRecovery": true,
+  "arbitraryCrashRecovery": false,
+  "fullProcessParity": false
+}

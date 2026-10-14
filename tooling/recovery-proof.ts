@@ -60,7 +60,7 @@ const spawned = await action({
   op: "process.spawn",
   execution: { op: "process.run", id: "compute", language: "wasm", source },
 });
-const completed = await action({ op: "process.wait", id: "compute", timeoutMs: 60000 });
+const completed = await action({ op: "process.wait", id: "compute", timeoutMs: 25000 });
 const record = Schema.decodeUnknownSync(RunRecord)(await completed.json());
 const statusResponse = await action({ op: "process.recovery.status", id: "compute" });
 const status = Schema.decodeUnknownSync(RecoveryStatus)(await statusResponse.json());
