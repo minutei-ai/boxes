@@ -1,0 +1,20 @@
+{
+  "measuredAt": "2026-10-14T12:48:50.601Z",
+  "url": "https://cirro-sandbox-prod-rs7wexxow56rmsoz.manoel-carvalhoneto.workers.dev",
+  "sandboxId": "export-proof-da4d814d-ff00-4824-8362-d373e192323f",
+  "profile": "minutei",
+  "runtime": "standard Worker",
+  "snapshotBytes": 566,
+  "checks": {
+    "setup": true,
+    "exported": true,
+    "binary": true,
+    "metadata": true,
+    "symlink": true,
+    "root": true,
+    "exactLimit": true,
+    "bounded": true,
+    "disposal": true
+  },
+  "allPassed": true
+}
