@@ -10,6 +10,7 @@ import {
   FileContent,
   ProcessDelivery,
   ExecutionCheckpoint,
+  HeapSnapshot,
   StoredRunMetadata,
   RecoveryStatus,
 } from "../src/contracts";
@@ -165,104 +166,162 @@ for (const mode of ["synced", "unsynced"] as const) {
     await rm(directory, { recursive: true, force: true });
   }, 30000);
 }
-test("blocked stdin checkpoints and resumes with buffered bytes and EOF after Worker replacement", async () => {
-  const directory = await mkdtemp(join(tmpdir(), "cirro-idle-recovery-"));
-  const first = runtime(directory, undefined, 1, false);
-  expect(
-    (
-      await post(first, "/v1/sandboxes", "cirro-local-test-credential", {
-        id: "idle",
-        policy: {
-          networkHosts: [],
-          interruptBudget: 100000,
-          memoryBytes: 8388608,
-          maxOutputBytes: 1048576,
-        },
-      })
-    ).status,
-  ).toBe(201);
-  const token = Schema.decodeUnknownSync(TokenResponse)(
-    await (
-      await post(first, "/v1/sandboxes/idle/capabilities", "cirro-local-test-credential", {
-        permissions: ["read", "execute"],
-        expiresInSeconds: 3600,
-      })
-    ).json(),
-  ).token;
-  const path = "/v1/sandboxes/idle/action";
-  const source = Buffer.from(
-    await Bun.file(join(import.meta.dir, "../dist/wasi-stdin.wasm")).arrayBuffer(),
-  ).toString("base64");
-  const spawned = await post(first, path, token, {
-    op: "process.spawn",
-    stdinMode: "pipe",
-    execution: {
-      op: "process.run",
-      id: "job",
-      language: "wasm",
-      source,
-      stdin: { content: "before:", encoding: "utf8" },
-    },
-  });
-  expect([200, 500]).toContain(spawned.status);
-  const bucket = await first.getR2Bucket("OBJECTS");
-  const key = "processes/idle/job.json";
-  const original = await bucket.head(key);
-  expect(original).not.toBeNull();
-  if (original === null) return;
-  await (
-    await first.getWorker("cirro")
-  ).queue("executions", [
-    {
-      id: "idle-start",
-      timestamp: new Date(),
-      attempts: 1,
-      body: Schema.encodeSync(ProcessDelivery)({ key, eTag: original.etag }),
-    },
-  ]);
-  const object = await bucket.get(key);
-  expect(object).not.toBeNull();
-  if (object === null) return;
-  const paused = Schema.decodeUnknownSync(Schema.fromJsonString(StoredRun))(await object.text());
-  expect(paused.status).toBe("queued");
-  expect(paused.checkpoint).not.toBeNull();
-  expect(
-    (
-      await post(first, path, token, {
-        op: "process.stdin.write",
+for (const role of ["root", "family", "stopped"] as const) {
+  test(`${role} blocked stdin checkpoints and resumes with buffered bytes and EOF after Worker replacement`, async () => {
+    const directory = await mkdtemp(join(tmpdir(), "cirro-idle-recovery-"));
+    const first = runtime(directory, undefined, 1, false);
+    expect(
+      (
+        await post(first, "/v1/sandboxes", "cirro-local-test-credential", {
+          id: "idle",
+          policy: {
+            networkHosts: [],
+            interruptBudget: 100000,
+            memoryBytes: 8388608,
+            maxOutputBytes: 1048576,
+          },
+        })
+      ).status,
+    ).toBe(201);
+    const token = Schema.decodeUnknownSync(TokenResponse)(
+      await (
+        await post(first, "/v1/sandboxes/idle/capabilities", "cirro-local-test-credential", {
+          permissions: ["read", "write", "execute"],
+          expiresInSeconds: 3600,
+        })
+      ).json(),
+    ).token;
+    const path = "/v1/sandboxes/idle/action";
+    const artifact = Match.value(role).pipe(
+      Match.when("family", () => "wasi-recovery-family.wasm"),
+      Match.when("stopped", () => "wasi-recovery-stopped.wasm"),
+      Match.orElse(() => "wasi-stdin.wasm"),
+    );
+    if (role !== "root") {
+      const childArtifact = Match.value(role).pipe(
+        Match.when("stopped", () => "wasi-stdin-resume-parent.wasm"),
+        Match.orElse(() => "wasi-stdin.wasm"),
+      );
+      const child = Buffer.from(
+        await Bun.file(join(import.meta.dir, `../dist/${childArtifact}`)).arrayBuffer(),
+      ).toString("base64");
+      expect(
+        (
+          await post(first, path, token, {
+            op: "filesystem.writeFile",
+            path: "/tmp/recovery-child.wasm",
+            content: child,
+            encoding: "base64",
+          })
+        ).status,
+      ).toBe(200);
+      expect(
+        (
+          await post(first, path, token, {
+            op: "filesystem.chmod",
+            path: "/tmp/recovery-child.wasm",
+            mode: 493,
+          })
+        ).status,
+      ).toBe(200);
+    }
+    const source = Buffer.from(
+      await Bun.file(join(import.meta.dir, `../dist/${artifact}`)).arrayBuffer(),
+    ).toString("base64");
+    const spawned = await post(first, path, token, {
+      op: "process.spawn",
+      stdinMode: "pipe",
+      execution: {
+        op: "process.run",
         id: "job",
-        offset: 7,
-        content: "after",
-        encoding: "utf8",
-      })
-    ).status,
-  ).toBe(200);
-  expect(
-    (await post(first, path, token, { op: "process.stdin.close", id: "job", offset: 12 })).status,
-  ).toBe(200);
-  await first.dispose();
-  const second = runtime(directory, undefined, 1, false);
-  const current = await (await second.getR2Bucket("OBJECTS")).head(key);
-  expect(current).not.toBeNull();
-  if (current === null) return;
-  await (
-    await second.getWorker("cirro")
-  ).queue("executions", [
-    {
-      id: "idle-resume",
-      timestamp: new Date(),
-      attempts: 1,
-      body: Schema.encodeSync(ProcessDelivery)({ key, eTag: current.etag }),
-    },
-  ]);
-  const result = await post(second, path, token, { op: "process.get", id: "job" });
-  expect(result.status).toBe(200);
-  const record = Schema.decodeUnknownSync(RunRecord)(await result.json());
-  expect(record.status).toBe("exited");
-  expect(record.output?.stdout).toBe("ready\nbefore:after\nbytes=12\n");
-  await second.dispose();
-  await rm(directory, { recursive: true, force: true });
-}, 45000);
+        language: "wasm",
+        source,
+        stdin: { content: "before:", encoding: "utf8" },
+      },
+    });
+    expect([200, 500]).toContain(spawned.status);
+    const bucket = await first.getR2Bucket("OBJECTS");
+    const key = "processes/idle/job.json";
+    const original = await bucket.head(key);
+    expect(original).not.toBeNull();
+    if (original === null) return;
+    await (
+      await first.getWorker("cirro")
+    ).queue("executions", [
+      {
+        id: "idle-start",
+        timestamp: new Date(),
+        attempts: 1,
+        body: Schema.encodeSync(ProcessDelivery)({ key, eTag: original.etag }),
+      },
+    ]);
+    const object = await bucket.get(key);
+    expect(object).not.toBeNull();
+    if (object === null) return;
+    const paused = Schema.decodeUnknownSync(Schema.fromJsonString(StoredRun))(await object.text());
+    expect(paused.status).toBe("queued");
+    expect(paused.checkpoint).not.toBeNull();
+    expect(paused.checkpointCount).toBe(1);
+    if (paused.checkpoint === null) return;
+    const envelopeObject = await bucket.get(
+      `sandboxes/idle/execution-checkpoints/${paused.checkpoint}.json`,
+    );
+    expect(envelopeObject).not.toBeNull();
+    if (envelopeObject === null) return;
+    const envelope = Schema.decodeUnknownSync(Schema.fromJsonString(ExecutionCheckpoint))(
+      await envelopeObject.text(),
+    );
+    const heapObject = await bucket.get(`sandboxes/idle/checkpoints/${envelope.heap}.json`);
+    expect(heapObject).not.toBeNull();
+    if (heapObject === null) return;
+    const heap = Schema.decodeUnknownSync(Schema.fromJsonString(HeapSnapshot))(
+      await heapObject.text(),
+    );
+    expect(heap.handles.map((handle) => handle.pid).sort()).toEqual(
+      Match.value(role).pipe(
+        Match.when("root", () => [1]),
+        Match.orElse(() => [1, 2]),
+      ),
+    );
+    expect(
+      (
+        await post(first, path, token, {
+          op: "process.stdin.write",
+          id: "job",
+          offset: 7,
+          content: "after",
+          encoding: "utf8",
+        })
+      ).status,
+    ).toBe(200);
+    expect(
+      (await post(first, path, token, { op: "process.stdin.close", id: "job", offset: 12 })).status,
+    ).toBe(200);
+    await first.dispose();
+    const second = runtime(directory, undefined, 1, false);
+    const current = await (await second.getR2Bucket("OBJECTS")).head(key);
+    expect(current).not.toBeNull();
+    if (current === null) return;
+    await (
+      await second.getWorker("cirro")
+    ).queue("executions", [
+      {
+        id: "idle-resume",
+        timestamp: new Date(),
+        attempts: 1,
+        body: Schema.encodeSync(ProcessDelivery)({ key, eTag: current.etag }),
+      },
+    ]);
+    const result = await post(second, path, token, { op: "process.get", id: "job" });
+    expect(result.status).toBe(200);
+    const record = Schema.decodeUnknownSync(RunRecord)(await result.json());
+    expect(record.status).toBe("exited");
+    expect(record.output?.exitCode).toBe(0);
+    expect(record.output?.stdout).toBe("ready\nbefore:after\nbytes=12\n");
+    await second.dispose();
+    await rm(directory, { recursive: true, force: true });
+  }, 45000);
+}
 const prepareGuard = async () => {
   const directory = await mkdtemp(join(tmpdir(), "cirro-recovery-guard-"));
   const first = runtime(directory, undefined, 1, false);

@@ -66,6 +66,49 @@ const statusResponse = await action({ op: "process.recovery.status", id: "comput
 const status = Schema.decodeUnknownSync(RecoveryStatus)(await statusResponse.json());
 const fileResponse = await action({ op: "filesystem.readFile", path: "/tmp/recovery-counter" });
 const file = Schema.decodeUnknownSync(FileContent)(await fileResponse.json());
+const childSource = Buffer.from(
+  await Bun.file(join(import.meta.dir, "../dist/wasi-stdin-resume-parent.wasm")).arrayBuffer(),
+).toString("base64");
+const childWritten = await action({
+  op: "filesystem.writeFile",
+  path: "/tmp/recovery-child.wasm",
+  content: childSource,
+  encoding: "base64",
+});
+const childExecutable = await action({
+  op: "filesystem.chmod",
+  path: "/tmp/recovery-child.wasm",
+  mode: 493,
+});
+const familySource = Buffer.from(
+  await Bun.file(join(import.meta.dir, "../dist/wasi-recovery-stopped.wasm")).arrayBuffer(),
+).toString("base64");
+const familySpawned = await action({
+  op: "process.spawn",
+  stdinMode: "pipe",
+  execution: {
+    op: "process.run",
+    id: "family",
+    language: "wasm",
+    source: familySource,
+    stdin: { content: "before:", encoding: "utf8" },
+  },
+});
+await action({ op: "process.wait", id: "family", timeoutMs: 25000 });
+await action({ op: "process.wait", id: "family", timeoutMs: 25000 });
+const familyStatus = Schema.decodeUnknownSync(RecoveryStatus)(
+  await (await action({ op: "process.recovery.status", id: "family" })).json(),
+);
+const familyInput = await action({
+  op: "process.stdin.write",
+  id: "family",
+  offset: 7,
+  content: "after",
+  encoding: "utf8",
+});
+const familyClosed = await action({ op: "process.stdin.close", id: "family", offset: 12 });
+const familyCompleted = await action({ op: "process.wait", id: "family", timeoutMs: 25000 });
+const familyRecord = Schema.decodeUnknownSync(RunRecord)(await familyCompleted.json());
 const disposed = await action({ op: "vm.dispose" });
 const checks = {
   spawn: spawned.status === 200,
@@ -77,6 +120,15 @@ const checks = {
   fuelContinuation: record.output?.result === ((3000000 * 2999999) / 2) % 1024,
   fileEffectsOnce:
     fileResponse.status === 200 && Buffer.from(file.content, file.encoding).toString() === "AB",
+  familySetup:
+    childWritten.status === 200 && childExecutable.status === 200 && familySpawned.status === 200,
+  familyCheckpoint: familyStatus.checkpoints >= 1,
+  familyInput: familyInput.status === 200 && familyClosed.status === 200,
+  stoppedParentResumed:
+    familyCompleted.status === 200 &&
+    familyRecord.status === "exited" &&
+    familyRecord.output?.exitCode === 0,
+  inheritedStdioOnce: familyRecord.output?.stdout === "ready\nbefore:after\nbytes=12\n",
   disposal: disposed.status === 200,
 };
 const report = {
@@ -86,6 +138,7 @@ const report = {
   profile: "minutei",
   runtime: "standard Worker",
   status,
+  familyStatus,
   checks,
   allPassed: Object.values(checks).every(Boolean),
   handoverRecovery: true,

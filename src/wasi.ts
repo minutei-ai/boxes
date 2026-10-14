@@ -466,7 +466,11 @@ export const wasi = Effect.fn("wasi.execute")(function* (
                   status: 401,
                   message: "Capability expired while stopped",
                 });
-              yield* Effect.raceFirst(Deferred.await(wake), Effect.sleep(untilExpiry));
+              const pause = Match.value(canHandover && guest.pid === 1).pipe(
+                Match.when(true, () => Math.min(1000, untilExpiry)),
+                Match.orElse(() => untilExpiry),
+              );
+              yield* Effect.raceFirst(Deferred.await(wake), Effect.sleep(pause));
             }
             return;
           }
@@ -758,6 +762,15 @@ export const wasi = Effect.fn("wasi.execute")(function* (
               Match.when({ kind: "wait" }, (input) =>
                 Effect.gen(function* () {
                   while (true) {
+                    if (
+                      canHandover &&
+                      guest.pid === 1 &&
+                      (yield* Clock.currentTimeMillis) - leaseStartedAt >= 30_000
+                    ) {
+                      yield* semaphore.take(1);
+                      lease.held = true;
+                      return yield* handover(Number(guest.fuel_used()));
+                    }
                     const wake = changes.pending;
                     const interrupted = yield* Effect.try({
                       try: () => guest.signal_ready(),
@@ -774,6 +787,7 @@ export const wasi = Effect.fn("wasi.execute")(function* (
                       return [Fiber.await(fiber).pipe(Effect.asVoid)];
                     });
                     if (waiting.length === 0) break;
+                    if (canHandover && guest.pid === 1) waiting.push(Effect.sleep(1000));
                     yield* Effect.raceAllFirst([...waiting, Deferred.await(wake)]);
                   }
                   return { data: Buffer.alloc(0), path: "/", directory: false, value: 0n };

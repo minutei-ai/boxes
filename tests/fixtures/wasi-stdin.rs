@@ -1,3 +1,8 @@
+#[cfg(case = "resume-parent")]
+#[link(wasm_import_module = "host_process")]
+unsafe extern "C" {
+    fn proc_kill(pid: u32, signal: u32) -> u32;
+}
 use std::io::{Read, Write};
 #[link(wasm_import_module = "wasi_snapshot_preview1")]
 unsafe extern "C" {
@@ -24,5 +29,11 @@ fn main() -> std::io::Result<()> {
         total += count;
     }
     println!("\nbytes={total}");
+    #[cfg(case = "resume-parent")]
+    unsafe {
+        if proc_kill(1, 18) != 0 {
+            return Err(std::io::Error::other("Unable to resume parent"));
+        }
+    }
     Ok(())
 }
