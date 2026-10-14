@@ -4305,18 +4305,21 @@ impl WasmGuest {
         let state = self.store.data();
         let result = self.outputs.first().and_then(Val::i32);
         let output = serde_json::json!({"stdout":String::from_utf8_lossy(&state.stdout.borrow()),"stderr":String::from_utf8_lossy(&state.stderr.borrow()),"exitCode":self.done,"result":result});
-        let encoded = serde_json::to_string(&output)
-            .map_err(|error| JsValue::from_str(&error.to_string()))?;
-        if encoded.len() > state.max_output {
-            return Err(JsValue::from_str("Wasm serialized output budget exceeded"));
-        }
         serde_json::to_string(&serde_json::json!({"kind":"done","output":output}))
             .map_err(|error| JsValue::from_str(&error.to_string()))
     }
 
-    pub fn stdio(&self) -> Result<String, JsValue> {
+    pub fn output_bytes(&self) -> usize {
         let state = self.store.data();
-        serde_json::to_string(&serde_json::json!({"stdout":String::from_utf8_lossy(&state.stdout.borrow()),"stderr":String::from_utf8_lossy(&state.stderr.borrow())})).map_err(|error| JsValue::from_str(&error.to_string()))
+        state.stdout.borrow().len() + state.stderr.borrow().len()
+    }
+
+    pub fn stdout_bytes(&self) -> Vec<u8> {
+        self.store.data().stdout.borrow().clone()
+    }
+
+    pub fn stderr_bytes(&self) -> Vec<u8> {
+        self.store.data().stderr.borrow().clone()
     }
 
     pub fn has_file(&self, path: &str) -> bool {

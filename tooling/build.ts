@@ -976,6 +976,17 @@ await Effect.runPromise(
       "-O",
       "-C",
       "strip=symbols",
+      "tests/fixtures/wasi-raw-stdio.rs",
+      "-o",
+      "dist/wasi-raw-stdio.wasm",
+    ]);
+    yield* run([
+      "rustc",
+      "--target",
+      "wasm32-wasip1",
+      "-O",
+      "-C",
+      "strip=symbols",
       "tests/fixtures/wasi-advice.rs",
       "-o",
       "dist/wasi-advice.wasm",

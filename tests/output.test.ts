@@ -5,6 +5,7 @@ import { join } from "node:path";
 import { Schema, Struct } from "effect";
 import {
   ProcessOutputPage,
+  LiveOutputPage,
   RunRecord,
   TokenResponse,
   StoredRun,
@@ -29,7 +30,11 @@ const post = async (
     headers: { authorization: `Bearer ${token}`, "content-type": "application/json" },
     body: JSON.stringify(body),
   });
-const setup = async (instance: ReturnType<typeof runtime>, id: string) => {
+const setup = async (
+  instance: ReturnType<typeof runtime>,
+  id: string,
+  maxOutputBytes = 1_048_576,
+) => {
   expect(
     (
       await post(instance, "/v1/sandboxes", "cirro-local-test-credential", {
@@ -38,7 +43,7 @@ const setup = async (instance: ReturnType<typeof runtime>, id: string) => {
           networkHosts: [],
           interruptBudget: 1000,
           memoryBytes: 8_388_608,
-          maxOutputBytes: 1_048_576,
+          maxOutputBytes,
         },
       })
     ).status,
@@ -629,3 +634,140 @@ test("receipt migration returns bounded page cursors and skips confirmed convers
   await instance.dispose();
   await rm(persisted, { recursive: true, force: true });
 }, 15000);
+
+test("WASI replay retains invalid UTF-8 and null bytes across blocks, guest failure and Worker replacement", async () => {
+  const id = "raw-wasi-output";
+  const token = await setup(mf, id, 70_009);
+  const source = Buffer.from(
+    await Bun.file(join(import.meta.dir, "../dist/wasi-raw-stdio.wasm")).arrayBuffer(),
+  ).toString("base64");
+  const expected = Buffer.from(Array.from({ length: 70_003 }, (_, index) => index % 256));
+  const expectedError = Buffer.from([255, 0, 128, 195, 40, 254]);
+  for (const mode of ["success", "failure"]) {
+    const response = await act(id, token, {
+      op: "process.run",
+      id: mode,
+      language: "wasm",
+      source,
+      args: [mode],
+    });
+    expect(response.status).toBe(200);
+    const record = Schema.decodeUnknownSync(RunRecord)(await response.json());
+    if (mode === "success") expect(record.output?.exitCode).toBe(0);
+    else expect(record.output?.exitCode).toBe(7);
+    const stdout: Buffer[] = [];
+    const stderr: Buffer[] = [];
+    const position = {
+      cursor: Schema.decodeUnknownSync(Schema.NullOr(Schema.Int))(null),
+      more: true,
+    };
+    while (position.more) {
+      const page = await read(id, token, mode, position.cursor, 4093, 2);
+      for (const event of page.events) {
+        const bytes = Buffer.from(event.data, "base64");
+        if (event.stream === "stdout") stdout.push(bytes);
+        else stderr.push(bytes);
+      }
+      if (position.cursor !== null) expect(page.nextCursor).toBeGreaterThan(position.cursor);
+      position.cursor = page.nextCursor;
+      position.more = page.hasMore;
+    }
+    expect(Buffer.concat(stdout)).toEqual(expected);
+    expect(Buffer.concat(stderr)).toEqual(expectedError);
+  }
+  const replacement = runtime(directory, { consume: true, controlled: false });
+  await replacement.ready;
+  const response = await post(replacement, `/v1/sandboxes/${id}/action`, token, {
+    op: "process.output.read",
+    id: "failure",
+    after: 65_535,
+    maxBytes: 32,
+    maxEvents: 2,
+  });
+  expect(response.status).toBe(200);
+  const page = Schema.decodeUnknownSync(ProcessOutputPage)(await response.json());
+  expect(Buffer.concat(page.events.map((event) => Buffer.from(event.data, "base64")))).toEqual(
+    expected.subarray(65_535, 65_567),
+  );
+  await replacement.dispose();
+});
+
+test("live WASI binary output retains byte cursors after cancellation", async () => {
+  const id = "raw-wasi-cancel";
+  const token = await setup(mf, id, 70_009);
+  const source = Buffer.from(
+    await Bun.file(join(import.meta.dir, "../dist/wasi-raw-stdio.wasm")).arrayBuffer(),
+  ).toString("base64");
+  const spawned = await act(id, token, {
+    op: "process.spawn",
+    stdinMode: "pipe",
+    execution: { op: "process.run", id: "waiting", language: "wasm", source, args: ["wait"] },
+  });
+  expect(spawned.status).toBe(200);
+  const observed = { bytes: 0 };
+  for (const attempt of Array.from({ length: 100 }, (_, index) => index)) {
+    const response = await act(id, token, {
+      op: "process.output.readLive",
+      id: "waiting",
+      after: null,
+      maxBytes: 256,
+      maxEvents: 2,
+    });
+    expect(response.status).toBe(200);
+    const page = Schema.decodeUnknownSync(LiveOutputPage)(await response.json());
+    if (page.events.length > 0) {
+      expect(page.state).toBe("running");
+      const stdout = page.events.filter((event) => event.stream === "stdout");
+      const bytes = Buffer.concat(stdout.map((event) => Buffer.from(event.data, "base64")));
+      expect(bytes).toEqual(Buffer.from(Array.from({ length: 256 }, (_, index) => index)));
+      observed.bytes = bytes.length;
+      break;
+    }
+    if (attempt < 99) await Bun.sleep(50);
+  }
+  expect(observed.bytes).toBe(256);
+  expect((await act(id, token, { op: "process.cancel", id: "waiting" })).status).toBe(200);
+  expect(
+    (await act(id, token, { op: "process.wait", id: "waiting", timeoutMs: 5000 })).status,
+  ).toBe(409);
+  const page = await read(id, token, "waiting", 65_535, 32, 2);
+  expect(page.state).toBe("cancelled");
+  expect(Buffer.concat(page.events.map((event) => Buffer.from(event.data, "base64")))).toEqual(
+    Buffer.from(Array.from({ length: 32 }, (_, index) => (65_535 + index) % 256)),
+  );
+});
+
+test("WASI output quota remains a raw byte bound when a write exceeds it", async () => {
+  const id = "raw-wasi-quota";
+  const token = await setup(mf, id, 70_000);
+  const source = Buffer.from(
+    await Bun.file(join(import.meta.dir, "../dist/wasi-raw-stdio.wasm")).arrayBuffer(),
+  ).toString("base64");
+  const response = await act(id, token, {
+    op: "process.run",
+    id: "quota",
+    language: "wasm",
+    source,
+  });
+  expect(response.status).toBe(200);
+  const record = Schema.decodeUnknownSync(RunRecord)(await response.json());
+  expect(record.output?.exitCode).toBe(1);
+  const first = await read(id, token, "quota", null);
+  const pages = [first];
+  if (first.hasMore) pages.push(await read(id, token, "quota", first.nextCursor));
+  expect(pages.at(-1)?.hasMore).toBe(false);
+  const events = pages.flatMap((page) => page.events);
+  const stdout = Buffer.concat(
+    events
+      .filter((event) => event.stream === "stdout")
+      .map((event) => Buffer.from(event.data, "base64")),
+  );
+  expect(stdout.length).toBeGreaterThan(0);
+  expect(stdout.length).toBeLessThan(70003);
+  expect(stdout).toEqual(
+    Buffer.from(Array.from({ length: stdout.length }, (_, index) => index % 256)),
+  );
+  expect(
+    Buffer.concat(events.map((event) => Buffer.from(event.data, "base64"))).length,
+  ).toBeLessThanOrEqual(70_000);
+});

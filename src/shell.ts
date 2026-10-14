@@ -86,9 +86,15 @@ export const shell = Effect.fn("shell.execute")(function* (
               const commandCapture: OutputCapture = (stdio, observeCancellation) => {
                 const stdout = Match.value(command.pipe || command.output !== null).pipe(
                   Match.when(true, () => state.stdout),
-                  Match.orElse(() => state.stdout + stdio.stdout),
+                  Match.orElse(() => {
+                    if (typeof stdio.stdout === "string") return state.stdout + stdio.stdout;
+                    return state.stdout + Buffer.from(stdio.stdout).toString("utf8");
+                  }),
                 );
-                const stderr = state.stderr + stdio.stderr;
+                const stderr = Match.value(stdio.stderr).pipe(
+                  Match.when(Match.string, (value) => state.stderr + value),
+                  Match.orElse((value) => state.stderr + Buffer.from(value).toString("utf8")),
+                );
                 if (
                   Buffer.byteLength(stdout) + Buffer.byteLength(stderr) >
                   session.head.policy.maxOutputBytes

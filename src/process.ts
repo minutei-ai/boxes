@@ -14,6 +14,7 @@ import {
   ProcessOutputAction,
   ProcessOutputPage,
   CapturedStdio,
+  CapturedBytes,
   ObservedOutput,
   StoredOutput,
   ProcessLiveOutputAction,
@@ -133,6 +134,7 @@ const complete = Effect.fn("process.complete")(function* (
   const publication = { etag, cancelled: false };
   const snapshots: (typeof ObservedOutput.Type)[] = [];
   const retained: (typeof StoredOutput.Type)[] = [];
+  const captured: (typeof CapturedBytes.Type)[] = [];
   if (record.output !== null) snapshots.push(record.output);
   if (reservation.retainedOutput !== null) retained.push(reservation.retainedOutput);
   const observeCancellation = Effect.fn("process.observeCancellation")(function* () {
@@ -161,10 +163,24 @@ const complete = Effect.fn("process.complete")(function* (
     observe?: boolean,
   ) {
     if (observe === true) yield* observeCancellation();
-    const previous = snapshots[0];
+    const bytes = yield* Effect.sync(() => {
+      if (typeof stdio.stdout === "string" && typeof stdio.stderr === "string")
+        return {
+          stdout: Buffer.from(stdio.stdout, "utf8"),
+          stderr: Buffer.from(stdio.stderr, "utf8"),
+        };
+      return {
+        stdout: Buffer.from(stdio.stdout),
+        stderr: Buffer.from(stdio.stderr),
+      };
+    });
+    const previous = captured[0];
     if (
       previous !== undefined &&
-      (!stdio.stdout.startsWith(previous.stdout) || !stdio.stderr.startsWith(previous.stderr))
+      (bytes.stdout.length < previous.stdout.length ||
+        bytes.stderr.length < previous.stderr.length ||
+        !bytes.stdout.subarray(0, previous.stdout.length).equals(previous.stdout) ||
+        !bytes.stderr.subarray(0, previous.stderr.length).equals(previous.stderr))
     )
       return yield* new Fault({
         code: "EINVAL",
@@ -173,13 +189,24 @@ const complete = Effect.fn("process.complete")(function* (
       });
     if (
       previous !== undefined &&
-      previous.stdout === stdio.stdout &&
-      previous.stderr === stdio.stderr
+      bytes.stdout.equals(previous.stdout) &&
+      bytes.stderr.equals(previous.stderr)
     )
       return;
-    if (previous === undefined && stdio.stdout.length === 0 && stdio.stderr.length === 0) return;
-    const pending = { ...stdio, exitCode: null, result: null };
-    const archived = yield* archiveOutput(env, capability.sandboxId, pending, retained[0] ?? null);
+    if (previous === undefined && bytes.stdout.length === 0 && bytes.stderr.length === 0) return;
+    const pending = {
+      stdout: bytes.stdout.toString("utf8"),
+      stderr: bytes.stderr.toString("utf8"),
+      exitCode: null,
+      result: null,
+    };
+    const archived = yield* archiveOutput(
+      env,
+      capability.sandboxId,
+      pending,
+      retained[0] ?? null,
+      bytes,
+    );
     const stored = {
       ...record,
       authority: null,
@@ -224,6 +251,7 @@ const complete = Effect.fn("process.complete")(function* (
     }
     publication.etag = written.etag;
     snapshots.splice(0, snapshots.length, pending);
+    captured.splice(0, captured.length, bytes);
     retained.splice(0, retained.length, archived);
   });
   const execution = Effect.scoped(
@@ -386,6 +414,17 @@ const complete = Effect.fn("process.complete")(function* (
   if (reservation.stdinMode === "pipe") yield* finishInput(env, capability.sandboxId, record.id);
   const settledOutput = yield* Effect.gen(function* () {
     if (finished.output === null) return null;
+    if (
+      finished.output.stdout === snapshots[0]?.stdout &&
+      finished.output.stderr === snapshots[0]?.stderr
+    )
+      return yield* archiveOutput(
+        env,
+        capability.sandboxId,
+        finished.output,
+        retained[0] ?? null,
+        captured[0] ?? null,
+      );
     return yield* archiveOutput(env, capability.sandboxId, finished.output, retained[0] ?? null);
   });
   for (const attempt of [0, 1]) {

@@ -1,5 +1,12 @@
 import { Effect, type Schema } from "effect";
-import type { CapturedStdio, Fault, ObservedOutput, StoredOutput, StdioRef } from "./contracts";
+import type {
+  CapturedBytes,
+  CapturedStdio,
+  Fault,
+  ObservedOutput,
+  StoredOutput,
+  StdioRef,
+} from "./contracts";
 import { StorageFailure } from "./storage";
 import type { Env } from "./resources";
 
@@ -15,10 +22,20 @@ export const archiveOutput = Effect.fn("output.archive")(function* (
   sandboxId: string,
   output: typeof ObservedOutput.Type,
   previous: typeof StoredOutput.Type | null,
+  captured: typeof CapturedBytes.Type | null = null,
 ) {
+  const uploaded = new Set<string>();
   const streams = yield* Effect.forEach(["stdout", "stderr"] as const, (stream) =>
     Effect.gen(function* () {
-      const bytes = Buffer.from(output[stream], "utf8");
+      const bytes = yield* Effect.sync(() => {
+        if (captured !== null) return Buffer.from(captured[stream]);
+        return Buffer.from(output[stream], "utf8");
+      });
+      const prior = previous?.[stream];
+      if (prior !== undefined && prior.chunks.length !== Math.ceil(prior.size / chunkBytes))
+        return yield* new StorageFailure({ cause: "Invalid retained output block count" });
+      if (prior !== undefined && bytes.length < prior.size)
+        return yield* new StorageFailure({ cause: "Retained output was rewound" });
       if (bytes.length > 2_097_152)
         return yield* new StorageFailure({ cause: "Oversized output stream" });
       const chunks: string[] = [];
@@ -29,7 +46,20 @@ export const archiveOutput = Effect.fn("output.archive")(function* (
         const block = bytes.subarray(offset, offset + chunkBytes);
         const digest = yield* Effect.promise(() => crypto.subtle.digest("SHA-256", block));
         const hash = Buffer.from(digest).toString("hex");
-        if (previous?.[stream].chunks[chunks.length] !== hash)
+        const previousHash = prior?.chunks[chunks.length];
+        if (prior !== undefined && previousHash !== undefined) {
+          const priorLength = Math.min(chunkBytes, prior.size - offset);
+          const prefixHash = yield* Effect.gen(function* () {
+            if (priorLength === block.length) return hash;
+            const digest = yield* Effect.promise(() =>
+              crypto.subtle.digest("SHA-256", block.subarray(0, priorLength)),
+            );
+            return Buffer.from(digest).toString("hex");
+          });
+          if (prefixHash !== previousHash)
+            return yield* new StorageFailure({ cause: "Retained output prefix changed" });
+        }
+        if (previous?.[stream].chunks[chunks.length] !== hash && !uploaded.has(hash)) {
           yield* Effect.tryPromise({
             try: () =>
               env.OBJECTS.put(`sandboxes/${sandboxId}/stdio/${hash}`, block, {
@@ -37,6 +67,8 @@ export const archiveOutput = Effect.fn("output.archive")(function* (
               }),
             catch: (cause) => new StorageFailure({ cause }),
           });
+          uploaded.add(hash);
+        }
         chunks.push(hash);
       }
       return { size: bytes.length, chunks };

@@ -16,7 +16,6 @@ import { createBindings } from "../dist/wasi/bindings";
 import { requirePermission } from "./auth";
 import {
   Capability,
-  CapturedStdio,
   Fault,
   FileStat,
   DirectoryEntries,
@@ -183,6 +182,7 @@ export const wasi = Effect.fn("wasi.execute")(function* (
   const checkpoint = yield* kernelCall(() => kernel.manifest());
   const state = {
     checkpointFuel: 0,
+    capturedBytes: 0,
     resumeFuel: 0,
     session: initial,
     dirty: checkpoint !== initial.head.manifest,
@@ -411,19 +411,17 @@ export const wasi = Effect.fn("wasi.execute")(function* (
           if (readinessChanged) yield* notify();
           if (
             capture !== null &&
-            step.kind !== "done" &&
+            guest.output_bytes() !== state.capturedBytes &&
             (step.kind !== "yield" ||
               state.checkpointFuel === 0 ||
               step.fuelUsed - state.checkpointFuel >= 10_000_000)
           ) {
-            const rawStdio = yield* Effect.try({
-              try: () => guest.stdio(),
+            const stdio = yield* Effect.try({
+              try: () => ({ stdout: guest.stdout_bytes(), stderr: guest.stderr_bytes() }),
               catch: (cause) => new WasmFailure({ cause }),
             });
-            const stdio = yield* Schema.decodeUnknownEffect(Schema.fromJsonString(CapturedStdio))(
-              rawStdio,
-            );
             yield* capture(stdio, step.kind === "yield");
+            state.capturedBytes = stdio.stdout.byteLength + stdio.stderr.byteLength;
             if (step.kind === "yield") state.checkpointFuel = step.fuelUsed;
           }
           const authorizedAt = yield* Clock.currentTimeMillis;

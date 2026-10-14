@@ -525,9 +525,15 @@ export const RunResult = Schema.Struct({
   result: Schema.Unknown,
   exitCode: Schema.Int,
 });
-export const CapturedStdio = RunResult.mapFields((fields) =>
-  Struct.pick(fields, ["stdout", "stderr"]),
-);
+export const CapturedBytes = RunResult.mapFields((fields) => ({
+  ...Struct.pick(fields, ["stdout", "stderr"]),
+  stdout: Schema.Uint8Array,
+  stderr: Schema.Uint8Array,
+}));
+export const CapturedStdio = Schema.Union([
+  RunResult.mapFields((fields) => Struct.pick(fields, ["stdout", "stderr"])),
+  CapturedBytes,
+]);
 export const ObservedOutput = RunResult.mapFields((fields) => ({
   ...fields,
   exitCode: Schema.NullOr(fields.exitCode),

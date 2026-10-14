@@ -1623,9 +1623,9 @@ test("WASI traps discard uncommitted changes while explicit sync preserves its c
   expect(Buffer.from(file.content, "base64").toString()).toBe("before trap");
 });
 
-test("WASI fuel, memory and serialized output limits cannot poison the Worker", async () => {
+test("WASI fuel and memory limits fail safely while JSON escaping cannot consume the raw output quota", async () => {
   const token = await setup("wasi-limits");
-  for (const name of ["fuel", "memory", "output", "budget"]) {
+  for (const name of ["fuel", "memory", "budget"]) {
     const record = Schema.decodeUnknownSync(RunRecord)(
       await (
         await act("wasi-limits", token, {
@@ -1640,6 +1640,18 @@ test("WASI fuel, memory and serialized output limits cannot poison the Worker", 
     expect(record.output).toBeNull();
     expect((await act("wasi-limits", token, { op: "vm.status" })).status).toBe(200);
   }
+  const response = await act("wasi-limits", token, {
+    op: "process.run",
+    id: "output",
+    language: "wasm",
+    source: await wasmFixture("output"),
+  });
+  expect(response.status).toBe(200);
+  const record = Schema.decodeUnknownSync(RunRecord)(await response.json());
+  expect(record.status).toBe("exited");
+  expect(record.output?.stdout).toBe('"'.repeat(policy.maxOutputBytes));
+  expect(record.output?.result).toBe(42);
+  expect((await act("wasi-limits", token, { op: "vm.status" })).status).toBe(200);
 });
 
 test("WASI positional I/O preserves offsets and simultaneous descriptors share file contents", async () => {
