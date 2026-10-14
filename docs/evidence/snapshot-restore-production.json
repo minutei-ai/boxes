@@ -1,0 +1,40 @@
+{
+  "measuredAt": "2026-10-14T19:32:44.363990+00:00",
+  "deployedCommit": "5fff4cf28502f913be3936b9d47264e284252b5c",
+  "profile": "minutei",
+  "production": {
+    "checks": 5,
+    "failures": 0,
+    "feature": "filesystem.restore",
+    "rootSnapshotPreserved": true,
+    "freshInodes": true,
+    "policyPreserved": true,
+    "writeAndManageRequired": true,
+    "disposal": true,
+    "transport": "Effect FetchHttpClient"
+  },
+  "local": {
+    "tests": 287,
+    "failures": 0,
+    "assertions": 2670,
+    "seconds": 159.07,
+    "typesPassed": true,
+    "clippyPassed": true,
+    "rustTestsPassed": true,
+    "formatPassed": true,
+    "concurrentWholeRootPublication": true,
+    "staleCheckpointRejectedInReplacementWorker": true
+  },
+  "sdk": {
+    "version": "0.3.0",
+    "operations": 55,
+    "effectConsumerVersion": "4.0.0",
+    "packedNativeServiceBindingTests": 4,
+    "packedNativeServiceBindingFailures": 0,
+    "archiveSha256": "cd2107dadb5f21bcdf98afed13e7a2c6d9e5a233d94d03041d3c9e9e766c25d0",
+    "minuteiIntegrationApplied": false
+  },
+  "ci": "https://github.com/minutei-ai/boxes/actions/runs/38624111311",
+  "newPersistedFormat": false,
+  "fullParity": false
+}
