@@ -1,0 +1,18 @@
+{
+  "measuredAt": "2026-10-14T05:32:27.637Z",
+  "url": "https://cirro-sandbox-prod-rs7wexxow56rmsoz.manoel-carvalhoneto.workers.dev",
+  "sandboxId": "inherited-pipe-proof-325c6cc9-12e3-44fe-8989-3b8bf17c448d",
+  "profile": "minutei",
+  "runtime": "standard Worker",
+  "checks": {
+    "duplexPollEofEpipe": true,
+    "bufferingAndResume": true,
+    "blockedFamily": true,
+    "cancellation": true,
+    "retainedOutput": true,
+    "disposal": true
+  },
+  "allPassed": true,
+  "durableChildReceipts": false,
+  "packageParity": false
+}
