@@ -1,0 +1,56 @@
+{
+  "target": "https://cirro-sandbox-prod-rs7wexxow56rmsoz.manoel-carvalhoneto.workers.dev",
+  "measuredAt": 1792019306946,
+  "checks": [
+    {
+      "name": "pipe",
+      "bytes": 70003,
+      "exitCode": 0
+    },
+    {
+      "name": "append",
+      "bytes": 140006,
+      "exitCode": 0
+    },
+    {
+      "name": "failure",
+      "bytes": 70003,
+      "exitCode": 7
+    },
+    {
+      "name": "trap",
+      "bytes": 70003,
+      "exitCode": 126
+    }
+  ],
+  "disposal": true,
+  "sourceCommit": "74c19a574a75a41a8583908a4ac26795ad449d0d",
+  "ci": {
+    "run": "https://github.com/minutei-ai/boxes/actions/runs/38651737347",
+    "result": "passed",
+    "tests": 304
+  },
+  "deployment": {
+    "provider": "native Alchemy",
+    "profile": "minutei",
+    "stage": "prod",
+    "migrations": "completed",
+    "kernelSha256": "54d8ba7a1f937d83c22a6abcd88583d83d430307493aea273b9456df3bb816f7"
+  },
+  "localCoverage": [
+    "cat overwrite and append",
+    "WASI pipelines in both directions",
+    "stdin file redirection",
+    "binary process output replay",
+    "exit code 7",
+    "acknowledged output before a WASI trap",
+    "denied write without file creation",
+    "aggregate cat output quota"
+  ],
+  "limitations": [
+    "Text filters retain UTF-8 semantics.",
+    "Original cross-stream ordering and complete POSIX shell semantics remain open.",
+    "Remote RPC and the Minutei consumer deployment are separate gates.",
+    "The local benchmark does not prove a production latency or cost improvement over AgentOS."
+  ]
+}
