@@ -281,6 +281,7 @@ await Effect.runPromise(
       "wait",
       "upper",
       "self",
+      "self-pause",
       "inherit-mask",
       "stop",
       "tstp",

@@ -189,6 +189,19 @@ pub extern "C" fn run() -> i32 {
         {
             return 1;
         }
+        if cfg!(case = "self-pause") {
+            let mut marker = *b"paused\n";
+            let io = Io {
+                pointer: marker.as_mut_ptr(),
+                length: 7,
+            };
+            let mut count = 0;
+            if fd_write(1, &io, 1, &mut count) != 0 {
+                return 38;
+            }
+            proc_kill(0, 19);
+            return 99;
+        }
         if cfg!(case = "self") {
             proc_kill(0, 9);
             return 99;

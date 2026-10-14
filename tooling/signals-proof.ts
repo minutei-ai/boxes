@@ -157,6 +157,35 @@ const receipts = await Effect.runPromise(
       }),
   ),
 );
+const pausedSource = Buffer.from(
+  await Bun.file(join(import.meta.dir, "../dist/wasi-signals-self-pause.wasm")).arrayBuffer(),
+).toString("base64");
+const queued = await action({
+  op: "process.spawn",
+  execution: { op: "process.run", id: "self-pause", language: "wasm", source: pausedSource },
+});
+const checkpoints: (typeof RunRecord.Type)[] = [];
+const deadline = Date.now() + 30000;
+while (Date.now() < deadline && checkpoints.length === 0) {
+  const record = Schema.decodeUnknownSync(RunRecord)(
+    await (await action({ op: "process.get", id: "self-pause" })).json(),
+  );
+  if (record.status === "running" && record.output?.stdout === "paused\n") checkpoints.push(record);
+  else await Bun.sleep(100);
+}
+const cancelled = await action({ op: "process.cancel", id: "self-pause" });
+const waited = await action({ op: "process.wait", id: "self-pause", timeoutMs: 10000 });
+const paused = Schema.decodeUnknownSync(RunRecord)(
+  await (await action({ op: "process.get", id: "self-pause" })).json(),
+);
+const stoppedCancellation =
+  queued.status === 200 &&
+  checkpoints.length === 1 &&
+  cancelled.status === 200 &&
+  waited.status === 409 &&
+  paused.status === "cancelled" &&
+  paused.output?.stdout === "paused\n" &&
+  paused.output.exitCode === null;
 const disposed = await action({ op: "vm.dispose" });
 const report = {
   measuredAt: new Date().toISOString(),
@@ -166,7 +195,9 @@ const report = {
   runtime: "standard Worker",
   receipts,
   disposal: disposed.status === 200,
-  allPassed: receipts.every((receipt) => receipt.passed) && disposed.status === 200,
+  stoppedCancellation,
+  allPassed:
+    receipts.every((receipt) => receipt.passed) && disposed.status === 200 && stoppedCancellation,
   stopContinue: true,
   customHandlers: false,
   fullProcessParity: false,

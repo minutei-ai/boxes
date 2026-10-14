@@ -1,7 +1,7 @@
 {
-  "measuredAt": "2026-10-14T07:15:46.055Z",
+  "measuredAt": "2026-10-14T07:45:12.301Z",
   "url": "https://cirro-sandbox-prod-rs7wexxow56rmsoz.manoel-carvalhoneto.workers.dev",
-  "sandboxId": "signals-proof-ba5e3996-beb2-4402-9cfc-ae005b207f44",
+  "sandboxId": "signals-proof-65f50474-52be-489e-992f-e8be2705bca8",
   "profile": "minutei",
   "runtime": "standard Worker",
   "receipts": [
@@ -40,10 +40,48 @@
     {
       "mode": "inherit-mask",
       "passed": true
+    },
+    {
+      "mode": "stop",
+      "passed": true
+    },
+    {
+      "mode": "tstp",
+      "passed": true
+    },
+    {
+      "mode": "stop-kill",
+      "passed": true
+    },
+    {
+      "mode": "stop-term",
+      "passed": true
+    },
+    {
+      "mode": "self-stop",
+      "passed": true
+    },
+    {
+      "mode": "stop-masked",
+      "passed": true
+    },
+    {
+      "mode": "stop-group",
+      "passed": true
+    },
+    {
+      "mode": "stop-zero",
+      "passed": true
+    },
+    {
+      "mode": "stop-clock",
+      "passed": true
     }
   ],
   "disposal": true,
+  "stoppedCancellation": true,
   "allPassed": true,
-  "handlersAndStopContinue": false,
+  "stopContinue": true,
+  "customHandlers": false,
   "fullProcessParity": false
 }

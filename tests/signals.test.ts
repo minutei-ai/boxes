@@ -135,3 +135,36 @@ for (const mode of [
     }
   });
 }
+
+test("durable cancellation releases a stopped root and preserves acknowledged output", async () => {
+  const source = Buffer.from(
+    await Bun.file(join(import.meta.dir, "../dist/wasi-signals-self-pause.wasm")).arrayBuffer(),
+  ).toString("base64");
+  expect(
+    (
+      await act({
+        op: "process.spawn",
+        execution: { op: "process.run", id: "self-pause", language: "wasm", source },
+      })
+    ).status,
+  ).toBe(200);
+  const checkpoints: (typeof RunRecord.Type)[] = [];
+  const deadline = Date.now() + 10000;
+  while (Date.now() < deadline && checkpoints.length === 0) {
+    const record = Schema.decodeUnknownSync(RunRecord)(
+      await (await act({ op: "process.get", id: "self-pause" })).json(),
+    );
+    if (record.status === "running" && record.output?.stdout === "paused\n")
+      checkpoints.push(record);
+    else await Bun.sleep(20);
+  }
+  expect(checkpoints.length).toBe(1);
+  expect((await act({ op: "process.cancel", id: "self-pause" })).status).toBe(200);
+  expect((await act({ op: "process.wait", id: "self-pause", timeoutMs: 10000 })).status).toBe(409);
+  const record = Schema.decodeUnknownSync(RunRecord)(
+    await (await act({ op: "process.get", id: "self-pause" })).json(),
+  );
+  expect(record.status).toBe("cancelled");
+  expect(record.output?.stdout).toBe("paused\n");
+  expect(record.output?.exitCode).toBeNull();
+}, 20000);
