@@ -218,6 +218,7 @@ mod tests {
         assert_eq!(byte_command("wc", &["-c".into()], input).stdout, b"6\n");
         assert_eq!(byte_command("wc", &["-w".into()], input).stdout, b"2\n");
         assert_eq!(byte_command("wc", &["-l".into()], input).stdout, b"1\n");
+        assert_eq!(byte_command("wc", &["-w".into()], b"a\x0bb").stdout, b"2\n");
         assert_eq!(
             byte_command("wc", &["-c".into(), "ignored".into()], input).exit_code,
             2
@@ -332,7 +333,7 @@ pub fn byte_command(name: &str, args: &[String], stdin: &[u8]) -> Output {
             }
             let lines = stdin.iter().filter(|b| **b == b'\n').count();
             let words = stdin
-                .split(|b| b.is_ascii_whitespace())
+                .split(|b| b.is_ascii_whitespace() || *b == 0x0b)
                 .filter(|word| !word.is_empty())
                 .count();
             let bytes = stdin.len();

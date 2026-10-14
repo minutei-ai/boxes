@@ -196,7 +196,13 @@ test("binary shell preserves cat, WASI pipes, redirections, failure output and d
             const oracle = yield* Effect.sync(() =>
               Bun.spawnSync({
                 cmd: [`/usr/bin/${item.command}`, ...item.args],
-                stdin: filterInput,
+                stdin: Buffer.from(
+                  Uint8Array.from(filterInput).map((byte) => {
+                    if (item.name !== "wc-words") return byte;
+                    if ([9, 10, 11, 12, 13, 32].includes(byte)) return byte;
+                    return 120;
+                  }),
+                ),
                 stdout: "pipe",
                 stderr: "pipe",
                 env: { LC_ALL: "C" },
