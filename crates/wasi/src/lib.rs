@@ -219,6 +219,7 @@ enum Completion {
         resources: SpawnResources,
         actions: Vec<SpawnAction>,
         mask: u64,
+        group: Option<u32>,
     },
     Wait {
         pids: Vec<u32>,
@@ -304,11 +305,13 @@ struct Pending {
 
 struct ChildStatus {
     parent: u32,
+    group: u32,
     code: Option<i32>,
     failed: bool,
 }
 struct ProcessTable {
     next_pid: u32,
+    root_group: u32,
     memory_bytes: usize,
     children: BTreeMap<u32, ChildStatus>,
     buffers: Vec<Weak<RefCell<FileBuffer>>>,
@@ -716,11 +719,78 @@ fn dispatch(caller: &mut Caller<'_, State>, name: &str, args: &[u64]) -> Result<
             };
             put(caller, a[0], &pid.to_le_bytes())?;
         }
+        "proc_getpgid" => {
+            bytes(caller, a[1], 4)?;
+            let requested = a[0] as u32;
+            let pid = if requested == 0 {
+                caller.data().pid
+            } else {
+                requested
+            };
+            let table = caller.data().processes.borrow();
+            let group = if pid == 1 {
+                table.root_group
+            } else {
+                table.children.get(&pid).ok_or(Failure::Errno(71))?.group
+            };
+            drop(table);
+            put(caller, a[1], &group.to_le_bytes())?;
+        }
+        "proc_setpgid" => {
+            let requested = a[0] as u32;
+            let requested_group = a[1] as u32;
+            if requested > i32::MAX as u32 || requested_group > i32::MAX as u32 {
+                return Err(Failure::Errno(28));
+            }
+            let pid = if requested == 0 {
+                caller.data().pid
+            } else {
+                requested
+            };
+            let mut table = caller.data().processes.borrow_mut();
+            if pid != 1 && !table.children.contains_key(&pid) {
+                return Err(Failure::Errno(71));
+            }
+            let group = if requested_group == 0 {
+                pid
+            } else {
+                requested_group
+            };
+            if group != pid
+                && group != table.root_group
+                && !table
+                    .children
+                    .values()
+                    .any(|child| child.group == group && child.code.is_none() && !child.failed)
+            {
+                return Err(Failure::Errno(63));
+            }
+            if pid == 1 {
+                table.root_group = group;
+            } else {
+                table
+                    .children
+                    .get_mut(&pid)
+                    .ok_or(Failure::Errno(71))?
+                    .group = group;
+            }
+        }
         "proc_spawn_v3" => {
             bytes(caller, a[16], 4)?;
-            if a[10] & !8 != 0 || a[11] != 0 || a[12] != 0 || a[15] != 0 {
+            if a[10] & !10 != 0 || a[11] != 0 || a[12] != 0 {
                 return Err(Failure::Errno(58));
             }
+            let group = if a[10] & 2 != 0 {
+                if a[15] as u32 > i32::MAX as u32 {
+                    return Err(Failure::Errno(28));
+                }
+                Some(a[15] as u32)
+            } else {
+                if a[15] != 0 {
+                    return Err(Failure::Errno(28));
+                }
+                None
+            };
             let cwd = bytes(caller, a[8], a[9])?;
             let cwd = std::str::from_utf8(&cwd).map_err(|_| Failure::Errno(25))?;
             if cwd.len() > 4096 || cwd.contains('\0') {
@@ -853,6 +923,7 @@ fn dispatch(caller: &mut Caller<'_, State>, name: &str, args: &[u64]) -> Result<
                     resources,
                     actions,
                     mask,
+                    group,
                 },
             )?;
         }
@@ -2316,6 +2387,8 @@ fn linker(engine: &Engine) -> Result<Linker<State>, String> {
     bind!("wasi_snapshot_preview1","clock_res_get",a:i32,b:i32);
     bind!("wasi_snapshot_preview1", "sched_yield");
     bind!("host_process","proc_getpid",a:i32);
+    bind!("host_process","proc_getpgid",a:i32,b:i32);
+    bind!("host_process","proc_setpgid",a:i32,b:i32);
     bind!("host_process","proc_getppid",a:i32);
     linker
         .func_new(
@@ -2501,6 +2574,7 @@ impl WasmGuest {
                 cwd: "/".into(),
                 processes: Rc::new(RefCell::new(ProcessTable {
                     next_pid: 2,
+                    root_group: 1,
                     memory_bytes: memory,
                     children: BTreeMap::new(),
                     buffers: Vec::new(),
@@ -2935,7 +3009,7 @@ impl WasmGuest {
         configuration: &str,
         cwd: &str,
     ) -> Result<Option<WasmGuest>, JsValue> {
-        let (resources, mask) = match self
+        let (resources, mask, requested_group) = match self
             .store
             .data()
             .pending
@@ -2943,8 +3017,11 @@ impl WasmGuest {
             .map(|pending| &pending.completion)
         {
             Some(Completion::Spawn {
-                resources, mask, ..
-            }) => (resources.clone(), *mask),
+                resources,
+                mask,
+                group,
+                ..
+            }) => (resources.clone(), *mask, *group),
             _ => return Err(JsValue::from_str("No pending spawn")),
         };
         let table = self.store.data().processes.clone();
@@ -2952,6 +3029,34 @@ impl WasmGuest {
             || table.borrow().memory_bytes + self.memory_limit > 67_108_864
         {
             self.respond(48, &[], "/", false, 0, &[])?;
+            return Ok(None);
+        }
+        let pid = table.borrow().next_pid;
+        let inherited_group = if self.store.data().pid == 1 {
+            table.borrow().root_group
+        } else {
+            table
+                .borrow()
+                .children
+                .get(&self.store.data().pid)
+                .ok_or_else(|| JsValue::from_str("Missing parent process"))?
+                .group
+        };
+        let group = match requested_group {
+            Some(0) => pid,
+            Some(group) => group,
+            None => inherited_group,
+        };
+        if requested_group.is_some()
+            && group != pid
+            && group != table.borrow().root_group
+            && !table
+                .borrow()
+                .children
+                .values()
+                .any(|child| child.group == group && child.code.is_none() && !child.failed)
+        {
+            self.respond(63, &[], "/", false, 0, &[])?;
             return Ok(None);
         }
         let available = self.budget.get();
@@ -2989,7 +3094,6 @@ impl WasmGuest {
         for fd in state.cloexec.clone() {
             close(state, fd);
         }
-        let pid = table.borrow().next_pid;
         state.pid = pid;
         state.parent_pid = parent.pid;
         state.cwd = cwd.into();
@@ -3000,6 +3104,7 @@ impl WasmGuest {
             pid,
             ChildStatus {
                 parent: parent.pid,
+                group,
                 code: None,
                 failed: false,
             },
