@@ -1,0 +1,107 @@
+{
+  "measuredAt": "2026-10-14T08:37:52.675Z",
+  "url": "https://cirro-sandbox-prod-rs7wexxow56rmsoz.manoel-carvalhoneto.workers.dev",
+  "sandboxId": "handlers-proof-999a9fcf-5e71-4ad3-9e13-6e5f5561c5c3",
+  "profile": "minutei",
+  "runtime": "standard Worker",
+  "receipts": [
+    {
+      "mode": "self",
+      "passed": true
+    },
+    {
+      "mode": "coalesce",
+      "passed": true
+    },
+    {
+      "mode": "sliced",
+      "passed": true
+    },
+    {
+      "mode": "missing",
+      "passed": true
+    },
+    {
+      "mode": "bad-signature",
+      "passed": true
+    },
+    {
+      "mode": "defer",
+      "passed": true
+    },
+    {
+      "mode": "nodefer",
+      "passed": true
+    },
+    {
+      "mode": "sa-mask",
+      "passed": true
+    },
+    {
+      "mode": "reset",
+      "passed": true
+    },
+    {
+      "mode": "upper",
+      "passed": true
+    },
+    {
+      "mode": "io",
+      "passed": true
+    },
+    {
+      "mode": "external",
+      "passed": true
+    },
+    {
+      "mode": "restart",
+      "passed": true
+    },
+    {
+      "mode": "external-io",
+      "passed": true
+    },
+    {
+      "mode": "inherit",
+      "passed": true
+    },
+    {
+      "mode": "chld",
+      "passed": true
+    },
+    {
+      "mode": "chld-stop",
+      "passed": true
+    },
+    {
+      "mode": "nocldstop",
+      "passed": true
+    },
+    {
+      "mode": "cont-handler",
+      "passed": true
+    },
+    {
+      "mode": "ignore-cont",
+      "passed": true
+    },
+    {
+      "mode": "restart-poll",
+      "passed": true
+    }
+  ],
+  "limits": [
+    {
+      "mode": "infinite",
+      "passed": true
+    },
+    {
+      "mode": "nest-limit",
+      "passed": true
+    }
+  ],
+  "disposal": true,
+  "allPassed": true,
+  "altStackAndAutoReap": false,
+  "fullProcessParity": false
+}
