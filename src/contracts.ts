@@ -382,6 +382,7 @@ export const ToolStep = Schema.Union([
 ]);
 
 export const WasmStep = Schema.Union([
+  Schema.Struct({ kind: Schema.Literal("yield") }),
   Schema.Struct({
     kind: Schema.Literal("open"),
     path: Path,

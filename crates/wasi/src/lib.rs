@@ -4,8 +4,8 @@ use std::collections::{BTreeMap, BTreeSet, VecDeque};
 use std::rc::Rc;
 use wasm_bindgen::prelude::*;
 use wasmi::{
-    Caller, Config, Engine, Error, Func, Linker, Memory, Module, ResumableCall,
-    ResumableCallHostTrap, Store, StoreLimits, StoreLimitsBuilder, Val,
+    Caller, CompilationMode, Config, Engine, Error, Func, Linker, Memory, Module, ResumableCall,
+    ResumableCallHostTrap, ResumableCallOutOfFuel, Store, StoreLimits, StoreLimitsBuilder, Val,
 };
 
 #[derive(Deserialize)]
@@ -17,6 +17,7 @@ struct Configuration {
 
 include!(concat!(env!("OUT_DIR"), "/module_limit.rs"));
 
+const FUEL_SLICE: u64 = 100_000;
 const MAX_FILES: usize = 128;
 const PIPE_BYTES: usize = 65_536;
 const PIPE_ATOMIC_BYTES: usize = 4096;
@@ -1980,6 +1981,8 @@ pub struct WasmGuest {
     function: Func,
     memory: Option<Memory>,
     invocation: Option<ResumableCallHostTrap>,
+    exhaustion: Option<ResumableCallOutOfFuel>,
+    fuel_left: u64,
     response: Option<Val>,
     outputs: Vec<Val>,
     done: Option<i32>,
@@ -2044,6 +2047,7 @@ impl WasmGuest {
             .collect();
         let mut config = Config::default();
         config.consume_fuel(true);
+        config.compilation_mode(CompilationMode::Eager);
         config.wasm_tail_call(false);
         let engine = Engine::new(&config);
         let module = Module::new(&engine, bytes).map_err(|error| error.to_string())?;
@@ -2117,11 +2121,16 @@ impl WasmGuest {
             .map(|ty| Val::default_for_ty(*ty))
             .collect();
         let memory = instance.get_memory(&store, "memory");
+        let available = store.get_fuel().map_err(|error| error.to_string())?;
+        let slice = available.min(FUEL_SLICE);
+        store.set_fuel(slice).map_err(|error| error.to_string())?;
         Ok(Self {
             store,
             function,
             memory,
             invocation: None,
+            exhaustion: None,
+            fuel_left: available - slice,
             response: None,
             outputs,
             done: None,
@@ -2129,17 +2138,31 @@ impl WasmGuest {
     }
 
     fn advance(&mut self) -> Result<(), String> {
-        let call = match self.invocation.take() {
-            Some(invocation) => {
-                let response = self
-                    .response
-                    .take()
-                    .ok_or("Wasm host response is required")?;
-                invocation.resume(&mut self.store, &[response], &mut self.outputs)
+        let call = if let Some(invocation) = self.exhaustion.take() {
+            let available =
+                self.store.get_fuel().map_err(|error| error.to_string())? + self.fuel_left;
+            if available < invocation.required_fuel() {
+                return Err("Wasm fuel exhausted".into());
             }
-            None => self
-                .function
-                .call_resumable(&mut self.store, &[], &mut self.outputs),
+            let slice = available.min(FUEL_SLICE).max(invocation.required_fuel());
+            self.fuel_left = available - slice;
+            self.store
+                .set_fuel(slice)
+                .map_err(|error| error.to_string())?;
+            invocation.resume(&mut self.store, &mut self.outputs)
+        } else {
+            match self.invocation.take() {
+                Some(invocation) => {
+                    let response = self
+                        .response
+                        .take()
+                        .ok_or("Wasm host response is required")?;
+                    invocation.resume(&mut self.store, &[response], &mut self.outputs)
+                }
+                None => self
+                    .function
+                    .call_resumable(&mut self.store, &[], &mut self.outputs),
+            }
         };
         match call {
             Ok(ResumableCall::Finished) => self.done = Some(0),
@@ -2153,7 +2176,14 @@ impl WasmGuest {
                     return Err(invocation.host_error().to_string());
                 }
             }
-            Ok(ResumableCall::OutOfFuel(_)) => return Err("Wasm fuel exhausted".into()),
+            Ok(ResumableCall::OutOfFuel(invocation)) => {
+                let available =
+                    self.store.get_fuel().map_err(|error| error.to_string())? + self.fuel_left;
+                if available < invocation.required_fuel() {
+                    return Err("Wasm fuel exhausted".into());
+                }
+                self.exhaustion = Some(invocation);
+            }
             Err(error) => {
                 if let Some(code) = error.i32_exit_status() {
                     self.done = Some(code);
@@ -2185,6 +2215,9 @@ impl WasmGuest {
     pub fn step(&mut self) -> Result<String, JsValue> {
         if self.store.data().pending.is_none() && self.done.is_none() {
             self.advance().map_err(|error| JsValue::from_str(&error))?;
+        }
+        if self.exhaustion.is_some() {
+            return Ok(r#"{"kind":"yield"}"#.into());
         }
         if let Some(pending) = &self.store.data().pending {
             return serde_json::to_string(&pending.request)
@@ -2851,6 +2884,54 @@ mod tests {
             drop(child);
             assert!(buffer.upgrade().is_none());
         }
+    }
+
+    #[test]
+    fn fuel_slices_resume_without_restarting_or_extending_the_total_budget() {
+        let configuration = r#"{"argv":[],"env":{}}"#;
+        let mut guest = WasmGuest::create(
+            include_bytes!("../../../dist/wasi-slices-finite.wasm"),
+            configuration,
+            &[],
+            8_388_608,
+            100_000_000,
+            1024,
+        )
+        .unwrap();
+        let mut slices = 0;
+        while guest.done.is_none() {
+            guest.advance().unwrap();
+            slices += 1;
+            assert!(slices < 1000);
+        }
+        assert!(slices > 1);
+        assert_eq!(guest.outputs.first().and_then(Val::i32), Some(352));
+        assert_eq!(guest.store.data().stdout, b"cpu loop started\n");
+        let mut guest = WasmGuest::create(
+            include_bytes!("../../../dist/wasi-slices-infinite.wasm"),
+            configuration,
+            &[],
+            8_388_608,
+            500_000,
+            1024,
+        )
+        .unwrap();
+        let mut slices = 0;
+        loop {
+            match guest.advance() {
+                Ok(()) => {
+                    slices += 1;
+                    assert!(slices < 10);
+                }
+                Err(error) => {
+                    assert_eq!(error, "Wasm fuel exhausted");
+                    break;
+                }
+            }
+        }
+        assert!(slices > 1);
+        assert_eq!(guest.store.data().stdout, b"cpu loop started\n");
+        assert!(guest.fuel_left < FUEL_SLICE);
     }
 
     #[test]

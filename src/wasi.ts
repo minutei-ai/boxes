@@ -136,6 +136,10 @@ export const wasi = Effect.fn("wasi.execute")(function* (
           status: 401,
           message: "Capability expired",
         });
+      if (step.kind === "yield") {
+        yield* Effect.sleep(1);
+        continue;
+      }
       const timestamp = yield* Clock.currentTimeNanos;
       yield* kernelCall(() => kernel.set_time(timestamp));
       if (step.kind === "done") {

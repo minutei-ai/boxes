@@ -199,6 +199,23 @@ await Effect.runPromise(
       "-o",
       "dist/wasi-signal-mask.wasm",
     ]);
+    for (const mode of ["finite", "infinite"]) {
+      yield* run([
+        "rustc",
+        "--crate-type",
+        "cdylib",
+        "--target",
+        "wasm32-unknown-unknown",
+        "-O",
+        "-C",
+        "strip=symbols",
+        "--cfg",
+        `case="${mode}"`,
+        "tests/fixtures/wasi-slices.rs",
+        "-o",
+        `dist/wasi-slices-${mode}.wasm`,
+      ]);
+    }
     for (const role of ["parent", "child"]) {
       yield* run([
         "rustc",
