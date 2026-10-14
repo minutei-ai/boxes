@@ -1,0 +1,45 @@
+{
+  "measuredAt": "2026-10-14T21:04:24.634391+00:00",
+  "deployedCommit": "4ae833822ff0dbad6dd6624bf16886f3a58c018b",
+  "profile": "minutei",
+  "local": {
+    "tests": 298,
+    "failures": 0,
+    "assertions": 2724,
+    "seconds": 166.36,
+    "typesPassed": true,
+    "clippyPassed": true,
+    "rustTestsPassed": true,
+    "formatPassed": true
+  },
+  "sdk": {
+    "version": "0.6.0",
+    "effectConsumerVersion": "4.0.0",
+    "packedNativeWorkerTests": 10,
+    "packedNativeWorkerFailures": 0,
+    "packedNativeWorkerSeconds": 3.44,
+    "archiveSha256": "891801341a61e252c63f00238025d04a0269663fec28bd1c7562831db51a8f50"
+  },
+  "voidCallbacks": {
+    "nativeRustRegression": true,
+    "omittedInputPreserved": true,
+    "undefinedResultPreserved": true,
+    "nullIsDistinct": true,
+    "workerdRpcRegression": true
+  },
+  "bootstrap": {
+    "sourceLanguage": "TypeScript",
+    "compiler": "native Rust/Oxc through Cargo build script",
+    "generatedJavascriptOwner": "Cargo OUT_DIR",
+    "authoredJavascriptFiles": 0,
+    "unrelatedDependencyVersionsChanged": false
+  },
+  "production": {
+    "httpSdkRegressionChecks": 6,
+    "failures": 0,
+    "remoteRpcInvoked": false
+  },
+  "ci": "https://github.com/minutei-ai/boxes/actions/runs/38636793930",
+  "minuteiConsumerApplied": false,
+  "fullParity": false
+}
