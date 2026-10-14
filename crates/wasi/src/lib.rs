@@ -5,7 +5,8 @@ use std::rc::{Rc, Weak};
 use wasm_bindgen::prelude::*;
 use wasmi::{
     Caller, CompilationMode, Config, Engine, Error, Func, Linker, Memory, Module, ResumableCall,
-    ResumableCallHostTrap, ResumableCallOutOfFuel, Store, StoreLimits, StoreLimitsBuilder, Val,
+    ResumableCallHostTrap, ResumableCallOutOfFuel, Store, StoreLimits, StoreLimitsBuilder,
+    TrapCode, Val,
 };
 
 #[derive(Deserialize)]
@@ -2594,6 +2595,24 @@ impl WasmGuest {
                 if let Some(code) = error.i32_exit_status() {
                     self.done = Some(code);
                     self.outputs.clear();
+                } else if self.store.data().pid != 1
+                    && matches!(
+                        error.as_trap_code(),
+                        Some(
+                            TrapCode::UnreachableCodeReached
+                                | TrapCode::MemoryOutOfBounds
+                                | TrapCode::TableOutOfBounds
+                                | TrapCode::IndirectCallToNull
+                                | TrapCode::IntegerDivisionByZero
+                                | TrapCode::IntegerOverflow
+                                | TrapCode::BadConversionToInteger
+                                | TrapCode::StackOverflow
+                                | TrapCode::BadSignature
+                        )
+                    )
+                {
+                    self.done = Some(1);
+                    self.outputs.clear();
                 } else {
                     return Err(error.to_string());
                 }
@@ -3601,6 +3620,27 @@ mod tests {
         );
     }
     #[test]
+    fn guest_traps_are_local_to_children_but_root_traps_remain_failures() {
+        let module = [
+            0, 97, 115, 109, 1, 0, 0, 0, 1, 5, 1, 96, 0, 1, 127, 3, 2, 1, 0, 7, 7, 1, 3, 114, 117,
+            110, 0, 0, 10, 5, 1, 3, 0, 0, 11,
+        ];
+        let configuration = r#"{"argv":[],"env":{}}"#;
+        let mut root =
+            WasmGuest::create(&module, configuration, &[], 8_388_608, 100_000, 1024, None).unwrap();
+        assert_eq!(
+            root.advance().unwrap_err(),
+            "wasm `unreachable` instruction executed"
+        );
+        assert_eq!(root.done, None);
+        let mut child =
+            WasmGuest::create(&module, configuration, &[], 8_388_608, 100_000, 1024, None).unwrap();
+        child.store.data_mut().pid = 2;
+        child.advance().unwrap();
+        assert_eq!(child.done, Some(1));
+        assert!(child.outputs.is_empty());
+    }
+    #[test]
     fn inherited_pipe_endpoints_survive_other_stores_and_release_on_guest_drop() {
         let module = include_bytes!("../../../dist/wasi-pipe-blocked.wasm");
         let configuration = r#"{"argv":[],"env":{}}"#;
@@ -3807,6 +3847,7 @@ mod tests {
             None,
         )
         .unwrap();
+        guest.store.data_mut().pid = 2;
         let mut slices = 0;
         loop {
             match guest.advance() {

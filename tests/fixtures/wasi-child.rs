@@ -73,7 +73,12 @@ struct Io {
     length: u32,
 }
 
-#[cfg(any(case = "child", case = "child-rename"))]
+#[cfg(any(
+    case = "child",
+    case = "child-rename",
+    case = "child-trap",
+    case = "child-oob"
+))]
 #[unsafe(no_mangle)]
 pub extern "C" fn _start() {
     unsafe {
@@ -146,11 +151,22 @@ pub extern "C" fn _start() {
         if fd_write(1, &io, 1, &mut count) != 0 {
             proc_exit(47);
         }
+        if cfg!(case = "child-trap") {
+            std::arch::wasm32::unreachable();
+        }
+        if cfg!(case = "child-oob") {
+            std::ptr::read_volatile(usize::MAX as *const u8);
+        }
         proc_exit(7);
     }
 }
 
-#[cfg(not(any(case = "child", case = "child-rename")))]
+#[cfg(not(any(
+    case = "child",
+    case = "child-rename",
+    case = "child-trap",
+    case = "child-oob"
+)))]
 #[unsafe(no_mangle)]
 pub extern "C" fn run() -> i32 {
     unsafe {
@@ -256,7 +272,7 @@ pub extern "C" fn run() -> i32 {
         let mut waited = 91;
         let mut core = 91;
         if proc_waitpid_v2(child, 0, &mut code, &mut signal, &mut waited, &mut core) != 0
-            || code != 7
+            || code != if cfg!(case = "parent-trap") { 1 } else { 7 }
             || signal != 0
             || waited != child
             || core != 0
@@ -279,6 +295,16 @@ pub extern "C" fn run() -> i32 {
             || u64::from_le_bytes(stat[32..40].try_into().unwrap()) != 4
         {
             return 10;
+        }
+        if cfg!(case = "parent-trap") {
+            let mut marker = [b'Y'];
+            let io = Io {
+                pointer: marker.as_mut_ptr(),
+                length: 1,
+            };
+            if fd_write(9, &io, 1, &mut count) != 0 {
+                return 11;
+            }
         }
         let mut marker = *b"waited\n";
         let io = Io {

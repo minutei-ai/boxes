@@ -259,7 +259,15 @@ await Effect.runPromise(
         `dist/wasi-inherited-pipe-${role}.wasm`,
       ]);
     }
-    for (const role of ["parent", "child", "child-rename", "denied"]) {
+    for (const role of [
+      "parent",
+      "child",
+      "child-rename",
+      "child-trap",
+      "child-oob",
+      "parent-trap",
+      "denied",
+    ]) {
       yield* run([
         "rustc",
         "--crate-type",

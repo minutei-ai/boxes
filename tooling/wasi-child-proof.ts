@@ -93,6 +93,53 @@ const moved = Schema.decodeUnknownSync(FileContent)(
 );
 const missing = await action({ op: "filesystem.readFile", path: "/tmp/shared" });
 await missing.text();
+const trapped = await Effect.runPromise(
+  Effect.forEach(["child-trap", "child-oob"] as const, (mode) =>
+    Effect.tryPromise(async () => {
+      const child = Buffer.from(
+        await Bun.file(join(import.meta.dir, `../dist/wasi-child-${mode}.wasm`)).arrayBuffer(),
+      ).toString("base64");
+      const uploaded = await action({
+        op: "filesystem.writeFile",
+        path: "/tmp/child.wasm",
+        content: child,
+        encoding: "base64",
+      });
+      const executable = await action({
+        op: "filesystem.chmod",
+        path: "/tmp/child.wasm",
+        mode: 493,
+      });
+      const reset = await action({
+        op: "filesystem.writeFile",
+        path: "/tmp/shared",
+        content: "abc",
+        encoding: "utf8",
+      });
+      const source = Buffer.from(
+        await Bun.file(join(import.meta.dir, "../dist/wasi-child-parent-trap.wasm")).arrayBuffer(),
+      ).toString("base64");
+      const response = await action({ op: "process.run", id: mode, language: "wasm", source });
+      const record = Schema.decodeUnknownSync(RunRecord)(await response.json());
+      const file = Schema.decodeUnknownSync(FileContent)(
+        await (await action({ op: "filesystem.readFile", path: "/tmp/shared" })).json(),
+      );
+      return {
+        mode,
+        passed:
+          uploaded.status === 200 &&
+          executable.status === 200 &&
+          reset.status === 200 &&
+          response.status === 200 &&
+          record.status === "exited" &&
+          record.output?.result === 0 &&
+          record.output.exitCode === 0 &&
+          record.output.stdout === "parent\nchild\nwaited\n" &&
+          Buffer.from(file.content, file.encoding).toString() === "abcXY",
+      };
+    }),
+  ),
+);
 const disposed = await action({ op: "vm.dispose" });
 const checks = {
   setup: uploaded.status === 200 && executable.status === 200 && written.status === 200,
@@ -108,6 +155,7 @@ const checks = {
     renamed.output?.result === 0 &&
     Buffer.from(moved.content, moved.encoding).toString() === "abcX" &&
     missing.status === 404,
+  childTrapIsolation: trapped.every((receipt) => receipt.passed),
   disposal: disposed.status === 200,
 };
 const report = {
@@ -117,6 +165,7 @@ const report = {
   profile: "minutei",
   runtime: "standard Worker",
   checks,
+  trapped,
   allPassed: Object.values(checks).every(Boolean),
   fullProcessParity: false,
   durableChildReceipts: false,

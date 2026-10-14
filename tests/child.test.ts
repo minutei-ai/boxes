@@ -161,3 +161,48 @@ test("a child rename preserves the parent's open inode metadata and shared conte
   );
   expect(Buffer.from(moved.content, moved.encoding).toString()).toBe("abcX");
 });
+
+for (const mode of ["child-trap", "child-oob"] as const) {
+  test(`${mode} is reaped with a nonzero status while the parent continues writing shared files`, async () => {
+    const child = Buffer.from(
+      await Bun.file(join(import.meta.dir, `../dist/wasi-child-${mode}.wasm`)).arrayBuffer(),
+    ).toString("base64");
+    expect(
+      (
+        await act({
+          op: "filesystem.writeFile",
+          path: "/tmp/child.wasm",
+          content: child,
+          encoding: "base64",
+        })
+      ).status,
+    ).toBe(200);
+    expect((await act({ op: "filesystem.chmod", path: "/tmp/child.wasm", mode: 493 })).status).toBe(
+      200,
+    );
+    expect(
+      (
+        await act({
+          op: "filesystem.writeFile",
+          path: "/tmp/shared",
+          content: "abc",
+          encoding: "utf8",
+        })
+      ).status,
+    ).toBe(200);
+    const source = Buffer.from(
+      await Bun.file(join(import.meta.dir, "../dist/wasi-child-parent-trap.wasm")).arrayBuffer(),
+    ).toString("base64");
+    const response = await act({ op: "process.run", id: mode, language: "wasm", source });
+    expect(response.status).toBe(200);
+    const record = Schema.decodeUnknownSync(RunRecord)(await response.json());
+    expect(record.status).toBe("exited");
+    expect(record.output?.result).toBe(0);
+    expect(record.output?.exitCode).toBe(0);
+    expect(record.output?.stdout).toBe("parent\nchild\nwaited\n");
+    const file = Schema.decodeUnknownSync(FileContent)(
+      await (await act({ op: "filesystem.readFile", path: "/tmp/shared" })).json(),
+    );
+    expect(Buffer.from(file.content, file.encoding).toString()).toBe("abcXY");
+  });
+}
