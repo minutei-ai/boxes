@@ -1,11 +1,12 @@
-import { Effect } from "effect";
+import { Effect, type Schema } from "effect";
 import type { CapturedStdio, Fault, ObservedOutput, StoredOutput, StdioRef } from "./contracts";
 import { StorageFailure } from "./storage";
 import type { Env } from "./resources";
 
 export type OutputCapture = (
   stdio: typeof CapturedStdio.Type,
-) => Effect.Effect<void, StorageFailure | Fault>;
+  observeCancellation?: boolean,
+) => Effect.Effect<void, StorageFailure | Fault | Schema.SchemaError>;
 
 const chunkBytes = 65_536;
 

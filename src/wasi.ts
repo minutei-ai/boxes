@@ -101,7 +101,12 @@ export const wasi = Effect.fn("wasi.execute")(function* (
   );
   const kernel = initial.kernel;
   const checkpoint = yield* kernelCall(() => kernel.manifest());
-  const state = { session: initial, dirty: checkpoint !== initial.head.manifest, checkpoint };
+  const state = {
+    checkpointFuel: 0,
+    session: initial,
+    dirty: checkpoint !== initial.head.manifest,
+    checkpoint,
+  };
   return yield* Effect.gen(function* () {
     const completed: (typeof RunResult.Type)[] = [];
     while (completed.length === 0) {
@@ -119,7 +124,13 @@ export const wasi = Effect.fn("wasi.execute")(function* (
       const step = yield* Schema.decodeUnknownEffect(Schema.fromJsonString(WasmStep), {
         onExcessProperty: "error",
       })(raw);
-      if (capture !== null && step.kind !== "done") {
+      if (
+        capture !== null &&
+        step.kind !== "done" &&
+        (step.kind !== "yield" ||
+          state.checkpointFuel === 0 ||
+          step.fuelUsed - state.checkpointFuel >= 10_000_000)
+      ) {
         const rawStdio = yield* Effect.try({
           try: () => guest.stdio(),
           catch: (cause) => new WasmFailure({ cause }),
@@ -127,7 +138,8 @@ export const wasi = Effect.fn("wasi.execute")(function* (
         const stdio = yield* Schema.decodeUnknownEffect(Schema.fromJsonString(CapturedStdio))(
           rawStdio,
         );
-        yield* capture(stdio);
+        yield* capture(stdio, step.kind === "yield");
+        if (step.kind === "yield") state.checkpointFuel = step.fuelUsed;
       }
       const authorizedAt = yield* Clock.currentTimeMillis;
       if (capability.expiresAt <= authorizedAt)

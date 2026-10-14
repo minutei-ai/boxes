@@ -1983,6 +1983,7 @@ pub struct WasmGuest {
     invocation: Option<ResumableCallHostTrap>,
     exhaustion: Option<ResumableCallOutOfFuel>,
     fuel_left: u64,
+    fuel_limit: u64,
     response: Option<Val>,
     outputs: Vec<Val>,
     done: Option<i32>,
@@ -2131,6 +2132,7 @@ impl WasmGuest {
             invocation: None,
             exhaustion: None,
             fuel_left: available - slice,
+            fuel_limit: fuel,
             response: None,
             outputs,
             done: None,
@@ -2217,7 +2219,15 @@ impl WasmGuest {
             self.advance().map_err(|error| JsValue::from_str(&error))?;
         }
         if self.exhaustion.is_some() {
-            return Ok(r#"{"kind":"yield"}"#.into());
+            let available = self
+                .store
+                .get_fuel()
+                .map_err(|error| JsValue::from_str(&error.to_string()))?
+                + self.fuel_left;
+            return serde_json::to_string(
+                &serde_json::json!({"kind":"yield","fuelUsed":self.fuel_limit - available}),
+            )
+            .map_err(|error| JsValue::from_str(&error.to_string()));
         }
         if let Some(pending) = &self.store.data().pending {
             return serde_json::to_string(&pending.request)
@@ -2899,8 +2909,14 @@ mod tests {
         )
         .unwrap();
         let mut slices = 0;
+        let mut consumed = 0;
         while guest.done.is_none() {
-            guest.advance().unwrap();
+            let step: serde_json::Value = serde_json::from_str(&guest.step().unwrap()).unwrap();
+            if step["kind"] == "yield" {
+                let reported = step["fuelUsed"].as_u64().unwrap();
+                assert!(reported > consumed && reported <= 100_000_000);
+                consumed = reported;
+            }
             slices += 1;
             assert!(slices < 1000);
         }

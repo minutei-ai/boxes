@@ -83,7 +83,7 @@ export const shell = Effect.fn("shell.execute")(function* (
                 stdin: { content: input, encoding: "utf8" },
               }).pipe(Effect.flatMap(Schema.decodeUnknownEffect(WasmProgram)));
               const before = session.etag;
-              const commandCapture: OutputCapture = (stdio) => {
+              const commandCapture: OutputCapture = (stdio, observeCancellation) => {
                 const stdout = Match.value(command.pipe || command.output !== null).pipe(
                   Match.when(true, () => state.stdout),
                   Match.orElse(() => state.stdout + stdio.stdout),
@@ -100,7 +100,7 @@ export const shell = Effect.fn("shell.execute")(function* (
                       message: "Shell output limit exceeded",
                     }),
                   );
-                return capture({ stdout, stderr });
+                return capture({ stdout, stderr }, observeCancellation);
               };
               return yield* wasi(env, capability, program, session, commandCapture).pipe(
                 Effect.ensuring(

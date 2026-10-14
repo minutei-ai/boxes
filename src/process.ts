@@ -92,8 +92,6 @@ const reserve = Effect.fn("process.reserve")(function* (
   };
 });
 
-class ProcessCancelled extends Schema.TaggedError<ProcessCancelled>()("ProcessCancelled", {}) {}
-
 const complete = Effect.fn("process.complete")(function* (
   env: Env,
   capability: typeof Capability.Type,
@@ -105,7 +103,32 @@ const complete = Effect.fn("process.complete")(function* (
   const publication = { etag };
   const snapshots: (typeof ObservedOutput.Type)[] = [];
   const retained: (typeof StoredOutput.Type)[] = [];
-  const capture = Effect.fn("process.capture")(function* (stdio: typeof CapturedStdio.Type) {
+  const observeCancellation = Effect.fn("process.observeCancellation")(function* () {
+    const current = yield* Effect.tryPromise({
+      try: () => env.OBJECTS.head(key),
+      catch: (cause) => new StorageFailure({ cause }),
+    });
+    if (current === null)
+      return yield* new StorageFailure({ cause: "Execution disappeared while active" });
+    const metadata = yield* Schema.decodeUnknownEffect(StoredRunMetadata)(current.customMetadata);
+    if (metadata.summary.status === "cancelling")
+      return yield* new Fault({
+        code: "ECANCELED",
+        status: 409,
+        message: "Execution cancellation observed",
+      });
+    if (metadata.summary.status !== "running")
+      return yield* new Fault({
+        code: "CONFLICT",
+        status: 409,
+        message: "Execution state changed while active",
+      });
+  });
+  const capture = Effect.fn("process.capture")(function* (
+    stdio: typeof CapturedStdio.Type,
+    observe?: boolean,
+  ) {
+    if (observe === true) yield* observeCancellation();
     const previous = snapshots[0];
     if (
       previous !== undefined &&
@@ -197,20 +220,7 @@ const complete = Effect.fn("process.complete")(function* (
   );
   const cancellation = Effect.gen(function* () {
     while (true) {
-      const current = yield* Effect.tryPromise({
-        try: () => env.OBJECTS.head(key),
-        catch: (cause) => new StorageFailure({ cause }),
-      });
-      if (current === null)
-        return yield* new StorageFailure({ cause: "Execution disappeared while active" });
-      const metadata = yield* Schema.decodeUnknownEffect(StoredRunMetadata)(current.customMetadata);
-      if (metadata.summary.status === "cancelling") return yield* new ProcessCancelled({});
-      if (metadata.summary.status !== "running")
-        return yield* new Fault({
-          code: "CONFLICT",
-          status: 409,
-          message: "Execution state changed while active",
-        });
+      yield* observeCancellation();
       yield* Effect.sleep(1000);
     }
   });
@@ -228,7 +238,11 @@ const complete = Effect.fn("process.complete")(function* (
   });
   const finishedAt = yield* Clock.currentTimeMillis;
   const finished = yield* Effect.sync(() => {
-    if (output._tag === "Failure" && output.failure._tag === "ProcessCancelled")
+    if (
+      output._tag === "Failure" &&
+      output.failure._tag === "Fault" &&
+      output.failure.code === "ECANCELED"
+    )
       return {
         ...snapshot,
         status: "cancelled" as const,

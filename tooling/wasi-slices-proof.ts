@@ -103,7 +103,7 @@ const checks = {
     record.status === "exited" &&
     record.output?.result === 352 &&
     record.output.stdout === "cpu loop started\n",
-  blocking:
+  runningCheckpoint:
     started.status === "queued" &&
     checkpoints[0]?.state === "running" &&
     observation.status === 408,
@@ -123,6 +123,13 @@ const report = {
   profile: "minutei",
   runtime: "standard Worker",
   checks,
+  receipts: {
+    observationStatus: observation.status,
+    cancelStatus: cancelled.status,
+    waitStatus: waited.status,
+    waitError: failure.error,
+    finalStatus: retained.status,
+  },
   allPassed: Object.values(checks).every(Boolean),
   processInheritance: false,
   packageParity: false,
