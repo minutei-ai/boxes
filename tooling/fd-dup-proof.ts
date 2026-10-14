@@ -86,7 +86,7 @@ const checks = {
   setup: written.status === 200 && otherWritten.status === 200,
   aliasesAndQuota:
     response.status === 200 && record.status === "exited" && record.output?.result === 0,
-  stdio: record.output?.stdout === "" && record.output.stderr === "alias stderr",
+  stdio: record.output?.stdout === "" && record.output.stderr === "alias stderralias stderr",
   persistedWrites:
     Buffer.from(file.content, file.encoding).toString() === "abcdefZ" &&
     Buffer.from(other.content, other.encoding).toString() === "other",

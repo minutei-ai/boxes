@@ -66,7 +66,7 @@ test("dup shares file position/status while descriptor flags and closure remain 
   expect(record.status).toBe("exited");
   expect(record.output?.result).toBe(0);
   expect(record.output?.stdout).toBe("");
-  expect(record.output?.stderr).toBe("alias stderr");
+  expect(record.output?.stderr).toBe("alias stderralias stderr");
   const file = Schema.decodeUnknownSync(FileContent)(
     await (await act({ op: "filesystem.readFile", path: "/tmp/dup" })).json(),
   );

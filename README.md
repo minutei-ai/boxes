@@ -184,8 +184,10 @@ The original numeric-cursor `process.output.read` serves stable terminal capture
 
 `bun run host-stat:proof` exercises the native libc metadata ABI against production: file and symlink modes, byte sizes and 512-byte block counts, UID/GID, closed descriptors, pointer validation, private pathname preopens, directory confinement and read grants. These queries use current sandbox metadata; captured stdio reports that it is not a terminal. Remaining host process imports required by other published packages remain open.
 
-`bun run fd-dup:proof` validates duplicate-FD positions, status/descriptor flags, replacement, closure, stdio remapping, quota and read-only rights against the real Worker and checks the resulting R2 file contents. Subprocess support remains pending.
+`bun run fd-dup:proof` validates duplicate-FD positions, status/descriptor flags, replacement, native WASI renumbering, closure, stdio remapping, quota and read-only rights against the real Worker and checks the resulting R2 file contents. Subprocess support remains pending.
 
 `bun run pipe:proof` validates native anonymous pipe buffering, aliases, EOF, EPIPE, atomic writes, pointer checks, descriptor quota and poll. It also observes a blocked guest before explicitly cancelling it and verifies retained output. Pipe handles currently live within one interpreter invocation; cross-process inheritance remains pending.
 
 `bun run signal-mask:proof` validates the published native mask ABI: block, unblock, replace and query across both 32-bit halves, exclusion of SIGKILL/SIGSTOP, atomic pointer validation and fresh state per invocation. This implements mask bookkeeping; signal delivery, dispositions and child inheritance remain pending.
+
+Native `fd_renumber` replaces an existing public descriptor atomically, closes the source and retains its open-file state, descriptor flags and directory cursor. Invalid source or target descriptors leave both resources unchanged; hidden pathname preopens cannot be moved or replaced.

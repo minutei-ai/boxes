@@ -14,6 +14,7 @@ unsafe extern "C" {
     fn fd_read(fd: u32, vectors: *const Io, length: u32, output: *mut u32) -> u32;
     fn fd_write(fd: u32, vectors: *const Io, length: u32, output: *mut u32) -> u32;
     fn fd_close(fd: u32) -> u32;
+    fn fd_renumber(fd: u32, target: u32) -> u32;
     fn fd_fdstat_set_flags(fd: u32, flags: u32) -> u32;
     fn fd_seek(fd: u32, offset: i64, whence: u32, output: *mut u64) -> u32;
     fn poll_oneoff(input: *const u8, output: *mut u8, count: u32, events: *mut u32) -> u32;
@@ -52,6 +53,14 @@ pub extern "C" fn run() -> i32 {
             }
             return 22;
         }
+        let mut moved = 0;
+        if fd_dup(writer, &mut moved) != 0
+            || fd_renumber(reader, moved) != 0
+            || fd_close(reader) != 8
+        {
+            return 26;
+        }
+        reader = moved;
         if fd_mode(reader) != 0o10600 || fd_mode(writer) != 0o10600 {
             return 2;
         }

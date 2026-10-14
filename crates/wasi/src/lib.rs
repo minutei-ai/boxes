@@ -623,6 +623,28 @@ fn dispatch(caller: &mut Caller<'_, State>, name: &str, args: &[u64]) -> Result<
                 put(caller, a[1], &target.to_le_bytes())?;
             }
         }
+        "fd_renumber" => {
+            let from = a[0] as u32;
+            let to = a[1] as u32;
+            let source = duplicate_source(caller.data(), from)?;
+            duplicate_source(caller.data(), to)?;
+            if from == to {
+                return Ok(0);
+            }
+            let state = caller.data_mut();
+            let cloexec = state.cloexec.contains(&from);
+            let directory = state.directories.remove(&from);
+            close(state, to);
+            state.descriptors.insert(to, source);
+            state.closed.remove(&to);
+            close(state, from);
+            if cloexec {
+                state.cloexec.insert(to);
+            }
+            if let Some(entries) = directory {
+                state.directories.insert(to, entries);
+            }
+        }
         "fd_getfd" | "fd_setfd" => {
             duplicate_source(caller.data(), a[0] as u32)?;
             if name == "fd_getfd" {
@@ -1836,6 +1858,7 @@ fn linker(engine: &Engine) -> Result<Linker<State>, String> {
     bind!("wasi_snapshot_preview1","path_symlink",a:i32,b:i32,c:i32,d:i32,e:i32);
     bind!("wasi_snapshot_preview1","fd_readdir",a:i32,b:i32,c:i32,d:i64,e:i32);
     bind!("wasi_snapshot_preview1","fd_close",a:i32);
+    bind!("wasi_snapshot_preview1","fd_renumber",a:i32,b:i32);
     bind!("wasi_snapshot_preview1","fd_sync",a:i32);
     bind!("wasi_snapshot_preview1","fd_datasync",a:i32);
     bind!("wasi_snapshot_preview1","fd_seek",a:i32,b:i64,c:i32,d:i32);

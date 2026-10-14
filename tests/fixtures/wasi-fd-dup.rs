@@ -19,6 +19,7 @@ unsafe extern "C" {
         output: *mut u32,
     ) -> u32;
     fn fd_close(fd: u32) -> u32;
+    fn fd_renumber(fd: u32, target: u32) -> u32;
     fn fd_read(fd: u32, vectors: *const Io, length: u32, output: *mut u32) -> u32;
     fn fd_write(fd: u32, vectors: *const Io, length: u32, output: *mut u32) -> u32;
     fn fd_seek(fd: u32, offset: i64, whence: u32, output: *mut u64) -> u32;
@@ -203,6 +204,35 @@ pub extern "C" fn run() -> i32 {
         if fd_dup(0x40000003, &mut alias) != 8 || fd_dup2(readonly, 0x40000003) != 8 {
             return 27;
         }
+        if fd_renumber(reader, 100) != 8
+            || fd_getfd(reader, &mut flag) != 0
+            || fd_dup2(0, 100) != 0
+            || fd_setfd(reader, 1) != 0
+            || fd_renumber(reader, 100) != 0
+        {
+            return 32;
+        }
+        if fd_getfd(reader, &mut flag) != 8 || fd_getfd(100, &mut flag) != 0 || flag != 1 {
+            return 33;
+        }
+        if fd_tell(100, &mut position) != 0 || position != 1 {
+            return 34;
+        }
+        if fd_renumber(100, 100) != 0 || fd_getfd(100, &mut flag) != 0 || flag != 1 {
+            return 35;
+        }
+        if fd_renumber(9999, 100) != 8
+            || fd_read(100, &vector, 1, &mut count) != 0
+            || buffer[0] != b'b'
+        {
+            return 36;
+        }
+        if fd_renumber(100, 0x40000003) != 8 || fd_renumber(0x40000003, 100) != 8 {
+            return 37;
+        }
+        if fd_dup2(readonly, reader) != 0 || fd_renumber(100, reader) != 0 {
+            return 38;
+        }
         let mut allocated = 0;
         loop {
             let result = fd_dup(readonly, &mut alias);
@@ -217,11 +247,24 @@ pub extern "C" fn run() -> i32 {
                 return 29;
             }
         }
-        if allocated == 0 || fd_read(reader, &vector, 1, &mut count) != 0 || buffer[0] != b'b' {
+        if allocated == 0 || fd_read(reader, &vector, 1, &mut count) != 0 || buffer[0] != b'c' {
             return 30;
         }
         if fd_close(alias) != 0 || fd_dup(readonly, &mut alias) != 0 {
             return 31;
+        }
+        if fd_renumber(readonly, 2) != 0 || fd_close(reader) != 0 {
+            return 39;
+        }
+        if fd_write(2, &write, 1, &mut count) != 76
+            || fd_read(2, &vector, 1, &mut count) != 0
+            || buffer[0] != b'd'
+        {
+            return 40;
+        }
+        if fd_dup2(1, 2) != 0 || fd_renumber(stdout, 2) != 0 || fd_write(2, &io, 1, &mut count) != 0
+        {
+            return 41;
         }
         0
     }
