@@ -1,5 +1,5 @@
 import { env, WorkerEntrypoint } from "cloudflare:workers";
-import { Clock, Effect, Fiber, Schema, Schedule } from "effect";
+import { Clock, Effect, Fiber, Schema, Schedule, Latch } from "effect";
 import * as TestClock from "effect/testing/TestClock";
 import type { Fetcher } from "@cloudflare/workers-types/experimental";
 import { consume, handleRequest } from "../../src/index";
@@ -17,7 +17,34 @@ export class Control extends WorkerEntrypoint<TestEnv> {
 }
 export default {
   fetch(request: Request, bindings: TestEnv) {
-    return Effect.runPromise(handleRequest(request, bindings));
+    const advance = request.headers.get("x-boxes-test-clock-advance");
+    if (advance === null) return Effect.runPromise(handleRequest(request, bindings));
+    return Effect.runPromise(
+      Effect.scoped(
+        Effect.gen(function* () {
+          const elapsed = yield* Schema.decodeUnknownEffect(Schema.fromJsonString(Schema.Int))(
+            advance,
+          );
+          const started = yield* Clock.currentTimeMillis;
+          const clock = yield* TestClock.make();
+          yield* clock.setTime(started);
+          const sleeping = yield* Latch.make();
+          const requestClock: Clock.Clock = {
+            ...clock,
+            sleep: (duration) => sleeping.open.pipe(Effect.andThen(clock.sleep(duration))),
+          };
+          const response = yield* handleRequest(request, bindings).pipe(
+            Effect.provideService(Clock.Clock, requestClock),
+            Effect.forkChild,
+          );
+          const drive = sleeping.await.pipe(
+            Effect.andThen(clock.adjust(elapsed)),
+            Effect.andThen(Fiber.join(response)),
+          );
+          return yield* Effect.raceFirst(Fiber.join(response), drive);
+        }),
+      ),
+    );
   },
   queue(batch: MessageBatch<unknown>, bindings: TestEnv) {
     if (env.CLOCK_CONTROLLED === false) return Effect.runPromise(consume(batch, bindings));

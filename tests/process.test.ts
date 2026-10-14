@@ -313,33 +313,116 @@ test("guest tools can wait on a background process without acquiring host lifecy
 });
 
 test("queue execution survives beyond the former 25-second continuation budget", async () => {
-  const token = await setup("spawn-wall-limit");
+  const directory = await mkdtemp(join(tmpdir(), "boxes-continuation-clock-"));
+  const instance = runtime(directory, { advance: 30_000 });
+  const send = async (
+    path: string,
+    token: string,
+    body: unknown,
+    headers: Record<string, string> = {},
+  ) =>
+    fetch(new URL(path, await instance.ready), {
+      method: "POST",
+      keepalive: false,
+      headers: { authorization: `Bearer ${token}`, "content-type": "application/json", ...headers },
+      body: JSON.stringify(body),
+    });
+  const path = "/v1/sandboxes/spawn-wall-limit/action";
+  expect(
+    (
+      await send("/v1/sandboxes", "cirro-local-test-credential", {
+        id: "spawn-wall-limit",
+        policy: {
+          networkHosts: [],
+          interruptBudget: 1000,
+          memoryBytes: 8388608,
+          maxOutputBytes: 1048576,
+        },
+      })
+    ).status,
+  ).toBe(201);
+  const token = Schema.decodeUnknownSync(TokenResponse)(
+    await (
+      await send("/v1/sandboxes/spawn-wall-limit/capabilities", "cirro-local-test-credential", {
+        permissions: ["read", "write", "execute"],
+        expiresInSeconds: 3600,
+      })
+    ).json(),
+  ).token;
   const source = Buffer.from(
-    await Bun.file(join(import.meta.dir, "../dist/wasi-background.wasm")).arrayBuffer(),
+    await Bun.file(join(import.meta.dir, "../dist/wasi-background-ready.wasm")).arrayBuffer(),
   ).toString("base64");
   expect(
     (
-      await action("spawn-wall-limit", token, {
+      await send(path, token, {
         op: "process.spawn",
         execution: { op: "process.run", id: "long", language: "wasm", source },
       })
     ).status,
   ).toBe(200);
   expect(
-    (await action("spawn-wall-limit", token, { op: "process.wait", id: "long", timeoutMs: 25_000 }))
-      .status,
+    (
+      await send(
+        path,
+        token,
+        { op: "process.wait", id: "long", timeoutMs: 25_000 },
+        { "x-boxes-test-clock-advance": "25000" },
+      )
+    ).status,
   ).toBe(408);
-  const final = await action("spawn-wall-limit", token, {
-    op: "process.wait",
-    id: "long",
-    timeoutMs: 10_000,
+  const objects = await instance.objects;
+  const key = "processes/spawn-wall-limit/long.json";
+  const retained = await objects.head(key);
+  if (retained === null) return expect(retained).not.toBeNull();
+  const worker = await instance.control;
+  await worker.deliver("executions", [
+    {
+      id: "long",
+      timestamp: new Date(),
+      attempts: 1,
+      body: Schema.encodeSync(ProcessDelivery)({ key, eTag: retained.etag }),
+    },
+  ]);
+  const paused = Schema.decodeUnknownSync(RunRecord)(
+    await (await send(path, token, { op: "process.get", id: "long" })).json(),
+  );
+  expect(paused.status).toBe("queued");
+  const published = await objects.get(key);
+  if (published === null) return expect(published).not.toBeNull();
+  expect(
+    Schema.decodeUnknownSync(Schema.fromJsonString(StoredRun))(await published.text())
+      .checkpointCount,
+  ).toBe(1);
+  await instance.dispose();
+  const resumed = runtime(directory, { clockStart: instance.time, advance: 1000 });
+  const retainedAfter = await (await resumed.objects).head(key);
+  if (retainedAfter === null) return expect(retainedAfter).not.toBeNull();
+  const second = await resumed.control;
+  await second.deliver("executions", [
+    {
+      id: "resume",
+      timestamp: new Date(),
+      attempts: 1,
+      body: Schema.encodeSync(ProcessDelivery)({ key, eTag: retainedAfter.etag }),
+    },
+  ]);
+  const final = await fetch(new URL(path, await resumed.ready), {
+    method: "POST",
+    keepalive: false,
+    headers: { authorization: `Bearer ${token}`, "content-type": "application/json" },
+    body: JSON.stringify({ op: "process.wait", id: "long", timeoutMs: 10_000 }),
   });
   expect(final.status).toBe(200);
   const record = Schema.decodeUnknownSync(RunRecord)(await final.json());
   expect(record.status).toBe("exited");
   expect(record.output?.exitCode).toBe(0);
-  expect(record.output?.stdout).toBe("continued beyond the HTTP continuation\n");
-}, 40_000);
+  expect(record.finishedAt).toBe(resumed.time);
+  expect(record.output?.stdout).toBe(
+    "continuation entered\ncontinued beyond the HTTP continuation\n",
+  );
+  await resumed.dispose();
+  await rm(directory, { recursive: true, force: true });
+});
 
 test("wait enforces capability expiry while another authorized caller keeps the execution", async () => {
   const token = await setup("wait-expiry");

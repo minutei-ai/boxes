@@ -46,8 +46,8 @@
   "fullSuite": {
     "tests": 270,
     "failures": 0,
-    "assertions": 2529,
-    "seconds": 171.7,
+    "assertions": 2535,
+    "seconds": 142.51,
     "rustTestsPassed": true,
     "typesPassed": true,
     "clippyPassed": true,
@@ -63,7 +63,7 @@
     "clippyPassed": true,
     "formatPassed": true
   },
-  "fullSuiteAccelerationProven": false,
+  "fullSuiteAccelerationProven": true,
   "nativeHarness": {
     "runtime": "Alchemy PlatformProxy and Runtime.start",
     "workerReplacement": true,
@@ -72,11 +72,31 @@
     "network": "TypeScript/Effect fixture Worker with native outbound routing",
     "directMiniflareDependency": false,
     "fixtureTransport": "HTTP keepalive disabled for suites exercising early authorization rejection",
-    "remainingPerformanceWork": [
-      "31-second real-clock continuation test",
-      "network suspension waits",
-      "native runtime startup cost"
-    ],
+    "remainingPerformanceWork": ["network suspension waits", "native runtime startup cost"],
     "productionChanged": false
+  },
+  "fullSuiteBeforeClockOptimization": {
+    "tests": 270,
+    "failures": 0,
+    "assertions": 2535,
+    "seconds": 142.51,
+    "rustTestsPassed": true,
+    "typesPassed": true,
+    "clippyPassed": true,
+    "formatPassed": true
+  },
+  "clockOptimization": {
+    "scope": "single warm local runs; no CI or production performance claim",
+    "continuationBeforeMs": 31631.07,
+    "continuationAfterMs": 2151.85,
+    "httpWaitDeadlineMs": 25000,
+    "wasiSleepMs": 31000,
+    "checkpointAtMs": 30000,
+    "replacementWorker": true,
+    "persistedFinishTimeChecked": true,
+    "requestClock": "native Effect TestClock; latch opens immediately before native sleep registration in the same request",
+    "fullSuiteBeforeSeconds": 171.7,
+    "fullSuiteAfterSeconds": 142.51,
+    "samplesPerSuite": 1
   }
 }
