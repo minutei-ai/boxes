@@ -121,6 +121,8 @@ test("SDK calls another Worker through its native service binding", async () => 
     "18446744073709551615",
   ]);
   expect(proof.run.status).toBe("exited");
+  expect(proof.restoredStat.inode).toBeGreaterThan(proof.stat.inode);
+  expect(proof.restoredStat.size).toBe(proof.stat.size);
   expect(proof.run.output?.result).toBe(42);
   expect(proof.denied).toBe(401);
 });

@@ -44,7 +44,7 @@ export const kernelCall = <A>(call: () => A) =>
         if (code === "ENOENT") return new Fault({ code, status: 404, message: cause });
         if (code === "EACCES" || code === "EPERM" || code === "EROFS")
           return new Fault({ code, status: 403, message: cause });
-        if (code === "EEXIST" || code === "ENOTEMPTY")
+        if (code === "EEXIST" || code === "ENOTEMPTY" || code === "CONFLICT")
           return new Fault({ code, status: 409, message: cause });
         if (code === "ENOSPC" || code === "EFBIG")
           return new Fault({ code, status: 413, message: cause });

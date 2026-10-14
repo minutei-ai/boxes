@@ -5,6 +5,7 @@ import { FileContent, FileStat, Id, RunRecord } from "../../src/contracts";
 export const BindingProof = Schema.Struct({
   file: FileContent,
   stat: FileStat,
+  restoredStat: FileStat,
   run: RunRecord,
   denied: Schema.Int,
 });
@@ -47,6 +48,28 @@ export default {
           path: "/binding",
           follow: true,
         });
+        const snapshot = yield* boxes.action(id, {
+          op: "filesystem.export",
+          maxBytes: 1048576,
+        });
+        yield* boxes.action(id, {
+          op: "filesystem.writeFile",
+          path: "/binding",
+          content: "changed",
+          encoding: "utf8",
+        });
+        yield* boxes.action(id, { op: "filesystem.restore", snapshot });
+        const restoredStat = yield* boxes.action(id, {
+          op: "filesystem.stat",
+          path: "/binding",
+          follow: true,
+        });
+        const restoredFile = yield* boxes.action(id, {
+          op: "filesystem.readFile",
+          path: "/binding",
+        });
+        if (restoredFile.content !== file.content)
+          return yield* Effect.die("Restore lost file bytes");
         const run = yield* boxes.action(id, {
           op: "typescript.evaluate",
           id: "binding-run",
@@ -59,6 +82,7 @@ export default {
           Schema.encodeSync(Schema.fromJsonString(BindingProof))({
             file,
             stat,
+            restoredStat,
             run,
             denied: denied.status,
           }),

@@ -1,6 +1,6 @@
 {
   "name": "@minutei-ai/boxes",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "license": "Apache-2.0",
   "repository": {
     "type": "git",
@@ -62,7 +62,8 @@
     "prepack": "bun run build:sdk",
     "sdk:proof": "bun tooling/sdk-proof.ts",
     "timestamps:proof": "bun tooling/timestamps-proof.ts",
-    "rights:proof": "bun tooling/rights-proof.ts"
+    "rights:proof": "bun tooling/rights-proof.ts",
+    "restore:proof": "bun tooling/restore-proof.ts"
   },
   "devDependencies": {
     "@alchemy.run/cloudflare-runtime": "2.0.0-beta.83",

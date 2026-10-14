@@ -124,6 +124,7 @@ struct TreeEntry {
 pub struct Kernel {
     state: Manifest,
     now: u64,
+    snapshot_import: bool,
 }
 
 fn fail(message: &str) -> JsValue {
@@ -241,7 +242,11 @@ pub fn migrate_filesystem(json: &str) -> Result<String, JsValue> {
         }
         _ => return Err(fail("EINVAL: unsupported manifest version")),
     };
-    let kernel = Kernel { state, now: 0 };
+    let kernel = Kernel {
+        state,
+        now: 0,
+        snapshot_import: false,
+    };
     kernel.validate().map_err(|error| fail(&error))?;
     kernel.manifest()
 }
@@ -401,6 +406,7 @@ impl Kernel {
                 ]),
             },
             now: 0,
+            snapshot_import: false,
         }
     }
 
@@ -621,6 +627,7 @@ impl Kernel {
                     state: serde_json::from_str(&json)
                         .map_err(|_| fail("EINVAL: invalid manifest"))?,
                     now: 0,
+                    snapshot_import: false,
                 };
                 kernel.validate().map_err(|e| fail(&e))?;
                 Ok(kernel)
@@ -641,6 +648,34 @@ impl Kernel {
         self.state.nodes.retain(|path, _| path == "/");
         self.state.metadata.retain(|path, _| path == "/");
         self.state.next_inode = 2;
+        Ok(())
+    }
+
+    pub fn reset_snapshot_root(&mut self) -> Result<(), JsValue> {
+        self.snapshot_import = true;
+        self.state.nodes.retain(|path, _| path == "/");
+        self.state.metadata.retain(|path, _| path == "/");
+        self.state
+            .nodes
+            .insert("/".into(), Node::Directory { mode: 0o755 });
+        self.state.packages.clear();
+        self.state.links.clear();
+        Ok(())
+    }
+
+    pub fn finish_snapshot_root(&mut self) -> Result<(), JsValue> {
+        self.snapshot_import = false;
+        self.validate().map_err(|error| fail(&error))
+    }
+
+    pub fn resume_manifest(&mut self, manifest: &str) -> Result<(), JsValue> {
+        let restored = Self::new(Some(manifest.into()))?;
+        if restored.state.generation != self.state.generation {
+            return Err(fail(
+                "CONFLICT: filesystem changed after execution checkpoint",
+            ));
+        }
+        self.state = restored.state;
         Ok(())
     }
 
@@ -678,6 +713,9 @@ impl Kernel {
     }
 
     pub fn manifest(&self) -> Result<String, JsValue> {
+        if self.snapshot_import {
+            return Err(fail("EPERM: snapshot reconstruction is not complete"));
+        }
         let manifest =
             serde_json::to_string(&self.state).map_err(|_| fail("EIO: serialization failed"))?;
         if manifest.len() > MAX_MANIFEST {
@@ -1281,6 +1319,35 @@ mod tests {
     }
 
     #[test]
+    fn snapshot_reconstruction_preserves_generation_and_monotonic_inode_allocation()
+    -> Result<(), String> {
+        let mut kernel = Kernel::fresh();
+        kernel.advance().map_err(|_| "generation advance failed")?;
+        let next = kernel.state.next_inode;
+        kernel.reset_snapshot_root().map_err(|_| "reset failed")?;
+        assert_eq!(kernel.state.generation, 1);
+        assert_eq!(kernel.state.next_inode, next);
+        assert_eq!(kernel.state.nodes.len(), 1);
+        assert!(kernel.snapshot_import);
+        kernel
+            .mkdir("/restored", false)
+            .map_err(|_| "directory failed")?;
+        assert_eq!(
+            kernel
+                .state
+                .metadata
+                .get("/restored")
+                .ok_or("missing inode")?
+                .inode,
+            next
+        );
+        kernel.finish_snapshot_root().map_err(|_| "finish failed")?;
+        assert!(!kernel.snapshot_import);
+        assert!(kernel.package_writable("/opt/cirro", false).is_err());
+        kernel.validate()
+    }
+
+    #[test]
     fn timestamp_flags_preserve_identity_and_unselected_fields() -> Result<(), String> {
         let mut kernel = Kernel::fresh();
         kernel.initialize_times(10);
@@ -1352,6 +1419,7 @@ mod tests {
         let restored = Kernel {
             state: serde_json::from_str(&data).map_err(|e| e.to_string())?,
             now: 0,
+            snapshot_import: false,
         };
         restored.validate()?;
         assert_eq!(restored.state.nodes, kernel.state.nodes);

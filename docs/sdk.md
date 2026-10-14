@@ -5,7 +5,7 @@ The `@minutei-ai/boxes` SDK targets Effect 4 and ordinary Cloudflare Workers. It
 Install the SDK archive attached to the GitHub SDK release:
 
 ```sh
-bun add https://github.com/minutei-ai/boxes/releases/download/sdk-v0.2.0/minutei-ai-boxes-0.2.0.tgz
+bun add https://github.com/minutei-ai/boxes/releases/download/sdk-v0.3.0/minutei-ai-boxes-0.3.0.tgz
 ```
 
 Use the service binding from the Minutei Worker environment:
@@ -47,3 +47,15 @@ API failures are `BoxesError` with the server's `status`, `error` code and `mess
 There are no automatic retries, polling loops or local copies of process state. After a lost mutation response or `409`, read current state before deciding whether to resubmit. Compose deadlines and schedules through Effect at the calling domain owner. SDK tests use real Alchemy workerd/R2, a second Worker connected through `Service.local`, and a native origin Worker for malformed responses and interruption. `bun run build:sdk` generates the distributable and `bun run sdk:proof` verifies the compiled SDK against the authenticated deployed Worker. The package is distributed through GitHub; npm registry publication and direct Minutei integration are separate steps.
 
 `filesystem.utimes` sets both timestamps exactly. SDK inputs use `bigint` values for `atimeNs` and `mtimeNs`; JSON clients send canonical unsigned decimal strings within uint64. `follow: false` updates a symlink itself and `follow: true` updates its target. The operation requires `write`, keeps inode identity and bytes unchanged, and sets ctime from the server clock.
+
+`filesystem.restore` accepts the snapshot returned by `filesystem.export` and requires both `write` and `manage`. It replaces the entire root in one conditional publication, preserving sandbox identity, policy and credentials. Files, symlinks, modes and ownership are restored; inode identities are newly allocated and timestamps come from the server clock. Software catalog registrations are cleared because they are outside the filesystem snapshot. Existing process receipts remain readable; an old execution checkpoint fails before resuming against a changed filesystem generation.
+
+```ts
+const snapshot =
+  yield *
+  boxes.action(sandboxId, {
+    op: "filesystem.export",
+    maxBytes: 1048576,
+  });
+yield * boxes.action(sandboxId, { op: "filesystem.restore", snapshot });
+```

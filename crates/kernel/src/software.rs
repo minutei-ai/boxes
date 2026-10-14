@@ -341,6 +341,9 @@ pub fn prepare(bytes: &[u8]) -> Result<Preparation, String> {
 
 impl Kernel {
     pub(crate) fn package_writable(&self, path: &str, subtree: bool) -> Result<(), String> {
+        if self.snapshot_import {
+            return Ok(());
+        }
         let projections = self.state.packages.iter().flat_map(|package| {
             package.manifest.provides.iter().flat_map(|provides| {
                 provides
@@ -559,6 +562,7 @@ impl Kernel {
         let mut staged = super::Kernel {
             state: self.state.clone(),
             now: self.now,
+            snapshot_import: false,
         };
         staged.package_directory(&prepared.root)?;
         if let Some(super::Node::Directory { mode }) = staged.state.nodes.get_mut(&prepared.root) {
@@ -613,6 +617,7 @@ impl Kernel {
         let mut staged = super::Kernel {
             state: self.state.clone(),
             now: self.now,
+            snapshot_import: false,
         };
         staged.remove_package_tree(&root);
         if let Some(provides) = package.manifest.provides {
@@ -646,6 +651,7 @@ impl Kernel {
         let mut staged = super::Kernel {
             state: self.state.clone(),
             now: self.now,
+            snapshot_import: false,
         };
         staged.state.links.insert(alias.into(), link);
         staged.package_aliases()?;
@@ -1025,6 +1031,7 @@ mod tests {
         let restored = Kernel {
             state: serde_json::from_str(&json).map_err(|error| error.to_string())?,
             now: 0,
+            snapshot_import: false,
         };
         assert_eq!(
             serde_json::to_string(&restored.state).map_err(|error| error.to_string())?,

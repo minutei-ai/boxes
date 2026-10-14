@@ -12,7 +12,6 @@ import {
   CreateSandbox,
   ErrorResponse,
   Fault,
-  FilesystemSnapshot,
   Head,
   Id,
   Policy,
@@ -29,6 +28,7 @@ import {
   TokenResponse,
 } from "./contracts";
 import { input } from "./input";
+import { importSnapshot } from "./snapshot";
 import { guestAction } from "./capabilities";
 import { migrate } from "./migration";
 import { migrateFilesystem } from "./filesystem-migration";
@@ -48,13 +48,10 @@ import {
   liveOutput,
   recoveryStatus,
 } from "./process";
-import { kernelCall, open, publish, write, StorageFailure } from "./storage";
+import { kernelCall, open, publish, StorageFailure } from "./storage";
 import type { Env } from "./resources";
 
 initSync({ module: wasm });
-
-const Exists = Schema.Struct({ exists: Schema.Boolean });
-const Link = Schema.Struct({ target: Schema.String });
 
 const route = Effect.fn("api.route")(function* (request: Request, env: Env) {
   const url = new URL(request.url);
@@ -147,86 +144,8 @@ const route = Effect.fn("api.route")(function* (request: Request, env: Env) {
           status: 409,
           message: "Sandbox ID already exists",
         });
-      const entries = input.snapshot.source.filesystem.entries;
-      const byPath = new Map(entries.map((entry) => [entry.path, entry]));
-      if (byPath.size !== entries.length || byPath.get("/")?.type !== "directory")
-        return yield* new Fault({
-          code: "EINVAL",
-          status: 400,
-          message: "Snapshot requires one directory root and unique paths",
-        });
-      const prepared = yield* Effect.forEach(entries, (entry) =>
-        Effect.gen(function* () {
-          const canonical = yield* kernelCall(() => kernel.canonical(entry.path, "/"));
-          if (canonical !== entry.path || !entry.path.startsWith("/"))
-            return yield* new Fault({
-              code: "EINVAL",
-              status: 400,
-              message: "Snapshot paths must be absolute and canonical",
-            });
-          if (
-            entry.path !== "/" &&
-            byPath.get(entry.path.slice(0, entry.path.lastIndexOf("/")) || "/")?.type !==
-              "directory"
-          )
-            return yield* new Fault({
-              code: "EINVAL",
-              status: 400,
-              message: "Snapshot parent must be a directory entry",
-            });
-          const mode = Number.parseInt(entry.mode, 8);
-          if (mode > 0o777 || (entry.type === "symlink" && mode !== 0o777))
-            return yield* new Fault({
-              code: "EINVAL",
-              status: 400,
-              message: "Snapshot mode cannot be represented by the kernel",
-            });
-          if (entry.type === "symlink")
-            yield* kernelCall(() =>
-              kernel.canonical(
-                entry.target,
-                entry.path.slice(0, entry.path.lastIndexOf("/")) || "/",
-              ),
-            );
-          if (entry.type !== "file") return { entry, mode, data: undefined };
-          const data = Buffer.from(entry.content, "base64");
-          if (data.toString("base64") !== entry.content)
-            return yield* new Fault({
-              code: "EINVAL",
-              status: 400,
-              message: "Snapshot file content must be canonical base64",
-            });
-          if (data.byteLength > 16_777_216)
-            return yield* new Fault({
-              code: "EFBIG",
-              status: 413,
-              message: "Snapshot file exceeds 16 MiB",
-            });
-          return { entry, mode, data };
-        }),
-      );
       yield* kernelCall(() => kernel.initialize_snapshot_root());
-      const ordered = prepared.toSorted(
-        (left, right) => left.entry.path.length - right.entry.path.length,
-      );
-      yield* Effect.forEach(ordered, ({ entry }) => {
-        if (entry.type === "directory" && entry.path !== "/")
-          return kernelCall(() => kernel.mkdir(entry.path, false));
-        return Effect.void;
-      });
-      yield* Effect.forEach(ordered, ({ entry, data }) => {
-        if (entry.type === "file" && data !== undefined)
-          return write(env, input.id, kernel, entry.path, data);
-        if (entry.type === "symlink")
-          return kernelCall(() => kernel.symlink(entry.target, entry.path));
-        return Effect.void;
-      });
-      yield* Effect.forEach(ordered.toReversed(), ({ entry, mode }) =>
-        Effect.gen(function* () {
-          yield* kernelCall(() => kernel.chown(entry.path, entry.uid, entry.gid, false));
-          if (entry.type !== "symlink") yield* kernelCall(() => kernel.chmod(entry.path, mode));
-        }),
-      );
+      yield* importSnapshot(env, input.id, kernel, input.snapshot);
     }
     const manifest = yield* kernelCall(() => kernel.manifest());
     const record: typeof Head.Type = {
@@ -287,7 +206,7 @@ const route = Effect.fn("api.route")(function* (request: Request, env: Env) {
   if (parts[4] !== "action")
     return yield* new Fault({ code: "NOT_FOUND", status: 404, message: "Unknown API route" });
   const capability = yield* authorize(env, token, id);
-  const data = yield* readBounded(request.body, 22_400_000);
+  const data = yield* readBounded(request.body, 25_200_000);
   const action = yield* Schema.decodeUnknownEffect(Schema.fromJsonString(Action), {
     onExcessProperty: "error",
   })(data.toString("utf8"));

@@ -37,10 +37,51 @@ export const DirectoryExclusions = Schema.Array(
 ).check(Schema.isMaxLength(128));
 
 const OwnerId = Schema.Int.check(Schema.isBetween({ minimum: 0, maximum: 4_294_967_295 }));
+export const FileStat = Schema.Struct({
+  path: Path,
+  kind: Schema.Literals(["file", "directory", "symlink"]),
+  size: Schema.Int,
+  mode: Schema.Int,
+  inode: Schema.Int,
+  nlink: Schema.Int,
+  uid: OwnerId,
+  gid: OwnerId,
+  atimeNs: Schema.String.check(Schema.isPattern(/^\d+$/)),
+  mtimeNs: Schema.String.check(Schema.isPattern(/^\d+$/)),
+  ctimeNs: Schema.String.check(Schema.isPattern(/^\d+$/)),
+});
+const SnapshotMetadata = {
+  path: FileStat.fields.path,
+  mode: Schema.String.check(Schema.isPattern(/^0[0-7]{1,4}$/)),
+  uid: FileStat.fields.uid,
+  gid: FileStat.fields.gid,
+};
+export const FilesystemSnapshot = Schema.Struct({
+  kind: Schema.Literal("snapshot-export"),
+  source: Schema.Struct({
+    format: Schema.Literal("boxes-filesystem-snapshot-v1"),
+    filesystem: Schema.Struct({
+      entries: Schema.Array(
+        Schema.Union([
+          Schema.Struct({ ...SnapshotMetadata, type: Schema.Literal("directory") }),
+          Schema.Struct({ ...SnapshotMetadata, type: Schema.Literal("symlink"), target: Path }),
+          Schema.Struct({
+            ...SnapshotMetadata,
+            type: Schema.Literal("file"),
+            content: Content,
+            encoding: Schema.Literal("base64"),
+          }),
+        ]),
+      ).check(Schema.isMaxLength(16_384)),
+    }),
+  }),
+});
+
 const Nanoseconds = Schema.String.check(Schema.isPattern(/^(0|[1-9][0-9]{0,19})$/))
   .pipe(Schema.decodeTo(Schema.BigIntFromString))
   .check(Schema.isBetweenBigInt({ minimum: 0n, maximum: 18_446_744_073_709_551_615n }));
 export const FilesystemAction = Schema.Union([
+  Schema.Struct({ op: Schema.Literal("filesystem.restore"), snapshot: FilesystemSnapshot }),
   Schema.Struct({
     op: Schema.Literal("filesystem.utimes"),
     path: Path,
@@ -378,45 +419,6 @@ export const Action = Schema.Union([
   Schema.Struct({ op: Schema.Literal("vm.status") }),
   Schema.Struct({ op: Schema.Literal("vm.dispose") }),
 ]);
-export const FileStat = Schema.Struct({
-  path: Path,
-  kind: Schema.Literals(["file", "directory", "symlink"]),
-  size: Schema.Int,
-  mode: Schema.Int,
-  inode: Schema.Int,
-  nlink: Schema.Int,
-  uid: OwnerId,
-  gid: OwnerId,
-  atimeNs: Schema.String.check(Schema.isPattern(/^\d+$/)),
-  mtimeNs: Schema.String.check(Schema.isPattern(/^\d+$/)),
-  ctimeNs: Schema.String.check(Schema.isPattern(/^\d+$/)),
-});
-const SnapshotMetadata = {
-  path: FileStat.fields.path,
-  mode: Schema.String.check(Schema.isPattern(/^0[0-7]{1,4}$/)),
-  uid: FileStat.fields.uid,
-  gid: FileStat.fields.gid,
-};
-export const FilesystemSnapshot = Schema.Struct({
-  kind: Schema.Literal("snapshot-export"),
-  source: Schema.Struct({
-    format: Schema.Literal("boxes-filesystem-snapshot-v1"),
-    filesystem: Schema.Struct({
-      entries: Schema.Array(
-        Schema.Union([
-          Schema.Struct({ ...SnapshotMetadata, type: Schema.Literal("directory") }),
-          Schema.Struct({ ...SnapshotMetadata, type: Schema.Literal("symlink"), target: Path }),
-          Schema.Struct({
-            ...SnapshotMetadata,
-            type: Schema.Literal("file"),
-            content: Content,
-            encoding: Schema.Literal("base64"),
-          }),
-        ]),
-      ).check(Schema.isMaxLength(16_384)),
-    }),
-  }),
-});
 export const CreateSandbox = Schema.Struct({
   id: Id,
   policy: Policy,
@@ -864,6 +866,7 @@ export const ExecutionCheckpoint = Schema.Struct({
 });
 
 export const ActionResponses = {
+  "filesystem.restore": Success,
   "filesystem.utimes": Success,
   "filesystem.export": FilesystemSnapshot,
   "filesystem.readFiles": BatchReadResults,

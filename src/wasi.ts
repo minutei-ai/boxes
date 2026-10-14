@@ -157,7 +157,7 @@ export const wasi = Effect.fn("wasi.execute")(function* (
   ]);
   const clocks = { offset: 0n };
   if (restored !== null) {
-    yield* kernelCall(() => initial.kernel.restore_manifest(restored.manifest));
+    yield* kernelCall(() => initial.kernel.resume_manifest(restored.manifest));
     initial.head = restored.head;
     initial.etag = restored.etag;
     const now = yield* Clock.currentTimeMillis;

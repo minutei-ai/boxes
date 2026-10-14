@@ -16,6 +16,7 @@ import {
   DirectoryExclusions,
 } from "./contracts";
 import { kernelCall, open, publish, read, write, writeRange } from "./storage";
+import { importSnapshot } from "./snapshot";
 import type { Env } from "./resources";
 
 const content = Effect.fn("filesystem.content")(function* (
@@ -57,10 +58,16 @@ export const filesystem = Effect.fn("filesystem.action")(function* (
     Match.orElse(() => "write" as const),
   );
   yield* requirePermission(capability, permission);
+  if (action.op === "filesystem.restore") yield* requirePermission(capability, "manage");
   const session = yield* open(env, id);
   const kernel = session.kernel;
   const now = yield* Clock.currentTimeNanos;
   yield* kernelCall(() => kernel.set_time(now));
+  if (action.op === "filesystem.restore") {
+    yield* importSnapshot(env, id, kernel, action.snapshot);
+    yield* publish(env, id, session);
+    return { ok: true } satisfies typeof Success.Type;
+  }
   if (action.op === "filesystem.utimes") {
     yield* kernelCall(() =>
       kernel.set_times(action.path, action.follow, action.atimeNs, action.mtimeNs, 5),
