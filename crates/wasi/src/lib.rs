@@ -1,6 +1,6 @@
 use serde::{Deserialize, Serialize};
-use std::cell::Cell;
-use std::collections::{BTreeMap, BTreeSet};
+use std::cell::{Cell, RefCell};
+use std::collections::{BTreeMap, BTreeSet, VecDeque};
 use std::rc::Rc;
 use wasm_bindgen::prelude::*;
 use wasmi::{
@@ -18,6 +18,8 @@ struct Configuration {
 include!(concat!(env!("OUT_DIR"), "/module_limit.rs"));
 
 const MAX_FILES: usize = 128;
+const PIPE_BYTES: usize = 65_536;
+const PIPE_ATOMIC_BYTES: usize = 4096;
 const HIDDEN_PREOPEN: u32 = 0x40000003;
 const MAX_BYTES: usize = 16_777_216;
 
@@ -30,6 +32,7 @@ struct Descriptor {
     flags: Rc<Cell<u16>>,
     offset: Rc<Cell<usize>>,
     stdio: Option<u32>,
+    pipe: Option<Rc<RefCell<VecDeque<u8>>>>,
     rights: u64,
     inheriting: u64,
     cache: Option<u32>,
@@ -201,6 +204,7 @@ enum Completion {
     Poll {
         events: Vec<[u8; 32]>,
         clocks: BTreeSet<usize>,
+        blocked: BTreeSet<usize>,
         pointer: usize,
         output: usize,
     },
@@ -412,6 +416,16 @@ fn stream(state: &State, fd: u32) -> Option<u32> {
     None
 }
 
+fn pipe_peer(state: &State, pipe: &Rc<RefCell<VecDeque<u8>>>, reading: bool) -> bool {
+    state.descriptors.values().any(|descriptor| {
+        descriptor.read == reading
+            && descriptor
+                .pipe
+                .as_ref()
+                .is_some_and(|candidate| Rc::ptr_eq(candidate, pipe))
+    })
+}
+
 fn duplicate_source(state: &State, fd: u32) -> Result<Descriptor, Failure> {
     if state.closed.contains(&fd) || fd == HIDDEN_PREOPEN {
         return Err(Failure::Errno(8));
@@ -428,6 +442,7 @@ fn duplicate_source(state: &State, fd: u32) -> Result<Descriptor, Failure> {
             flags: state.stdio_flags[index as usize].clone(),
             offset: Rc::new(Cell::new(0)),
             stdio: Some(index),
+            pipe: None,
             rights: (if index == 0 { 2 } else { 64 }) | (1 << 27) | (1 << 3),
             inheriting: 0,
             cache: None,
@@ -507,6 +522,50 @@ fn dispatch(caller: &mut Caller<'_, State>, name: &str, args: &[u64]) -> Result<
         return Err(Failure::Errno(8));
     }
     match name {
+        "fd_pipe" => {
+            bytes(caller, a[0], 4)?;
+            bytes(caller, a[1], 4)?;
+            if caller.data().descriptors.len() + 2 > MAX_FILES {
+                return Err(Failure::Errno(33));
+            }
+            let numbers: Vec<u32> = (0..MAX_FILES as u32 + 4)
+                .filter(|fd| {
+                    stream(caller.data(), *fd).is_none()
+                        && !caller.data().descriptors.contains_key(fd)
+                })
+                .take(2)
+                .collect();
+            let [reader, writer] = numbers.as_slice() else {
+                return Err(Failure::Errno(33));
+            };
+            let pipe = Rc::new(RefCell::new(VecDeque::new()));
+            let mut metadata = [0u8; 76];
+            metadata[64..68].copy_from_slice(&0o10600u32.to_le_bytes());
+            for (fd, read) in [(*reader, true), (*writer, false)] {
+                caller.data_mut().descriptors.insert(
+                    fd,
+                    Descriptor {
+                        path: "/".into(),
+                        directory: false,
+                        read,
+                        write: !read,
+                        flags: Rc::new(Cell::new(0)),
+                        offset: Rc::new(Cell::new(0)),
+                        stdio: None,
+                        pipe: Some(pipe.clone()),
+                        rights: (if read { 2 } else { 64 }) | (1 << 3) | (1 << 21) | (1 << 27),
+                        inheriting: 0,
+                        cache: None,
+                        linked: false,
+                        metadata,
+                    },
+                );
+                caller.data_mut().closed.remove(&fd);
+                caller.data_mut().cloexec.remove(&fd);
+            }
+            put(caller, a[0], &reader.to_le_bytes())?;
+            put(caller, a[1], &writer.to_le_bytes())?;
+        }
         "fd_dup" | "fd_dup2" => {
             let source = duplicate_source(caller.data(), a[0] as u32)?;
             let target = if name == "fd_dup" {
@@ -590,13 +649,25 @@ fn dispatch(caller: &mut Caller<'_, State>, name: &str, args: &[u64]) -> Result<
             };
             if name.starts_with("fd_") {
                 let fd = a[0] as u32;
-                if stream(caller.data(), fd).is_some() {
+                if stream(caller.data(), fd).is_some()
+                    || caller
+                        .data()
+                        .descriptors
+                        .get(&fd)
+                        .is_some_and(|descriptor| descriptor.pipe.is_some())
+                {
                     if let Some((uid, gid)) = pointers {
                         put(caller, uid, &0u32.to_le_bytes())?;
                         put(caller, gid, &0u32.to_le_bytes())?;
                     }
                     return Ok(match projection {
-                        StatProjection::Mode => 0o20000,
+                        StatProjection::Mode => {
+                            if stream(caller.data(), fd).is_some() {
+                                0o20000
+                            } else {
+                                0o10600
+                            }
+                        }
                         _ => 0,
                     });
                 }
@@ -738,7 +809,13 @@ fn dispatch(caller: &mut Caller<'_, State>, name: &str, args: &[u64]) -> Result<
                     .descriptors
                     .get(&(a[0] as u32))
                     .ok_or(Failure::Errno(8))?;
-                stat[0] = if descriptor.directory { 3 } else { 4 };
+                stat[0] = if descriptor.pipe.is_some() {
+                    0
+                } else if descriptor.directory {
+                    3
+                } else {
+                    4
+                };
                 stat[2..4].copy_from_slice(&descriptor.flags.get().to_le_bytes());
                 stat[8..16].copy_from_slice(&descriptor.rights.to_le_bytes());
                 stat[16..24].copy_from_slice(&descriptor.inheriting.to_le_bytes());
@@ -798,6 +875,44 @@ fn dispatch(caller: &mut Caller<'_, State>, name: &str, args: &[u64]) -> Result<
             }
             if !descriptor.read || (name == "fd_pread" && descriptor.rights & 4 == 0) {
                 return Err(Failure::Errno(76));
+            }
+            if let Some(pipe) = &descriptor.pipe {
+                if name == "fd_pread" {
+                    return Err(Failure::Errno(70));
+                }
+                for (pointer, length) in &vectors {
+                    bytes(caller, *pointer, *length)?;
+                }
+                let wanted: usize = vectors.iter().map(|(_, length)| length).sum();
+                if wanted == 0 {
+                    put(caller, output, &0u32.to_le_bytes())?;
+                    return Ok(0);
+                }
+                if pipe.borrow().is_empty() && pipe_peer(caller.data(), pipe, false) {
+                    if descriptor.flags.get() & 4 != 0 {
+                        return Err(Failure::Errno(6));
+                    }
+                    suspend(
+                        caller,
+                        Request::Poll {
+                            clocks: Vec::new(),
+                            immediate: false,
+                        },
+                        Completion::Unit,
+                    )?;
+                }
+                let mut read = 0usize;
+                for (pointer, length) in vectors {
+                    let available = pipe.borrow().len();
+                    let data: Vec<u8> = pipe.borrow_mut().drain(..length.min(available)).collect();
+                    put(caller, pointer, &data)?;
+                    read += data.len();
+                    if data.len() < length {
+                        break;
+                    }
+                }
+                put(caller, output, &(read as u32).to_le_bytes())?;
+                return Ok(0);
             }
             let mut offset = if name == "fd_pread" {
                 usize::try_from(args[3]).map_err(|_| Failure::Errno(28))?
@@ -869,6 +984,33 @@ fn dispatch(caller: &mut Caller<'_, State>, name: &str, args: &[u64]) -> Result<
                 }
                 if data.is_empty() {
                     put(caller, output, &0u32.to_le_bytes())?;
+                    return Ok(0);
+                }
+                if let Some(pipe) = &descriptor.pipe {
+                    if name == "fd_pwrite" {
+                        return Err(Failure::Errno(70));
+                    }
+                    if !pipe_peer(state, pipe, true) {
+                        return Err(Failure::Errno(64));
+                    }
+                    let available = PIPE_BYTES.saturating_sub(pipe.borrow().len());
+                    if available == 0 || (data.len() <= PIPE_ATOMIC_BYTES && available < data.len())
+                    {
+                        if descriptor.flags.get() & 4 != 0 {
+                            return Err(Failure::Errno(6));
+                        }
+                        suspend(
+                            caller,
+                            Request::Poll {
+                                clocks: Vec::new(),
+                                immediate: false,
+                            },
+                            Completion::Unit,
+                        )?;
+                    }
+                    let count = data.len().min(available);
+                    pipe.borrow_mut().extend(&data[..count]);
+                    put(caller, output, &(count as u32).to_le_bytes())?;
                     return Ok(0);
                 }
                 let file = &state
@@ -1060,6 +1202,7 @@ fn dispatch(caller: &mut Caller<'_, State>, name: &str, args: &[u64]) -> Result<
             let mut clocks = Vec::new();
             let mut clock_indices = BTreeSet::new();
             let mut events = Vec::new();
+            let mut blocked = BTreeSet::new();
             let state = caller.data();
             for (index, subscription) in subscriptions.as_chunks::<48>().0.iter().enumerate() {
                 let mut event = [0u8; 32];
@@ -1139,6 +1282,18 @@ fn dispatch(caller: &mut Caller<'_, State>, name: &str, args: &[u64]) -> Result<
                                 errno = 76;
                             } else if descriptor.directory {
                                 errno = 31;
+                            } else if let Some(pipe) = &descriptor.pipe {
+                                let length = pipe.borrow().len();
+                                let peer = pipe_peer(state, pipe, writing);
+                                let available = if writing { PIPE_BYTES - length } else { length };
+                                event[16..24].copy_from_slice(&(available as u64).to_le_bytes());
+                                if writing && !peer {
+                                    errno = 64;
+                                } else if !writing && !peer {
+                                    event[24..26].copy_from_slice(&1u16.to_le_bytes());
+                                } else if available == 0 {
+                                    blocked.insert(index);
+                                }
                             } else if let Some(file) =
                                 descriptor.cache.and_then(|cache| state.files.get(&cache))
                             {
@@ -1168,13 +1323,14 @@ fn dispatch(caller: &mut Caller<'_, State>, name: &str, args: &[u64]) -> Result<
                 event[8..10].copy_from_slice(&errno.to_le_bytes());
                 events.push(event);
             }
-            let immediate = events.len() != clock_indices.len();
+            let immediate = events.len() != clock_indices.len() + blocked.len();
             suspend(
                 caller,
                 Request::Poll { clocks, immediate },
                 Completion::Poll {
                     events,
                     clocks: clock_indices,
+                    blocked,
                     pointer: a[1],
                     output: a[3],
                 },
@@ -1189,6 +1345,11 @@ fn dispatch(caller: &mut Caller<'_, State>, name: &str, args: &[u64]) -> Result<
                 .ok_or(Failure::Errno(8))?;
             if descriptor.rights & (1 << 21) == 0 {
                 return Err(Failure::Errno(76));
+            }
+            if descriptor.pipe.is_some() {
+                let metadata = descriptor.metadata;
+                put(caller, a[1], &metadata[..64])?;
+                return Ok(0);
             }
             let path = if descriptor.linked {
                 Some(descriptor.path.clone())
@@ -1404,6 +1565,7 @@ fn dispatch(caller: &mut Caller<'_, State>, name: &str, args: &[u64]) -> Result<
                 flags: Rc::new(Cell::new((a[3] & 5) as u16)),
                 offset: Rc::new(Cell::new(0)),
                 stdio: None,
+                pipe: None,
                 rights,
                 inheriting: 0,
                 cache: None,
@@ -1472,6 +1634,7 @@ fn dispatch(caller: &mut Caller<'_, State>, name: &str, args: &[u64]) -> Result<
                 flags: Rc::new(Cell::new(a[7] as u16)),
                 offset: Rc::new(Cell::new(0)),
                 stdio: None,
+                pipe: None,
                 rights: args[5],
                 inheriting: args[6],
                 cache: None,
@@ -1543,6 +1706,9 @@ fn dispatch(caller: &mut Caller<'_, State>, name: &str, args: &[u64]) -> Result<
                 .get(&(a[0] as u32))
                 .cloned()
                 .ok_or(Failure::Errno(8))?;
+            if descriptor.pipe.is_some() {
+                return Err(Failure::Errno(70));
+            }
             if descriptor.directory {
                 return Err(Failure::Errno(31));
             }
@@ -1664,6 +1830,7 @@ fn linker(engine: &Engine) -> Result<Linker<State>, String> {
     bind!("wasi_snapshot_preview1","clock_time_get",a:i32,b:i64,c:i32);
     bind!("wasi_snapshot_preview1","clock_res_get",a:i32,b:i32);
     bind!("wasi_snapshot_preview1", "sched_yield");
+    bind!("host_process","fd_pipe",a:i32,b:i32);
     bind!("host_process","fd_dup",a:i32,b:i32);
     bind!("host_process","fd_dup2",a:i32,b:i32);
     bind!("host_process","fd_getfd",a:i32,b:i32);
@@ -1793,6 +1960,7 @@ impl WasmGuest {
             flags: Rc::new(Cell::new(0)),
             offset: Rc::new(Cell::new(0)),
             stdio: None,
+            pipe: None,
             rights: (1 << 30) - 1,
             inheriting: (1 << 30) - 1,
             cache: None,
@@ -2262,6 +2430,7 @@ impl WasmGuest {
                 Completion::Poll {
                     events,
                     clocks,
+                    blocked,
                     pointer,
                     output,
                 } => {
@@ -2276,7 +2445,10 @@ impl WasmGuest {
                     let bytes: Vec<u8> = events
                         .into_iter()
                         .enumerate()
-                        .filter(|(index, _)| !clocks.contains(index) || ready.contains(index))
+                        .filter(|(index, _)| {
+                            !blocked.contains(index)
+                                && (!clocks.contains(index) || ready.contains(index))
+                        })
                         .flat_map(|(_, event)| event)
                         .collect();
                     let count = (bytes.len() / 32) as u32;

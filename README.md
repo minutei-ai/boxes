@@ -185,3 +185,5 @@ The original numeric-cursor `process.output.read` serves stable terminal capture
 `bun run host-stat:proof` exercises the native libc metadata ABI against production: file and symlink modes, byte sizes and 512-byte block counts, UID/GID, closed descriptors, pointer validation, private pathname preopens, directory confinement and read grants. These queries use current sandbox metadata; captured stdio reports that it is not a terminal. Host process and pipe imports required by other published packages remain open.
 
 `bun run fd-dup:proof` validates duplicate-FD positions, status/descriptor flags, replacement, closure, stdio remapping, quota and read-only rights against the real Worker and checks the resulting R2 file contents. It does not establish subprocess or pipe support.
+
+`bun run pipe:proof` validates native anonymous pipe buffering, aliases, EOF, EPIPE, atomic writes, pointer checks, descriptor quota and poll. It also observes a blocked guest before explicitly cancelling it and verifies retained output. Pipe handles currently live within one interpreter invocation; cross-process inheritance remains pending.
