@@ -114,6 +114,12 @@ Current limits: 16 MiB per file, 64 MiB logical filesystem bytes, 16,384 nodes, 
 
 Unreferenced blocks and disposed sandboxes are retained. Safe garbage collection is pending. The filesystem currently loads its bounded metadata manifest for each operation; a paged metadata index is pending for large inventories.
 
+## Filesystem snapshots
+
+`filesystem.export` takes `maxBytes` (1 byte to 24 MiB) and returns a `snapshot-export` with `source.format: "boxes-filesystem-snapshot-v1"` and `source.filesystem.entries`. Entries contain absolute paths, octal modes, UID/GID, base64 file bytes or a symlink target. It includes the root and reads one confirmed R2 manifest; it does not follow symlinks. Oversized exports fail with `EFBIG` before fetching file blocks. Unreadable files and corrupt content fail the whole operation. The operation requires a read capability and is available through guest `tools.call`.
+
+`bun run export:proof` validates the public contract against `CIRRO_URL`. Importing a snapshot is not implemented.
+
 ## Inspiration
 
 Boxes is inspired by Rivet’s [AgentOS](https://github.com/rivet-dev/agentos), inspected at `4d48628304c1ddedafc9d55f60752093fcf6f3d2`. Boxes is an independent implementation; the upstream native sidecar, V8 embedding and Unix socket transport are not used.

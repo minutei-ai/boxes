@@ -37,7 +37,8 @@
     "pipe:proof": "bun tooling/pipe-proof.ts",
     "format": "oxfmt . && cargo fmt --all && rustfmt tests/fixtures/*.rs",
     "format:check": "oxfmt --check . && cargo fmt --all -- --check && rustfmt --check tests/fixtures/*.rs",
-    "plan": "bun run build && alchemy plan alchemy.run.ts --stage prod --profile minutei --no-input"
+    "plan": "bun run build && alchemy plan alchemy.run.ts --stage prod --profile minutei --no-input",
+    "export:proof": "bun tooling/export-proof.ts"
   },
   "dependencies": {
     "alchemy": "2.0.0-beta.83",

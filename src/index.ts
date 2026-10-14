@@ -20,6 +20,7 @@ import {
   Fault,
   FileContent,
   FileStat,
+  FilesystemSnapshot,
   Head,
   Id,
   Policy,
@@ -333,6 +334,9 @@ const route = Effect.fn("api.route")(function* (request: Request, env: Env) {
             ),
             Match.whenOr({ op: "software.list" }, { op: "software.installed" }, () =>
               Schema.encodeUnknownSync(Schema.fromJsonString(SoftwareCatalog))(result),
+            ),
+            Match.when({ op: "filesystem.export" }, () =>
+              Schema.encodeUnknownSync(Schema.fromJsonString(FilesystemSnapshot))(result),
             ),
             Match.when({ op: "filesystem.readFiles" }, () =>
               Schema.encodeUnknownSync(Schema.fromJsonString(BatchReadResults))(result),

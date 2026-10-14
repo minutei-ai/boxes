@@ -7,6 +7,7 @@ import {
   Fault,
   FileContent,
   FileStat,
+  FilesystemSnapshot,
   FilesystemAction,
   Success,
   BatchReadResults,
@@ -41,6 +42,7 @@ export const filesystem = Effect.fn("filesystem.action")(function* (
 ) {
   const id = capability.sandboxId;
   const reads = [
+    "filesystem.export",
     "filesystem.readFile",
     "filesystem.readFiles",
     "filesystem.readdirRecursive",
@@ -60,6 +62,77 @@ export const filesystem = Effect.fn("filesystem.action")(function* (
   const now = yield* Clock.currentTimeNanos;
   yield* kernelCall(() => kernel.set_time(now));
   return yield* Match.value(action).pipe(
+    Match.when({ op: "filesystem.export" }, (input) =>
+      Effect.gen(function* () {
+        const tree = yield* kernelCall(() => kernel.readdir_recursive("/", 64, "[]")).pipe(
+          Effect.flatMap(Schema.decodeUnknownEffect(Schema.fromJsonString(DirectoryTree))),
+        );
+        const metadata = yield* Effect.forEach(["/", ...tree.map((entry) => entry.path)], (path) =>
+          kernelCall(() => kernel.stat(path, false)).pipe(
+            Effect.flatMap(Schema.decodeUnknownEffect(Schema.fromJsonString(FileStat))),
+          ),
+        );
+        const entries = yield* Effect.forEach(metadata, (stat) => {
+          const common = {
+            path: stat.path,
+            mode: `0${(stat.mode & 0o7777).toString(8)}`,
+            uid: stat.uid,
+            gid: stat.gid,
+          };
+          return Match.value(stat.kind).pipe(
+            Match.when("directory", () =>
+              Effect.succeed({ ...common, type: "directory" as const }),
+            ),
+            Match.when("symlink", () =>
+              kernelCall(() => kernel.readlink(stat.path)).pipe(
+                Effect.map((target) => ({ ...common, type: "symlink" as const, target })),
+              ),
+            ),
+            Match.when("file", () =>
+              Effect.succeed({
+                ...common,
+                type: "file" as const,
+                content: "",
+                encoding: "base64" as const,
+              }),
+            ),
+            Match.exhaustive,
+          );
+        });
+        const snapshot = {
+          kind: "snapshot-export" as const,
+          source: {
+            format: "boxes-filesystem-snapshot-v1" as const,
+            filesystem: { entries },
+          },
+        };
+        const estimated =
+          Buffer.byteLength(
+            Schema.encodeSync(Schema.fromJsonString(FilesystemSnapshot))(snapshot),
+          ) +
+          metadata.reduce((total, stat) => {
+            if (stat.kind === "file") return total + 4 * Math.ceil(stat.size / 3);
+            return total;
+          }, 0);
+        if (estimated > input.maxBytes)
+          return yield* new Fault({
+            code: "EFBIG",
+            status: 413,
+            message: `Filesystem export is ${estimated} bytes, exceeding maxBytes ${input.maxBytes}`,
+          });
+        const completed = yield* Effect.forEach(
+          entries,
+          (entry) =>
+            Effect.gen(function* () {
+              if (entry.type !== "file") return entry;
+              const data = yield* read(env, id, kernel, entry.path);
+              return { ...entry, content: data.toString("base64") };
+            }),
+          { concurrency: 4 },
+        );
+        return { ...snapshot, source: { ...snapshot.source, filesystem: { entries: completed } } };
+      }),
+    ),
     Match.when({ op: "filesystem.readFiles" }, (input) =>
       Effect.gen(function* () {
         const metadata = yield* Effect.forEach(input.paths, (path) =>
