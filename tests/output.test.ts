@@ -484,3 +484,48 @@ test("inline receipt migration preserves grants, deadlines, observed output and 
   });
   expect((await post(mf, "/v1/migrations/output-chunks-v1", token, {})).status).toBe(401);
 });
+
+test("historical receipt migration remains resumable after fencing and a conflicting target", async () => {
+  const token = await setup(mf, "output-fence");
+  const record = Schema.decodeUnknownSync(RunRecord)(
+    await (
+      await act("output-fence", token, {
+        op: "process.run",
+        id: "saved",
+        language: "javascript",
+        source: 'export default ({console}) => { console.log("retained"); return 42; }',
+      })
+    ).json(),
+  );
+  const bucket = await mf.getR2Bucket("OBJECTS");
+  const legacy = "sandboxes/output-fence/runs/saved.json";
+  const primary = "processes/output-fence/saved.json";
+  await bucket.put(legacy, Schema.encodeSync(Schema.fromJsonString(RunRecord))(record));
+  await bucket.put(primary, "conflicting target");
+  const failed = await post(
+    mf,
+    "/v1/migrations/process-receipts-v2",
+    "cirro-local-test-credential",
+    {},
+  );
+  expect(failed.status).toBe(500);
+  const fenced = await bucket.get(legacy);
+  if (fenced === null) return expect(fenced).not.toBeNull();
+  expect(Schema.decodeUnknownSync(Schema.fromJsonString(RunRecord))(await fenced.text())).toEqual(
+    record,
+  );
+  await bucket.delete(primary);
+  const resumed = await post(
+    mf,
+    "/v1/migrations/process-receipts-v2",
+    "cirro-local-test-credential",
+    {},
+  );
+  expect(resumed.status).toBe(200);
+  expect(Schema.decodeUnknownSync(MigrationReceipt)(await resumed.json()).migrated).toBe(1);
+  expect(await bucket.head(legacy)).toBeNull();
+  const restored = Schema.decodeUnknownSync(RunRecord)(
+    await (await act("output-fence", token, { op: "process.get", id: "saved" })).json(),
+  );
+  expect(restored).toEqual(record);
+});

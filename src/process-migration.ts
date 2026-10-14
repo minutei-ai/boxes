@@ -58,7 +58,15 @@ export const migrateProcesses = Effect.fn("migration.processReceipts")(function*
           });
           const fenced = yield* Effect.tryPromise({
             try: () =>
-              env.OBJECTS.put(object.key, encoded, { onlyIf: { etagMatches: stored.etag } }),
+              env.OBJECTS.put(
+                object.key,
+                Schema.encodeSync(Schema.fromJsonString(InlineRun))({
+                  ...record,
+                  authority: null,
+                  deadlineAt: null,
+                }),
+                { onlyIf: { etagMatches: stored.etag } },
+              ),
             catch: (cause) => new StorageFailure({ cause }),
           });
           if (fenced === null)
