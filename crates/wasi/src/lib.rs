@@ -3598,6 +3598,11 @@ impl WasmGuest {
     }
 }
 
+thread_local! {
+    static PARKED_GUESTS: RefCell<BTreeMap<u32,WasmGuest>> = const {RefCell::new(BTreeMap::new())};
+    static NEXT_PARKED_GUEST: Cell<u32> = const {Cell::new(1)};
+}
+
 impl Drop for WasmGuest {
     fn drop(&mut self) {
         self.store.data().processes.borrow_mut().memory_bytes -= self.memory_limit;
@@ -3606,6 +3611,33 @@ impl Drop for WasmGuest {
 
 #[wasm_bindgen]
 impl WasmGuest {
+    pub fn park(self) -> Result<u32, JsValue> {
+        PARKED_GUESTS.with(|guests| {
+            let mut guests = guests.borrow_mut();
+            if guests.len() >= 9 {
+                return Err(JsValue::from_str("Checkpoint guest limit exceeded"));
+            }
+            let id = NEXT_PARKED_GUEST.with(|next| {
+                let id = next.get();
+                next.set(id.saturating_add(1));
+                id
+            });
+            if guests.contains_key(&id) {
+                return Err(JsValue::from_str("Checkpoint handle exhausted"));
+            }
+            guests.insert(id, self);
+            Ok(id)
+        })
+    }
+    pub fn resume(handle: u32) -> Result<WasmGuest, JsValue> {
+        PARKED_GUESTS.with(|guests| {
+            guests
+                .borrow_mut()
+                .remove(&handle)
+                .ok_or_else(|| JsValue::from_str("Checkpoint handle does not exist"))
+        })
+    }
+
     #[wasm_bindgen(constructor)]
     pub fn new(
         bytes: &[u8],

@@ -142,6 +142,16 @@ await Effect.runPromise(
         'import "./cirro_compiler";\nexport declare const createBindings: () => typeof wasm_bindgen;\n',
       ),
     );
+    const wasiBinary = yield* Effect.promise(() =>
+      Bun.file(join(root, "dist/wasi/cirro_wasi_bg.wasm")).arrayBuffer(),
+    );
+    const wasiDigest = yield* Effect.promise(() => crypto.subtle.digest("SHA-256", wasiBinary));
+    yield* Effect.promise(() =>
+      Bun.write(
+        join(root, "dist/wasi/revision.json"),
+        JSON.stringify({ sha256: Buffer.from(wasiDigest).toString("hex") }) + "\n",
+      ),
+    );
     const wasi = yield* Effect.promise(() =>
       Bun.file(join(root, "dist/wasi/cirro_wasi.js")).text(),
     );
@@ -790,38 +800,49 @@ await Effect.runPromise(
           `dist/wasi-${name}.wasm`,
         ]),
     );
-    const result = yield* Effect.promise(() =>
-      Bun.build({
-        entrypoints: [join(root, "src/index.ts")],
-        outdir: join(root, "dist/worker"),
-        target: "browser",
-        format: "esm",
-        minify: true,
-        external: ["cloudflare:workers"],
-        plugins: [
-          {
-            name: "wasm-module",
-            setup(builder) {
-              builder.onResolve({ filter: /^cirro:(wasm|guest|compiler|wasi|python)$/ }, (args) => {
-                const name = args.path.slice(6);
-                if (name === "wasm") return { path: "./cirro_kernel_bg.wasm", external: true };
-                return { path: `./cirro_${name}_bg.wasm`, external: true };
-              });
-              builder.onResolve({ filter: /^env$/ }, () => ({ path: join(root, "src/clock.ts") }));
+    for (const [entry, directory] of [
+      ["src/index.ts", "dist/worker"],
+      ["tests/fixtures/checkpoint-worker.ts", "dist/checkpoint-worker"],
+    ] as const) {
+      const result = yield* Effect.promise(() =>
+        Bun.build({
+          entrypoints: [join(root, entry)],
+          outdir: join(root, directory),
+          naming: "index.js",
+          target: "browser",
+          format: "esm",
+          minify: true,
+          external: ["cloudflare:workers"],
+          plugins: [
+            {
+              name: "wasm-module",
+              setup(builder) {
+                builder.onResolve(
+                  { filter: /^cirro:(wasm|guest|compiler|wasi|python)$/ },
+                  (args) => {
+                    const name = args.path.slice(6);
+                    if (name === "wasm") return { path: "./cirro_kernel_bg.wasm", external: true };
+                    return { path: `./cirro_${name}_bg.wasm`, external: true };
+                  },
+                );
+                builder.onResolve({ filter: /^env$/ }, () => ({
+                  path: join(root, "src/clock.ts"),
+                }));
+              },
             },
-          },
-        ],
-      }),
-    );
-    if (!result.success)
-      return yield* new BuildFailure({ message: "Worker bundle failed", cause: result.logs });
-    yield* Effect.forEach(["kernel", "guest", "compiler", "wasi", "python"], (name) =>
-      Effect.promise(() =>
-        Bun.write(
-          join(root, `dist/worker/cirro_${name}_bg.wasm`),
-          Bun.file(join(root, `dist/${name}/cirro_${name}_bg.wasm`)),
+          ],
+        }),
+      );
+      if (!result.success)
+        return yield* new BuildFailure({ message: "Worker bundle failed", cause: result.logs });
+      yield* Effect.forEach(["kernel", "guest", "compiler", "wasi", "python"], (name) =>
+        Effect.promise(() =>
+          Bun.write(
+            join(root, `${directory}/cirro_${name}_bg.wasm`),
+            Bun.file(join(root, `dist/${name}/cirro_${name}_bg.wasm`)),
+          ),
         ),
-      ),
-    );
+      );
+    }
   }),
 );

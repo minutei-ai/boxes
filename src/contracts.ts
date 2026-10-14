@@ -768,3 +768,18 @@ export const OutputMigrationReceipt = Schema.Struct({
   cursor: Schema.NullOr(Schema.String),
 });
 export const MigrationReceipt = Schema.Struct({ migrated: Schema.Int });
+
+export const HeapSnapshot = Schema.Struct({
+  version: Schema.Literal(1),
+  runtime: Schema.String.check(Schema.isPattern(/^[a-f0-9]{64}$/)),
+  memoryBytes: Schema.Int.check(Schema.isBetween({ minimum: 65_536, maximum: 67_108_864 })),
+  pages: Schema.Array(Schema.String.check(Schema.isPattern(/^[a-f0-9]{64}$/))).check(
+    Schema.isMaxLength(1024),
+  ),
+  handles: Schema.Array(
+    Schema.Struct({
+      pid: Schema.Int.check(Schema.isBetween({ minimum: 1, maximum: 2147483647 })),
+      handle: Schema.Int.check(Schema.isBetween({ minimum: 1, maximum: 4294967295 })),
+    }),
+  ).check(Schema.isMinLength(1), Schema.isMaxLength(9)),
+});

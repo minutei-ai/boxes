@@ -90,6 +90,14 @@ A scoped feeder validates addressed block sizes and SHA-256 before delivering at
 
 The unconditional output migration converts v2 inline and v3 chunked receipts to v4 with closed stdin. It preserves grants, deadlines, output references and public summaries. Runtime reads only v4 receipts; legacy shapes are confined to the migration owner. The migration returns a continuation cursor after at most 50 listed receipts. Alchemy follows each confirmed cursor and logs page receipts, keeping individual requests below the client timeout. Retrying from the beginning reads persisted metadata and skips already converted receipts.
 
+## Rust heap checkpoints
+
+The internal Wasmi checkpoint path parks native guest ownership in a bounded Rust registry and persists the quiescent host Wasm memory as immutable 64 KiB R2 pages plus a content-addressed manifest. The manifest records the exact compiled Rust runtime digest and PID/handle mapping. Restoring validates the manifest, layout, runtime digest and every addressed page before adopting any guest. A different Rust build is rejected; the loader never compiles uploaded guest code through the platform WebAssembly API. Pages read with concurrency four, and repeated page hashes upload once within a snapshot.
+
+Replacement-workerd tests restore an out-of-fuel continuation without repeating entry or resetting fuel, a caught signal handler with its mask/frame, and a parent/child pair with shared pipe buffers, EOF and child wait status. Corrupt pages and incompatible runtime manifests fail before native resume. These helpers are internal and the fixture Worker is separate from the deployed application.
+
+The public execution lifecycle does not yet use these checkpoints. Queue claims, sandbox kernel state, monotonic timer continuity, grants, output acknowledgements and the ordering of external effects must be integrated before automatic process recovery can be claimed. A heap image alone does not prove that a mutation outside the interpreter can be replayed safely.
+
 ## Execution receipts
 
 `sandboxes/<id>/code/<sha256>` stores JSON programs. A Wasm program captures source bytes as canonical base64, full argv, the supplied environment and stdin. Its digest identifies the complete input, not just the binary. File execution snapshots the binary before creating its receipt; later file edits do not change that artifact. `processes/<sandbox>/<id>.json` stores a unique execution ID, language, source digest, timestamps, lifecycle status and output block references. The initial receipt is conditionally created. A duplicate ID is rejected before execution. Completion conditionally replaces only the original running receipt. Run summaries are encoded into native R2 custom metadata at the same write, so paginated listings fetch only the requested metadata page and do not download each execution output. Cursors and limits pass directly to the owning native API.

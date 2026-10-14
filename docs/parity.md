@@ -32,3 +32,5 @@ Implemented shell commands: `pwd`, `whoami`, `cd`, `ls`, `mkdir`, `rm`, `mv`, `c
 The current implementation passes the implemented-boundary tests; these gates are open. There is no total-parity or production-readiness claim.
 
 `bun run software:proof` validates the published jq artifact with SHA-256 `edb1cf0bbcf663d177916592d2f1b4361a02966dbf2eb44e3e61ea2a399bb43a`, installs it and exercises version, stdin, filters, file input and a shell pipeline against `CIRRO_URL`. Host libc imports support one-shot file creation modes, hidden pathname preopens that survive closing fd 3, and anonymous temporary files with descriptor lifetime, sandbox grants and readonly package guards. Direct I/O is explicitly unsupported; network send/recv on regular files returns NOTSOCK. This does not establish compatibility for other release packages.
+
+Internal Rust heap restoration is verified in replacement workerd instances with R2 pages: fuel continuation, handler frames/masks, and parent/child pipe/wait state. This is not yet public execution recovery; the receipt/Queue lifecycle and effect boundary gate remain open.
