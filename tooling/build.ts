@@ -980,6 +980,30 @@ await Effect.runPromise(
       "-o",
       "dist/wasi-advice.wasm",
     ]);
+    yield* run([
+      "rustc",
+      "--target",
+      "wasm32-wasip1",
+      "-O",
+      "-C",
+      "strip=symbols",
+      "tests/fixtures/wasi-attenuation.rs",
+      "-o",
+      "dist/wasi-attenuation.wasm",
+    ]);
+    yield* run([
+      "rustc",
+      "--target",
+      "wasm32-wasip1",
+      "-O",
+      "-C",
+      "strip=symbols",
+      "--cfg",
+      'case="checkpoint"',
+      "tests/fixtures/wasi-attenuation.rs",
+      "-o",
+      "dist/wasi-attenuation-checkpoint.wasm",
+    ]);
     for (const [entry, directory] of [
       ["src/index.ts", "dist/worker"],
       ["tests/fixtures/checkpoint-worker.ts", "dist/checkpoint-worker"],

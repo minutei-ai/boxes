@@ -779,6 +779,19 @@ fn stream(state: &State, fd: u32) -> Option<u32> {
     None
 }
 
+fn descriptor_rights(state: &State, fd: u32) -> Result<(u64, u64), Failure> {
+    if state.closed.contains(&fd) || fd == HIDDEN_PREOPEN {
+        return Err(Failure::Errno(8));
+    }
+    if let Some(descriptor) = state.descriptors.get(&fd) {
+        return Ok((descriptor.rights, descriptor.inheriting));
+    }
+    if let Some(index) = stream(state, fd) {
+        return Ok(((if index == 0 { 2 } else { 64 }) | (1 << 27) | (1 << 3), 0));
+    }
+    Err(Failure::Errno(8))
+}
+
 fn duplicate_source(state: &State, fd: u32) -> Result<Descriptor, Failure> {
     if state.closed.contains(&fd) || fd == HIDDEN_PREOPEN {
         return Err(Failure::Errno(8));
@@ -796,7 +809,7 @@ fn duplicate_source(state: &State, fd: u32) -> Result<Descriptor, Failure> {
             offset: Rc::new(Cell::new(0)),
             stdio: Some(index),
             pipe: None,
-            rights: (if index == 0 { 2 } else { 64 }) | (1 << 27) | (1 << 3),
+            rights: descriptor_rights(state, fd)?.0,
             inheriting: 0,
             cache: None,
             linked: false,
@@ -894,6 +907,17 @@ fn dispatch(caller: &mut Caller<'_, State>, name: &str, args: &[u64]) -> Result<
             .is_some_and(|fd| caller.data().closed.contains(&(*fd as u32)))
     {
         return Err(Failure::Errno(8));
+    }
+    let required = match name {
+        "fd_read" | "fd_pread" => Some(2),
+        "fd_write" | "fd_pwrite" => Some(64),
+        "fd_fdstat_set_flags" => Some(1 << 3),
+        _ => None,
+    };
+    if let Some(required) = required
+        && descriptor_rights(caller.data(), a[0] as u32)?.0 & required == 0
+    {
+        return Err(Failure::Errno(76));
     }
     match name {
         "proc_getpid" | "proc_getppid" => {
@@ -1873,7 +1897,7 @@ fn dispatch(caller: &mut Caller<'_, State>, name: &str, args: &[u64]) -> Result<
                         .get()
                         .to_le_bytes(),
                 );
-                let rights: u64 = (if index == 0 { 2 } else { 64 }) | (1 << 27) | (1 << 3);
+                let rights = descriptor_rights(caller.data(), a[0] as u32)?.0;
                 stat[8..16].copy_from_slice(&rights.to_le_bytes());
             } else {
                 let descriptor = caller
@@ -1893,6 +1917,22 @@ fn dispatch(caller: &mut Caller<'_, State>, name: &str, args: &[u64]) -> Result<
                 stat[16..24].copy_from_slice(&descriptor.inheriting.to_le_bytes());
             }
             put(caller, a[1], &stat)?;
+        }
+        "fd_fdstat_set_rights" => {
+            let fd = a[0] as u32;
+            let (base, inheriting) = descriptor_rights(caller.data(), fd)?;
+            if args[1] & !base != 0 || args[2] & !inheriting != 0 {
+                return Err(Failure::Errno(76));
+            }
+            if let Some(descriptor) = caller.data_mut().descriptors.get_mut(&fd) {
+                descriptor.rights = args[1];
+                descriptor.inheriting = args[2];
+            } else {
+                let mut descriptor = duplicate_source(caller.data(), fd)?;
+                descriptor.rights = args[1];
+                descriptor.inheriting = args[2];
+                caller.data_mut().descriptors.insert(fd, descriptor);
+            }
         }
         "fd_fdstat_set_flags" => {
             if a[1] & !5 != 0 {
@@ -2380,7 +2420,9 @@ fn dispatch(caller: &mut Caller<'_, State>, name: &str, args: &[u64]) -> Result<
                         if state.closed.contains(&fd) {
                             errno = 8;
                         } else if let Some(index) = stream(state, fd) {
-                            if index == 0 && !writing {
+                            if descriptor_rights(state, fd)?.0 & (1 << 27) == 0 {
+                                errno = 76;
+                            } else if index == 0 && !writing {
                                 let available =
                                     state.stdin.len().saturating_sub(state.stdin_offset.get());
                                 event[16..24].copy_from_slice(&(available as u64).to_le_bytes());
@@ -2737,6 +2779,8 @@ fn dispatch(caller: &mut Caller<'_, State>, name: &str, args: &[u64]) -> Result<
                 return Err(Failure::Errno(54));
             }
             if parent.rights & (1 << 13) == 0
+                || (a[4] & 1 != 0 && parent.rights & (1 << 10) == 0)
+                || (a[4] & 8 != 0 && parent.rights & (1 << 19) == 0)
                 || args[5] & !parent.inheriting != 0
                 || args[6] & !parent.inheriting != 0
             {
@@ -2943,6 +2987,7 @@ fn linker(engine: &Engine) -> Result<Linker<State>, String> {
     bind!("wasi_snapshot_preview1","fd_prestat_dir_name",a:i32,b:i32,c:i32);
     bind!("wasi_snapshot_preview1","fd_fdstat_get",a:i32,b:i32);
     bind!("wasi_snapshot_preview1","fd_fdstat_set_flags",a:i32,b:i32);
+    bind!("wasi_snapshot_preview1","fd_fdstat_set_rights",a:i32,b:i64,c:i64);
     bind!("wasi_snapshot_preview1","fd_read",a:i32,b:i32,c:i32,d:i32);
     bind!("wasi_snapshot_preview1","fd_write",a:i32,b:i32,c:i32,d:i32);
     bind!("wasi_snapshot_preview1","fd_pread",a:i32,b:i32,c:i32,d:i64,e:i32);
