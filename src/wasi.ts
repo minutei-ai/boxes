@@ -543,7 +543,7 @@ export const wasi = Effect.fn("wasi.execute")(function* (
                       if (fiber === undefined) return [];
                       return [Fiber.await(fiber).pipe(Effect.asVoid)];
                     });
-                    if (waiting.length !== input.pids.length || waiting.length === 0) break;
+                    if (waiting.length === 0) break;
                     yield* Effect.raceAllFirst([...waiting, Deferred.await(wake)]);
                   }
                   return { data: Buffer.alloc(0), path: "/", directory: false, value: 0n };

@@ -72,6 +72,12 @@ const receipts = await Effect.runPromise(
       "chld",
       "chld-stop",
       "nocldstop",
+      "autoreap-ignore",
+      "autoreap-default",
+      "autoreap-user",
+      "autoreap-late",
+      "autoreap-many",
+      "autoreap-multi",
       "cont-handler",
       "ignore-cont",
       "restart-poll",
@@ -86,6 +92,12 @@ const receipts = await Effect.runPromise(
           ["chld", "child-exit"],
           ["chld-stop", "child-exit"],
           ["nocldstop", "child-exit"],
+          ["autoreap-ignore", "child-exit"],
+          ["autoreap-default", "child-exit"],
+          ["autoreap-user", "child-exit"],
+          ["autoreap-late", "child-exit"],
+          ["autoreap-many", "child-exit"],
+          ["autoreap-multi", "child-exit"],
           ["ignore-cont", "child-ignorecont"],
           ["restart-poll", "child-poll"],
         ]).get(mode);
@@ -128,6 +140,12 @@ const receipts = await Effect.runPromise(
             ["chld", "C main\n"],
             ["chld-stop", "CCC main\n"],
             ["nocldstop", "C main\n"],
+            ["autoreap-ignore", " auto\n"],
+            ["autoreap-default", " auto\n"],
+            ["autoreap-user", "C auto\n"],
+            ["autoreap-late", " auto\n"],
+            ["autoreap-many", " many\n"],
+            ["autoreap-multi", "CC multi\n"],
             ["ignore-cont", " main\n"],
             ["restart-poll", " main\n"],
           ]).get(mode) ?? "Aa main\n";
@@ -192,7 +210,8 @@ const report = {
     receipts.every((receipt) => receipt.passed) &&
     limits.every((receipt) => receipt.passed) &&
     disposed.status === 200,
-  altStackAndAutoReap: false,
+  automaticChildReaping: true,
+  alternateSignalStack: false,
   fullProcessParity: false,
 };
 await Bun.write(

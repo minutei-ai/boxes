@@ -430,9 +430,9 @@ enum Failure {
     Signal(u32),
 }
 
-fn notify_signal_parent(table: &ProcessTable, pid: u32, transition: bool) {
+fn notify_signal_parent(table: &ProcessTable, pid: u32, transition: bool) -> bool {
     let Some(child) = table.children.get(&pid) else {
-        return;
+        return false;
     };
     let target = if child.parent == 1 {
         Some((
@@ -446,13 +446,19 @@ fn notify_signal_parent(table: &ProcessTable, pid: u32, transition: bool) {
             .map(|parent| (parent.pending_signals.clone(), parent.dispositions.clone()))
     };
     if let Some((pending, dispositions)) = target {
-        let caught = dispositions.borrow().get(&17).is_some_and(|disposition| {
+        let disposition = dispositions.borrow().get(&17).cloned();
+        let caught = disposition.as_ref().is_some_and(|disposition| {
             disposition.action == 2 && (!transition || disposition.flags & 1 == 0)
         });
         if caught {
             pending.set(pending.get() | (1 << 16));
         }
+        return !transition
+            && disposition
+                .as_ref()
+                .is_some_and(|disposition| disposition.action == 1 || disposition.flags & 2 != 0);
     }
+    false
 }
 
 fn deliver_signal(state: &mut State) -> Option<u32> {
@@ -474,7 +480,10 @@ fn deliver_signal(state: &mut State) -> Option<u32> {
     if disposition
         .as_ref()
         .is_some_and(|disposition| disposition.action == 1)
-        || (disposition.is_none() && matches!(signal, 17 | 23 | 28))
+        || (disposition
+            .as_ref()
+            .is_none_or(|disposition| disposition.action == 0)
+            && matches!(signal, 17 | 23 | 28))
     {
         state
             .pending_signals
@@ -517,7 +526,9 @@ fn take_wait_status(
     options: u32,
 ) -> Option<(u32, u32, bool)> {
     for pid in pids {
-        let child = table.children.get(pid)?;
+        let Some(child) = table.children.get(pid) else {
+            continue;
+        };
         let selected = child.transitions.borrow().iter().position(|status| {
             (*status == 0xffff && options & 8 != 0) || (*status & 0xff == 0x7f && options & 2 != 0)
         });
@@ -887,7 +898,7 @@ fn dispatch(caller: &mut Caller<'_, State>, name: &str, args: &[u64]) -> Result<
                 return Err(Failure::Errno(28));
             }
             let flags = a[4] as u32;
-            if flags & !0xd0000005 != 0 {
+            if flags & !0xd0000007 != 0 {
                 return Err(Failure::Errno(58));
             }
             if action == 2 {
@@ -902,7 +913,7 @@ fn dispatch(caller: &mut Caller<'_, State>, name: &str, args: &[u64]) -> Result<
             }
             let mask =
                 (u64::from(a[2] as u32) | (u64::from(a[3] as u32) << 32)) & !((1 << 8) | (1 << 18));
-            if action == 0 {
+            if action == 0 && flags == 0 {
                 caller.data().dispositions.borrow_mut().remove(&signal);
             } else {
                 caller.data().dispositions.borrow_mut().insert(
@@ -998,7 +1009,10 @@ fn dispatch(caller: &mut Caller<'_, State>, name: &str, args: &[u64]) -> Result<
                 let ignored = disposition
                     .as_ref()
                     .is_some_and(|disposition| disposition.action == 1)
-                    || (disposition.is_none() && matches!(signal, 17 | 23 | 28));
+                    || (disposition
+                        .as_ref()
+                        .is_none_or(|disposition| disposition.action == 0)
+                        && matches!(signal, 17 | 23 | 28));
                 if signal == 18 {
                     pending.set(pending.get() & !((1 << 18) | (1 << 19) | (1 << 20) | (1 << 21)));
                     if stopped.replace(false) {
@@ -3353,22 +3367,28 @@ impl WasmGuest {
         let state = self.store.data();
         let table = state.processes.borrow();
         match state.pending.as_ref().map(|pending| &pending.completion) {
-            Some(Completion::Wait { pids, .. }) => pids.iter().any(|pid| {
-                table
-                    .children
-                    .get(pid)
-                    .is_some_and(|child| child.code.is_some() || child.failed)
-            }),
-            Some(Completion::WaitRaw { pids, options, .. }) => pids.iter().any(|pid| {
-                table.children.get(pid).is_some_and(|child| {
-                    child.code.is_some()
-                        || child.failed
-                        || child.transitions.borrow().iter().any(|status| {
-                            (*status == 0xffff && options & 8 != 0)
-                                || (*status & 0xff == 0x7f && options & 2 != 0)
+            Some(Completion::Wait { pids, .. }) => {
+                pids.iter().all(|pid| !table.children.contains_key(pid))
+                    || pids.iter().any(|pid| {
+                        table
+                            .children
+                            .get(pid)
+                            .is_some_and(|child| child.code.is_some() || child.failed)
+                    })
+            }
+            Some(Completion::WaitRaw { pids, options, .. }) => {
+                pids.iter().all(|pid| !table.children.contains_key(pid))
+                    || pids.iter().any(|pid| {
+                        table.children.get(pid).is_some_and(|child| {
+                            child.code.is_some()
+                                || child.failed
+                                || child.transitions.borrow().iter().any(|status| {
+                                    (*status == 0xffff && options & 8 != 0)
+                                        || (*status & 0xff == 0x7f && options & 2 != 0)
+                                })
                         })
-                })
-            }),
+                    })
+            }
             _ => false,
         }
     }
@@ -3424,7 +3444,10 @@ impl WasmGuest {
             }
             child.failed = failed || self.done.is_none();
         }
-        notify_signal_parent(&table, self.store.data().pid, false);
+        let auto_reap = notify_signal_parent(&table, self.store.data().pid, false);
+        if auto_reap && !failed {
+            table.children.remove(&self.store.data().pid);
+        }
     }
 
     pub fn spawn_action(&mut self, index: usize) -> Result<String, JsValue> {

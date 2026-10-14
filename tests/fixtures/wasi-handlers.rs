@@ -57,6 +57,10 @@ struct Io {
     pointer: *mut u8,
     length: u32,
 }
+const AUTO_REAP: bool = cfg!(case = "autoreap-ignore")
+    || cfg!(case = "autoreap-default")
+    || cfg!(case = "autoreap-user")
+    || cfg!(case = "autoreap-late");
 static mut CALLS: u32 = 0;
 static mut OTHER: u32 = 0;
 fn output(bytes: &mut [u8]) {
@@ -82,6 +86,17 @@ pub extern "C" fn __wasi_signal_trampoline(signal: u32) {
         }
         if signal == 11 || signal == 17 {
             OTHER += 1;
+            if cfg!(case = "autoreap-multi") && OTHER == 1 {
+                let mut byte = [b'X'];
+                let io = Io {
+                    pointer: byte.as_mut_ptr(),
+                    length: 1,
+                };
+                let mut count = 0;
+                if fd_write(5, &io, 1, &mut count) != 0 || count != 1 {
+                    proc_exit(102);
+                }
+            }
             output(&mut [b'C']);
             return;
         }
@@ -282,10 +297,146 @@ pub extern "C" fn run() -> i32 {
         if proc_sigaction(12, 1, 0, 0, 0) != 0 || proc_kill(0, 12) != 0 {
             return 3;
         }
+        if cfg!(case = "autoreap-many") || cfg!(case = "autoreap-multi") {
+            let action = if cfg!(case = "autoreap-multi") { 2 } else { 1 };
+            let flags = if cfg!(case = "autoreap-multi") {
+                0x10000002
+            } else {
+                0
+            };
+            if proc_sigaction(17, action, 0, 0, flags) != 0 {
+                return 44;
+            }
+            let iterations = if cfg!(case = "autoreap-many") { 24 } else { 1 };
+            for iteration in 0..iterations {
+                let mut reader = 0;
+                let mut writer = 0;
+                let mut reply_reader = 0;
+                let mut reply_writer = 0;
+                if fd_pipe(&mut reader, &mut writer) != 0
+                    || fd_pipe(&mut reply_reader, &mut reply_writer) != 0
+                {
+                    return 45;
+                }
+                if cfg!(case = "autoreap-multi") && writer != 5 {
+                    return 46;
+                }
+                let mut actions = [0u8; 144];
+                for (index, (command, fd, source)) in [
+                    (2u32, 0, reader),
+                    (2, 1, reply_writer),
+                    (1, reader, 0),
+                    (1, writer, 0),
+                    (1, reply_reader, 0),
+                    (1, reply_writer, 0),
+                ]
+                .into_iter()
+                .enumerate()
+                {
+                    let offset = index * 24;
+                    actions[offset..offset + 4].copy_from_slice(&command.to_le_bytes());
+                    actions[offset + 4..offset + 8].copy_from_slice(&fd.to_le_bytes());
+                    actions[offset + 8..offset + 12].copy_from_slice(&source.to_le_bytes());
+                }
+                let path = b"/tmp/handler-child.wasm";
+                let children = if cfg!(case = "autoreap-multi") { 2 } else { 1 };
+                for index in 0..children {
+                    let mut pid = 0;
+                    if proc_spawn_v3(
+                        path.as_ptr(),
+                        path.len() as u32,
+                        std::ptr::null(),
+                        0,
+                        std::ptr::null(),
+                        0,
+                        actions.as_ptr(),
+                        actions.len() as u32,
+                        std::ptr::null(),
+                        0,
+                        2,
+                        0,
+                        0,
+                        0,
+                        0,
+                        0,
+                        &mut pid,
+                    ) != 0
+                        || pid != 2 + iteration + index
+                    {
+                        return 47;
+                    }
+                }
+                if fd_close(reader) != 0 || fd_close(reply_writer) != 0 {
+                    return 48;
+                }
+                let mut ready = [0u8; 10];
+                let total = children * 5;
+                let mut read = 0;
+                while read < total {
+                    let io = Io {
+                        pointer: ready.as_mut_ptr().add(read as usize),
+                        length: total - read,
+                    };
+                    let mut count = 0;
+                    if fd_read(reply_reader, &io, 1, &mut count) != 0 || count == 0 {
+                        return 49;
+                    }
+                    read += count;
+                }
+                if ready[..5] != *b"ready" {
+                    return 50;
+                }
+                let mut byte = [b'X'];
+                let io = Io {
+                    pointer: byte.as_mut_ptr(),
+                    length: 1,
+                };
+                let mut count = 0;
+                if fd_write(writer, &io, 1, &mut count) != 0 || count != 1 {
+                    return 51;
+                }
+                let mut status = 91;
+                let mut waited = 91;
+                if proc_waitpid_v3(u32::MAX, 0, &mut status, &mut waited) != 12
+                    || status != 91
+                    || waited != 91
+                {
+                    return 52;
+                }
+                for index in 0..children {
+                    if proc_kill(2 + iteration + index, 0) != 71 {
+                        return 53;
+                    }
+                }
+                let io = Io {
+                    pointer: byte.as_mut_ptr(),
+                    length: 1,
+                };
+                if fd_read(reply_reader, &io, 1, &mut count) != 0
+                    || count != 0
+                    || fd_close(reply_reader) != 0
+                    || fd_close(writer) != 0
+                {
+                    return 54;
+                }
+            }
+            if cfg!(case = "autoreap-multi") {
+                if OTHER != 2 {
+                    return 55;
+                }
+                let mut marker = *b" multi\n";
+                output(&mut marker);
+            } else {
+                let mut marker = *b" many\n";
+                output(&mut marker);
+            }
+            return 7;
+        }
         if cfg!(case = "external")
             || cfg!(case = "restart")
             || cfg!(case = "external-io")
             || cfg!(case = "inherit")
+            || AUTO_REAP
             || cfg!(case = "restart-poll")
             || (cfg!(case = "chld")
                 || cfg!(case = "chld-stop")
@@ -357,6 +508,82 @@ pub extern "C" fn run() -> i32 {
             let mut count = 0;
             if fd_read(reply_reader, &io, 1, &mut count) != 0 || count != 5 || ready != *b"ready" {
                 return 17;
+            }
+            if AUTO_REAP {
+                let action = if cfg!(case = "autoreap-ignore") {
+                    1
+                } else if cfg!(case = "autoreap-default") {
+                    0
+                } else {
+                    2
+                };
+                let flags = if cfg!(case = "autoreap-ignore") || cfg!(case = "autoreap-late") {
+                    0
+                } else {
+                    2
+                };
+                if proc_sigaction(17, action, 0, 0, flags) != 0 {
+                    return 35;
+                }
+                let mut code = 91;
+                let mut signal = 91;
+                let mut waited = 91;
+                let mut core = 91;
+                if proc_waitpid_v2(pid, 1, &mut code, &mut signal, &mut waited, &mut core) != 0
+                    || waited != 0
+                {
+                    return 36;
+                }
+                if cfg!(case = "autoreap-late") && proc_sigaction(17, 1, 0, 0, 0) != 0 {
+                    return 37;
+                }
+                let mut byte = [b'X'];
+                let io = Io {
+                    pointer: byte.as_mut_ptr(),
+                    length: 1,
+                };
+                if fd_write(writer, &io, 1, &mut count) != 0 || count != 1 {
+                    return 38;
+                }
+                code = 91;
+                signal = 91;
+                waited = 91;
+                core = 91;
+                if proc_waitpid_v2(pid, 0, &mut code, &mut signal, &mut waited, &mut core) != 12
+                    || code != 91
+                    || signal != 91
+                    || waited != 91
+                    || core != 91
+                {
+                    return 39;
+                }
+                if proc_waitpid_v3(pid, 1, &mut code, &mut waited) != 12 || proc_kill(pid, 0) != 71
+                {
+                    return 40;
+                }
+                let expected = if cfg!(case = "autoreap-user") { 1 } else { 0 };
+                if OTHER != expected {
+                    return 41;
+                }
+                let mut byte = [0u8];
+                let io = Io {
+                    pointer: byte.as_mut_ptr(),
+                    length: 1,
+                };
+                if fd_read(reply_reader, &io, 1, &mut count) != 0 || count != 0 {
+                    return 42;
+                }
+                let mut byte = [b'X'];
+                let io = Io {
+                    pointer: byte.as_mut_ptr(),
+                    length: 1,
+                };
+                if fd_write(writer, &io, 1, &mut count) != 64 {
+                    return 43;
+                }
+                let mut marker = *b" auto\n";
+                output(&mut marker);
+                return 7;
             }
             if (cfg!(case = "chld") || cfg!(case = "chld-stop") || cfg!(case = "nocldstop")) {
                 if proc_sigaction(17, 2, 0, 0, if cfg!(case = "nocldstop") { 1 } else { 0 }) != 0 {
