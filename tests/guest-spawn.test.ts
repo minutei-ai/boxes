@@ -4,10 +4,10 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { Schema } from "effect";
 import { RunRecord, TokenResponse } from "../src/contracts";
-import { runtime } from "../tooling/runtime";
+import { runtime } from "../tooling/worker-test";
 
 const directory = await mkdtemp(join(tmpdir(), "cirro-guest-spawn-"));
-const mf = runtime(directory);
+const mf = runtime(directory, { consume: true, controlled: false });
 const post = async (path: string, token: string, body: unknown) =>
   fetch(new URL(path, await mf.ready), {
     method: "POST",

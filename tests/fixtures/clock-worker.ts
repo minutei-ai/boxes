@@ -8,6 +8,9 @@ import type { Env } from "../../src/resources";
 
 type TestEnv = Env & { SELF: Fetcher };
 export class Control extends WorkerEntrypoint<TestEnv> {
+  notify(messages: Parameters<Env["EVENTS"]["sendBatch"]>[0]) {
+    return this.env.EVENTS.sendBatch(messages);
+  }
   deliver(queue: string, messages: Parameters<Fetcher["queue"]>[1]) {
     return this.env.SELF.queue(queue, messages);
   }
@@ -17,6 +20,7 @@ export default {
     return Effect.runPromise(handleRequest(request, bindings));
   },
   queue(batch: MessageBatch<unknown>, bindings: TestEnv) {
+    if (env.CLOCK_CONTROLLED === false) return Effect.runPromise(consume(batch, bindings));
     return Effect.runPromise(
       Effect.scoped(
         Effect.gen(function* () {
@@ -56,6 +60,7 @@ declare global {
     interface Env {
       CLOCK_START: number;
       CLOCK_ADVANCE: number;
+      CLOCK_CONTROLLED: boolean;
     }
   }
 }

@@ -3,10 +3,10 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { Schema } from "effect";
 import { ProcessOutputPage, RunRecord, TokenResponse } from "../src/contracts";
-import { runtime } from "./runtime";
+import { runtime } from "./worker-test";
 
 const directory = await mkdtemp(join(tmpdir(), "cirro-output-bench-"));
-const mf = runtime(directory);
+const mf = runtime(directory, { consume: true, controlled: false });
 const origin = await mf.ready;
 const post = (path: string, token: string, body: unknown) =>
   fetch(new URL(path, origin), {
@@ -69,12 +69,12 @@ const measurements = await Promise.all(
     };
   }),
 );
-const bucket = await mf.getR2Bucket("OBJECTS");
+const bucket = await mf.objects;
 const receipt = await bucket.head("processes/output-bench/large.json");
 const blocks = await bucket.list({ prefix: "sandboxes/output-bench/stdio/" });
 const report = {
   measuredAt: new Date().toISOString(),
-  runtime: "local workerd via Miniflare",
+  runtime: "local workerd via native Alchemy",
   production: false,
   concurrentPageReaders: 3,
   stdoutBytes: Buffer.byteLength(record.output?.stdout ?? ""),

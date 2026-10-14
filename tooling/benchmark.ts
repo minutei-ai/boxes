@@ -3,10 +3,10 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { Schema } from "effect";
 import { Status, TokenResponse, RunRecord } from "../src/contracts";
-import { runtime } from "./runtime";
+import { runtime } from "./worker-test";
 
 const directory = await mkdtemp(join(tmpdir(), "cirro-benchmark-"));
-const mf = runtime(directory);
+const mf = runtime(directory, { consume: true, controlled: false });
 const origin = await mf.ready;
 const post = (path: string, token: string, body: unknown) =>
   fetch(new URL(path, origin), {
@@ -93,7 +93,7 @@ const batchEightFiles = await sample(25, async () => {
   await response.text();
 });
 const afterBatch = Schema.decodeUnknownSync(Status)(await (await call({ op: "vm.status" })).json());
-const bucket = await mf.getR2Bucket("OBJECTS");
+const bucket = await mf.objects;
 const blocks = await bucket.list({ prefix: "sandboxes/bench/blobs/" });
 const javascript = await sample(25, async (i) => {
   const response = await call({
@@ -194,8 +194,8 @@ const patchFourKiB = await sample(25, async (index) => {
 const report = {
   measuredAt: new Date().toISOString(),
   environment: {
-    runtime: "local workerd via Miniflare",
-    miniflare: "5.20261006.1-alpha",
+    runtime: "local workerd via native Alchemy",
+    alchemy: "2.0.0-beta.83",
     production: false,
     platform: process.platform,
     arch: process.arch,

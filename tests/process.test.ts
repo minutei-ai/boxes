@@ -13,19 +13,18 @@ import {
   ProcessDelivery,
   TokenResponse,
 } from "../src/contracts";
-import { runtime, deliverProcess } from "../tooling/runtime";
+import { runtime } from "../tooling/worker-test";
 
 const directory = await mkdtemp(join(tmpdir(), "cirro-process-"));
-const origin = `const state = { calls: 0 }; export default { async fetch(request) {
-  if (new URL(request.url).pathname === "/count") return Response.json(state.calls);
-  state.calls += 1;
-  await new Promise(resolve => setTimeout(resolve, 500));
-  return new Response("native deferred response");
-} };`;
-const mf = runtime(directory, origin, 2);
+const mf = runtime(directory, {
+  consume: true,
+  controlled: false,
+  origin: { delay: 500, body: "native deferred response" },
+});
 const post = async (path: string, token: string, body: unknown, signal?: AbortSignal) =>
   fetch(new URL(path, await mf.ready), {
     method: "POST",
+    keepalive: false,
     headers: { authorization: `Bearer ${token}`, "content-type": "application/json" },
     body: JSON.stringify(body),
     signal,
@@ -371,7 +370,7 @@ test("wait enforces capability expiry while another authorized caller keeps the 
 
 test("completed background receipts survive replacing the Worker without replaying the execution", async () => {
   const persisted = await mkdtemp(join(tmpdir(), "cirro-process-restart-"));
-  const first = runtime(persisted);
+  const first = runtime(persisted, { consume: true, controlled: false });
   const send = async (
     instance: ReturnType<typeof runtime>,
     token: string,
@@ -380,6 +379,7 @@ test("completed background receipts survive replacing the Worker without replayi
   ) =>
     fetch(new URL(path, await instance.ready), {
       method: "POST",
+      keepalive: false,
       headers: { authorization: `Bearer ${token}`, "content-type": "application/json" },
       body: JSON.stringify(body),
     });
@@ -429,7 +429,7 @@ test("completed background receipts survive replacing the Worker without replayi
   );
   expect(original.output?.result).toBe(42);
   await first.dispose();
-  const second = runtime(persisted);
+  const second = runtime(persisted, { consume: true, controlled: false });
   const restored = Schema.decodeUnknownSync(RunRecord)(
     await (
       await send(second, token, `/v1/sandboxes/${id}/action`, {
@@ -482,22 +482,22 @@ test("wait distinguishes observed nonzero exits from unobserved runtime failures
 
 test("duplicate native Queue deliveries enter the execution only once", async () => {
   const token = await setup("queue-duplicate");
-  const originWorker = await mf.getWorker("origin");
-  const before = await (await originWorker.fetch("https://allowed.example/count")).json();
+  const originWorker = await mf.origin();
+  const before = await (await fetch(new URL("/count", originWorker))).json();
   const response = await post("/v1/sandboxes/queue-duplicate/action", token, {
     op: "process.spawn",
     execution: { op: "process.run", id: "once", language: "javascript", source: deferredSource },
   });
   expect(response.status).toBe(200);
-  const bucket = await mf.getR2Bucket("OBJECTS");
+  const bucket = await mf.objects;
   const object = await bucket.head("processes/queue-duplicate/once.json");
   if (object === null) return expect(object).not.toBeNull();
-  const producer = await mf.getQueueProducer("EVENTS", "cirro");
+  const worker = await mf.control;
   const body = Schema.encodeSync(ProcessDelivery)({ key: object.key, eTag: object.etag });
-  await producer.sendBatch(Array.from({ length: 4 }, () => ({ body })));
+  await worker.notify(Array.from({ length: 4 }, () => ({ body })));
   expect((await observed("queue-duplicate", token, "once")).output?.result).toBe(42);
   const after = Schema.decodeUnknownSync(Schema.Number)(
-    await (await originWorker.fetch("https://allowed.example/count")).json(),
+    await (await fetch(new URL("/count", originWorker))).json(),
   );
   expect(after - Schema.decodeUnknownSync(Schema.Number)(before)).toBe(1);
   const publicRecord = await (
@@ -522,7 +522,7 @@ test("claimed execution with a lost observation becomes failed after its platfor
       })
     ).status,
   ).toBe(200);
-  const bucket = await mf.getR2Bucket("OBJECTS");
+  const bucket = await mf.objects;
   const object = await bucket.get("processes/queue-lost/lost.json");
   if (object === null) return expect(object).not.toBeNull();
   const stored = Schema.decodeUnknownSync(Schema.fromJsonString(StoredRun))(await object.text());
@@ -540,7 +540,12 @@ test("claimed execution with a lost observation becomes failed after its platfor
       summary: Struct.omit(lost, ["authority", "deadlineAt", "output", "stdinMode", "checkpoint"]),
     }),
   });
-  await deliverProcess(mf, "queue-lost", "lost");
+  const retained = await bucket.head("processes/queue-lost/lost.json");
+  if (retained === null) return expect(retained).not.toBeNull();
+  const worker = await mf.control;
+  await worker.notify([
+    { body: Schema.encodeSync(ProcessDelivery)({ key: retained.key, eTag: retained.etag }) },
+  ]);
   const waited = await action("queue-lost", token, {
     op: "process.wait",
     id: "lost",
@@ -565,7 +570,7 @@ test("claimed execution with a lost observation becomes failed after its platfor
 
 test("queued work survives a stopped consumer and archived corruption settles before entry", async () => {
   const persisted = await mkdtemp(join(tmpdir(), "cirro-queue-repair-"));
-  const first = runtime(persisted, undefined, 1, false);
+  const first = runtime(persisted, { consume: false, controlled: false });
   const send = async (
     instance: ReturnType<typeof runtime>,
     token: string,
@@ -574,6 +579,7 @@ test("queued work survives a stopped consumer and archived corruption settles be
   ) =>
     fetch(new URL(path, await instance.ready), {
       method: "POST",
+      keepalive: false,
       headers: { authorization: `Bearer ${token}`, "content-type": "application/json" },
       body: JSON.stringify(body),
     });
@@ -617,10 +623,10 @@ test("queued work survives a stopped consumer and archived corruption settles be
     ).json(),
   );
   expect(queued.status).toBe("queued");
-  const bucket = await first.getR2Bucket("OBJECTS");
+  const bucket = await first.objects;
   await bucket.put(`sandboxes/${id}/code/${queued.sourceHash}`, "corrupt");
   await first.dispose();
-  const second = runtime(persisted);
+  const second = runtime(persisted, { consume: true, controlled: false });
   expect((await send(second, token, "/v1/maintenance/process-dispatch", {})).status).toBe(401);
   expect(
     (await send(second, "cirro-local-test-credential", "/v1/maintenance/process-dispatch", {}))

@@ -23,11 +23,11 @@ import {
   WasmProgram,
   RunMetadata,
 } from "../src/contracts";
-import { runtime } from "../tooling/runtime";
+import { runtime } from "../tooling/worker-test";
 import { commandPackage } from "./fixtures/package";
 
 const directory = await mkdtemp(join(tmpdir(), "cirro-integration-"));
-const mf = runtime(directory);
+const mf = runtime(directory, { consume: true, controlled: false });
 const admin = "cirro-local-test-credential";
 const policy = {
   interruptBudget: 1000,
@@ -38,6 +38,7 @@ const policy = {
 const post = async (path: string, token: string, body: unknown) =>
   fetch(new URL(path, await mf.ready), {
     method: "POST",
+    keepalive: false,
     headers: { authorization: `Bearer ${token}`, "content-type": "application/json" },
     body: JSON.stringify(body),
   });
@@ -395,7 +396,7 @@ test("sandbox module graphs resolve TypeScript, reexports, cycles, symlinks and 
     ).json(),
   );
   expect(executed.output?.stdout).toBe("42 42 42 42\n");
-  const bucket = await mf.getR2Bucket("OBJECTS");
+  const bucket = await mf.objects;
   const artifact = await bucket.get(`sandboxes/module-graph/code/${executed.sourceHash}`);
   if (artifact === null) return expect(artifact).not.toBeNull();
   const graph = Schema.decodeUnknownSync(Schema.fromJsonString(ScriptProgram))(
@@ -573,7 +574,7 @@ test("computed imports load files created during execution and preserve ESM func
     ).json(),
   );
   expect(executed.output?.stdout).toBe("42 true\n42\n");
-  const bucket = await mf.getR2Bucket("OBJECTS");
+  const bucket = await mf.objects;
   const artifact = await bucket.get(`sandboxes/lazy-created/code/${executed.sourceHash}`);
   if (artifact === null) return expect(artifact).not.toBeNull();
   const graph = Schema.decodeUnknownSync(Schema.fromJsonString(ScriptProgram))(
@@ -681,7 +682,7 @@ test("an interrupted guest retains the sources it imported and its committed fil
     (await act("lazy-interrupted", token, { op: "filesystem.readFile", path: "/tmp/loaded.mjs" }))
       .status,
   ).toBe(200);
-  const bucket = await mf.getR2Bucket("OBJECTS");
+  const bucket = await mf.objects;
   const source = await bucket.get(`sandboxes/lazy-interrupted/code/${executed.sourceHash}`);
   if (source === null) return expect(source).not.toBeNull();
   const graph = Schema.decodeUnknownSync(Schema.fromJsonString(ScriptProgram))(await source.text());
@@ -721,7 +722,7 @@ test("R2 filesystem survives a new workerd instance", async () => {
       })
     ).status,
   ).toBe(200);
-  const second = runtime(directory);
+  const second = runtime(directory, { consume: true, controlled: false });
   await second.ready;
   const response = await fetch(new URL("/v1/sandboxes/restart/action", await second.ready), {
     method: "POST",
@@ -1054,7 +1055,7 @@ test("corrupt R2 content is rejected before unbounded body allocation", async ()
   const digest = Buffer.from(await crypto.subtle.digest("SHA-256", Buffer.from("abc"))).toString(
     "hex",
   );
-  const bucket = await mf.getR2Bucket("OBJECTS");
+  const bucket = await mf.objects;
   await bucket.put(`sandboxes/corrupt/blobs/${digest}`, "oversized");
   expect((await act("corrupt", token, { op: "filesystem.readFile", path: "/tmp/a" })).status).toBe(
     500,
@@ -1101,7 +1102,7 @@ test("native R2 migration preserves files and tombstones and is idempotent", asy
       })
     ).status,
   ).toBe(200);
-  const bucket = await mf.getR2Bucket("OBJECTS");
+  const bucket = await mf.objects;
   const key = "sandboxes/migration/head.json";
   const object = await bucket.get(key);
   if (object === null) return expect(object).not.toBeNull();
@@ -1789,7 +1790,7 @@ test("WASI argv, isolated environment and binary stdin persist as a complete cod
   expect(run.output?.stdout).toBe(
     'argv=["/tmp/__cirro_inline__.wasm", "ação", "two words"]\nmarker=ação\nprivate=unset\nproto=safe\nstdin=[0, 255, 10]\neof=0\n',
   );
-  const bucket = await mf.getR2Bucket("OBJECTS");
+  const bucket = await mf.objects;
   const object = await bucket.get(`sandboxes/wasi-inputs/code/${run.sourceHash}`);
   if (object === null) return expect(object).not.toBeNull();
   const program = Schema.decodeUnknownSync(Schema.fromJsonString(WasmProgram))(await object.text());
@@ -1854,7 +1855,7 @@ test("WASI executeFile requires read and captures binary bytes before subsequent
       })
     ).status,
   ).toBe(200);
-  const bucket = await mf.getR2Bucket("OBJECTS");
+  const bucket = await mf.objects;
   const object = await bucket.get(`sandboxes/wasi-file-inputs/code/${run.sourceHash}`);
   if (object === null) return expect(object).not.toBeNull();
   const archived = Schema.decodeUnknownSync(Schema.fromJsonString(WasmProgram))(
@@ -1926,7 +1927,7 @@ test("Wasm input migration preserves old results and updates source references a
       })
     ).json(),
   );
-  const bucket = await mf.getR2Bucket("OBJECTS");
+  const bucket = await mf.objects;
   const oldHash = Buffer.from(await crypto.subtle.digest("SHA-256", source)).toString("hex");
   await bucket.put(`sandboxes/wasm-input-migration/code/${oldHash}`, source);
   await bucket.delete("processes/wasm-input-migration/prior.json");
@@ -1989,7 +1990,7 @@ test("Wasm input migration rejects corrupt immutable source instead of rewriting
     ).json(),
   );
   const hash = Buffer.from(await crypto.subtle.digest("SHA-256", source)).toString("hex");
-  const bucket = await mf.getR2Bucket("OBJECTS");
+  const bucket = await mf.objects;
   await bucket.delete("processes/wasm-corrupt-migration/prior.json");
   await bucket.put(`sandboxes/wasm-corrupt-migration/code/${hash}`, "corrupt");
   await bucket.put(
@@ -2124,7 +2125,7 @@ test("filesystem inode identities survive writes and rename while replacements r
 
 test("metadata migration assigns persistent unique identities without inventing historical timestamps", async () => {
   const token = await setup("metadata-migration");
-  const bucket = await mf.getR2Bucket("OBJECTS");
+  const bucket = await mf.objects;
   const key = "sandboxes/metadata-migration/head.json";
   const stored = await bucket.get(key);
   if (stored === null) return expect(stored).not.toBeNull();
@@ -3655,7 +3656,7 @@ test("partial R2 I/O fetches and verifies only needed blocks and can overwrite a
       })
     ).status,
   ).toBe(200);
-  const bucket = await mf.getR2Bucket("OBJECTS");
+  const bucket = await mf.objects;
   await bucket.put(`sandboxes/range-blocks/blobs/${digest}`, "bad");
   const first = Schema.decodeUnknownSync(FileContent)(
     await (

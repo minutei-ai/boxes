@@ -13,10 +13,10 @@ import {
   MigrationReceipt,
   OutputMigrationReceipt,
 } from "../src/contracts";
-import { runtime } from "../tooling/runtime";
+import { runtime } from "../tooling/worker-test";
 
 const directory = await mkdtemp(join(tmpdir(), "cirro-output-"));
-const mf = runtime(directory);
+const mf = runtime(directory, { consume: true, controlled: false });
 const post = async (
   instance: ReturnType<typeof runtime>,
   path: string,
@@ -272,7 +272,7 @@ test("runtime failures expose unobserved output rather than a fabricated empty s
 
 test("queued output is pending and completed replay survives replacing the Worker", async () => {
   const persisted = await mkdtemp(join(tmpdir(), "cirro-output-restart-"));
-  const first = runtime(persisted, undefined, 1, false);
+  const first = runtime(persisted, { consume: false, controlled: false });
   const id = "output-restart";
   const token = await setup(first, id);
   const path = `/v1/sandboxes/${id}/action`;
@@ -329,7 +329,7 @@ test("queued output is pending and completed replay survives replacing the Worke
   );
   expect(original.availability).toBe("retained");
   await first.dispose();
-  const second = runtime(persisted, undefined, 1, false);
+  const second = runtime(persisted, { consume: false, controlled: false });
   const restored = Schema.decodeUnknownSync(ProcessOutputPage)(
     await (
       await post(second, path, token, {
@@ -359,7 +359,7 @@ test("output pages read only addressed immutable blocks and reject corrupted add
       })
     ).json(),
   );
-  const bucket = await mf.getR2Bucket("OBJECTS");
+  const bucket = await mf.objects;
   const object = await bucket.get("processes/output-blocks/blocks.json");
   if (object === null) return expect(object).not.toBeNull();
   expect(object.size).toBeLessThan(1000);
@@ -395,7 +395,7 @@ test("output pages read only addressed immutable blocks and reject corrupted add
 
 test("inline receipt migration preserves grants, deadlines, observed output and all process states", async () => {
   const token = await setup(mf, "output-migration");
-  const bucket = await mf.getR2Bucket("OBJECTS");
+  const bucket = await mf.objects;
   const Inline = RunRecord.mapFields((fields) => ({
     ...fields,
     authority: Schema.NullOr(Capability),
@@ -498,7 +498,7 @@ test("historical receipt migration remains resumable after fencing and a conflic
       })
     ).json(),
   );
-  const bucket = await mf.getR2Bucket("OBJECTS");
+  const bucket = await mf.objects;
   const legacy = "sandboxes/output-fence/runs/saved.json";
   const primary = "processes/output-fence/saved.json";
   await bucket.put(legacy, Schema.encodeSync(Schema.fromJsonString(RunRecord))(record));
@@ -539,7 +539,7 @@ test("version 3 chunked receipts migrate to explicit closed stdin without rewrit
     source: 'export default ()=>{console.log("retained");return 7;}',
   });
   expect(response.status).toBe(200);
-  const bucket = await mf.getR2Bucket("OBJECTS");
+  const bucket = await mf.objects;
   const key = "processes/input-migration/old.json";
   const object = await bucket.get(key);
   expect(object).not.toBeNull();
@@ -570,9 +570,9 @@ test("version 3 chunked receipts migrate to explicit closed stdin without rewrit
 });
 test("receipt migration returns bounded page cursors and skips confirmed conversions on retry", async () => {
   const persisted = await mkdtemp(join(tmpdir(), "cirro-migration-pages-"));
-  const instance = runtime(persisted);
+  const instance = runtime(persisted, { consume: true, controlled: false });
   await setup(instance, "paged");
-  const bucket = await instance.getR2Bucket("OBJECTS");
+  const bucket = await instance.objects;
   for (const index of Array.from({ length: 101 }, (_, index) => index)) {
     const record = {
       id: `old-${String(index).padStart(3, "0")}`,

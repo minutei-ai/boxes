@@ -1,5 +1,5 @@
-import { Clock, Effect } from "effect";
-import { Runtime, PlatformProxy } from "@alchemy.run/cloudflare-runtime/core";
+import { Clock, Effect, Schema } from "effect";
+import { Runtime, PlatformProxy, type QueueConsumer } from "@alchemy.run/cloudflare-runtime/core";
 import {
   R2Bucket,
   Text,
@@ -9,37 +9,96 @@ import {
 } from "@alchemy.run/cloudflare-runtime/core/bindings";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
+import { PluginContext } from "@alchemy.run/cloudflare-runtime/core";
+import { RegistryProxy } from "@alchemy.run/cloudflare-runtime/core/registry/RegistryProxy";
+import * as Plugin from "@alchemy.run/cloudflare-runtime/core/Plugin";
 import type { Env } from "../src/resources";
 import type { Control } from "../tests/fixtures/clock-worker";
 
-type TestEnv = Env & { APP_URL: string; CONTROL: Fetcher<Control> };
-export const runtime = (persist: string, advance = 0, clockStart?: number) => {
+class NetworkOrigin extends Plugin.Service<NetworkOrigin>()(
+  "cloudflare-runtime/plugin/BoxesOrigin",
+) {}
+const Endpoints = Schema.Struct({ app: Schema.String, origin: Schema.UndefinedOr(Schema.String) });
+type TestEnv = Env & { ENDPOINTS: typeof Endpoints.Type; CONTROL: Fetcher<Control> };
+const Options = Schema.Struct({
+  origin: Schema.optionalKey(Schema.Struct({ delay: Schema.Int, body: Schema.String })),
+  advance: Schema.optionalKey(Schema.Int),
+  clockStart: Schema.optionalKey(Schema.Int),
+  consume: Schema.optionalKey(Schema.Boolean),
+  controlled: Schema.optionalKey(Schema.Boolean),
+  artifact: Schema.optionalKey(Schema.Literals(["clock-worker", "checkpoint-worker"])),
+});
+export const runtime = (persist: string, options: typeof Options.Type = {}) => {
+  const advance = options.advance ?? 0;
   const name = `boxes-test-${crypto.randomUUID()}`;
-  const start = clockStart ?? Effect.runSync(Clock.currentTimeMillis);
+  const consumers: QueueConsumer[] = [
+    {
+      queueName: name,
+      maxBatchSize: 1,
+      maxBatchTimeout: 0,
+      maxRetries: 100,
+    },
+  ];
+  const producer = { binding: "EVENTS", queueName: name, deliveryDelay: 86400 };
+  if (options.consume === true) producer.deliveryDelay = 0;
+  const start = options.clockStart ?? Effect.runSync(Clock.currentTimeMillis);
   const workerBindings = [
     R2Bucket.local({ binding: "OBJECTS", id: "boxes-test" }),
     Text.local("API_KEY", "cirro-local-test-credential"),
     Json.local("CLOCK_START", start),
     Json.local("CLOCK_ADVANCE", advance),
-    Queue.local({ binding: "EVENTS", queueName: "executions" }),
+    Json.local("CLOCK_CONTROLLED", options.controlled ?? true),
+    Queue.local(producer),
     Service.self("SELF"),
   ];
+  const artifact = options.artifact ?? "clock-worker";
+  const engines = ["kernel", "wasi"];
+  if (artifact === "clock-worker") engines.push("guest", "compiler", "python");
   const modules = [
     {
       name: "index.js",
       type: "ESModule" as const,
-      content: readFileSync(join(import.meta.dir, "../dist/clock-worker/index.js"), "utf8"),
+      content: readFileSync(join(import.meta.dir, `../dist/${artifact}/index.js`), "utf8"),
     },
-    ...["kernel", "guest", "compiler", "wasi", "python"].map((module) => ({
+    ...engines.map((module) => ({
       name: `cirro_${module}_bg.wasm`,
       type: "Wasm" as const,
-      content: readFileSync(join(import.meta.dir, `../dist/clock-worker/cirro_${module}_bg.wasm`)),
+      content: readFileSync(join(import.meta.dir, `../dist/${artifact}/cirro_${module}_bg.wasm`)),
     })),
   ];
   const bindings = [
     R2Bucket.local({ binding: "OBJECTS", id: "boxes-test" }),
     Effect.gen(function* () {
       const workerRuntime = yield* Runtime;
+      const originName = `${name}-origin`;
+      const origin = yield* Effect.gen(function* () {
+        if (options.origin === undefined) return undefined;
+        return yield* workerRuntime
+          .start({
+            name: originName,
+            compatibilityDate: "2026-10-06",
+            compatibilityFlags: [],
+            bindings: [Json.local("OPTIONS", options.origin)],
+            modules: [
+              {
+                name: "index.js",
+                type: "ESModule",
+                content: readFileSync(
+                  join(import.meta.dir, "../dist/origin-worker/index.js"),
+                  "utf8",
+                ),
+              },
+            ],
+          })
+          .pipe(Effect.orDie);
+      });
+      const outbound = Effect.gen(function* () {
+        if (options.origin === undefined) return {};
+        const context = yield* PluginContext;
+        const proxy = yield* context.get(RegistryProxy);
+        const origin = yield* proxy.api.subscribe({ kind: "worker", scriptName: originName });
+        return { userWorker: { globalOutbound: origin } };
+      });
       const url = yield* workerRuntime
         .start({
           name,
@@ -52,9 +111,10 @@ export const runtime = (persist: string, advance = 0, clockStart?: number) => {
           ],
           bindings: workerBindings,
           modules,
+          queueConsumers: consumers,
         })
-        .pipe(Effect.orDie);
-      return yield* Text.local("APP_URL", url.href);
+        .pipe(Effect.provideService(NetworkOrigin, outbound), Effect.orDie);
+      return yield* Json.local("ENDPOINTS", { app: url.href, origin: origin?.href });
     }),
     Service.local({ binding: "CONTROL", scriptName: name, entrypoint: "Control" }),
   ];
@@ -66,7 +126,13 @@ export const runtime = (persist: string, advance = 0, clockStart?: number) => {
   });
   return {
     time: start + advance,
-    ready: ready.then((value) => new URL(value.env.APP_URL)),
+    ready: ready.then((value) => new URL(value.env.ENDPOINTS.app)),
+    origin: () =>
+      ready.then((value) => {
+        if (value.env.ENDPOINTS.origin === undefined)
+          return Promise.reject(new Error("Network fixture requires an origin"));
+        return new URL(value.env.ENDPOINTS.origin);
+      }),
     objects: ready.then((value) => value.env.OBJECTS),
     control: ready.then((value) => value.env.CONTROL),
     dispose: () => ready.then((value) => value.dispose()),

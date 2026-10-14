@@ -10,14 +10,14 @@ import {
   TokenResponse,
   ErrorResponse,
 } from "../src/contracts";
-import { runtime } from "../tooling/runtime";
+import { runtime } from "../tooling/worker-test";
 
 const directory = await mkdtemp(join(tmpdir(), "cirro-live-output-"));
-const mf = runtime(
-  directory,
-  'export default { async fetch() { await new Promise(resolve => setTimeout(resolve, 2500)); return new Response("native suspension"); } };',
-  2,
-);
+const mf = runtime(directory, {
+  consume: true,
+  controlled: false,
+  origin: { delay: 2500, body: "native suspension" },
+});
 const post = async (path: string, token: string, body: unknown) =>
   fetch(new URL(path, await mf.ready), {
     method: "POST",

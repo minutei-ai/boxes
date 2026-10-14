@@ -5,10 +5,10 @@ import { join } from "node:path";
 import { Schema } from "effect";
 import { RunRecord, TokenResponse, ErrorResponse, ProcessPage } from "../src/contracts";
 import wasmModuleBytes from "../src/wasm-module-bytes.json";
-import { runtime } from "../tooling/runtime";
+import { runtime } from "../tooling/worker-test";
 
 const directory = await mkdtemp(join(tmpdir(), "cirro-large-wasm-"));
-const mf = runtime(directory);
+const mf = runtime(directory, { consume: true, controlled: false });
 const admin = "cirro-local-test-credential";
 const post = async (path: string, credential: string, body: unknown) =>
   fetch(new URL(path, await mf.ready), {

@@ -4,9 +4,9 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { Schema } from "effect";
 import { RunRecord, TokenResponse, FileContent } from "../src/contracts";
-import { runtime } from "../tooling/runtime";
+import { runtime } from "../tooling/worker-test";
 const directory = await mkdtemp(join(tmpdir(), "cirro-wasi-cwd-"));
-const mf = runtime(directory);
+const mf = runtime(directory, { consume: true, controlled: false });
 const digest = "edb1cf0bbcf663d177916592d2f1b4361a02966dbf2eb44e3e61ea2a399bb43a";
 const artifact = await fetch(
   `https://releases.rivet.dev/agent-os/latest/software/packages/jq/${digest}.aospkg`,

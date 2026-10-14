@@ -4,10 +4,10 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { Schema } from "effect";
 import { RunRecord, TokenResponse, FileContent } from "../src/contracts";
-import { runtime } from "../tooling/runtime";
+import { runtime } from "../tooling/worker-test";
 
 const directory = await mkdtemp(join(tmpdir(), "cirro-fd-dup-"));
-const mf = runtime(directory);
+const mf = runtime(directory, { consume: true, controlled: false });
 const admin = "cirro-local-test-credential";
 const post = async (path: string, token: string, body: unknown) =>
   fetch(new URL(path, await mf.ready), {

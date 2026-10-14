@@ -2,8 +2,7 @@ import { expect, test } from "bun:test";
 import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { readFileSync } from "node:fs";
-import { Miniflare } from "miniflare";
+import { runtime } from "../tooling/worker-test";
 import { Schema } from "effect";
 import { HeapSnapshot } from "../src/contracts";
 import { CheckpointProof, CheckpointRequest } from "./fixtures/checkpoint-contract";
@@ -11,43 +10,7 @@ import { CheckpointProof, CheckpointRequest } from "./fixtures/checkpoint-contra
 const source = Buffer.from(
   await Bun.file(join(import.meta.dir, "../dist/wasi-slices-finite.wasm")).arrayBuffer(),
 ).toString("base64");
-const instance = (persist: string) =>
-  new Miniflare({
-    resourcePersistencePath: persist,
-    workers: [
-      {
-        config: {
-          name: "checkpoint",
-          compatibilityDate: "2026-10-06",
-          compatibilityFlags: ["nodejs_compat"],
-          manifest: {
-            mainModule: "index.js",
-            modules: {
-              "index.js": {
-                type: "esm",
-                contents: readFileSync(
-                  join(import.meta.dir, "../dist/checkpoint-worker/index.js"),
-                  "utf8",
-                ),
-              },
-              ...Object.fromEntries(
-                ["kernel", "wasi"].map((name) => [
-                  `cirro_${name}_bg.wasm`,
-                  {
-                    type: "wasm" as const,
-                    contents: readFileSync(
-                      join(import.meta.dir, `../dist/checkpoint-worker/cirro_${name}_bg.wasm`),
-                    ),
-                  },
-                ]),
-              ),
-            },
-          },
-          env: { OBJECTS: { type: "r2", name: "checkpoint-data" } },
-        },
-      },
-    ],
-  });
+const instance = (persist: string) => runtime(persist, { artifact: "checkpoint-worker" });
 const send = async (runtime: ReturnType<typeof instance>, input: typeof CheckpointRequest.Type) =>
   fetch(await runtime.ready, {
     method: "POST",
@@ -92,7 +55,7 @@ test("checkpoint integrity and Rust runtime identity are checked before native r
   );
   expect(saved.op).toBe("saved");
   if (saved.op !== "saved") return;
-  const bucket = await runtime.getR2Bucket("OBJECTS");
+  const bucket = await runtime.objects;
   const key = `sandboxes/checkpoint-test/checkpoints/${saved.hash}.json`;
   const object = await bucket.get(key);
   expect(object).not.toBeNull();

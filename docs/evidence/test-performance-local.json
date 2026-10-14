@@ -40,10 +40,20 @@
     "production": false,
     "runtime": "native Rust/Wasmi; validation and translation only"
   },
-  "allTestsMigrated": false,
+  "allTestsMigrated": true,
   "productionPerformanceProven": false,
   "cpythonExecutionProven": false,
   "fullSuite": {
+    "tests": 270,
+    "failures": 0,
+    "assertions": 2529,
+    "seconds": 171.7,
+    "rustTestsPassed": true,
+    "typesPassed": true,
+    "clippyPassed": true,
+    "formatPassed": true
+  },
+  "fullSuiteBeforeNativeMigration": {
     "tests": 270,
     "failures": 0,
     "assertions": 2533,
@@ -52,5 +62,21 @@
     "typesPassed": true,
     "clippyPassed": true,
     "formatPassed": true
+  },
+  "fullSuiteAccelerationProven": false,
+  "nativeHarness": {
+    "runtime": "Alchemy PlatformProxy and Runtime.start",
+    "workerReplacement": true,
+    "r2": "native local binding persisted across replacement",
+    "queue": "native unique broker per runtime; delayed producer before guest entry",
+    "network": "TypeScript/Effect fixture Worker with native outbound routing",
+    "directMiniflareDependency": false,
+    "fixtureTransport": "HTTP keepalive disabled for suites exercising early authorization rejection",
+    "remainingPerformanceWork": [
+      "31-second real-clock continuation test",
+      "network suspension waits",
+      "native runtime startup cost"
+    ],
+    "productionChanged": false
   }
 }

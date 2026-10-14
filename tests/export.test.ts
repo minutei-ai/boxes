@@ -4,14 +4,15 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { Schema } from "effect";
 import { FilesystemSnapshot, TokenResponse, ErrorResponse, RunRecord } from "../src/contracts";
-import { runtime } from "../tooling/runtime";
+import { runtime } from "../tooling/worker-test";
 
 test("root exports retain binary files, modes and symlinks with exact byte limits across Worker replacement", async () => {
   const directory = await mkdtemp(join(tmpdir(), "boxes-export-"));
-  const first = runtime(directory);
+  const first = runtime(directory, { consume: true, controlled: false });
   const post = async (path: string, token: string, body: unknown) =>
     fetch(new URL(path, await first.ready), {
       method: "POST",
+      keepalive: false,
       headers: { authorization: `Bearer ${token}`, "content-type": "application/json" },
       body: JSON.stringify(body),
     });
@@ -60,7 +61,7 @@ test("root exports retain binary files, modes and symlinks with exact byte limit
       200,
     );
   }
-  const bucket = await first.getR2Bucket("OBJECTS");
+  const bucket = await first.objects;
   const before = await bucket.head("sandboxes/export/head.json");
   const response = await post(path, token, { op: "filesystem.export", maxBytes: 25165824 });
   expect(response.status).toBe(200);
@@ -122,9 +123,10 @@ test("root exports retain binary files, modes and symlinks with exact byte limit
   ).toBe(401);
   expect((await post(path, token, { op: "filesystem.export", maxBytes: 0 })).status).toBe(400);
   await first.dispose();
-  const second = runtime(directory);
+  const second = runtime(directory, { consume: true, controlled: false });
   const restored = await fetch(new URL(path, await second.ready), {
     method: "POST",
+    keepalive: false,
     headers: { authorization: `Bearer ${token}`, "content-type": "application/json" },
     body: JSON.stringify({ op: "filesystem.export", maxBytes: 25165824 }),
   });
@@ -133,6 +135,7 @@ test("root exports retain binary files, modes and symlinks with exact byte limit
   const action = async (body: unknown) =>
     fetch(new URL(path, await second.ready), {
       method: "POST",
+      keepalive: false,
       headers: { authorization: `Bearer ${token}`, "content-type": "application/json" },
       body: JSON.stringify(body),
     });
@@ -164,7 +167,7 @@ test("root exports retain binary files, modes and symlinks with exact byte limit
   expect((await action({ op: "filesystem.chmod", path: "/tmp/data", mode: 416 })).status).toBe(200);
   const digest = new Bun.CryptoHasher("sha256").update(Buffer.from(binary, "base64")).digest("hex");
   await (
-    await second.getR2Bucket("OBJECTS")
+    await second.objects
   ).put(`sandboxes/export/blobs/${digest}`, Buffer.from([0, 255, 128, 11, 0, 1]));
   const corrupt = await action({ op: "filesystem.export", maxBytes: 25165824 });
   expect(corrupt.status).toBe(500);

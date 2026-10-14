@@ -4,9 +4,9 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { Schema } from "effect";
 import { RunRecord, TokenResponse, InputReceipt, InputHead } from "../src/contracts";
-import { runtime } from "../tooling/runtime";
+import { runtime } from "../tooling/worker-test";
 const directory = await mkdtemp(join(tmpdir(), "cirro-wasi-stdin-"));
-const mf = runtime(directory);
+const mf = runtime(directory, { consume: true, controlled: false });
 const post = async (path: string, token: string, body: unknown) =>
   fetch(new URL(path, await mf.ready), {
     method: "POST",
@@ -223,7 +223,7 @@ test("closing the last stdin reader rejects further input before process exit", 
 }, 10000);
 test("queued stdin and EOF survive replacing the Worker before guest entry", async () => {
   const persisted = await mkdtemp(join(tmpdir(), "cirro-input-restart-"));
-  const first = runtime(persisted, undefined, 1, false);
+  const first = runtime(persisted, { consume: false, controlled: false });
   const send = (instance: ReturnType<typeof runtime>, token: string, path: string, body: unknown) =>
     instance.ready.then((origin) =>
       fetch(new URL(path, origin), {
@@ -278,7 +278,7 @@ test("queued stdin and EOF survive replacing the Worker before guest entry", asy
     (await send(first, token, path, { op: "process.stdin.close", id: "saved", offset: 9 })).status,
   ).toBe(200);
   await first.dispose();
-  const second = runtime(persisted);
+  const second = runtime(persisted, { consume: true, controlled: false });
   expect(
     (await send(second, "cirro-local-test-credential", "/v1/maintenance/process-dispatch", {}))
       .status,
@@ -297,7 +297,7 @@ test("queued stdin and EOF survive replacing the Worker before guest entry", asy
 }, 15000);
 test("corrupt retained input fails before delivering bytes and leaves the Worker healthy", async () => {
   const persisted = await mkdtemp(join(tmpdir(), "cirro-input-integrity-"));
-  const first = runtime(persisted, undefined, 1, false);
+  const first = runtime(persisted, { consume: false, controlled: false });
   const send = (instance: ReturnType<typeof runtime>, token: string, path: string, body: unknown) =>
     instance.ready.then((origin) =>
       fetch(new URL(path, origin), {
@@ -352,7 +352,7 @@ test("corrupt retained input fails before delivering bytes and leaves the Worker
     (await send(first, token, path, { op: "process.stdin.close", id: "corrupt", offset: 5 }))
       .status,
   ).toBe(200);
-  const bucket = await first.getR2Bucket("OBJECTS");
+  const bucket = await first.objects;
   const object = await bucket.get("process-input/integrity/corrupt.json");
   expect(object).not.toBeNull();
   if (object === null) return;
@@ -362,7 +362,7 @@ test("corrupt retained input fails before delivering bytes and leaves the Worker
   if (block === undefined) return;
   await bucket.put(`sandboxes/integrity/stdin/${block.hash}`, "wrong");
   await first.dispose();
-  const second = runtime(persisted);
+  const second = runtime(persisted, { consume: true, controlled: false });
   expect(
     (await send(second, "cirro-local-test-credential", "/v1/maintenance/process-dispatch", {}))
       .status,

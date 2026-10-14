@@ -169,7 +169,7 @@ for (const mode of ["synced", "unsynced"] as const) {
 for (const role of ["root", "family", "stopped"] as const) {
   test(`${role} blocked stdin checkpoints and resumes with buffered bytes and EOF after Worker replacement`, async () => {
     const directory = await mkdtemp(join(tmpdir(), "cirro-idle-recovery-"));
-    const first = runtime(directory, 30000);
+    const first = runtime(directory, { advance: 30000 });
     expect(
       (
         await post(first, "/v1/sandboxes", "cirro-local-test-credential", {
@@ -299,7 +299,7 @@ for (const role of ["root", "family", "stopped"] as const) {
     ).toBe(200);
     const time = first.time;
     await first.dispose();
-    const second = runtime(directory, 0, time);
+    const second = runtime(directory, { clockStart: time });
     const current = await (await second.objects).head(key);
     expect(current).not.toBeNull();
     if (current === null) return;

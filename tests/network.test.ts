@@ -4,24 +4,10 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { Schema } from "effect";
 import { NetworkResult, RunRecord, TokenResponse } from "../src/contracts";
-import { runtime } from "../tooling/runtime";
+import { runtime } from "../tooling/worker-test";
 
 const directory = await mkdtemp(join(tmpdir(), "cirro-network-"));
-const mf = runtime(
-  directory,
-  `
-const state = { requests: 0 };
-export default { async fetch(request) {
-  const url = new URL(request.url);
-  if (url.pathname === "/count") return Response.json(state.requests);
-  state.requests += 1;
-  if (url.pathname === "/redirect") return new Response(null, { status: 307, headers: { location: "https://forbidden.example/echo" } });
-  if (url.pathname === "/accepted") return Response.json((await request.arrayBuffer()).byteLength);
-  if (url.pathname === "/large") return new Response(new Uint8Array(2048));
-  if (url.pathname === "/large-header") return new Response(null, { headers: { "x-large": "a".repeat(8193) } });
-  return Response.json({ method: request.method, header: request.headers.get("x-agent"), auth: request.headers.get("authorization"), body: Array.from(new Uint8Array(await request.arrayBuffer())), url: request.url }, { status: 201, headers: { "x-origin": "native-workerd" } });
-} };`,
-);
+const mf = runtime(directory, { consume: true, controlled: false, origin: { delay: 0, body: "" } });
 const policy = {
   networkHosts: ["allowed.example"],
   interruptBudget: 1000,
@@ -31,6 +17,7 @@ const policy = {
 const post = async (path: string, token: string, body: unknown) =>
   fetch(new URL(path, await mf.ready), {
     method: "POST",
+    keepalive: false,
     headers: { authorization: `Bearer ${token}`, "content-type": "application/json" },
     body: JSON.stringify(body),
   });
@@ -114,8 +101,10 @@ test("HTTP methods, binary bodies and response headers traverse native Workers",
 
 test("HTTP grants, destination policy and transport headers cannot be bypassed", async () => {
   const token = await setup("http-denied");
-  const origin = await mf.getWorker("origin");
-  const before = await (await origin.fetch("https://allowed.example/count")).json();
+  const origin = await mf.origin();
+  const before = Schema.decodeUnknownSync(Schema.Number)(
+    await (await fetch(new URL("/count", origin))).json(),
+  );
   for (const url of [
     "https://forbidden.example/echo",
     "http://allowed.example/echo",
@@ -148,13 +137,17 @@ test("HTTP grants, destination policy and transport headers cannot be bypassed",
       })
     ).status,
   ).toBe(403);
-  expect(await (await origin.fetch("https://allowed.example/count")).json()).toBe(before);
+  expect(
+    Schema.decodeUnknownSync(Schema.Number)(await (await fetch(new URL("/count", origin))).json()),
+  ).toBe(before);
 });
 
 test("malformed HTTP inputs fail before outbound requests", async () => {
   const token = await setup("http-input");
-  const origin = await mf.getWorker("origin");
-  const before = await (await origin.fetch("https://allowed.example/count")).json();
+  const origin = await mf.origin();
+  const before = Schema.decodeUnknownSync(Schema.Number)(
+    await (await fetch(new URL("/count", origin))).json(),
+  );
   for (const input of [
     { method: "TRACE" },
     { method: "CONNECT" },
@@ -182,7 +175,9 @@ test("malformed HTTP inputs fail before outbound requests", async () => {
     body: { content: "é".repeat(524289), encoding: "utf8" },
   });
   expect(oversized.status).toBe(413);
-  expect(await (await origin.fetch("https://allowed.example/count")).json()).toBe(before);
+  expect(
+    Schema.decodeUnknownSync(Schema.Number)(await (await fetch(new URL("/count", origin))).json()),
+  ).toBe(before);
 });
 
 test("redirects remain visible and oversized responses fail", async () => {

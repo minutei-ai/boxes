@@ -4,14 +4,14 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { Schema } from "effect";
 import { ErrorResponse, FileContent, RunRecord, RunSummary, TokenResponse } from "../src/contracts";
-import { runtime } from "../tooling/runtime";
+import { runtime } from "../tooling/worker-test";
 
 const directory = await mkdtemp(join(tmpdir(), "cirro-cancel-"));
-const mf = runtime(
-  directory,
-  'export default { async fetch() { await new Promise(resolve => setTimeout(resolve, 2000)); return new Response("native delay"); } };',
-  2,
-);
+const mf = runtime(directory, {
+  consume: true,
+  controlled: false,
+  origin: { delay: 2000, body: "native delay" },
+});
 const post = async (
   instance: ReturnType<typeof runtime>,
   path: string,
@@ -20,6 +20,7 @@ const post = async (
 ) =>
   fetch(new URL(path, await instance.ready), {
     method: "POST",
+    keepalive: false,
     headers: { authorization: `Bearer ${token}`, "content-type": "application/json" },
     body: JSON.stringify(body),
   });
@@ -167,7 +168,7 @@ test("WASI and shell release a pending native clock wait on cancellation", async
 
 test("queued cancellation is durable, idempotent and cannot expose output to an execute-only caller", async () => {
   const persisted = await mkdtemp(join(tmpdir(), "cirro-cancel-queued-"));
-  const first = runtime(persisted, undefined, 1, false);
+  const first = runtime(persisted, { consume: false, controlled: false });
   const id = "cancel-queued";
   const token = await setup(first, id);
   const path = `/v1/sandboxes/${id}/action`;
@@ -191,7 +192,7 @@ test("queued cancellation is durable, idempotent and cannot expose output to an 
     ),
   ).toEqual(stopped);
   await first.dispose();
-  const second = runtime(persisted);
+  const second = runtime(persisted, { consume: true, controlled: false });
   expect(
     (await post(second, "/v1/maintenance/process-dispatch", "cirro-local-test-credential", {}))
       .status,

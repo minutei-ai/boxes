@@ -960,6 +960,7 @@ await Effect.runPromise(
       ["src/index.ts", "dist/worker"],
       ["tests/fixtures/checkpoint-worker.ts", "dist/checkpoint-worker"],
       ["tests/fixtures/clock-worker.ts", "dist/clock-worker"],
+      ["tests/fixtures/origin-worker.ts", "dist/origin-worker"],
     ] as const) {
       const result = yield* Effect.promise(() =>
         Bun.build({
