@@ -104,6 +104,7 @@ enum Request {
         cwd_steps: Vec<String>,
         actions: Vec<SpawnAction>,
     },
+    Handler,
     Stopped,
     Wait {
         pids: Vec<u32>,
@@ -311,11 +312,30 @@ struct Pending {
     completion: Completion,
 }
 
+#[derive(Clone)]
+struct SignalDisposition {
+    action: u32,
+    mask: u64,
+    flags: u32,
+}
+struct HandlerFrame {
+    function: Func,
+    parameters: Vec<Val>,
+    outputs: Vec<Val>,
+    invocation: Option<ResumableCallHostTrap>,
+    exhaustion: Option<ResumableCallOutOfFuel>,
+    response: Option<Val>,
+    pending: Option<Pending>,
+    mask: u64,
+    restart: bool,
+}
+
 struct ChildStatus {
     parent: u32,
     group: u32,
     session: u32,
     pending_signals: Rc<Cell<u64>>,
+    dispositions: Rc<RefCell<BTreeMap<u32, SignalDisposition>>>,
     stopped: Rc<Cell<bool>>,
     transitions: Rc<RefCell<VecDeque<u32>>>,
     signal: u32,
@@ -327,6 +347,7 @@ struct ProcessTable {
     root_group: u32,
     root_session: u32,
     root_pending_signals: Rc<Cell<u64>>,
+    root_dispositions: Rc<RefCell<BTreeMap<u32, SignalDisposition>>>,
     root_stopped: Rc<Cell<bool>>,
     root_transitions: Rc<RefCell<VecDeque<u32>>>,
     memory_bytes: usize,
@@ -386,6 +407,8 @@ struct State {
     signal_mask: u64,
     pending_signals: Rc<Cell<u64>>,
     delivered_signal: u32,
+    dispositions: Rc<RefCell<BTreeMap<u32, SignalDisposition>>>,
+    caught_signal: Option<u32>,
     stopped: Rc<Cell<bool>>,
     transitions: Rc<RefCell<VecDeque<u32>>>,
     readiness_notification: bool,
@@ -407,6 +430,31 @@ enum Failure {
     Signal(u32),
 }
 
+fn notify_signal_parent(table: &ProcessTable, pid: u32, transition: bool) {
+    let Some(child) = table.children.get(&pid) else {
+        return;
+    };
+    let target = if child.parent == 1 {
+        Some((
+            table.root_pending_signals.clone(),
+            table.root_dispositions.clone(),
+        ))
+    } else {
+        table
+            .children
+            .get(&child.parent)
+            .map(|parent| (parent.pending_signals.clone(), parent.dispositions.clone()))
+    };
+    if let Some((pending, dispositions)) = target {
+        let caught = dispositions.borrow().get(&17).is_some_and(|disposition| {
+            disposition.action == 2 && (!transition || disposition.flags & 1 == 0)
+        });
+        if caught {
+            pending.set(pending.get() | (1 << 16));
+        }
+    }
+}
+
 fn deliver_signal(state: &mut State) -> Option<u32> {
     let mut available = state.pending_signals.get() & !state.signal_mask;
     if state.stopped.get() {
@@ -422,6 +470,27 @@ fn deliver_signal(state: &mut State) -> Option<u32> {
     } else {
         available.trailing_zeros() + 1
     };
+    let disposition = state.dispositions.borrow().get(&signal).cloned();
+    if disposition
+        .as_ref()
+        .is_some_and(|disposition| disposition.action == 1)
+        || (disposition.is_none() && matches!(signal, 17 | 23 | 28))
+    {
+        state
+            .pending_signals
+            .set(state.pending_signals.get() & !(1u64 << (signal - 1)));
+        return deliver_signal(state);
+    }
+    if disposition
+        .as_ref()
+        .is_some_and(|disposition| disposition.action == 2)
+    {
+        state
+            .pending_signals
+            .set(state.pending_signals.get() & !(1u64 << (signal - 1)));
+        state.caught_signal = Some(signal);
+        return Some(signal);
+    }
     if matches!(signal, 19..=22) {
         state
             .pending_signals
@@ -431,6 +500,7 @@ fn deliver_signal(state: &mut State) -> Option<u32> {
                 .transitions
                 .borrow_mut()
                 .push_back((signal << 8) | 0x7f);
+            notify_signal_parent(&state.processes.borrow(), state.pid, true);
         }
         state.readiness_notification = true;
     } else {
@@ -810,6 +880,47 @@ fn dispatch(caller: &mut Caller<'_, State>, name: &str, args: &[u64]) -> Result<
             };
             put(caller, a[0], &pid.to_le_bytes())?;
         }
+        "proc_sigaction" => {
+            let signal = a[0] as u32;
+            let action = a[1] as u32;
+            if signal == 0 || signal > 64 || matches!(signal, 9 | 19) || action > 2 {
+                return Err(Failure::Errno(28));
+            }
+            let flags = a[4] as u32;
+            if flags & !0xd0000005 != 0 {
+                return Err(Failure::Errno(58));
+            }
+            if action == 2 {
+                let trampoline = caller
+                    .get_export("__wasi_signal_trampoline")
+                    .and_then(|export| export.into_func())
+                    .ok_or(Failure::Errno(58))?;
+                let signature = trampoline.ty(&*caller);
+                if signature.params() != [wasmi::ValType::I32] || !signature.results().is_empty() {
+                    return Err(Failure::Errno(28));
+                }
+            }
+            let mask =
+                (u64::from(a[2] as u32) | (u64::from(a[3] as u32) << 32)) & !((1 << 8) | (1 << 18));
+            if action == 0 {
+                caller.data().dispositions.borrow_mut().remove(&signal);
+            } else {
+                caller.data().dispositions.borrow_mut().insert(
+                    signal,
+                    SignalDisposition {
+                        action,
+                        mask,
+                        flags,
+                    },
+                );
+            }
+            if action == 1 || (action == 0 && matches!(signal, 17 | 23 | 28)) {
+                caller
+                    .data()
+                    .pending_signals
+                    .set(caller.data().pending_signals.get() & !(1u64 << (signal - 1)));
+            }
+        }
         "proc_kill" => {
             let pid = a[0] as u32 as i32;
             let signal = a[1] as u32;
@@ -838,6 +949,7 @@ fn dispatch(caller: &mut Caller<'_, State>, name: &str, args: &[u64]) -> Result<
                             child.pending_signals.clone(),
                             child.stopped.clone(),
                             child.transitions.clone(),
+                            child.dispositions.clone(),
                         )
                     })
                     .collect();
@@ -846,6 +958,7 @@ fn dispatch(caller: &mut Caller<'_, State>, name: &str, args: &[u64]) -> Result<
                         table.root_pending_signals.clone(),
                         table.root_stopped.clone(),
                         table.root_transitions.clone(),
+                        table.root_dispositions.clone(),
                     ));
                 }
                 targets
@@ -854,6 +967,7 @@ fn dispatch(caller: &mut Caller<'_, State>, name: &str, args: &[u64]) -> Result<
                     table.root_pending_signals.clone(),
                     table.root_stopped.clone(),
                     table.root_transitions.clone(),
+                    table.root_dispositions.clone(),
                 )]
             } else {
                 let child = table
@@ -864,13 +978,14 @@ fn dispatch(caller: &mut Caller<'_, State>, name: &str, args: &[u64]) -> Result<
                     child.pending_signals.clone(),
                     child.stopped.clone(),
                     child.transitions.clone(),
+                    child.dispositions.clone(),
                 )]
             };
             drop(table);
             if targets.is_empty() {
                 return Err(Failure::Errno(71));
             }
-            if signal == 0 || matches!(signal, 17 | 23 | 28) {
+            if signal == 0 {
                 return Ok(0);
             }
             let operations = caller.data().requests.get();
@@ -878,18 +993,38 @@ fn dispatch(caller: &mut Caller<'_, State>, name: &str, args: &[u64]) -> Result<
                 return Err(Failure::Budget);
             }
             caller.data().requests.set(operations + 1);
-            for (pending, stopped, transitions) in targets {
+            for (pending, stopped, transitions, dispositions) in targets {
+                let disposition = dispositions.borrow().get(&signal).cloned();
+                let ignored = disposition
+                    .as_ref()
+                    .is_some_and(|disposition| disposition.action == 1)
+                    || (disposition.is_none() && matches!(signal, 17 | 23 | 28));
                 if signal == 18 {
                     pending.set(pending.get() & !((1 << 18) | (1 << 19) | (1 << 20) | (1 << 21)));
                     if stopped.replace(false) {
                         transitions.borrow_mut().push_back(0xffff);
+                        let table = caller.data().processes.borrow();
+                        for (pid, child) in &table.children {
+                            if Rc::ptr_eq(&child.transitions, &transitions) {
+                                notify_signal_parent(&table, *pid, true);
+                            }
+                        }
                     }
-                } else {
+                    if disposition
+                        .as_ref()
+                        .is_some_and(|disposition| disposition.action == 2)
+                    {
+                        pending.set(pending.get() | (1 << 17));
+                    }
+                } else if !ignored {
                     pending.set(pending.get() | (1u64 << (signal - 1)));
                 }
             }
             caller.data_mut().readiness_notification = true;
             if let Some(signal) = deliver_signal(caller.data_mut()) {
+                if caller.data().caught_signal.is_some() {
+                    suspend(caller, Request::Handler, Completion::Sync)?;
+                }
                 if caller.data().stopped.get() {
                     suspend(caller, Request::Stopped, Completion::Sync)?;
                 }
@@ -1256,6 +1391,9 @@ fn dispatch(caller: &mut Caller<'_, State>, name: &str, args: &[u64]) -> Result<
                 _ => requested,
             };
             if let Some(signal) = deliver_signal(caller.data_mut()) {
+                if caller.data().caught_signal.is_some() {
+                    suspend(caller, Request::Handler, Completion::Sync)?;
+                }
                 if caller.data().stopped.get() {
                     suspend(caller, Request::Stopped, Completion::Sync)?;
                 }
@@ -2656,6 +2794,7 @@ fn linker(engine: &Engine) -> Result<Linker<State>, String> {
     bind!("wasi_snapshot_preview1", "sched_yield");
     bind!("host_process","proc_getpid",a:i32);
     bind!("host_process","proc_kill",a:i32,b:i32);
+    bind!("host_process","proc_sigaction",a:i32,b:i32,c:i32,d:i32,e:i32);
     bind!("host_process","proc_waitpid_v3",a:i32,b:i32,c:i32,d:i32);
     bind!("host_process","proc_getpgid",a:i32,b:i32);
     bind!("host_process","proc_setpgid",a:i32,b:i32);
@@ -2733,6 +2872,9 @@ fn linker(engine: &Engine) -> Result<Linker<State>, String> {
 #[wasm_bindgen]
 pub struct WasmGuest {
     store: Store<State>,
+    trampoline: Option<Func>,
+    parameters: Vec<Val>,
+    handlers: Vec<HandlerFrame>,
     function: Func,
     memory: Option<Memory>,
     invocation: Option<ResumableCallHostTrap>,
@@ -2835,6 +2977,7 @@ impl WasmGuest {
         let pending_signals = Rc::new(Cell::new(0));
         let stopped = Rc::new(Cell::new(false));
         let transitions = Rc::new(RefCell::new(VecDeque::new()));
+        let dispositions = Rc::new(RefCell::new(BTreeMap::new()));
         let mut store = Store::new(
             &engine,
             State {
@@ -2854,6 +2997,7 @@ impl WasmGuest {
                     root_group: 1,
                     root_session: 1,
                     root_pending_signals: pending_signals.clone(),
+                    root_dispositions: dispositions.clone(),
                     root_stopped: stopped.clone(),
                     root_transitions: transitions.clone(),
                     memory_bytes: memory,
@@ -2866,6 +3010,8 @@ impl WasmGuest {
                 signal_mask: 0,
                 pending_signals,
                 delivered_signal: 0,
+                dispositions,
+                caught_signal: None,
                 stopped,
                 transitions,
                 readiness_notification: false,
@@ -2911,7 +3057,11 @@ impl WasmGuest {
         let memory = instance.get_memory(&store, "memory");
         let available = store.get_fuel().map_err(|error| error.to_string())?;
         store.set_fuel(0).map_err(|error| error.to_string())?;
+        let trampoline = instance.get_func(&store, "__wasi_signal_trampoline");
         Ok(Self {
+            trampoline,
+            parameters: Vec::new(),
+            handlers: Vec::new(),
             store,
             function,
             memory,
@@ -2926,23 +3076,127 @@ impl WasmGuest {
         })
     }
 
-    fn observe_signal(&mut self) -> bool {
-        if self.done.is_some() {
-            return false;
+    fn enter_handler(&mut self, signal: u32) -> Result<(), String> {
+        if self.handlers.len() >= 32 {
+            return Err("Wasm signal handler nesting exceeds 32".into());
         }
-        if let Some(signal) = deliver_signal(self.store.data_mut()) {
+        let disposition = self
+            .store
+            .data()
+            .dispositions
+            .borrow()
+            .get(&signal)
+            .cloned()
+            .ok_or("Missing signal disposition")?;
+        let trampoline = self.trampoline.ok_or("Missing signal trampoline")?;
+        let state = self.store.data_mut();
+        let mask = state.signal_mask;
+        state.signal_mask |= disposition.mask;
+        if disposition.flags & 0x40000000 == 0 {
+            state.signal_mask |= 1u64 << (signal - 1);
+        }
+        if disposition.flags & 0x80000000 != 0 {
+            state.dispositions.borrow_mut().remove(&signal);
+        }
+        state.caught_signal = None;
+        let pending = state.pending.take();
+        self.handlers.push(HandlerFrame {
+            function: self.function,
+            parameters: std::mem::take(&mut self.parameters),
+            outputs: std::mem::take(&mut self.outputs),
+            invocation: self.invocation.take(),
+            exhaustion: self.exhaustion.take(),
+            response: self.response.take(),
+            pending,
+            mask,
+            restart: disposition.flags & 0x10000000 != 0,
+        });
+        self.function = trampoline;
+        self.parameters = vec![Val::I32(signal as i32)];
+        Ok(())
+    }
+    fn finish_handler(&mut self) -> Result<(), String> {
+        let frame = self.handlers.pop().ok_or("Missing signal handler frame")?;
+        self.function = frame.function;
+        self.parameters = frame.parameters;
+        self.outputs = frame.outputs;
+        self.invocation = frame.invocation;
+        self.exhaustion = frame.exhaustion;
+        self.response = frame.response;
+        self.store.data_mut().pending = frame.pending;
+        self.store.data_mut().signal_mask = frame.mask;
+        let interrupt = self.store.data().pending.as_ref().is_some_and(|pending| {
+            matches!(
+                pending.completion,
+                Completion::PipeRead { .. }
+                    | Completion::PipeWrite { .. }
+                    | Completion::Poll { .. }
+                    | Completion::Wait { .. }
+                    | Completion::WaitRaw { .. }
+            )
+        });
+        let restartable = self.store.data().pending.as_ref().is_some_and(|pending| {
+            matches!(
+                pending.completion,
+                Completion::PipeRead { .. }
+                    | Completion::PipeWrite { .. }
+                    | Completion::Wait { .. }
+                    | Completion::WaitRaw { .. }
+            )
+        });
+        if interrupt && !(frame.restart && restartable) && !self.wait_ready() {
+            self.respond(27, &[], "/", false, 0, &[])
+                .map_err(|error| format!("{error:?}"))?;
+        }
+        Ok(())
+    }
+    fn observe_signal(&mut self, handlers: bool) -> Result<bool, String> {
+        if self.done.is_some() {
+            return Ok(false);
+        }
+        let pending = self.store.data().pending_signals.get();
+        let selected = if pending & (1 << 8) != 0 {
+            self.store.data_mut().caught_signal = None;
+            deliver_signal(self.store.data_mut())
+        } else if self.store.data().stopped.get() {
+            return Ok(false);
+        } else if pending & (1 << 18) != 0 {
+            deliver_signal(self.store.data_mut())
+        } else if self.store.data().caught_signal.is_some() {
+            self.store.data().caught_signal
+        } else {
+            deliver_signal(self.store.data_mut())
+        };
+        if let Some(signal) = selected {
             if self.store.data().stopped.get() {
-                return false;
+                return Ok(false);
+            }
+            if self.store.data().caught_signal.is_some() {
+                if handlers {
+                    self.enter_handler(signal)?;
+                    return Ok(true);
+                }
+                return Ok(self.store.data().pending.as_ref().is_some_and(|pending| {
+                    matches!(
+                        pending.completion,
+                        Completion::PipeRead { .. }
+                            | Completion::PipeWrite { .. }
+                            | Completion::Poll { .. }
+                            | Completion::Wait { .. }
+                            | Completion::WaitRaw { .. }
+                    )
+                }));
             }
             self.done = Some(128 + signal as i32);
             self.outputs.clear();
             self.invocation = None;
             self.exhaustion = None;
             self.response = None;
+            self.handlers.clear();
             self.store.data_mut().pending = None;
-            return true;
+            return Ok(true);
         }
-        false
+        Ok(false)
     }
 
     fn advance(&mut self) -> Result<(), String> {
@@ -2971,16 +3225,24 @@ impl WasmGuest {
                         .ok_or("Wasm host response is required")?;
                     invocation.resume(&mut self.store, &[response], &mut self.outputs)
                 }
-                None => self
-                    .function
-                    .call_resumable(&mut self.store, &[], &mut self.outputs),
+                None => self.function.call_resumable(
+                    &mut self.store,
+                    &self.parameters,
+                    &mut self.outputs,
+                ),
             }
         };
         let unused = self.store.get_fuel().map_err(|error| error.to_string())?;
         self.budget.set(self.budget.get() + unused);
         self.store.set_fuel(0).map_err(|error| error.to_string())?;
         match call {
-            Ok(ResumableCall::Finished) => self.done = Some(0),
+            Ok(ResumableCall::Finished) => {
+                if self.handlers.is_empty() {
+                    self.done = Some(0);
+                } else {
+                    self.finish_handler()?;
+                }
+            }
             Ok(ResumableCall::HostTrap(invocation)) => {
                 if let Some(code) = invocation.host_error().i32_exit_status() {
                     self.done = Some(code);
@@ -3152,14 +3414,9 @@ impl WasmGuest {
     }
 
     pub fn finish_child(&self, failed: bool) {
-        if let Some(child) = self
-            .store
-            .data()
-            .processes
-            .borrow_mut()
-            .children
-            .get_mut(&self.store.data().pid)
-        {
+        let table = self.store.data().processes.clone();
+        let mut table = table.borrow_mut();
+        if let Some(child) = table.children.get_mut(&self.store.data().pid) {
             child.code = self.done;
             child.signal = self.store.data().delivered_signal;
             if child.signal != 0 {
@@ -3167,6 +3424,7 @@ impl WasmGuest {
             }
             child.failed = failed || self.done.is_none();
         }
+        notify_signal_parent(&table, self.store.data().pid, false);
     }
 
     pub fn spawn_action(&mut self, index: usize) -> Result<String, JsValue> {
@@ -3473,6 +3731,13 @@ impl WasmGuest {
         state.stdin_offset = parent.stdin_offset.clone();
         state.stdio_flags = parent.stdio_flags.clone();
         state.requests = parent.requests.clone();
+        *state.dispositions.borrow_mut() = parent
+            .dispositions
+            .borrow()
+            .iter()
+            .filter(|(_, disposition)| disposition.action == 1)
+            .map(|(signal, disposition)| (*signal, disposition.clone()))
+            .collect();
         state.signal_mask = mask;
         for fd in state.cloexec.clone() {
             close(state, fd);
@@ -3490,6 +3755,7 @@ impl WasmGuest {
                 group,
                 session,
                 pending_signals: state.pending_signals.clone(),
+                dispositions: state.dispositions.clone(),
                 stopped: state.stopped.clone(),
                 transitions: state.transitions.clone(),
                 signal: 0,
@@ -3502,7 +3768,8 @@ impl WasmGuest {
     }
 
     pub fn step(&mut self) -> Result<String, JsValue> {
-        self.observe_signal();
+        self.observe_signal(true)
+            .map_err(|error| JsValue::from_str(&error))?;
         if self.store.data().stopped.get() {
             return serde_json::to_string(&Request::Stopped)
                 .map_err(|error| JsValue::from_str(&error.to_string()));
@@ -3512,12 +3779,24 @@ impl WasmGuest {
             .data()
             .pending
             .as_ref()
-            .is_some_and(|pending| matches!(pending.request, Request::Stopped))
+            .is_some_and(|pending| matches!(pending.request, Request::Stopped | Request::Handler))
         {
             self.respond(0, &[], "/", false, 0, &[])?;
         }
         if self.store.data().pending.is_none() && self.done.is_none() {
             self.advance().map_err(|error| JsValue::from_str(&error))?;
+        }
+        if self
+            .store
+            .data()
+            .pending
+            .as_ref()
+            .is_some_and(|pending| matches!(pending.request, Request::Handler))
+        {
+            return self.step();
+        }
+        if self.done.is_none() && self.store.data().pending.is_none() && self.exhaustion.is_none() {
+            return self.step();
         }
         if self.exhaustion.is_some() {
             let available = self.budget.get();
@@ -3602,7 +3881,11 @@ impl WasmGuest {
         value: u64,
         metadata: &[u8],
     ) -> Result<(), JsValue> {
-        if self.observe_signal() || self.store.data().stopped.get() {
+        if self
+            .observe_signal(false)
+            .map_err(|error| JsValue::from_str(&error))?
+            || self.store.data().stopped.get()
+        {
             return Ok(());
         }
         let pending = self

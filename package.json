@@ -19,6 +19,7 @@
     "fd-dup:proof": "bun tooling/fd-dup-proof.ts",
     "guest-spawn:proof": "bun tooling/guest-spawn-proof.ts",
     "signal-mask:proof": "bun tooling/signal-mask-proof.ts",
+    "handlers:proof": "bun tooling/handlers-proof.ts",
     "signals:proof": "bun tooling/signals-proof.ts",
     "groups:proof": "bun tooling/groups-proof.ts",
     "cwd:proof": "bun tooling/cwd-proof.ts",
