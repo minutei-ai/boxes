@@ -7,6 +7,7 @@ import { open } from "./storage";
 import { fetchAuthorized } from "./network";
 import { input } from "./input";
 import { software } from "./software";
+import { cron } from "./cron";
 import type { Env } from "./resources";
 
 export const guestAction = Effect.fn("guest.action")(function* (
@@ -17,6 +18,13 @@ export const guestAction = Effect.fn("guest.action")(function* (
   const now = yield* Clock.currentTimeMillis;
   if (capability.expiresAt <= now)
     return yield* new Fault({ code: "UNAUTHORIZED", status: 401, message: "Capability expired" });
+  if (
+    action.op === "cron.schedule" ||
+    action.op === "cron.get" ||
+    action.op === "cron.list" ||
+    action.op === "cron.cancel"
+  )
+    return yield* cron(env, capability, action);
   if (action.op === "process.spawn")
     return yield* spawn(env, capability, action.execution, action.stdinMode ?? "closed");
   if (

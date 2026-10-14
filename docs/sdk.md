@@ -5,7 +5,7 @@ The `@minutei-ai/boxes` SDK targets Effect 4 and ordinary Cloudflare Workers. It
 Install the SDK archive attached to the GitHub SDK release:
 
 ```sh
-bun add https://github.com/minutei-ai/boxes/releases/download/sdk-v0.3.0/minutei-ai-boxes-0.3.0.tgz
+bun add https://github.com/minutei-ai/boxes/releases/download/sdk-v0.4.0/minutei-ai-boxes-0.4.0.tgz
 ```
 
 Use the service binding from the Minutei Worker environment:
@@ -59,3 +59,23 @@ const snapshot =
   });
 yield * boxes.action(sandboxId, { op: "filesystem.restore", snapshot });
 ```
+
+`cron.schedule` registers a five-field UTC cron expression or an ISO one-shot timestamp. It requires `manage`, `execute` and `read`; scheduled execution retains the original capability permissions and expiry. Supply an execution action as a template: its `id` is an identity seed, and each occurrence gets a deterministic `cron-…` process ID exposed through `lastProcessId`. `cron.get`, paginated `cron.list` and idempotent `cron.cancel` require `manage`. Listing includes terminal schedule records so failures, cancellation and expiry remain inspectable.
+
+```ts
+yield *
+  boxes.action(sandboxId, {
+    op: "cron.schedule",
+    id: "cleanup",
+    schedule: "0 * * * *",
+    overlap: "skip",
+    execution: {
+      op: "process.run",
+      id: "cleanup-seed",
+      language: "shell",
+      source: "rm /tmp/cache",
+    },
+  });
+```
+
+`allow` admits independent occurrences, `skip` advances past a due occurrence while the previous process is queued/running, and `queue` retains its due time until that process terminates. One overdue occurrence is admitted per scheduler tick. The ordinary Worker wakes every minute; Cloudflare delivery latency applies, including to one-shot timestamps. Jobs stop at capability expiry and never renew their authority. Cancellation prevents subsequent claims; an already claimed occurrence may finish admission, and cancelling the schedule does not cancel its process. `completed` means a one-shot has no further occurrence, while actual execution outcome remains with `process.get`. Arbitrary host callback closures, persistent grants, cron events and retained per-job run history are not implemented.

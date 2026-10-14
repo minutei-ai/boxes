@@ -1,11 +1,12 @@
-import { Effect, Redacted, Schema } from "effect";
+import { Clock, Effect, Redacted, Schema } from "effect";
 import { makeBinding } from "../../src/sdk";
-import { FileContent, FileStat, Id, RunRecord } from "../../src/contracts";
+import { CronRecord, FileContent, FileStat, Id, RunRecord } from "../../src/contracts";
 
 export const BindingProof = Schema.Struct({
   file: FileContent,
   stat: FileStat,
   restoredStat: FileStat,
+  cron: CronRecord,
   run: RunRecord,
   denied: Schema.Int,
 });
@@ -77,12 +78,22 @@ export default {
         });
         const denied = yield* boxes.create({ id: `${id}-denied`, policy }).pipe(Effect.flip);
         if (denied._tag !== "BoxesError") return yield* Effect.die(denied);
+        const now = yield* Clock.currentTimeMillis;
+        const cron = yield* boxes.action(id, {
+          op: "cron.schedule",
+          id: "binding-cron",
+          schedule: new Date(now + 120000).toISOString(),
+          overlap: "allow",
+          execution: { op: "typescript.evaluate", id: "seed", expression: "6 * 7" },
+        });
+        yield* boxes.action(id, { op: "cron.cancel", id: cron.id });
         yield* boxes.action(id, { op: "vm.dispose" });
         return new Response(
           Schema.encodeSync(Schema.fromJsonString(BindingProof))({
             file,
             stat,
             restoredStat,
+            cron,
             run,
             denied: denied.status,
           }),

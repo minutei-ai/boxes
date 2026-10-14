@@ -4,10 +4,23 @@ import * as TestClock from "effect/testing/TestClock";
 import type { Fetcher } from "@cloudflare/workers-types/experimental";
 import { consume, handleRequest } from "../../src/index";
 import { ProcessDelivery, StoredRun } from "../../src/contracts";
+import { tick } from "../../src/cron";
 import type { Env } from "../../src/resources";
 
 type TestEnv = Env & { SELF: Fetcher };
 export class Control extends WorkerEntrypoint<TestEnv> {
+  schedules(now: number) {
+    const bindings = this.env;
+    return Effect.runPromise(
+      Effect.scoped(
+        Effect.gen(function* () {
+          const clock = yield* TestClock.make();
+          yield* clock.setTime(now);
+          return yield* tick(bindings).pipe(Effect.provideService(Clock.Clock, clock));
+        }),
+      ),
+    );
+  }
   notify(messages: Parameters<Env["EVENTS"]["sendBatch"]>[0]) {
     return this.env.EVENTS.sendBatch(messages);
   }

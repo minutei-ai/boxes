@@ -369,7 +369,44 @@ export const SpawnAction = Schema.Struct({
   execution: RunAction,
   stdinMode: Schema.optionalKey(Schema.Literals(["closed", "pipe"])),
 });
+export const CronAction = Schema.Union([
+  Schema.Struct({
+    op: Schema.Literal("cron.schedule"),
+    id: Id,
+    schedule: Schema.String.check(Schema.isMinLength(1), Schema.isMaxLength(256)),
+    execution: RunAction,
+    overlap: Schema.Literals(["allow", "skip", "queue"]),
+  }),
+  Schema.Struct({ op: Schema.Literal("cron.get"), id: Id }),
+  Schema.Struct({ op: Schema.Literal("cron.cancel"), id: Id }),
+  Schema.Struct({
+    op: Schema.Literal("cron.list"),
+    limit: Schema.Int.check(Schema.isBetween({ minimum: 1, maximum: 100 })),
+    cursor: Schema.optionalKey(Schema.String.check(Schema.isMaxLength(2048))),
+  }),
+]);
+export const CronRecord = Schema.Struct({
+  ...CronAction.members[0].fields,
+  op: Schema.Literal("cron.schedule"),
+  state: Schema.Literals(["active", "cancelled", "completed", "expired", "failed"]),
+  createdAt: Schema.Int,
+  nextRun: Schema.NullOr(Schema.Int),
+  lastRun: Schema.NullOr(Schema.Int),
+  runCount: Schema.Int,
+  lastProcessId: Schema.NullOr(Id),
+  error: Schema.NullOr(Schema.String),
+});
+export const StoredCron = Schema.Struct({
+  ...CronRecord.fields,
+  authority: Capability,
+  pendingAt: Schema.NullOr(Schema.Int),
+});
+export const CronPage = Schema.Struct({
+  jobs: Schema.Array(CronRecord),
+  cursor: Schema.NullOr(Schema.String),
+});
 export const GuestAction = Schema.Union([
+  CronAction,
   SpawnAction,
   FilesystemAction,
   NetworkAction,
@@ -866,6 +903,10 @@ export const ExecutionCheckpoint = Schema.Struct({
 });
 
 export const ActionResponses = {
+  "cron.schedule": CronRecord,
+  "cron.get": CronRecord,
+  "cron.list": CronPage,
+  "cron.cancel": Success,
   "filesystem.restore": Success,
   "filesystem.utimes": Success,
   "filesystem.export": FilesystemSnapshot,

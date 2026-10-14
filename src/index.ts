@@ -29,6 +29,7 @@ import {
 } from "./contracts";
 import { input } from "./input";
 import { importSnapshot } from "./snapshot";
+import { tick } from "./cron";
 import { guestAction } from "./capabilities";
 import { migrate } from "./migration";
 import { migrateFilesystem } from "./filesystem-migration";
@@ -405,8 +406,15 @@ export const handleRequest = Effect.fn("worker.request")((request: Request, env:
   ),
 );
 export default {
-  scheduled(_controller: ScheduledController, env: Env) {
-    return Effect.runPromise(Effect.scoped(reconcile(env)));
+  scheduled(controller: ScheduledController, env: Env) {
+    return Effect.runPromise(
+      Effect.scoped(
+        Effect.gen(function* () {
+          yield* tick(env);
+          if (Math.floor(controller.scheduledTime / 60000) % 5 === 0) yield* reconcile(env);
+        }),
+      ),
+    );
   },
   queue(batch: MessageBatch<unknown>, env: Env) {
     return Effect.runPromise(consume(batch, env));

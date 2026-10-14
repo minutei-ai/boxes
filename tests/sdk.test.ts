@@ -123,6 +123,11 @@ test("SDK calls another Worker through its native service binding", async () => 
   expect(proof.run.status).toBe("exited");
   expect(proof.restoredStat.inode).toBeGreaterThan(proof.stat.inode);
   expect(proof.restoredStat.size).toBe(proof.stat.size);
+  expect([proof.cron.id, proof.cron.state, proof.cron.runCount]).toEqual([
+    "binding-cron",
+    "active",
+    0,
+  ]);
   expect(proof.run.output?.result).toBe(42);
   expect(proof.denied).toBe(401);
 });
