@@ -969,6 +969,17 @@ await Effect.runPromise(
       "-o",
       "dist/wasi-stdin-resume-parent.wasm",
     ]);
+    yield* run([
+      "rustc",
+      "--target",
+      "wasm32-wasip1",
+      "-O",
+      "-C",
+      "strip=symbols",
+      "tests/fixtures/wasi-advice.rs",
+      "-o",
+      "dist/wasi-advice.wasm",
+    ]);
     for (const [entry, directory] of [
       ["src/index.ts", "dist/worker"],
       ["tests/fixtures/checkpoint-worker.ts", "dist/checkpoint-worker"],

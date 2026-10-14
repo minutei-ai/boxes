@@ -20,6 +20,7 @@
     "live": "bun tooling/live.ts",
     "software:proof": "bun tooling/software-proof.ts",
     "wasm:proof": "bun tooling/large-wasm-proof.ts",
+    "advice:proof": "bun tooling/advice-proof.ts",
     "host-stat:proof": "bun tooling/host-stat-proof.ts",
     "fd-dup:proof": "bun tooling/fd-dup-proof.ts",
     "guest-spawn:proof": "bun tooling/guest-spawn-proof.ts",

@@ -3855,3 +3855,22 @@ test("filesystem base64 validation accepts boundary-sized files without recursiv
   expect(batch[0].success).toBe(false);
   expect(batch[1].success).toBe(true);
 });
+
+test("WASI advice enforces descriptors, rights, ranges and enums while retaining bytes and cursor", async () => {
+  const token = await setup("wasi-advice");
+  const source = Buffer.from(
+    await Bun.file(join(import.meta.dir, "../dist/wasi-advice.wasm")).arrayBuffer(),
+  ).toString("base64");
+  const response = await post("/v1/sandboxes/wasi-advice/action", token, {
+    op: "process.run",
+    id: "advice",
+    language: "wasm",
+    source,
+  });
+  expect(response.status).toBe(200);
+  const record = Schema.decodeUnknownSync(RunRecord)(await response.json());
+  expect(record.output?.exitCode).toBe(0);
+  expect(record.output?.stdout).toBe(
+    "advice validated descriptors, rights, enums and ranges without changing bytes or cursor\n",
+  );
+});

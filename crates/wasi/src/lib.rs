@@ -2166,6 +2166,31 @@ fn dispatch(caller: &mut Caller<'_, State>, name: &str, args: &[u64]) -> Result<
             }
             put(caller, output, &(data.len() as u32).to_le_bytes())?;
         }
+        "fd_advise" => {
+            if !(0..=5).contains(&a[3]) {
+                return Err(Failure::Errno(28));
+            }
+            let state = caller.data();
+            let fd = a[0] as u32;
+            if state.closed.contains(&fd) || fd == HIDDEN_PREOPEN {
+                return Err(Failure::Errno(8));
+            }
+            let descriptor = match state.descriptors.get(&fd) {
+                Some(descriptor) => descriptor,
+                None if stream(state, fd).is_some() => return Err(Failure::Errno(76)),
+                None => return Err(Failure::Errno(8)),
+            };
+            if descriptor.rights & (1 << 7) == 0 {
+                return Err(Failure::Errno(76));
+            }
+            if descriptor.directory {
+                return Err(Failure::Errno(31));
+            }
+            if descriptor.stdio.is_some() || descriptor.pipe.is_some() {
+                return Err(Failure::Errno(70));
+            }
+            args[1].checked_add(args[2]).ok_or(Failure::Errno(61))?;
+        }
         "fd_filestat_set_size" | "fd_allocate" => {
             let state = caller.data_mut();
             let descriptor = state
@@ -2649,6 +2674,7 @@ fn dispatch(caller: &mut Caller<'_, State>, name: &str, args: &[u64]) -> Result<
                 | (1 << 22)
                 | (1 << 23)
                 | (1 << 8)
+                | (1 << 7)
                 | if read { 2 } else { 0 }
                 | if write { 64 } else { 0 };
             if rights & !parent.inheriting != 0 {
@@ -2936,6 +2962,7 @@ fn linker(engine: &Engine) -> Result<Linker<State>, String> {
     bind!("wasi_snapshot_preview1","fd_seek",a:i32,b:i64,c:i32,d:i32);
     bind!("wasi_snapshot_preview1","fd_tell",a:i32,b:i32);
     bind!("wasi_snapshot_preview1","fd_filestat_set_size",a:i32,b:i64);
+    bind!("wasi_snapshot_preview1","fd_advise",a:i32,b:i64,c:i64,d:i32);
     bind!("wasi_snapshot_preview1","fd_allocate",a:i32,b:i64,c:i64);
     bind!("wasi_snapshot_preview1","poll_oneoff",a:i32,b:i32,c:i32,d:i32);
     bind!("wasi_snapshot_preview1","fd_filestat_set_times",a:i32,b:i64,c:i64,d:i32);
