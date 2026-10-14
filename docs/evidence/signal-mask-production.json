@@ -1,0 +1,16 @@
+{
+  "measuredAt": "2026-10-14T03:16:20.299Z",
+  "url": "https://cirro-sandbox-prod-rs7wexxow56rmsoz.manoel-carvalhoneto.workers.dev",
+  "sandboxId": "signal-mask-proof-b0896cdf-eac9-4503-b173-1d00b53a4080",
+  "profile": "minutei",
+  "runtime": "standard Worker",
+  "checks": {
+    "maskOperations": true,
+    "invocationIsolation": true,
+    "disposal": true
+  },
+  "allPassed": true,
+  "signalDelivery": false,
+  "processInheritance": false,
+  "packageParity": false
+}
