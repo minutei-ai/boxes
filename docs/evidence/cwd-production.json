@@ -1,0 +1,40 @@
+{
+  "measuredAt": "2026-10-14T05:48:11.754Z",
+  "url": "https://cirro-sandbox-prod-rs7wexxow56rmsoz.manoel-carvalhoneto.workers.dev",
+  "sandboxId": "cwd-proof-0013d36a-02e0-44d7-8b16-6178e9bef296",
+  "profile": "minutei",
+  "runtime": "standard Worker",
+  "checks": {
+    "setup": true,
+    "publishedRelativeInput": true,
+    "invalidCwdAndActions": true,
+    "disposal": true
+  },
+  "receipts": [
+    {
+      "mode": "explicit",
+      "passed": true
+    },
+    {
+      "mode": "relative",
+      "passed": true
+    },
+    {
+      "mode": "chdir",
+      "passed": true
+    },
+    {
+      "mode": "fchdir",
+      "passed": true
+    },
+    {
+      "mode": "symlink",
+      "passed": true
+    }
+  ],
+  "artifactDigest": "edb1cf0bbcf663d177916592d2f1b4361a02966dbf2eb44e3e61ea2a399bb43a",
+  "allPassed": true,
+  "openFileActions": false,
+  "fullProcessParity": false,
+  "packageParity": false
+}
