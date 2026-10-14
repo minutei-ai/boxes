@@ -1,7 +1,7 @@
 {
-  "measuredAt": "2026-10-14T06:12:17.418Z",
+  "measuredAt": "2026-10-14T06:28:29.753Z",
   "url": "https://cirro-sandbox-prod-rs7wexxow56rmsoz.manoel-carvalhoneto.workers.dev",
-  "sandboxId": "cwd-proof-bc813dbd-e9f9-4a71-994e-e6f0d9f59fde",
+  "sandboxId": "cwd-proof-4995e659-85e0-4c4e-aeaa-8926978f0514",
   "profile": "minutei",
   "runtime": "standard Worker",
   "checks": {
@@ -34,6 +34,14 @@
     },
     {
       "mode": "open-dir",
+      "passed": true
+    },
+    {
+      "mode": "closefrom-root",
+      "passed": true
+    },
+    {
+      "mode": "closefrom-high",
       "passed": true
     }
   ],
@@ -70,6 +78,18 @@
     },
     {
       "mode": "open-close",
+      "errno": 8,
+      "observed": 8,
+      "passed": true
+    },
+    {
+      "mode": "closefrom",
+      "errno": 8,
+      "observed": 8,
+      "passed": true
+    },
+    {
+      "mode": "closefrom-negative",
       "errno": 8,
       "observed": 8,
       "passed": true
