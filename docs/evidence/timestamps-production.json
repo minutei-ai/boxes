@@ -1,0 +1,34 @@
+{
+  "measuredAt": "2026-10-14T18:14:24.540310+00:00",
+  "target": "https://cirro-sandbox-prod-rs7wexxow56rmsoz.manoel-carvalhoneto.workers.dev",
+  "deployedCommit": "0185080b05b2434ee46d5f1346346c3f7e32252e",
+  "profile": "minutei",
+  "production": {
+    "checks": 6,
+    "failures": 0,
+    "uint64Precision": true,
+    "symlinkSelection": true,
+    "guestInvocation": true,
+    "inodeAndBytesPreserved": true,
+    "writePermissionRequired": true,
+    "disposal": true
+  },
+  "local": {
+    "tests": 282,
+    "failures": 0,
+    "assertions": 2633,
+    "seconds": 174.64,
+    "workerReplacement": true,
+    "invalidInputsDoNotPublish": true,
+    "typesPassed": true,
+    "clippyPassed": true,
+    "rustTestsPassed": true,
+    "packedSdkBindingEffectVersion": "4.0.0",
+    "packedSdkFocusedTests": 5
+  },
+  "ci": "https://github.com/minutei-ai/boxes/actions/runs/38612175756",
+  "sdkVersion": "0.2.0",
+  "sdkSha256": "9bd89522a7114ce5b92e6c707861937dc374c095c06c7c43781981a57a57e36e",
+  "scope": "filesystem.utimes through the agent API and native service-binding SDK",
+  "fullParity": false
+}
