@@ -23,6 +23,38 @@ const PIPE_ATOMIC_BYTES: usize = 4096;
 const HIDDEN_PREOPEN: u32 = 0x40000003;
 const MAX_BYTES: usize = 16_777_216;
 
+struct Pipe {
+    bytes: RefCell<VecDeque<u8>>,
+    readers: Cell<usize>,
+    writers: Cell<usize>,
+}
+
+struct PipeEndpoint {
+    pipe: Rc<Pipe>,
+    reading: bool,
+}
+
+impl PipeEndpoint {
+    fn has_peer(&self) -> bool {
+        if self.reading {
+            self.pipe.writers.get() > 0
+        } else {
+            self.pipe.readers.get() > 0
+        }
+    }
+}
+
+impl Drop for PipeEndpoint {
+    fn drop(&mut self) {
+        let count = if self.reading {
+            &self.pipe.readers
+        } else {
+            &self.pipe.writers
+        };
+        count.set(count.get() - 1);
+    }
+}
+
 #[derive(Clone)]
 struct Descriptor {
     path: String,
@@ -32,7 +64,7 @@ struct Descriptor {
     flags: Rc<Cell<u16>>,
     offset: Rc<Cell<usize>>,
     stdio: Option<u32>,
-    pipe: Option<Rc<RefCell<VecDeque<u8>>>>,
+    pipe: Option<Rc<PipeEndpoint>>,
     rights: u64,
     inheriting: u64,
     cache: Option<u32>,
@@ -259,6 +291,7 @@ struct State {
     open_direct: bool,
 }
 
+#[derive(Debug)]
 enum Failure {
     Errno(i32),
     Suspend,
@@ -417,16 +450,6 @@ fn stream(state: &State, fd: u32) -> Option<u32> {
     None
 }
 
-fn pipe_peer(state: &State, pipe: &Rc<RefCell<VecDeque<u8>>>, reading: bool) -> bool {
-    state.descriptors.values().any(|descriptor| {
-        descriptor.read == reading
-            && descriptor
-                .pipe
-                .as_ref()
-                .is_some_and(|candidate| Rc::ptr_eq(candidate, pipe))
-    })
-}
-
 fn duplicate_source(state: &State, fd: u32) -> Result<Descriptor, Failure> {
     if state.closed.contains(&fd) || fd == HIDDEN_PREOPEN {
         return Err(Failure::Errno(8));
@@ -559,7 +582,11 @@ fn dispatch(caller: &mut Caller<'_, State>, name: &str, args: &[u64]) -> Result<
             let [reader, writer] = numbers.as_slice() else {
                 return Err(Failure::Errno(33));
             };
-            let pipe = Rc::new(RefCell::new(VecDeque::new()));
+            let pipe = Rc::new(Pipe {
+                bytes: RefCell::new(VecDeque::new()),
+                readers: Cell::new(1),
+                writers: Cell::new(1),
+            });
             let mut metadata = [0u8; 76];
             metadata[64..68].copy_from_slice(&0o10600u32.to_le_bytes());
             for (fd, read) in [(*reader, true), (*writer, false)] {
@@ -573,7 +600,10 @@ fn dispatch(caller: &mut Caller<'_, State>, name: &str, args: &[u64]) -> Result<
                         flags: Rc::new(Cell::new(0)),
                         offset: Rc::new(Cell::new(0)),
                         stdio: None,
-                        pipe: Some(pipe.clone()),
+                        pipe: Some(Rc::new(PipeEndpoint {
+                            pipe: pipe.clone(),
+                            reading: read,
+                        })),
                         rights: (if read { 2 } else { 64 }) | (1 << 3) | (1 << 21) | (1 << 27),
                         inheriting: 0,
                         cache: None,
@@ -931,7 +961,7 @@ fn dispatch(caller: &mut Caller<'_, State>, name: &str, args: &[u64]) -> Result<
                     put(caller, output, &0u32.to_le_bytes())?;
                     return Ok(0);
                 }
-                if pipe.borrow().is_empty() && pipe_peer(caller.data(), pipe, false) {
+                if pipe.pipe.bytes.borrow().is_empty() && pipe.has_peer() {
                     if descriptor.flags.get() & 4 != 0 {
                         return Err(Failure::Errno(6));
                     }
@@ -946,8 +976,13 @@ fn dispatch(caller: &mut Caller<'_, State>, name: &str, args: &[u64]) -> Result<
                 }
                 let mut read = 0usize;
                 for (pointer, length) in vectors {
-                    let available = pipe.borrow().len();
-                    let data: Vec<u8> = pipe.borrow_mut().drain(..length.min(available)).collect();
+                    let available = pipe.pipe.bytes.borrow().len();
+                    let data: Vec<u8> = pipe
+                        .pipe
+                        .bytes
+                        .borrow_mut()
+                        .drain(..length.min(available))
+                        .collect();
                     put(caller, pointer, &data)?;
                     read += data.len();
                     if data.len() < length {
@@ -1033,10 +1068,10 @@ fn dispatch(caller: &mut Caller<'_, State>, name: &str, args: &[u64]) -> Result<
                     if name == "fd_pwrite" {
                         return Err(Failure::Errno(70));
                     }
-                    if !pipe_peer(state, pipe, true) {
+                    if !pipe.has_peer() {
                         return Err(Failure::Errno(64));
                     }
-                    let available = PIPE_BYTES.saturating_sub(pipe.borrow().len());
+                    let available = PIPE_BYTES.saturating_sub(pipe.pipe.bytes.borrow().len());
                     if available == 0 || (data.len() <= PIPE_ATOMIC_BYTES && available < data.len())
                     {
                         if descriptor.flags.get() & 4 != 0 {
@@ -1052,7 +1087,7 @@ fn dispatch(caller: &mut Caller<'_, State>, name: &str, args: &[u64]) -> Result<
                         )?;
                     }
                     let count = data.len().min(available);
-                    pipe.borrow_mut().extend(&data[..count]);
+                    pipe.pipe.bytes.borrow_mut().extend(&data[..count]);
                     put(caller, output, &(count as u32).to_le_bytes())?;
                     return Ok(0);
                 }
@@ -1326,8 +1361,8 @@ fn dispatch(caller: &mut Caller<'_, State>, name: &str, args: &[u64]) -> Result<
                             } else if descriptor.directory {
                                 errno = 31;
                             } else if let Some(pipe) = &descriptor.pipe {
-                                let length = pipe.borrow().len();
-                                let peer = pipe_peer(state, pipe, writing);
+                                let length = pipe.pipe.bytes.borrow().len();
+                                let peer = pipe.has_peer();
                                 let available = if writing { PIPE_BYTES - length } else { length };
                                 event[16..24].copy_from_slice(&(available as u64).to_le_bytes());
                                 if writing && !peer {
@@ -2618,6 +2653,104 @@ mod tests {
             .is_err()
         );
     }
+    #[test]
+    fn inherited_pipe_endpoints_survive_other_stores_and_release_on_guest_drop() {
+        let module = include_bytes!("../../../dist/wasi-pipe-blocked.wasm");
+        let configuration = r#"{"argv":[],"env":{}}"#;
+        let mut parent =
+            WasmGuest::create(module, configuration, &[], 8_388_608, 100_000, 1024).unwrap();
+        let mut child =
+            WasmGuest::create(module, configuration, &[], 8_388_608, 100_000, 1024).unwrap();
+        parent.advance().unwrap();
+        child.advance().unwrap();
+        assert!(matches!(
+            parent.store.data().pending.as_ref().unwrap().request,
+            Request::Poll {
+                immediate: false,
+                ..
+            }
+        ));
+        let reader = parent
+            .store
+            .data()
+            .descriptors
+            .iter()
+            .find(|(_, descriptor)| descriptor.pipe.is_some() && descriptor.read)
+            .map(|(fd, _)| *fd)
+            .unwrap();
+        let writer = parent
+            .store
+            .data()
+            .descriptors
+            .iter()
+            .find(|(_, descriptor)| descriptor.pipe.is_some() && descriptor.write)
+            .map(|(fd, _)| *fd)
+            .unwrap();
+        close(child.store.data_mut(), reader);
+        close(child.store.data_mut(), writer);
+        child.store.data_mut().descriptors.insert(
+            writer,
+            duplicate_source(parent.store.data(), writer).unwrap(),
+        );
+        close(parent.store.data_mut(), writer);
+        assert!(
+            parent.store.data().descriptors[&reader]
+                .pipe
+                .as_ref()
+                .unwrap()
+                .has_peer()
+        );
+        assert!(
+            child.store.data().descriptors[&writer]
+                .pipe
+                .as_ref()
+                .unwrap()
+                .has_peer()
+        );
+        let alias = duplicate_source(child.store.data(), writer).unwrap();
+        child.store.data_mut().descriptors.insert(100, alias);
+        close(child.store.data_mut(), writer);
+        assert!(
+            parent.store.data().descriptors[&reader]
+                .pipe
+                .as_ref()
+                .unwrap()
+                .has_peer()
+        );
+        drop(child);
+        assert!(
+            !parent.store.data().descriptors[&reader]
+                .pipe
+                .as_ref()
+                .unwrap()
+                .has_peer()
+        );
+        let mut receiver =
+            WasmGuest::create(module, configuration, &[], 8_388_608, 100_000, 1024).unwrap();
+        receiver.advance().unwrap();
+        close(parent.store.data_mut(), reader);
+        parent.store.data_mut().descriptors.insert(
+            reader,
+            duplicate_source(receiver.store.data(), reader).unwrap(),
+        );
+        close(receiver.store.data_mut(), reader);
+        assert!(
+            receiver.store.data().descriptors[&writer]
+                .pipe
+                .as_ref()
+                .unwrap()
+                .has_peer()
+        );
+        drop(parent);
+        assert!(
+            !receiver.store.data().descriptors[&writer]
+                .pipe
+                .as_ref()
+                .unwrap()
+                .has_peer()
+        );
+    }
+
     #[test]
     fn paths_cannot_escape_the_directory_descriptor() {
         assert!(confined("/tmp", "../escape").is_err());
