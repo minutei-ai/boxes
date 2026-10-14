@@ -73,6 +73,7 @@
     "timestamps:proof": "bun tooling/timestamps-proof.ts",
     "rights:proof": "bun tooling/rights-proof.ts",
     "stdio:proof": "bun tooling/raw-stdio-proof.ts",
+    "shell:binary:proof": "bun tooling/binary-shell-proof.ts",
     "restore:proof": "bun tooling/restore-proof.ts",
     "cron:proof": "bun tooling/cron-proof.ts"
   },
