@@ -67,6 +67,7 @@
     "export:proof": "bun tooling/export-proof.ts",
     "bench:wasi": "cargo run -p boxes-wasm-bench --release --locked --",
     "build:sdk": "bun tooling/build-sdk.ts",
+    "pack:runtime": "bun tooling/package-runtime.ts",
     "prepack": "bun run build:sdk",
     "sdk:proof": "bun tooling/sdk-proof.ts",
     "timestamps:proof": "bun tooling/timestamps-proof.ts",
