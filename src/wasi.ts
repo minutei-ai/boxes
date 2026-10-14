@@ -24,7 +24,7 @@ export class WasmFailure extends Schema.TaggedError<WasmFailure>()("WasmFailure"
 }) {}
 
 const statBytes = (stat: typeof FileStat.Type) => {
-  const bytes = Buffer.alloc(64);
+  const bytes = Buffer.alloc(76);
   bytes.writeBigUInt64LE(BigInt(stat.inode), 8);
   bytes[16] = Match.value(stat.kind).pipe(
     Match.when("file", () => 4),
@@ -36,6 +36,15 @@ const statBytes = (stat: typeof FileStat.Type) => {
   bytes.writeBigUInt64LE(BigInt(stat.atimeNs), 40);
   bytes.writeBigUInt64LE(BigInt(stat.mtimeNs), 48);
   bytes.writeBigUInt64LE(BigInt(stat.ctimeNs), 56);
+  const kind = Match.value(stat.kind).pipe(
+    Match.when("file", () => 0o100000),
+    Match.when("directory", () => 0o40000),
+    Match.when("symlink", () => 0o120000),
+    Match.exhaustive,
+  );
+  bytes.writeUInt32LE(kind | stat.mode, 64);
+  bytes.writeUInt32LE(stat.uid, 68);
+  bytes.writeUInt32LE(stat.gid, 72);
   return bytes;
 };
 

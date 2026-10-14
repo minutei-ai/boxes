@@ -31,13 +31,13 @@ struct Descriptor {
     inheriting: u64,
     cache: Option<u32>,
     linked: bool,
-    metadata: [u8; 64],
+    metadata: [u8; 76],
 }
 
 struct FileBuffer {
     path: Option<String>,
     bytes: Vec<u8>,
-    metadata: [u8; 64],
+    metadata: [u8; 76],
 }
 
 #[derive(Clone, Serialize)]
@@ -145,7 +145,20 @@ enum Request {
     },
 }
 
+#[derive(Clone, Copy)]
+enum StatProjection {
+    Mode,
+    Size,
+    Blocks,
+    Owner,
+}
+
 enum Completion {
+    HostStat {
+        fd: Option<u32>,
+        projection: StatProjection,
+        pointers: Option<(usize, usize)>,
+    },
     Open {
         descriptor: Descriptor,
         pointer: usize,
@@ -446,6 +459,88 @@ fn dispatch(caller: &mut Caller<'_, State>, name: &str, args: &[u64]) -> Result<
         return Err(Failure::Errno(8));
     }
     match name {
+        "isatty" => {
+            let fd = a[0] as u32;
+            if (fd >= 3 || caller.data().closed.contains(&fd))
+                && !caller.data().descriptors.contains_key(&fd)
+            {
+                return Err(Failure::Errno(8));
+            }
+            bytes(caller, a[1], 4)?;
+            put(caller, a[1], &0u32.to_le_bytes())?;
+            return Ok(0);
+        }
+        "fd_mode" | "fd_size" | "fd_blocks" | "fd_owner" | "path_mode" | "path_size"
+        | "path_blocks" | "path_owner" => {
+            let projection = match name {
+                "fd_mode" | "path_mode" => StatProjection::Mode,
+                "fd_size" | "path_size" => StatProjection::Size,
+                "fd_blocks" | "path_blocks" => StatProjection::Blocks,
+                _ => StatProjection::Owner,
+            };
+            let pointers = if matches!(projection, StatProjection::Owner) {
+                let start = if name.starts_with("fd_") { 1 } else { 4 };
+                bytes(caller, a[start], 4)?;
+                bytes(caller, a[start + 1], 4)?;
+                Some((a[start], a[start + 1]))
+            } else {
+                None
+            };
+            if name.starts_with("fd_") {
+                let fd = a[0] as u32;
+                if fd < 3 && !caller.data().closed.contains(&fd) {
+                    if let Some((uid, gid)) = pointers {
+                        put(caller, uid, &0u32.to_le_bytes())?;
+                        put(caller, gid, &0u32.to_le_bytes())?;
+                    }
+                    return Ok(match projection {
+                        StatProjection::Mode => 0o20000,
+                        _ => 0,
+                    });
+                }
+                let descriptor = caller
+                    .data()
+                    .descriptors
+                    .get(&fd)
+                    .ok_or(Failure::Errno(8))?;
+                if descriptor.rights & (1 << 21) == 0 {
+                    return Err(Failure::Errno(76));
+                }
+                let path = if descriptor.linked {
+                    Some(descriptor.path.clone())
+                } else {
+                    None
+                };
+                let write = descriptor.write;
+                suspend(
+                    caller,
+                    Request::FdStat { fd, path, write },
+                    Completion::HostStat {
+                        fd: Some(fd),
+                        projection,
+                        pointers,
+                    },
+                )?;
+            } else {
+                if a[3] > 1 {
+                    return Err(Failure::Errno(28));
+                }
+                let (path, base) = directory_path(caller, a[0] as u32, a[1], a[2], 1 << 18)?;
+                suspend(
+                    caller,
+                    Request::PathStat {
+                        path,
+                        base,
+                        follow: a[3] != 0,
+                    },
+                    Completion::HostStat {
+                        fd: None,
+                        projection,
+                        pointers,
+                    },
+                )?;
+            }
+        }
         "args_sizes_get" | "environ_sizes_get" => {
             bytes(caller, a[0], 4)?;
             bytes(caller, a[1], 4)?;
@@ -1188,7 +1283,7 @@ fn dispatch(caller: &mut Caller<'_, State>, name: &str, args: &[u64]) -> Result<
                 inheriting: 0,
                 cache: None,
                 linked: false,
-                metadata: [0; 64],
+                metadata: [0; 76],
             };
             suspend(
                 caller,
@@ -1255,7 +1350,7 @@ fn dispatch(caller: &mut Caller<'_, State>, name: &str, args: &[u64]) -> Result<
                 inheriting: args[6],
                 cache: None,
                 linked: true,
-                metadata: [0; 64],
+                metadata: [0; 76],
             };
             suspend(
                 caller,
@@ -1442,6 +1537,27 @@ fn linker(engine: &Engine) -> Result<Linker<State>, String> {
     bind!("wasi_snapshot_preview1","clock_time_get",a:i32,b:i64,c:i32);
     bind!("wasi_snapshot_preview1","clock_res_get",a:i32,b:i32);
     bind!("wasi_snapshot_preview1", "sched_yield");
+    bind!("host_user","isatty",a:i32,b:i32);
+    macro_rules! bind_stat {
+        ($name:literal,$result:ty,$failure:expr $(,$arg:ident:$type:ty)*) => {
+            linker.func_wrap("host_fs",$name,|mut caller:Caller<'_,State>,$($arg:$type),*| -> Result<$result,Error> {
+                match dispatch(&mut caller,$name,&[$($arg as u64),*]) {
+                    Ok(value) => Ok(value as $result),
+                    Err(Failure::Errno(_)) => Ok($failure),
+                    Err(Failure::Suspend) => Err(Error::new("Cirro host request")),
+                    Err(Failure::Budget) => Err(Error::new("WASI host request budget exceeded")),
+                }
+            }).map_err(|error|error.to_string())?;
+        }
+    }
+    bind_stat!("fd_mode",i32,0,a:i32);
+    bind_stat!("path_mode",i32,0,a:i32,b:i32,c:i32,d:i32);
+    bind_stat!("fd_size",i64,-1,a:i32);
+    bind_stat!("fd_blocks",i64,-1,a:i32);
+    bind_stat!("path_size",i64,-1,a:i32,b:i32,c:i32,d:i32);
+    bind_stat!("path_blocks",i64,-1,a:i32,b:i32,c:i32,d:i32);
+    bind!("host_fs","fd_owner",a:i32,b:i32,c:i32);
+    bind!("host_fs","path_owner",a:i32,b:i32,c:i32,d:i32,e:i32,f:i32);
     bind!("host_fs","set_open_mode",a:i32);
     bind!("host_fs","set_open_direct",a:i32);
     bind!("host_fs","open_tmpfile",a:i32,b:i32,c:i32,d:i32,e:i32,f:i32);
@@ -1463,7 +1579,7 @@ pub struct WasmGuest {
     function: Func,
     memory: Option<Memory>,
     invocation: Option<ResumableCallHostTrap>,
-    response: Option<i32>,
+    response: Option<Val>,
     outputs: Vec<Val>,
     done: Option<i32>,
 }
@@ -1549,7 +1665,7 @@ impl WasmGuest {
             inheriting: (1 << 30) - 1,
             cache: None,
             linked: true,
-            metadata: [0; 64],
+            metadata: [0; 76],
         };
         let mut store = Store::new(
             &engine,
@@ -1613,7 +1729,7 @@ impl WasmGuest {
                     .response
                     .take()
                     .ok_or("Wasm host response is required")?;
-                invocation.resume(&mut self.store, &[Val::I32(response)], &mut self.outputs)
+                invocation.resume(&mut self.store, &[response], &mut self.outputs)
             }
             None => self
                 .function
@@ -1749,6 +1865,14 @@ impl WasmGuest {
             .take()
             .ok_or_else(|| JsValue::from_str("No pending Wasm request"))?;
         let mut result = errno;
+        let mut scalar = match &pending.completion {
+            Completion::HostStat { projection, .. } if errno != 0 => Some(match projection {
+                StatProjection::Mode => Val::I32(0),
+                StatProjection::Size | StatProjection::Blocks => Val::I64(-1),
+                StatProjection::Owner => Val::I32(errno),
+            }),
+            _ => None,
+        };
         if errno != 0
             && let Completion::Flush {
                 fd,
@@ -1906,8 +2030,60 @@ impl WasmGuest {
                             .map_err(|error| JsValue::from_str(&error.to_string()))?;
                     }
                 }
+                Completion::HostStat {
+                    fd,
+                    projection,
+                    pointers,
+                } => {
+                    let bytes: [u8; 76] = data
+                        .try_into()
+                        .map_err(|_| JsValue::from_str("Invalid host stat response"))?;
+                    if let Some(fd) = fd {
+                        let state = self.store.data_mut();
+                        let descriptor = state
+                            .descriptors
+                            .get_mut(&fd)
+                            .ok_or_else(|| JsValue::from_str("Missing descriptor"))?;
+                        descriptor.metadata = bytes;
+                        if let Some(cache) = descriptor.cache {
+                            state
+                                .files
+                                .get_mut(&cache)
+                                .ok_or_else(|| JsValue::from_str("Missing cache reference"))?
+                                .metadata = bytes;
+                        }
+                    }
+                    let size = u64::from_le_bytes(
+                        bytes[32..40]
+                            .try_into()
+                            .map_err(|_| JsValue::from_str("Invalid size"))?,
+                    );
+                    scalar = Some(match projection {
+                        StatProjection::Mode => Val::I32(i32::from_le_bytes(
+                            bytes[64..68]
+                                .try_into()
+                                .map_err(|_| JsValue::from_str("Invalid mode"))?,
+                        )),
+                        StatProjection::Size => Val::I64(size as i64),
+                        StatProjection::Blocks => Val::I64(size.div_ceil(512) as i64),
+                        StatProjection::Owner => {
+                            let (uid, gid) = pointers
+                                .ok_or_else(|| JsValue::from_str("Missing ownership pointers"))?;
+                            let memory = self
+                                .memory
+                                .ok_or_else(|| JsValue::from_str("Missing Wasm memory"))?;
+                            memory
+                                .write(&mut self.store, uid, &bytes[68..72])
+                                .map_err(|error| JsValue::from_str(&error.to_string()))?;
+                            memory
+                                .write(&mut self.store, gid, &bytes[72..76])
+                                .map_err(|error| JsValue::from_str(&error.to_string()))?;
+                            Val::I32(0)
+                        }
+                    });
+                }
                 Completion::Stat { fd, pointer } => {
-                    let bytes: [u8; 64] = data
+                    let bytes: [u8; 76] = data
                         .try_into()
                         .map_err(|_| JsValue::from_str("Invalid stat response"))?;
                     if let Some(fd) = fd {
@@ -1927,11 +2103,11 @@ impl WasmGuest {
                     }
                     self.memory
                         .ok_or_else(|| JsValue::from_str("Missing Wasm memory"))?
-                        .write(&mut self.store, pointer, &bytes)
+                        .write(&mut self.store, pointer, &bytes[..64])
                         .map_err(|error| JsValue::from_str(&error.to_string()))?;
                 }
                 Completion::Metadata { fd } => {
-                    let metadata: [u8; 64] = data
+                    let metadata: [u8; 76] = data
                         .try_into()
                         .map_err(|_| JsValue::from_str("Invalid inode metadata"))?;
                     let state = self.store.data_mut();
@@ -2067,7 +2243,7 @@ impl WasmGuest {
                 }
             }
         }
-        self.response = Some(result);
+        self.response = Some(scalar.unwrap_or(Val::I32(result)));
         Ok(())
     }
 }
