@@ -435,7 +435,7 @@ pub extern "C" fn run() -> i32 {
         if cfg!(case = "external")
             || cfg!(case = "restart")
             || cfg!(case = "external-io")
-            || cfg!(case = "inherit")
+            || (cfg!(case = "inherit") || cfg!(case = "inherit-default"))
             || AUTO_REAP
             || cfg!(case = "restart-poll")
             || (cfg!(case = "chld")
@@ -443,7 +443,9 @@ pub extern "C" fn run() -> i32 {
                 || cfg!(case = "nocldstop")
                 || cfg!(case = "ignore-cont"))
         {
-            if cfg!(case = "inherit") && proc_sigaction(10, 2, 0, 0, 0) != 0 {
+            if (cfg!(case = "inherit") || cfg!(case = "inherit-default"))
+                && proc_sigaction(10, 2, 0, 0, 0) != 0
+            {
                 return 13;
             }
             let mut reader = 0;
@@ -485,8 +487,12 @@ pub extern "C" fn run() -> i32 {
                 actions.len() as u32,
                 std::ptr::null(),
                 0,
-                2,
-                0,
+                if cfg!(case = "inherit-default") { 6 } else { 2 },
+                if cfg!(case = "inherit-default") {
+                    1 << 11
+                } else {
+                    0
+                },
                 0,
                 0,
                 0,
@@ -589,7 +595,7 @@ pub extern "C" fn run() -> i32 {
                 if proc_sigaction(17, 2, 0, 0, if cfg!(case = "nocldstop") { 1 } else { 0 }) != 0 {
                     return 18;
                 }
-            } else if !cfg!(case = "inherit")
+            } else if !(cfg!(case = "inherit") || cfg!(case = "inherit-default"))
                 && !cfg!(case = "ignore-cont")
                 && proc_kill(pid, 10) != 0
             {
@@ -662,8 +668,15 @@ pub extern "C" fn run() -> i32 {
             {
                 return 22;
             }
-            if cfg!(case = "inherit") {
-                if code != 0 || signal != 10 {
+            if cfg!(case = "inherit") || cfg!(case = "inherit-default") {
+                if code != 0
+                    || signal
+                        != if cfg!(case = "inherit-default") {
+                            12
+                        } else {
+                            10
+                        }
+                {
                     return 23;
                 }
             } else if code != 7 || signal != 0 {
@@ -673,7 +686,9 @@ pub extern "C" fn run() -> i32 {
                 if OTHER != if cfg!(case = "chld-stop") { 3 } else { 1 } {
                     return 25;
                 }
-            } else if !cfg!(case = "inherit") && !cfg!(case = "ignore-cont") {
+            } else if !(cfg!(case = "inherit") || cfg!(case = "inherit-default"))
+                && !cfg!(case = "ignore-cont")
+            {
                 let mut log = [0u8; 3];
                 let length = if cfg!(case = "restart") { 1 } else { 3 };
                 let io = Io {

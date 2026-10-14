@@ -408,6 +408,9 @@ export const WasmStep = Schema.Union([
       Schema.isMaxLength(4096),
       Schema.isPattern(/^[^\0]*$/),
     ),
+    searchPath: Schema.NullOr(
+      Schema.String.check(Schema.isMaxLength(65536), Schema.isPattern(/^[^\0]*$/)),
+    ),
     cwdSteps: Schema.Array(
       Schema.String.check(
         Schema.isMinLength(1),

@@ -461,19 +461,47 @@ export const wasi = Effect.fn("wasi.execute")(function* (
                       location.cwd = directory.path;
                     }
                   }
-                  const image = Match.value(input.path.startsWith("/")).pipe(
-                    Match.when(true, () => input.path),
-                    Match.orElse(() => `${location.cwd}/${input.path}`),
-                  );
-                  const stat = yield* kernelCall(() => kernel.stat(image, true)).pipe(
-                    Effect.flatMap(Schema.decodeUnknownEffect(Schema.fromJsonString(FileStat))),
-                  );
-                  if (stat.kind !== "file" || (stat.mode & 0o111) === 0)
+                  const stat = yield* Effect.gen(function* () {
+                    const paths: string[] = [];
+                    if (input.searchPath === null || input.path.includes("/")) {
+                      if (input.path.startsWith("/")) paths.push(input.path);
+                      else paths.push(`${location.cwd}/${input.path}`);
+                    } else {
+                      for (const directory of input.searchPath.split(":")) {
+                        if (directory.startsWith("/")) paths.push(`${directory}/${input.path}`);
+                        else paths.push(`${location.cwd}/${directory}/${input.path}`);
+                      }
+                    }
+                    const access = { denied: false };
+                    for (const path of paths) {
+                      const found = yield* kernelCall(() => kernel.stat(path, true)).pipe(
+                        Effect.flatMap(Schema.decodeUnknownEffect(Schema.fromJsonString(FileStat))),
+                        Effect.catchTag("Fault", (fault) => {
+                          if (fault.code === "ENOENT" || fault.code === "ENOTDIR")
+                            return Effect.succeed(null);
+                          if (fault.code === "EACCES") {
+                            access.denied = true;
+                            return Effect.succeed(null);
+                          }
+                          return Effect.fail(fault);
+                        }),
+                      );
+                      if (found === null) continue;
+                      if (found.kind === "file" && (found.mode & 0o111) !== 0) return found;
+                      access.denied = true;
+                    }
+                    if (access.denied)
+                      return yield* new Fault({
+                        code: "EACCES",
+                        status: 403,
+                        message: "Child image is not executable",
+                      });
                     return yield* new Fault({
-                      code: "EACCES",
-                      status: 403,
-                      message: "Child image is not executable",
+                      code: "ENOENT",
+                      status: 404,
+                      message: "Child image was not found",
                     });
+                  });
                   if (stat.size > wasmModuleBytes)
                     return yield* new Fault({
                       code: "EFBIG",

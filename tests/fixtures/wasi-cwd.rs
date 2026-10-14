@@ -19,6 +19,29 @@ unsafe extern "C" {
         group: u32,
         pid: *mut u32,
     ) -> u32;
+    fn proc_spawn_v4(
+        path: *const u8,
+        path_len: u32,
+        argv: *const u8,
+        argv_len: u32,
+        env: *const u8,
+        env_len: u32,
+        actions: *const u8,
+        actions_len: u32,
+        cwd: *const u8,
+        cwd_len: u32,
+        search: *const u8,
+        search_len: u32,
+        flags: u32,
+        default_lo: u32,
+        default_hi: u32,
+        mask_lo: u32,
+        mask_hi: u32,
+        group: u32,
+        policy: u32,
+        priority: u32,
+        pid: *mut u32,
+    ) -> u32;
     fn proc_waitpid_v2(
         pid: u32,
         options: u32,
@@ -47,7 +70,7 @@ pub extern "C" fn run() -> i32 {
     unsafe {
         let mut actions = [0u8; 256];
         let mut length = 0usize;
-        if cfg!(case = "chdir") || cfg!(case = "symlink") {
+        if cfg!(case = "chdir") || cfg!(case = "symlink") || cfg!(case = "path-chdir") {
             let path = if cfg!(case = "symlink") {
                 b"link"
             } else {
@@ -195,7 +218,13 @@ pub extern "C" fn run() -> i32 {
                 length = 52;
             }
         }
-        let cwd = if cfg!(case = "explicit") || cfg!(case = "relative") {
+        let cwd = if cfg!(case = "explicit")
+            || cfg!(case = "relative")
+            || cfg!(case = "path-empty")
+            || cfg!(case = "path-absolute")
+            || cfg!(case = "path-slash")
+            || cfg!(case = "sched-zero")
+        {
             b"/tmp/work".as_slice()
         } else if cfg!(case = "missing") {
             b"/tmp/absent".as_slice()
@@ -204,7 +233,14 @@ pub extern "C" fn run() -> i32 {
         } else {
             b"/tmp".as_slice()
         };
-        let path = if cfg!(case = "relative") {
+        let path = if cfg!(case = "relative")
+            || cfg!(case = "path-absolute")
+            || cfg!(case = "path-empty")
+            || cfg!(case = "path-chdir")
+            || cfg!(case = "path-missing")
+            || cfg!(case = "path-absent")
+            || cfg!(case = "path-denied")
+        {
             b"jq".as_slice()
         } else {
             b"/opt/cirro/bin/jq".as_slice()
@@ -212,26 +248,88 @@ pub extern "C" fn run() -> i32 {
         let argv = b"kept argv0\0.value\0input.json\0";
         let env = b"PWD=/wrong\0";
         let mut pid = 91;
-        let status = proc_spawn_v3(
-            path.as_ptr(),
-            path.len() as u32,
-            argv.as_ptr(),
-            argv.len() as u32,
-            env.as_ptr(),
-            env.len() as u32,
-            actions.as_ptr(),
-            length as u32,
-            cwd.as_ptr(),
-            cwd.len() as u32,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            &mut pid,
-        );
-        if cfg!(case = "missing")
+        let status = if cfg!(case = "path-absolute")
+            || cfg!(case = "path-empty")
+            || cfg!(case = "path-chdir")
+            || cfg!(case = "path-slash")
+            || cfg!(case = "path-missing")
+            || cfg!(case = "path-absent")
+            || cfg!(case = "path-denied")
+            || cfg!(case = "sched-zero")
+            || cfg!(case = "sched-priority")
+            || cfg!(case = "sched-policy")
+        {
+            let search = if cfg!(case = "path-absolute") {
+                b"/missing:/tmp/work/input.json:/tmp/denied:/opt/cirro/bin".as_slice()
+            } else if cfg!(case = "path-missing") || cfg!(case = "path-slash") {
+                b"/missing".as_slice()
+            } else if cfg!(case = "path-denied") {
+                b"/tmp/denied:/missing".as_slice()
+            } else {
+                b"".as_slice()
+            };
+            let search_ptr = if cfg!(case = "path-absent") {
+                std::ptr::null()
+            } else {
+                search.as_ptr()
+            };
+            let flags = if cfg!(case = "sched-priority") {
+                16
+            } else if cfg!(case = "sched-policy") || cfg!(case = "sched-zero") {
+                32
+            } else {
+                0
+            };
+            proc_spawn_v4(
+                path.as_ptr(),
+                path.len() as u32,
+                argv.as_ptr(),
+                argv.len() as u32,
+                env.as_ptr(),
+                env.len() as u32,
+                actions.as_ptr(),
+                length as u32,
+                cwd.as_ptr(),
+                cwd.len() as u32,
+                search_ptr,
+                search.len() as u32,
+                flags,
+                0,
+                0,
+                0,
+                0,
+                0,
+                u32::from(cfg!(case = "sched-policy")),
+                u32::from(cfg!(case = "sched-priority")),
+                &mut pid,
+            )
+        } else {
+            proc_spawn_v3(
+                path.as_ptr(),
+                path.len() as u32,
+                argv.as_ptr(),
+                argv.len() as u32,
+                env.as_ptr(),
+                env.len() as u32,
+                actions.as_ptr(),
+                length as u32,
+                cwd.as_ptr(),
+                cwd.len() as u32,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                &mut pid,
+            )
+        };
+        if cfg!(case = "path-missing")
+            || cfg!(case = "path-absent")
+            || cfg!(case = "path-denied")
+            || cfg!(case = "sched-priority")
+            || cfg!(case = "sched-policy")
+            || cfg!(case = "missing")
             || cfg!(case = "file")
             || cfg!(case = "closed")
             || cfg!(case = "malformed")

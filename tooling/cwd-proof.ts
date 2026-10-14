@@ -84,6 +84,18 @@ const imageLinked = await action({
   target: "/opt/cirro/bin/jq",
   path: "/tmp/work/jq",
 });
+const deniedDirectory = await action({
+  op: "filesystem.mkdir",
+  path: "/tmp/denied",
+  recursive: true,
+});
+const deniedImage = await action({
+  op: "filesystem.writeFile",
+  path: "/tmp/denied/jq",
+  content: "not executable",
+  encoding: "utf8",
+});
+const deniedMode = await action({ op: "filesystem.chmod", path: "/tmp/denied/jq", mode: 420 });
 const receipts = await Effect.runPromise(
   Effect.forEach(
     [
@@ -92,6 +104,11 @@ const receipts = await Effect.runPromise(
       "chdir",
       "fchdir",
       "symlink",
+      "path-absolute",
+      "path-empty",
+      "path-chdir",
+      "path-slash",
+      "sched-zero",
       "open-dir",
       "closefrom-root",
       "closefrom-high",
@@ -119,6 +136,11 @@ const rejected = await Effect.runPromise(
   Effect.forEach(
     [
       ["missing", 44],
+      ["path-missing", 44],
+      ["path-absent", 44],
+      ["path-denied", 2],
+      ["sched-priority", 28],
+      ["sched-policy", 63],
       ["file", 54],
       ["closed", 8],
       ["malformed", 28],
@@ -163,6 +185,8 @@ const redirectedFile = await action({ op: "filesystem.readFile", path: "/tmp/wor
 const redirectedContent = Schema.decodeUnknownSync(FileContent)(await redirectedFile.json());
 const disposed = await action({ op: "vm.dispose" });
 const checks = {
+  deniedImage:
+    deniedDirectory.status === 200 && deniedImage.status === 200 && deniedMode.status === 200,
   setup:
     uploaded.status === 200 &&
     installed.status === 200 &&

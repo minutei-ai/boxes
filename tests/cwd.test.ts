@@ -80,6 +80,20 @@ expect(
   (await act({ op: "filesystem.symlink", target: "/opt/cirro/bin/jq", path: "/tmp/work/jq" }))
     .status,
 ).toBe(200);
+expect((await act({ op: "filesystem.mkdir", path: "/tmp/denied", recursive: true })).status).toBe(
+  200,
+);
+expect(
+  (
+    await act({
+      op: "filesystem.writeFile",
+      path: "/tmp/denied/jq",
+      content: "not executable",
+      encoding: "utf8",
+    })
+  ).status,
+).toBe(200);
+expect((await act({ op: "filesystem.chmod", path: "/tmp/denied/jq", mode: 420 })).status).toBe(200);
 afterAll(async () => {
   await mf.dispose();
   await rm(directory, { recursive: true, force: true });
@@ -91,6 +105,11 @@ for (const mode of [
   "chdir",
   "fchdir",
   "symlink",
+  "path-absolute",
+  "path-empty",
+  "path-chdir",
+  "path-slash",
+  "sched-zero",
   "open-dir",
   "closefrom-root",
   "closefrom-high",
@@ -110,6 +129,11 @@ for (const mode of [
 }
 for (const [mode, errno] of [
   ["missing", 44],
+  ["path-missing", 44],
+  ["path-absent", 44],
+  ["path-denied", 2],
+  ["sched-priority", 28],
+  ["sched-policy", 63],
   ["file", 54],
   ["closed", 8],
   ["malformed", 28],

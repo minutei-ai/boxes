@@ -102,6 +102,7 @@ enum Request {
         argv: Vec<String>,
         env: BTreeMap<String, String>,
         cwd_steps: Vec<String>,
+        search_path: Option<String>,
         actions: Vec<SpawnAction>,
     },
     Handler,
@@ -223,6 +224,7 @@ enum Completion {
         mask: u64,
         group: Option<u32>,
         new_session: bool,
+        signal_defaults: u64,
     },
     Wait {
         pids: Vec<u32>,
@@ -1108,11 +1110,60 @@ fn dispatch(caller: &mut Caller<'_, State>, name: &str, args: &[u64]) -> Result<
                     .group = group;
             }
         }
-        "proc_spawn_v3" => {
-            bytes(caller, a[16], 4)?;
-            if a[10] & !138 != 0 || a[11] != 0 || a[12] != 0 {
+        "proc_spawn_v4" => {
+            bytes(caller, a[20], 4)?;
+            let flags = a[12] as u32;
+            if flags & !255 != 0 {
                 return Err(Failure::Errno(58));
             }
+            if flags & (16 | 32) != 0 && a[19] != 0 {
+                return Err(Failure::Errno(28));
+            }
+            if flags & 32 != 0 && a[18] != 0 {
+                return Err(Failure::Errno(63));
+            }
+            if a[11] > 65536 {
+                return Err(Failure::Errno(22));
+            }
+            let search_path = if a[10] == 0 {
+                if a[11] != 0 {
+                    return Err(Failure::Errno(21));
+                }
+                None
+            } else {
+                let raw = bytes(caller, a[10], a[11])?;
+                let value = std::str::from_utf8(&raw).map_err(|_| Failure::Errno(25))?;
+                if value.contains('\0') || value.split(':').count() > 256 {
+                    return Err(Failure::Errno(28));
+                }
+                Some(value.to_string())
+            };
+            let mut normalized = args[..10].to_vec();
+            normalized.push(u64::from(flags & !(16 | 32)));
+            normalized.extend_from_slice(&args[13..18]);
+            normalized.push(args[20]);
+            let result = dispatch(caller, "proc_spawn_v3", &normalized);
+            if matches!(result, Err(Failure::Suspend))
+                && let Some(pending) = caller.data_mut().pending.as_mut()
+                && let Request::Spawn {
+                    search_path: target,
+                    ..
+                } = &mut pending.request
+            {
+                *target = search_path;
+            }
+            return result;
+        }
+        "proc_spawn_v3" => {
+            bytes(caller, a[16], 4)?;
+            if a[10] & !207 != 0 {
+                return Err(Failure::Errno(58));
+            }
+            let signal_defaults = if a[10] & 4 != 0 {
+                u64::from(a[11] as u32) | (u64::from(a[12] as u32) << 32)
+            } else {
+                0
+            };
             let new_session = a[10] & 128 != 0;
             if new_session && a[10] & 2 != 0 {
                 return Err(Failure::Errno(63));
@@ -1257,6 +1308,7 @@ fn dispatch(caller: &mut Caller<'_, State>, name: &str, args: &[u64]) -> Result<
                     argv,
                     env,
                     cwd_steps,
+                    search_path: None,
                     actions: actions.clone(),
                 },
                 Completion::Spawn {
@@ -1266,6 +1318,7 @@ fn dispatch(caller: &mut Caller<'_, State>, name: &str, args: &[u64]) -> Result<
                     mask,
                     group,
                     new_session,
+                    signal_defaults,
                 },
             )?;
         }
@@ -2813,31 +2866,33 @@ fn linker(engine: &Engine) -> Result<Linker<State>, String> {
     bind!("host_process","proc_getpgid",a:i32,b:i32);
     bind!("host_process","proc_setpgid",a:i32,b:i32);
     bind!("host_process","proc_getppid",a:i32);
-    linker
-        .func_new(
-            "host_process",
-            "proc_spawn_v3",
-            wasmi::FuncType::new([wasmi::ValType::I32; 17], [wasmi::ValType::I32]),
-            |mut caller, inputs, outputs| {
-                let args: Vec<u64> = inputs
-                    .iter()
-                    .map(|value| u64::from(value.i32().unwrap() as u32))
-                    .collect();
-                outputs[0] = Val::I32(match dispatch(&mut caller, "proc_spawn_v3", &args) {
-                    Ok(value) => value,
-                    Err(Failure::Errno(errno)) => errno,
-                    Err(Failure::Suspend) => return Err(Error::new("Cirro host request")),
-                    Err(Failure::Budget) => {
-                        return Err(Error::new("WASI host request budget exceeded"));
-                    }
-                    Err(Failure::Signal(signal)) => {
-                        return Err(Error::i32_exit(128 + signal as i32));
-                    }
-                });
-                Ok(())
-            },
-        )
-        .map_err(|error| error.to_string())?;
+    for (name, count) in [("proc_spawn_v3", 17), ("proc_spawn_v4", 21)] {
+        linker
+            .func_new(
+                "host_process",
+                name,
+                wasmi::FuncType::new(vec![wasmi::ValType::I32; count], [wasmi::ValType::I32]),
+                move |mut caller, inputs, outputs| {
+                    let args: Vec<u64> = inputs
+                        .iter()
+                        .map(|value| u64::from(value.i32().unwrap() as u32))
+                        .collect();
+                    outputs[0] = Val::I32(match dispatch(&mut caller, name, &args) {
+                        Ok(value) => value,
+                        Err(Failure::Errno(errno)) => errno,
+                        Err(Failure::Suspend) => return Err(Error::new("Cirro host request")),
+                        Err(Failure::Budget) => {
+                            return Err(Error::new("WASI host request budget exceeded"));
+                        }
+                        Err(Failure::Signal(signal)) => {
+                            return Err(Error::i32_exit(128 + signal as i32));
+                        }
+                    });
+                    Ok(())
+                },
+            )
+            .map_err(|error| error.to_string())?;
+    }
     bind!("host_process","proc_waitpid_v2",a:i32,b:i32,c:i32,d:i32,e:i32,f:i32);
     bind!("host_process","proc_signal_mask_v2",a:i32,b:i32,c:i32,d:i32,e:i32);
     bind!("host_process","fd_pipe",a:i32,b:i32);
@@ -3665,7 +3720,7 @@ impl WasmGuest {
         configuration: &str,
         cwd: &str,
     ) -> Result<Option<WasmGuest>, JsValue> {
-        let (resources, mask, requested_group, new_session) = match self
+        let (resources, mask, requested_group, new_session, signal_defaults) = match self
             .store
             .data()
             .pending
@@ -3677,8 +3732,15 @@ impl WasmGuest {
                 mask,
                 group,
                 new_session,
+                signal_defaults,
                 ..
-            }) => (resources.clone(), *mask, *group, *new_session),
+            }) => (
+                resources.clone(),
+                *mask,
+                *group,
+                *new_session,
+                *signal_defaults,
+            ),
             _ => return Err(JsValue::from_str("No pending spawn")),
         };
         let table = self.store.data().processes.clone();
@@ -3758,7 +3820,9 @@ impl WasmGuest {
             .dispositions
             .borrow()
             .iter()
-            .filter(|(_, disposition)| disposition.action == 1)
+            .filter(|(signal, disposition)| {
+                disposition.action == 1 && signal_defaults & (1u64 << (**signal - 1)) == 0
+            })
             .map(|(signal, disposition)| (*signal, disposition.clone()))
             .collect();
         state.signal_mask = mask;
