@@ -4,10 +4,11 @@
     "noEmit": false,
     "declaration": true,
     "emitDeclarationOnly": true,
+    "lib": ["ES2024", "ESNext.Disposable"],
     "rootDir": "src",
     "outDir": "dist/sdk",
     "types": ["@cloudflare/workers-types"]
   },
-  "include": ["src/sdk.ts", "src/contracts.ts"],
+  "include": ["src/sdk.ts", "src/sdk-rpc.ts", "src/contracts.ts"],
   "exclude": []
 }

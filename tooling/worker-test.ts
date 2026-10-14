@@ -128,6 +128,7 @@ export const runtime = (persist: string, options: typeof Options.Type = {}) => {
             compatibilityFlags: ["nodejs_compat", "enable_request_signal"],
             bindings: [
               Service.local({ binding: "BOXES", scriptName: name }),
+              Service.local({ binding: "BOXES_AGENT", scriptName: name, entrypoint: "Agent" }),
               Text.local("TOKEN", "cirro-local-test-credential"),
             ],
             modules: [

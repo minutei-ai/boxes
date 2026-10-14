@@ -1,9 +1,14 @@
 import { Cause, Clock, Effect, Match, Schema } from "effect";
+import type { RpcStub } from "cloudflare:workers";
 import wasm from "cirro:wasm";
 import { initSync, Kernel } from "../dist/kernel/cirro_kernel";
 import { administrator, authorize, mint, requirePermission } from "./auth";
 import {
   Action,
+  AgentRequest,
+  AgentReply,
+  HostCall,
+  HostReply,
   ActionResponses,
   DispatchReceipt,
   MigrationReceipt,
@@ -28,6 +33,8 @@ import {
   TokenResponse,
 } from "./contracts";
 import { input } from "./input";
+import { HostFailure } from "./host";
+import { AgentProtocol, type HostCallback } from "./rpc-protocol";
 import { importSnapshot } from "./snapshot";
 import { tick } from "./cron";
 import { guestAction } from "./capabilities";
@@ -423,3 +430,90 @@ export default {
     return Effect.runPromise(handleRequest(request, env));
   },
 };
+
+export class Agent extends AgentProtocol<Env> {
+  fetch(request: Request) {
+    return Effect.runPromise(handleRequest(request, this.env));
+  }
+  runWithTools(
+    request: typeof AgentRequest.Encoded,
+    callback: RpcStub<HostCallback>,
+  ): Promise<typeof AgentReply.Encoded> {
+    const bindings = this.env;
+    return Effect.runPromise(
+      Effect.scoped(
+        Effect.gen(function* () {
+          yield* Effect.addFinalizer(() => Effect.sync(() => callback[Symbol.dispose]()));
+          const input = yield* Schema.decodeUnknownEffect(AgentRequest, {
+            onExcessProperty: "error",
+          })(request);
+          const capability = yield* authorize(bindings, input.token, input.sandboxId);
+          const calls = { count: 0 };
+          const host = Effect.fn("agent.hostCall")(function* (call: typeof HostCall.Type) {
+            const now = yield* Clock.currentTimeMillis;
+            if (now >= capability.expiresAt)
+              return yield* new Fault({
+                code: "UNAUTHORIZED",
+                status: 401,
+                message: "Capability expired",
+              });
+            if (!input.tools.includes(call.name))
+              return yield* new Fault({
+                code: "FORBIDDEN",
+                status: 403,
+                message: "Tool is not granted to this execution",
+              });
+            if (calls.count >= input.maxToolCalls)
+              return yield* new Fault({
+                code: "TOOL_LIMIT",
+                status: 429,
+                message: "Host tool budget exhausted",
+              });
+            calls.count += 1;
+            const reply = yield* Effect.acquireUseRelease(
+              Effect.tryPromise({
+                try: async () => await callback(call),
+                catch: (cause) => new HostFailure({ cause }),
+              }),
+              (value) => Schema.decodeUnknownEffect(HostReply)(value),
+              (value) => Effect.sync(() => value[Symbol.dispose]()),
+            );
+            const encoded = yield* Schema.encodeEffect(Schema.fromJsonString(HostReply))(reply);
+            if (Buffer.byteLength(encoded) > 1_048_576)
+              return yield* new Fault({
+                code: "EFBIG",
+                status: 413,
+                message: "Host response exceeds 1 MiB",
+              });
+            if (!reply.ok)
+              return yield* new Fault({
+                code: "HOST_TOOL_FAILED",
+                status: 400,
+                message: reply.message,
+              });
+            return reply.value;
+          });
+          const record = yield* run(
+            bindings,
+            capability,
+            { op: "process.run", id: input.id, language: "typescript", source: input.source },
+            host,
+            input.timeoutMs,
+          );
+          return Schema.encodeSync(AgentReply)({ ok: true, record });
+        }).pipe(
+          Effect.catchTag("Fault", (failure) =>
+            Effect.succeed(
+              Schema.encodeSync(AgentReply)({
+                ok: false,
+                status: failure.status,
+                error: failure.code,
+                message: failure.message,
+              }),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}

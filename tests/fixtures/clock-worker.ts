@@ -3,6 +3,7 @@ import { Clock, Effect, Fiber, Schema, Schedule, Latch } from "effect";
 import * as TestClock from "effect/testing/TestClock";
 import type { Fetcher } from "@cloudflare/workers-types/experimental";
 import { consume, handleRequest } from "../../src/index";
+export { Agent } from "../../src/index";
 import { ProcessDelivery, StoredRun } from "../../src/contracts";
 import { tick } from "../../src/cron";
 import type { Env } from "../../src/resources";

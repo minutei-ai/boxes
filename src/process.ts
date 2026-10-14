@@ -27,6 +27,7 @@ import { initializeInput, finishInput } from "./input";
 import { execute } from "./execution";
 import { head, open, StorageFailure } from "./storage";
 import type { Env } from "./resources";
+import type { HostBridge } from "./host";
 import { shell } from "./shell";
 import { archiveOutput, restoreOutput, readOutputRange } from "./output";
 
@@ -125,6 +126,7 @@ const complete = Effect.fn("process.complete")(function* (
   capability: typeof Capability.Type,
   reservation: Effect.Success<ReturnType<typeof reserve>>,
   timeoutMs: number | null,
+  host: HostBridge | null = null,
 ) {
   const { record, etag } = reservation;
   const key = `processes/${capability.sandboxId}/${record.id}.json`;
@@ -260,6 +262,7 @@ const complete = Effect.fn("process.complete")(function* (
         }),
         reservation.checkpoint,
         reservation.deadlineAt !== null,
+        host,
       );
     }),
   );
@@ -449,9 +452,11 @@ export const run = Effect.fn("process.run")(function* (
   env: Env,
   capability: typeof Capability.Type,
   action: typeof RunAction.Type,
+  host: HostBridge | null = null,
+  timeoutMs: number | null = null,
 ) {
   const reservation = yield* Effect.scoped(reserve(env, capability, action, false, "closed"));
-  return yield* complete(env, capability, reservation, null);
+  return yield* complete(env, capability, reservation, timeoutMs, host);
 });
 
 const readReceipt = Effect.fn("process.readReceipt")(function* (

@@ -1,5 +1,7 @@
 import { Clock, Effect, Redacted, Schema } from "effect";
 import { makeBinding } from "../../src/sdk";
+import { makeAgentBinding } from "../../src/sdk-rpc";
+import type { AgentProtocol } from "../../src/rpc-protocol";
 import { CronRecord, FileContent, FileStat, Id, RunRecord } from "../../src/contracts";
 
 export const BindingProof = Schema.Struct({
@@ -8,10 +10,28 @@ export const BindingProof = Schema.Struct({
   restoredStat: FileStat,
   cron: CronRecord,
   run: RunRecord,
+  rpc: RunRecord,
+  hostCalls: Schema.Array(Schema.String),
   denied: Schema.Int,
 });
+export const RpcProbe = Schema.Struct({
+  record: Schema.NullOr(RunRecord),
+  calls: Schema.Int,
+  denied: Schema.NullOr(Schema.Int),
+});
+const RpcCase = Schema.Literals([
+  "error",
+  "timeout",
+  "credentials",
+  "wrong-sandbox",
+  "oversize",
+  "queue",
+]);
 export default {
-  fetch(request: Request, env: { BOXES: Fetcher; TOKEN: string }) {
+  fetch(
+    request: Request,
+    env: { BOXES: Fetcher; BOXES_AGENT: Fetcher<AgentProtocol>; TOKEN: string },
+  ) {
     return Effect.runPromise(
       Effect.gen(function* () {
         const id = yield* Schema.decodeUnknownEffect(Schema.fromJsonString(Id))(
@@ -30,6 +50,70 @@ export default {
           expiresInSeconds: 600,
         });
         const boxes = yield* makeBinding(env.BOXES, Redacted.make(capability.token));
+        const rpcCase = new URL(request.url).searchParams.get("rpc");
+        if (rpcCase !== null) {
+          const mode = yield* Schema.decodeUnknownEffect(RpcCase)(rpcCase);
+          const token = yield* Effect.sync(() => {
+            if (mode === "credentials") return Redacted.make("invalid");
+            return Redacted.make(capability.token);
+          });
+          const agent = yield* makeAgentBinding(env.BOXES_AGENT, token);
+          const calls = { count: 0 };
+          const input = {
+            id: "rpc-probe",
+            tools: ["lookup"],
+            maxToolCalls: 1,
+            timeoutMs: 1000,
+            source:
+              'export default async ({tools}) => tools.call({op:"host.call",name:"lookup",input:{}}).catch(error => error.code)',
+          };
+          if (mode === "timeout") input.timeoutMs = 25;
+          const result = yield* Effect.gen(function* () {
+            if (mode === "queue")
+              return yield* boxes.action(id, {
+                op: "process.spawn",
+                execution: {
+                  op: "process.run",
+                  id: "rpc-probe",
+                  language: "typescript",
+                  source: input.source,
+                },
+              });
+            const sandbox = yield* Effect.sync(() => {
+              if (mode === "wrong-sandbox") return `${id}-other`;
+              return id;
+            });
+            return yield* agent.runWithTools(sandbox, input, async () => {
+              calls.count += 1;
+              if (mode === "error") return { ok: false, message: "declared callback failure" };
+              if (mode === "timeout")
+                return Effect.runPromise(
+                  Effect.sleep(100).pipe(Effect.as({ ok: true as const, value: "late" })),
+                );
+              if (mode === "oversize") return { ok: true, value: "x".repeat(1_048_576) };
+              return { ok: true, value: "callback" };
+            });
+          }).pipe(Effect.result);
+          if (result._tag === "Failure") {
+            if (result.failure._tag !== "BoxesError") return yield* result.failure;
+            yield* boxes.action(id, { op: "vm.dispose" });
+            return new Response(
+              Schema.encodeSync(Schema.fromJsonString(RpcProbe))({
+                record: null,
+                calls: calls.count,
+                denied: result.failure.status,
+              }),
+            );
+          }
+          if (mode !== "queue") yield* boxes.action(id, { op: "vm.dispose" });
+          return new Response(
+            Schema.encodeSync(Schema.fromJsonString(RpcProbe))({
+              record: result.success,
+              calls: calls.count,
+              denied: null,
+            }),
+          );
+        }
         yield* boxes.action(id, {
           op: "filesystem.writeFile",
           path: "/binding",
@@ -87,6 +171,23 @@ export default {
           execution: { op: "typescript.evaluate", id: "seed", expression: "6 * 7" },
         });
         yield* boxes.action(id, { op: "cron.cancel", id: cron.id });
+        const agent = yield* makeAgentBinding(env.BOXES_AGENT, Redacted.make(capability.token));
+        const hostCalls: string[] = [];
+        const rpc = yield* agent.runWithTools(
+          id,
+          {
+            id: "rpc-run",
+            tools: ["lookup"],
+            maxToolCalls: 2,
+            timeoutMs: 1000,
+            source:
+              'export default async ({tools}) => { const a = await tools.call({op:"host.call",name:"lookup",input:{id:1}}); const b = await tools.call({op:"host.call",name:"lookup",input:{id:2}}); const failures = []; for (const name of ["lookup", "forbidden"]) { try { await tools.call({op:"host.call",name,input:{}}); } catch (error) { failures.push(error.code); } } return { a, b, failures }; }',
+          },
+          async (call) => {
+            hostCalls.push(call.name);
+            return { ok: true, value: { echoed: call.input, actor: id } };
+          },
+        );
         yield* boxes.action(id, { op: "vm.dispose" });
         return new Response(
           Schema.encodeSync(Schema.fromJsonString(BindingProof))({
@@ -95,6 +196,8 @@ export default {
             restoredStat,
             cron,
             run,
+            rpc,
+            hostCalls,
             denied: denied.status,
           }),
           {

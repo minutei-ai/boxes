@@ -369,6 +369,30 @@ export const SpawnAction = Schema.Struct({
   execution: RunAction,
   stdinMode: Schema.optionalKey(Schema.Literals(["closed", "pipe"])),
 });
+export const HostCall = Schema.Struct({
+  op: Schema.Literal("host.call"),
+  name: Schema.String.check(Schema.isPattern(/^[a-zA-Z_$][a-zA-Z0-9_$-]{0,127}$/)),
+  input: Schema.Json,
+});
+export const HostReply = Schema.Union([
+  Schema.Struct({ ok: Schema.Literal(true), value: Schema.Json }),
+  Schema.Struct({
+    ok: Schema.Literal(false),
+    message: Schema.String.check(Schema.isMaxLength(8192)),
+  }),
+]);
+export const AgentInput = Schema.Struct({
+  id: Id,
+  source: InlineRun.fields.source,
+  tools: Schema.Array(HostCall.fields.name).check(Schema.isMaxLength(128)),
+  maxToolCalls: Schema.Int.check(Schema.isBetween({ minimum: 1, maximum: 256 })),
+  timeoutMs: Schema.Int.check(Schema.isBetween({ minimum: 1, maximum: 30000 })),
+});
+export const AgentRequest = Schema.Struct({
+  ...AgentInput.fields,
+  sandboxId: Id,
+  token: Schema.String.check(Schema.isMinLength(1), Schema.isMaxLength(2048)),
+});
 export const CronAction = Schema.Union([
   Schema.Struct({
     op: Schema.Literal("cron.schedule"),
@@ -842,6 +866,10 @@ export const GuestResponse = Schema.Union([
   ProcessPage,
 ]);
 export const ErrorResponse = Schema.Struct({ error: Schema.String, message: Schema.String });
+export const AgentReply = Schema.Union([
+  Schema.Struct({ ok: Schema.Literal(true), record: RunRecord }),
+  Schema.Struct({ ok: Schema.Literal(false), status: Schema.Int, ...ErrorResponse.fields }),
+]);
 export class Fault extends Schema.TaggedError<Fault>()("Fault", {
   code: Schema.String,
   status: Schema.Int,

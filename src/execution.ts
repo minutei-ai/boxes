@@ -12,7 +12,10 @@ import {
   ModuleRequest,
   ModuleBatch,
   ToolStep,
+  Fault,
+  HostCall,
 } from "./contracts";
+import type { HostBridge } from "./host";
 import { guestAction } from "./capabilities";
 import { dynamic } from "./modules";
 import { wasi } from "./wasi";
@@ -28,6 +31,7 @@ class InterpreterFailure extends Schema.TaggedError<InterpreterFailure>()("Inter
 }) {}
 const Step = Schema.Union([
   ToolStep,
+  Schema.Struct({ kind: Schema.Literal("request"), action: Schema.fromJsonString(HostCall) }),
   ModuleRequest.mapFields((fields) => ({ kind: Schema.Literal("module"), ...fields })),
 ]);
 
@@ -40,6 +44,7 @@ export const execute = Effect.fn("execution.run")(function* (
   inputId: string | null,
   checkpoint: string | null,
   canHandover: boolean,
+  host: HostBridge | null = null,
 ) {
   const policy = session.head.policy;
   if (program.language === "python")
@@ -131,6 +136,44 @@ export const execute = Effect.fn("execution.run")(function* (
           });
         }
       } else {
+        if (step.action.op === "host.call") {
+          const call = step.action;
+          const response = yield* Effect.gen(function* () {
+            if (host === null)
+              return yield* new Fault({
+                code: "FORBIDDEN",
+                status: 403,
+                message: "Host callbacks require an active RPC execution",
+              });
+            return yield* host(call);
+          }).pipe(Effect.result);
+          yield* Effect.try({
+            try: () => {
+              if (response._tag === "Success")
+                return guest.respond(
+                  Schema.encodeSync(Schema.fromJsonString(Schema.Json))(response.success),
+                  false,
+                );
+              if (response.failure._tag === "Fault")
+                return guest.respond(
+                  Schema.encodeSync(Schema.fromJsonString(ErrorResponse))({
+                    error: response.failure.code,
+                    message: response.failure.message,
+                  }),
+                  true,
+                );
+              return guest.respond(
+                Schema.encodeSync(Schema.fromJsonString(ErrorResponse))({
+                  error: "HOST_CALLBACK_FAILED",
+                  message: "Host callback transport failed",
+                }),
+                true,
+              );
+            },
+            catch: (cause) => new InterpreterFailure({ cause }),
+          });
+          continue;
+        }
         const response = yield* guestAction(env, capability, step.action).pipe(Effect.result);
         if (response._tag === "Success") {
           const value = Schema.encodeUnknownSync(Schema.fromJsonString(GuestResponse))(
