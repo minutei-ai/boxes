@@ -292,6 +292,28 @@ export const wasi = Effect.fn("wasi.execute")(function* (
             yield* Effect.sleep(1);
             return;
           }
+          if (step.kind === "stopped") {
+            lease.held = false;
+            yield* semaphore.release(1);
+            while (true) {
+              const wake = changes.pending;
+              const stopped = yield* Effect.try({
+                try: () => guest.is_stopped(),
+                catch: (cause) => new WasmFailure({ cause }),
+              });
+              if (!stopped) break;
+              const now = yield* Clock.currentTimeMillis;
+              const untilExpiry = capability.expiresAt - now;
+              if (untilExpiry <= 0)
+                return yield* new Fault({
+                  code: "UNAUTHORIZED",
+                  status: 401,
+                  message: "Capability expired while stopped",
+                });
+              yield* Effect.raceFirst(Deferred.await(wake), Effect.sleep(untilExpiry));
+            }
+            return;
+          }
           const timestamp = yield* Clock.currentTimeNanos;
           yield* kernelCall(() => kernel.set_time(timestamp));
           if (step.kind === "done") {
@@ -511,7 +533,11 @@ export const wasi = Effect.fn("wasi.execute")(function* (
                       try: () => guest.signal_ready(),
                       catch: (cause) => new WasmFailure({ cause }),
                     });
-                    if (interrupted) break;
+                    const ready = yield* Effect.try({
+                      try: () => guest.wait_ready(),
+                      catch: (cause) => new WasmFailure({ cause }),
+                    });
+                    if (interrupted || ready) break;
                     const waiting = input.pids.flatMap((pid) => {
                       const fiber = children.get(pid);
                       if (fiber === undefined) return [];
@@ -801,6 +827,12 @@ export const wasi = Effect.fn("wasi.execute")(function* (
                       remaining: deadline - now,
                     };
                   });
+                  for (const clock of deadlines) {
+                    yield* Effect.try({
+                      try: () => guest.set_poll_deadline(clock.index, clock.deadline.toString()),
+                      catch: (cause) => new WasmFailure({ cause }),
+                    });
+                  }
                   const readings = { realtime, monotonic };
                   while (!input.immediate) {
                     const wake = changes.pending;

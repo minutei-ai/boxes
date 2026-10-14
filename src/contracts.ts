@@ -400,6 +400,7 @@ export const WasiOpen = Schema.Struct({
 });
 
 export const WasmStep = Schema.Union([
+  Schema.Struct({ kind: Schema.Literal("stopped") }),
   Schema.Struct({
     kind: Schema.Literal("spawn"),
     path: Schema.String.check(

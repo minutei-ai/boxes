@@ -57,6 +57,15 @@ const receipts = await Effect.runPromise(
       "upper",
       "self",
       "inherit-mask",
+      "stop",
+      "tstp",
+      "stop-kill",
+      "stop-term",
+      "self-stop",
+      "stop-masked",
+      "stop-group",
+      "stop-zero",
+      "stop-clock",
     ] as const,
     (mode) =>
       Effect.tryPromise(async () => {
@@ -67,6 +76,9 @@ const receipts = await Effect.runPromise(
             ["natural", "child-natural"],
             ["wait", "child-wait"],
             ["inherit-mask", "child-inherited"],
+            ["self-stop", "child-stopself"],
+            ["stop-masked", "child-maskstop"],
+            ["stop-clock", "child-clock"],
           ]).get(mode) ?? "child";
         const child = Buffer.from(
           await Bun.file(
@@ -108,6 +120,24 @@ const receipts = await Effect.runPromise(
         const record = Schema.decodeUnknownSync(RunRecord)(await response.json());
         const expected = Match.value(mode).pipe(
           Match.when("self", () => record.output?.exitCode === 137 && record.output.stdout === ""),
+          Match.when(
+            (mode) =>
+              [
+                "stop",
+                "tstp",
+                "stop-kill",
+                "stop-term",
+                "self-stop",
+                "stop-masked",
+                "stop-group",
+                "stop-zero",
+                "stop-clock",
+              ].includes(mode),
+            () =>
+              record.output?.exitCode === 0 &&
+              record.output.result === 0 &&
+              record.output.stdout === "resumed\n",
+          ),
           Match.orElse(
             () =>
               record.output?.exitCode === 0 &&
@@ -137,7 +167,8 @@ const report = {
   receipts,
   disposal: disposed.status === 200,
   allPassed: receipts.every((receipt) => receipt.passed) && disposed.status === 200,
-  handlersAndStopContinue: false,
+  stopContinue: true,
+  customHandlers: false,
   fullProcessParity: false,
 };
 await Bun.write(

@@ -104,6 +104,7 @@ enum Request {
         cwd_steps: Vec<String>,
         actions: Vec<SpawnAction>,
     },
+    Stopped,
     Wait {
         pids: Vec<u32>,
     },
@@ -226,6 +227,12 @@ enum Completion {
         pids: Vec<u32>,
         pointers: [usize; 4],
     },
+    WaitRaw {
+        pids: Vec<u32>,
+        options: u32,
+        status: usize,
+        pid: usize,
+    },
     HostStat {
         fd: Option<u32>,
         projection: StatProjection,
@@ -309,6 +316,8 @@ struct ChildStatus {
     group: u32,
     session: u32,
     pending_signals: Rc<Cell<u64>>,
+    stopped: Rc<Cell<bool>>,
+    transitions: Rc<RefCell<VecDeque<u32>>>,
     signal: u32,
     code: Option<i32>,
     failed: bool,
@@ -318,6 +327,8 @@ struct ProcessTable {
     root_group: u32,
     root_session: u32,
     root_pending_signals: Rc<Cell<u64>>,
+    root_stopped: Rc<Cell<bool>>,
+    root_transitions: Rc<RefCell<VecDeque<u32>>>,
     memory_bytes: usize,
     children: BTreeMap<u32, ChildStatus>,
     buffers: Vec<Weak<RefCell<FileBuffer>>>,
@@ -375,6 +386,8 @@ struct State {
     signal_mask: u64,
     pending_signals: Rc<Cell<u64>>,
     delivered_signal: u32,
+    stopped: Rc<Cell<bool>>,
+    transitions: Rc<RefCell<VecDeque<u32>>>,
     readiness_notification: bool,
     stdio_flags: [Rc<Cell<u16>>; 3],
     argv: Vec<Vec<u8>>,
@@ -395,18 +408,64 @@ enum Failure {
 }
 
 fn deliver_signal(state: &mut State) -> Option<u32> {
-    let available = state.pending_signals.get() & !state.signal_mask;
+    let mut available = state.pending_signals.get() & !state.signal_mask;
+    if state.stopped.get() {
+        available &= 1 << 8;
+    }
     if available == 0 {
         return None;
     }
     let signal = if available & (1 << 8) != 0 {
         9
+    } else if available & (1 << 18) != 0 {
+        19
     } else {
         available.trailing_zeros() + 1
     };
-    state.pending_signals.set(0);
-    state.delivered_signal = signal;
+    if matches!(signal, 19..=22) {
+        state
+            .pending_signals
+            .set(state.pending_signals.get() & !(1u64 << (signal - 1)));
+        if !state.stopped.replace(true) {
+            state
+                .transitions
+                .borrow_mut()
+                .push_back((signal << 8) | 0x7f);
+        }
+        state.readiness_notification = true;
+    } else {
+        state.pending_signals.set(0);
+        state.delivered_signal = signal;
+        state.stopped.set(false);
+    }
     Some(signal)
+}
+
+fn take_wait_status(
+    table: &mut ProcessTable,
+    pids: &[u32],
+    options: u32,
+) -> Option<(u32, u32, bool)> {
+    for pid in pids {
+        let child = table.children.get(pid)?;
+        let selected = child.transitions.borrow().iter().position(|status| {
+            (*status == 0xffff && options & 8 != 0) || (*status & 0xff == 0x7f && options & 2 != 0)
+        });
+        if let Some(index) = selected {
+            let status = child.transitions.borrow_mut().remove(index)?;
+            return Some((*pid, status, false));
+        }
+        if child.code.is_some() || child.failed {
+            let child = table.children.remove(pid)?;
+            let status = if child.signal != 0 {
+                child.signal
+            } else {
+                (child.code.unwrap_or(0) as u32 & 0xff) << 8
+            };
+            return Some((*pid, status, child.failed));
+        }
+    }
+    None
 }
 
 fn memory(caller: &Caller<'_, State>) -> Result<Memory, Failure> {
@@ -758,7 +817,7 @@ fn dispatch(caller: &mut Caller<'_, State>, name: &str, args: &[u64]) -> Result<
                 return Err(Failure::Errno(28));
             }
             let table = caller.data().processes.borrow();
-            let targets: Vec<Rc<Cell<u64>>> = if pid <= 0 {
+            let targets = if pid <= 0 {
                 let group = if pid < 0 {
                     pid.unsigned_abs()
                 } else if caller.data().pid == 1 {
@@ -774,23 +833,38 @@ fn dispatch(caller: &mut Caller<'_, State>, name: &str, args: &[u64]) -> Result<
                     .children
                     .values()
                     .filter(|child| child.group == group)
-                    .map(|child| child.pending_signals.clone())
+                    .map(|child| {
+                        (
+                            child.pending_signals.clone(),
+                            child.stopped.clone(),
+                            child.transitions.clone(),
+                        )
+                    })
                     .collect();
                 if table.root_group == group {
-                    targets.push(table.root_pending_signals.clone());
+                    targets.push((
+                        table.root_pending_signals.clone(),
+                        table.root_stopped.clone(),
+                        table.root_transitions.clone(),
+                    ));
                 }
                 targets
             } else if pid == 1 {
-                vec![table.root_pending_signals.clone()]
+                vec![(
+                    table.root_pending_signals.clone(),
+                    table.root_stopped.clone(),
+                    table.root_transitions.clone(),
+                )]
             } else {
-                vec![
-                    table
-                        .children
-                        .get(&(pid as u32))
-                        .ok_or(Failure::Errno(71))?
-                        .pending_signals
-                        .clone(),
-                ]
+                let child = table
+                    .children
+                    .get(&(pid as u32))
+                    .ok_or(Failure::Errno(71))?;
+                vec![(
+                    child.pending_signals.clone(),
+                    child.stopped.clone(),
+                    child.transitions.clone(),
+                )]
             };
             drop(table);
             if targets.is_empty() {
@@ -799,14 +873,26 @@ fn dispatch(caller: &mut Caller<'_, State>, name: &str, args: &[u64]) -> Result<
             if signal == 0 || matches!(signal, 17 | 23 | 28) {
                 return Ok(0);
             }
-            if matches!(signal, 18..=22) {
-                return Err(Failure::Errno(58));
+            let operations = caller.data().requests.get();
+            if operations >= 256 {
+                return Err(Failure::Budget);
             }
-            for target in targets {
-                target.set(target.get() | (1u64 << (signal - 1)));
+            caller.data().requests.set(operations + 1);
+            for (pending, stopped, transitions) in targets {
+                if signal == 18 {
+                    pending.set(pending.get() & !((1 << 18) | (1 << 19) | (1 << 20) | (1 << 21)));
+                    if stopped.replace(false) {
+                        transitions.borrow_mut().push_back(0xffff);
+                    }
+                } else {
+                    pending.set(pending.get() | (1u64 << (signal - 1)));
+                }
             }
             caller.data_mut().readiness_notification = true;
             if let Some(signal) = deliver_signal(caller.data_mut()) {
+                if caller.data().stopped.get() {
+                    suspend(caller, Request::Stopped, Completion::Sync)?;
+                }
                 return Err(Failure::Signal(signal));
             }
         }
@@ -1034,6 +1120,68 @@ fn dispatch(caller: &mut Caller<'_, State>, name: &str, args: &[u64]) -> Result<
                 },
             )?;
         }
+        "proc_waitpid_v3" => {
+            if a[1] & !11 != 0 {
+                return Err(Failure::Errno(28));
+            }
+            let selector = a[0] as u32 as i32;
+            let table = caller.data().processes.borrow();
+            let group = if caller.data().pid == 1 {
+                table.root_group
+            } else {
+                table
+                    .children
+                    .get(&caller.data().pid)
+                    .ok_or(Failure::Errno(71))?
+                    .group
+            };
+            let pids: Vec<u32> = table
+                .children
+                .iter()
+                .filter(|(pid, child)| {
+                    child.parent == caller.data().pid
+                        && (selector == -1
+                            || (selector > 0 && **pid == selector as u32)
+                            || (selector == 0 && child.group == group)
+                            || (selector < -1 && child.group == selector.unsigned_abs()))
+                })
+                .map(|(pid, _)| *pid)
+                .collect();
+            drop(table);
+            if pids.is_empty() {
+                return Err(Failure::Errno(12));
+            }
+            bytes(caller, a[2], 4)?;
+            bytes(caller, a[3], 4)?;
+            let ready = take_wait_status(
+                &mut caller.data().processes.borrow_mut(),
+                &pids,
+                a[1] as u32,
+            );
+            if let Some((pid, status, failed)) = ready {
+                if failed {
+                    return Err(Failure::Errno(29));
+                }
+                put(caller, a[2], &status.to_le_bytes())?;
+                put(caller, a[3], &pid.to_le_bytes())?;
+                return Ok(0);
+            }
+            if a[1] & 1 != 0 {
+                put(caller, a[2], &0u32.to_le_bytes())?;
+                put(caller, a[3], &0u32.to_le_bytes())?;
+                return Ok(0);
+            }
+            suspend(
+                caller,
+                Request::Wait { pids: pids.clone() },
+                Completion::WaitRaw {
+                    pids,
+                    options: a[1] as u32,
+                    status: a[2],
+                    pid: a[3],
+                },
+            )?;
+        }
         "proc_waitpid_v2" => {
             if a[1] & !1 != 0 {
                 return Err(Failure::Errno(28));
@@ -1108,6 +1256,9 @@ fn dispatch(caller: &mut Caller<'_, State>, name: &str, args: &[u64]) -> Result<
                 _ => requested,
             };
             if let Some(signal) = deliver_signal(caller.data_mut()) {
+                if caller.data().stopped.get() {
+                    suspend(caller, Request::Stopped, Completion::Sync)?;
+                }
                 return Err(Failure::Signal(signal));
             }
         }
@@ -2505,6 +2656,7 @@ fn linker(engine: &Engine) -> Result<Linker<State>, String> {
     bind!("wasi_snapshot_preview1", "sched_yield");
     bind!("host_process","proc_getpid",a:i32);
     bind!("host_process","proc_kill",a:i32,b:i32);
+    bind!("host_process","proc_waitpid_v3",a:i32,b:i32,c:i32,d:i32);
     bind!("host_process","proc_getpgid",a:i32,b:i32);
     bind!("host_process","proc_setpgid",a:i32,b:i32);
     bind!("host_process","proc_getppid",a:i32);
@@ -2681,6 +2833,8 @@ impl WasmGuest {
             metadata: [0; 76],
         };
         let pending_signals = Rc::new(Cell::new(0));
+        let stopped = Rc::new(Cell::new(false));
+        let transitions = Rc::new(RefCell::new(VecDeque::new()));
         let mut store = Store::new(
             &engine,
             State {
@@ -2700,6 +2854,8 @@ impl WasmGuest {
                     root_group: 1,
                     root_session: 1,
                     root_pending_signals: pending_signals.clone(),
+                    root_stopped: stopped.clone(),
+                    root_transitions: transitions.clone(),
                     memory_bytes: memory,
                     children: BTreeMap::new(),
                     buffers: Vec::new(),
@@ -2710,6 +2866,8 @@ impl WasmGuest {
                 signal_mask: 0,
                 pending_signals,
                 delivered_signal: 0,
+                stopped,
+                transitions,
                 readiness_notification: false,
                 stdio_flags: std::array::from_fn(|_| Rc::new(Cell::new(0))),
                 argv,
@@ -2773,6 +2931,9 @@ impl WasmGuest {
             return false;
         }
         if let Some(signal) = deliver_signal(self.store.data_mut()) {
+            if self.store.data().stopped.get() {
+                return false;
+            }
             self.done = Some(128 + signal as i32);
             self.outputs.clear();
             self.invocation = None;
@@ -2894,6 +3055,28 @@ impl WasmGuest {
         self.store.data().pid
     }
 
+    pub fn set_poll_deadline(&mut self, index: usize, deadline: &str) -> Result<(), JsValue> {
+        deadline
+            .parse::<u128>()
+            .map_err(|_| JsValue::from_str("Invalid poll deadline"))?;
+        let pending = self
+            .store
+            .data_mut()
+            .pending
+            .as_mut()
+            .ok_or_else(|| JsValue::from_str("No pending poll"))?;
+        let Request::Poll { clocks, .. } = &mut pending.request else {
+            return Err(JsValue::from_str("No pending poll"));
+        };
+        let clock = clocks
+            .iter_mut()
+            .find(|clock| clock.index == index)
+            .ok_or_else(|| JsValue::from_str("Missing poll clock"))?;
+        clock.timeout = deadline.into();
+        clock.absolute = true;
+        Ok(())
+    }
+
     pub fn take_readiness_notification(&mut self) -> bool {
         let state = self.store.data_mut();
         let notify = state.readiness_notification;
@@ -2901,8 +3084,37 @@ impl WasmGuest {
         notify
     }
 
+    pub fn is_stopped(&self) -> bool {
+        self.store.data().stopped.get() && self.store.data().pending_signals.get() & (1 << 8) == 0
+    }
+    pub fn wait_ready(&self) -> bool {
+        let state = self.store.data();
+        let table = state.processes.borrow();
+        match state.pending.as_ref().map(|pending| &pending.completion) {
+            Some(Completion::Wait { pids, .. }) => pids.iter().any(|pid| {
+                table
+                    .children
+                    .get(pid)
+                    .is_some_and(|child| child.code.is_some() || child.failed)
+            }),
+            Some(Completion::WaitRaw { pids, options, .. }) => pids.iter().any(|pid| {
+                table.children.get(pid).is_some_and(|child| {
+                    child.code.is_some()
+                        || child.failed
+                        || child.transitions.borrow().iter().any(|status| {
+                            (*status == 0xffff && options & 8 != 0)
+                                || (*status & 0xff == 0x7f && options & 2 != 0)
+                        })
+                })
+            }),
+            _ => false,
+        }
+    }
     pub fn signal_ready(&self) -> bool {
         let state = self.store.data();
+        if state.stopped.get() {
+            return state.pending_signals.get() & (1 << 8) != 0;
+        }
         self.done.is_none() && state.pending_signals.get() & !state.signal_mask != 0
     }
 
@@ -3278,6 +3490,8 @@ impl WasmGuest {
                 group,
                 session,
                 pending_signals: state.pending_signals.clone(),
+                stopped: state.stopped.clone(),
+                transitions: state.transitions.clone(),
                 signal: 0,
                 code: None,
                 failed: false,
@@ -3289,6 +3503,19 @@ impl WasmGuest {
 
     pub fn step(&mut self) -> Result<String, JsValue> {
         self.observe_signal();
+        if self.store.data().stopped.get() {
+            return serde_json::to_string(&Request::Stopped)
+                .map_err(|error| JsValue::from_str(&error.to_string()));
+        }
+        if self
+            .store
+            .data()
+            .pending
+            .as_ref()
+            .is_some_and(|pending| matches!(pending.request, Request::Stopped))
+        {
+            self.respond(0, &[], "/", false, 0, &[])?;
+        }
         if self.store.data().pending.is_none() && self.done.is_none() {
             self.advance().map_err(|error| JsValue::from_str(&error))?;
         }
@@ -3375,7 +3602,7 @@ impl WasmGuest {
         value: u64,
         metadata: &[u8],
     ) -> Result<(), JsValue> {
-        if self.observe_signal() {
+        if self.observe_signal() || self.store.data().stopped.get() {
             return Ok(());
         }
         let pending = self
@@ -3491,6 +3718,35 @@ impl WasmGuest {
                         .ok_or_else(|| JsValue::from_str("Missing memory"))?
                         .write(&mut self.store, pointer, &(value as u32).to_le_bytes())
                         .map_err(|error| JsValue::from_str(&error.to_string()))?;
+                }
+                Completion::WaitRaw {
+                    pids,
+                    options,
+                    status,
+                    pid,
+                } => {
+                    let ready = take_wait_status(
+                        &mut self.store.data().processes.borrow_mut(),
+                        &pids,
+                        options,
+                    );
+                    if let Some((found, raw, failed)) = ready {
+                        if failed {
+                            result = 29;
+                        } else {
+                            let memory = self
+                                .memory
+                                .ok_or_else(|| JsValue::from_str("Missing memory"))?;
+                            memory
+                                .write(&mut self.store, status, &raw.to_le_bytes())
+                                .map_err(|error| JsValue::from_str(&error.to_string()))?;
+                            memory
+                                .write(&mut self.store, pid, &found.to_le_bytes())
+                                .map_err(|error| JsValue::from_str(&error.to_string()))?;
+                        }
+                    } else {
+                        result = 12;
+                    }
                 }
                 Completion::Wait { pids, pointers } => {
                     let ready = self

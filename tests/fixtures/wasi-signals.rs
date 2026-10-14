@@ -1,6 +1,7 @@
 #[link(wasm_import_module = "host_process")]
 unsafe extern "C" {
     fn proc_kill(pid: u32, signal: u32) -> u32;
+    fn proc_waitpid_v3(pid: u32, options: u32, status: *mut u32, waited: *mut u32) -> u32;
     fn fd_pipe(reader: *mut u32, writer: *mut u32) -> u32;
     fn proc_signal_mask_v2(how: u32, lo: u32, hi: u32, old_lo: *mut u32, old_hi: *mut u32) -> u32;
     fn proc_spawn_v3(
@@ -34,6 +35,8 @@ unsafe extern "C" {
 #[link(wasm_import_module = "wasi_snapshot_preview1")]
 unsafe extern "C" {
     fn fd_close(fd: u32) -> u32;
+    fn poll_oneoff(input: *const u8, output: *mut u8, count: u32, ready: *mut u32) -> u32;
+    fn clock_time_get(clock: u32, precision: u64, output: *mut u64) -> u32;
     fn fd_read(fd: u32, vectors: *const Io, length: u32, output: *mut u32) -> u32;
     fn fd_write(fd: u32, vectors: *const Io, length: u32, output: *mut u32) -> u32;
     fn proc_exit(code: u32) -> !;
@@ -49,7 +52,10 @@ struct Io {
     case = "child-unmask",
     case = "child-natural",
     case = "child-wait",
-    case = "child-inherited"
+    case = "child-inherited",
+    case = "child-stopself",
+    case = "child-maskstop",
+    case = "child-clock"
 ))]
 #[unsafe(no_mangle)]
 pub extern "C" fn _start() {
@@ -104,6 +110,13 @@ pub extern "C" fn _start() {
                 proc_exit(42);
             }
         }
+        if cfg!(case = "child-maskstop") {
+            let mut lo = 0;
+            let mut hi = 0;
+            if proc_signal_mask_v2(0, (1 << 19) | (1 << 18), 0, &mut lo, &mut hi) != 0 {
+                proc_exit(47);
+            }
+        }
         let mut ready = *b"ready";
         let io = Io {
             pointer: ready.as_mut_ptr(),
@@ -115,6 +128,23 @@ pub extern "C" fn _start() {
         }
         if cfg!(case = "child-natural") {
             proc_exit(137);
+        }
+        if cfg!(case = "child-stopself") {
+            if proc_kill(0, 19) != 0 {
+                proc_exit(48);
+            }
+        }
+        if cfg!(case = "child-clock") {
+            let mut subscription = [0u8; 48];
+            subscription[24..32].copy_from_slice(&250_000_000u64.to_le_bytes());
+            let mut events = [0u8; 32];
+            let mut ready = 0;
+            if poll_oneoff(subscription.as_ptr(), events.as_mut_ptr(), 1, &mut ready) != 0
+                || ready != 1
+            {
+                proc_exit(49);
+            }
+            proc_exit(45);
         }
         let mut byte = [0u8];
         let io = Io {
@@ -144,7 +174,10 @@ pub extern "C" fn _start() {
     case = "child-unmask",
     case = "child-natural",
     case = "child-wait",
-    case = "child-inherited"
+    case = "child-inherited",
+    case = "child-stopself",
+    case = "child-maskstop",
+    case = "child-clock"
 )))]
 #[unsafe(no_mangle)]
 pub extern "C" fn run() -> i32 {
@@ -206,7 +239,7 @@ pub extern "C" fn run() -> i32 {
             actions.len() as u32,
             std::ptr::null(),
             0,
-            2,
+            if cfg!(case = "stop-zero") { 0 } else { 2 },
             0,
             0,
             0,
@@ -230,12 +263,160 @@ pub extern "C" fn run() -> i32 {
         if fd_read(reply_reader, &io, 1, &mut count) != 0 || count != 5 || ready != *b"ready" {
             return 5;
         }
+        if cfg!(case = "stop")
+            || cfg!(case = "tstp")
+            || cfg!(case = "stop-kill")
+            || cfg!(case = "stop-term")
+            || cfg!(case = "self-stop")
+            || cfg!(case = "stop-masked")
+            || cfg!(case = "stop-group")
+            || cfg!(case = "stop-zero")
+            || cfg!(case = "stop-clock")
+        {
+            let selector = if cfg!(case = "stop-group") {
+                (-2i32) as u32
+            } else if cfg!(case = "stop-zero") {
+                0
+            } else {
+                pid
+            };
+            let mut status = 91;
+            let mut waited = 91;
+            if cfg!(case = "stop-masked") {
+                if proc_kill(pid, 20) != 0
+                    || proc_waitpid_v3(selector, 3, &mut status, &mut waited) != 0
+                    || status != 0
+                    || waited != 0
+                {
+                    return 20;
+                }
+            }
+            let stopped_signal = if cfg!(case = "tstp") { 20 } else { 19 };
+            if !cfg!(case = "self-stop") && proc_kill(pid, stopped_signal) != 0 {
+                return 21;
+            }
+            if proc_waitpid_v3(selector, 16, &mut status, &mut waited) != 28
+                || proc_waitpid_v3(selector, 2, u32::MAX as *mut u32, &mut waited) != 21
+            {
+                return 22;
+            }
+            if proc_waitpid_v3(selector, 2, &mut status, &mut waited) != 0
+                || status != (stopped_signal << 8) | 0x7f
+                || waited != pid
+                || proc_kill(pid, 0) != 0
+            {
+                return 23;
+            }
+            if proc_waitpid_v3(selector, 3, &mut status, &mut waited) != 0
+                || status != 0
+                || waited != 0
+            {
+                return 24;
+            }
+            if cfg!(case = "stop-term") && proc_kill(pid, 15) != 0 {
+                return 25;
+            }
+            let mut byte = [b'X'];
+            let io = Io {
+                pointer: byte.as_mut_ptr(),
+                length: 1,
+            };
+            if fd_write(writer, &io, 1, &mut count) != 0 || count != 1 {
+                return 26;
+            }
+            if proc_waitpid_v3(selector, 1, &mut status, &mut waited) != 0
+                || status != 0
+                || waited != 0
+            {
+                return 27;
+            }
+            if cfg!(case = "stop-clock") {
+                let mut subscription = [0u8; 48];
+                subscription[24..32].copy_from_slice(&500_000_000u64.to_le_bytes());
+                let mut events = [0u8; 32];
+                let mut ready = 0;
+                if poll_oneoff(subscription.as_ptr(), events.as_mut_ptr(), 1, &mut ready) != 0
+                    || ready != 1
+                {
+                    return 35;
+                }
+            }
+            let mut resumed_at = 0;
+            if clock_time_get(0, 0, &mut resumed_at) != 0 {
+                return 36;
+            }
+            if cfg!(case = "stop-kill") {
+                if proc_kill(pid, 9) != 0 {
+                    return 28;
+                }
+            } else {
+                if proc_kill(pid, 18) != 0
+                    || proc_waitpid_v3(selector, 8, &mut status, &mut waited) != 0
+                    || status != 0xffff
+                    || waited != pid
+                {
+                    return 29;
+                }
+            }
+            if proc_waitpid_v3(selector, 0, &mut status, &mut waited) != 0 || waited != pid {
+                return 30;
+            }
+            if cfg!(case = "stop-clock") {
+                let mut finished_at = 0;
+                if clock_time_get(0, 0, &mut finished_at) != 0
+                    || finished_at.saturating_sub(resumed_at) > 100_000_000
+                {
+                    return 37;
+                }
+            }
+            let expected = if cfg!(case = "stop-kill") {
+                9
+            } else if cfg!(case = "stop-term") {
+                15
+            } else {
+                45 << 8
+            };
+            if status != expected || proc_waitpid_v3(selector, 1, &mut status, &mut waited) != 12 {
+                return 31;
+            }
+            if !cfg!(case = "stop-kill") && !cfg!(case = "stop-term") && !cfg!(case = "stop-clock")
+            {
+                let mut data = [0u8; 7];
+                let io = Io {
+                    pointer: data.as_mut_ptr(),
+                    length: 7,
+                };
+                if fd_read(reply_reader, &io, 1, &mut count) != 0
+                    || count != 7
+                    || data != *b"escaped"
+                {
+                    return 32;
+                }
+            }
+            let mut data = [0u8];
+            let io = Io {
+                pointer: data.as_mut_ptr(),
+                length: 1,
+            };
+            if fd_read(reply_reader, &io, 1, &mut count) != 0 || count != 0 {
+                return 33;
+            }
+            let mut marker = *b"resumed\n";
+            let io = Io {
+                pointer: marker.as_mut_ptr(),
+                length: 8,
+            };
+            if fd_write(1, &io, 1, &mut count) != 0 {
+                return 34;
+            }
+            return 0;
+        }
         let mut code = 91;
         let mut signal = 91;
         let mut waited = 91;
         let mut core = 91;
         if !cfg!(case = "natural") {
-            if proc_kill(pid, 0) != 0 || proc_kill(pid, 28) != 0 || proc_kill(pid, 19) != 58 {
+            if proc_kill(pid, 0) != 0 || proc_kill(pid, 28) != 0 {
                 return 6;
             }
             if cfg!(case = "masked") || cfg!(case = "unmask") || cfg!(case = "inherit-mask") {

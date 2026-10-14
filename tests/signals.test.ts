@@ -47,12 +47,24 @@ for (const mode of [
   "upper",
   "self",
   "inherit-mask",
+  "stop",
+  "tstp",
+  "stop-kill",
+  "stop-term",
+  "self-stop",
+  "stop-masked",
+  "stop-group",
+  "stop-zero",
+  "stop-clock",
 ] as const) {
   test(`native signal ${mode} preserves wait status, masks, peer lifetime and parent continuation`, async () => {
     const childMode =
       new Map([
         ["masked", "child-masked"],
         ["inherit-mask", "child-inherited"],
+        ["self-stop", "child-stopself"],
+        ["stop-masked", "child-maskstop"],
+        ["stop-clock", "child-clock"],
         ["unmask", "child-unmask"],
         ["natural", "child-natural"],
         ["wait", "child-wait"],
@@ -105,7 +117,21 @@ for (const mode of [
     } else {
       expect(record.output?.exitCode).toBe(0);
       expect(record.output?.result).toBe(0);
-      expect(record.output?.stdout).toBe("signaled\n");
+      if (
+        [
+          "stop",
+          "tstp",
+          "stop-kill",
+          "stop-term",
+          "self-stop",
+          "stop-masked",
+          "stop-group",
+          "stop-zero",
+          "stop-clock",
+        ].includes(mode)
+      )
+        expect(record.output?.stdout).toBe("resumed\n");
+      else expect(record.output?.stdout).toBe("signaled\n");
     }
   });
 }
