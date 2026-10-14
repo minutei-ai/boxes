@@ -1,5 +1,7 @@
 use serde::{Deserialize, Serialize};
+use std::cell::Cell;
 use std::collections::{BTreeMap, BTreeSet};
+use std::rc::Rc;
 use wasm_bindgen::prelude::*;
 use wasmi::{
     Caller, Config, Engine, Error, Func, Linker, Memory, Module, ResumableCall,
@@ -25,8 +27,9 @@ struct Descriptor {
     directory: bool,
     read: bool,
     write: bool,
-    flags: u16,
-    offset: usize,
+    flags: Rc<Cell<u16>>,
+    offset: Rc<Cell<usize>>,
+    stdio: Option<u32>,
     rights: u64,
     inheriting: u64,
     cache: Option<u32>,
@@ -240,6 +243,8 @@ struct State {
     pending: Option<Pending>,
     requests: usize,
     closed: BTreeSet<u32>,
+    cloexec: BTreeSet<u32>,
+    stdio_flags: [Rc<Cell<u16>>; 3],
     argv: Vec<Vec<u8>>,
     environment: Vec<Vec<u8>>,
     stdin: Vec<u8>,
@@ -379,6 +384,10 @@ fn detach(state: &mut State, path: &str) {
 
 fn close(state: &mut State, fd: u32) {
     state.directories.remove(&fd);
+    state.cloexec.remove(&fd);
+    if fd < 3 {
+        state.closed.insert(fd);
+    }
     if let Some(descriptor) = state.descriptors.remove(&fd)
         && let Some(cache) = descriptor.cache
         && !state
@@ -388,6 +397,45 @@ fn close(state: &mut State, fd: u32) {
     {
         state.files.remove(&cache);
     }
+}
+
+fn stream(state: &State, fd: u32) -> Option<u32> {
+    if state.closed.contains(&fd) {
+        return None;
+    }
+    if let Some(descriptor) = state.descriptors.get(&fd) {
+        return descriptor.stdio;
+    }
+    if fd < 3 {
+        return Some(fd);
+    }
+    None
+}
+
+fn duplicate_source(state: &State, fd: u32) -> Result<Descriptor, Failure> {
+    if state.closed.contains(&fd) || fd == HIDDEN_PREOPEN {
+        return Err(Failure::Errno(8));
+    }
+    if let Some(descriptor) = state.descriptors.get(&fd) {
+        return Ok(descriptor.clone());
+    }
+    if let Some(index) = stream(state, fd) {
+        return Ok(Descriptor {
+            path: "/".into(),
+            directory: false,
+            read: index == 0,
+            write: index > 0,
+            flags: state.stdio_flags[index as usize].clone(),
+            offset: Rc::new(Cell::new(0)),
+            stdio: Some(index),
+            rights: (if index == 0 { 2 } else { 64 }) | (1 << 27) | (1 << 3),
+            inheriting: 0,
+            cache: None,
+            linked: false,
+            metadata: [0; 76],
+        });
+    }
+    Err(Failure::Errno(8))
 }
 
 fn directory_path(
@@ -459,6 +507,60 @@ fn dispatch(caller: &mut Caller<'_, State>, name: &str, args: &[u64]) -> Result<
         return Err(Failure::Errno(8));
     }
     match name {
+        "fd_dup" | "fd_dup2" => {
+            let source = duplicate_source(caller.data(), a[0] as u32)?;
+            let target = if name == "fd_dup" {
+                bytes(caller, a[1], 4)?;
+                (0..MAX_FILES as u32 + 4)
+                    .find(|fd| {
+                        stream(caller.data(), *fd).is_none()
+                            && !caller.data().descriptors.contains_key(fd)
+                    })
+                    .ok_or(Failure::Errno(33))?
+            } else {
+                let target = a[1] as u32;
+                if target >= MAX_FILES as u32 + 4 {
+                    return Err(Failure::Errno(8));
+                }
+                if target == a[0] as u32 {
+                    return Ok(0);
+                }
+                target
+            };
+            let replacing = stream(caller.data(), target).is_some()
+                || caller.data().descriptors.contains_key(&target);
+            if !replacing && caller.data().descriptors.len() >= MAX_FILES {
+                return Err(Failure::Errno(33));
+            }
+            let state = caller.data_mut();
+            if replacing {
+                close(state, target);
+            }
+            state.descriptors.insert(target, source);
+            state.closed.remove(&target);
+            state.cloexec.remove(&target);
+            if name == "fd_dup" {
+                put(caller, a[1], &target.to_le_bytes())?;
+            }
+        }
+        "fd_getfd" | "fd_setfd" => {
+            duplicate_source(caller.data(), a[0] as u32)?;
+            if name == "fd_getfd" {
+                bytes(caller, a[1], 4)?;
+                let flags = u32::from(caller.data().cloexec.contains(&(a[0] as u32)));
+                put(caller, a[1], &flags.to_le_bytes())?;
+            } else {
+                if a[1] & !1 != 0 {
+                    return Err(Failure::Errno(28));
+                }
+                if a[1] & 1 != 0 {
+                    caller.data_mut().cloexec.insert(a[0] as u32);
+                } else {
+                    caller.data_mut().cloexec.remove(&(a[0] as u32));
+                }
+            }
+        }
+
         "isatty" => {
             let fd = a[0] as u32;
             if (fd >= 3 || caller.data().closed.contains(&fd))
@@ -488,7 +590,7 @@ fn dispatch(caller: &mut Caller<'_, State>, name: &str, args: &[u64]) -> Result<
             };
             if name.starts_with("fd_") {
                 let fd = a[0] as u32;
-                if fd < 3 && !caller.data().closed.contains(&fd) {
+                if stream(caller.data(), fd).is_some() {
                     if let Some((uid, gid)) = pointers {
                         put(caller, uid, &0u32.to_le_bytes())?;
                         put(caller, gid, &0u32.to_le_bytes())?;
@@ -590,7 +692,13 @@ fn dispatch(caller: &mut Caller<'_, State>, name: &str, args: &[u64]) -> Result<
         "sched_yield" => {}
         "fd_prestat_get" => {
             if (a[0] != 3 && a[0] as u32 != HIDDEN_PREOPEN)
-                || !caller.data().descriptors.contains_key(&(a[0] as u32))
+                || !caller
+                    .data()
+                    .descriptors
+                    .get(&(a[0] as u32))
+                    .is_some_and(|descriptor| {
+                        descriptor.directory && descriptor.path == "/" && descriptor.linked
+                    })
             {
                 return Err(Failure::Errno(8));
             }
@@ -598,7 +706,13 @@ fn dispatch(caller: &mut Caller<'_, State>, name: &str, args: &[u64]) -> Result<
         }
         "fd_prestat_dir_name" => {
             if (a[0] != 3 && a[0] as u32 != HIDDEN_PREOPEN)
-                || !caller.data().descriptors.contains_key(&(a[0] as u32))
+                || !caller
+                    .data()
+                    .descriptors
+                    .get(&(a[0] as u32))
+                    .is_some_and(|descriptor| {
+                        descriptor.directory && descriptor.path == "/" && descriptor.linked
+                    })
             {
                 return Err(Failure::Errno(8));
             }
@@ -609,9 +723,14 @@ fn dispatch(caller: &mut Caller<'_, State>, name: &str, args: &[u64]) -> Result<
         }
         "fd_fdstat_get" => {
             let mut stat = [0u8; 24];
-            if a[0] < 3 {
+            if let Some(index) = stream(caller.data(), a[0] as u32) {
                 stat[0] = 2;
-                let rights: u64 = (if a[0] == 0 { 2 } else { 64 }) | (1 << 27);
+                stat[2..4].copy_from_slice(
+                    &caller.data().stdio_flags[index as usize]
+                        .get()
+                        .to_le_bytes(),
+                );
+                let rights: u64 = (if index == 0 { 2 } else { 64 }) | (1 << 27) | (1 << 3);
                 stat[8..16].copy_from_slice(&rights.to_le_bytes());
             } else {
                 let descriptor = caller
@@ -620,7 +739,7 @@ fn dispatch(caller: &mut Caller<'_, State>, name: &str, args: &[u64]) -> Result<
                     .get(&(a[0] as u32))
                     .ok_or(Failure::Errno(8))?;
                 stat[0] = if descriptor.directory { 3 } else { 4 };
-                stat[2..4].copy_from_slice(&descriptor.flags.to_le_bytes());
+                stat[2..4].copy_from_slice(&descriptor.flags.get().to_le_bytes());
                 stat[8..16].copy_from_slice(&descriptor.rights.to_le_bytes());
                 stat[16..24].copy_from_slice(&descriptor.inheriting.to_le_bytes());
             }
@@ -630,6 +749,10 @@ fn dispatch(caller: &mut Caller<'_, State>, name: &str, args: &[u64]) -> Result<
             if a[1] & !5 != 0 {
                 return Err(Failure::Errno(58));
             }
+            if let Some(index) = stream(caller.data(), a[0] as u32) {
+                caller.data().stdio_flags[index as usize].set(a[1] as u16);
+                return Ok(0);
+            }
             let descriptor = caller
                 .data_mut()
                 .descriptors
@@ -638,13 +761,13 @@ fn dispatch(caller: &mut Caller<'_, State>, name: &str, args: &[u64]) -> Result<
             if descriptor.rights & (1 << 3) == 0 {
                 return Err(Failure::Errno(76));
             }
-            descriptor.flags = a[1] as u16;
+            descriptor.flags.set(a[1] as u16);
         }
         "fd_read" | "fd_pread" => {
             let output = *a.last().ok_or(Failure::Errno(28))?;
             bytes(caller, output, 4)?;
             let vectors = vectors(caller, a[1], a[2])?;
-            if a[0] == 0 {
+            if stream(caller.data(), a[0] as u32) == Some(0) {
                 if name == "fd_pread" {
                     return Err(Failure::Errno(70));
                 }
@@ -679,7 +802,7 @@ fn dispatch(caller: &mut Caller<'_, State>, name: &str, args: &[u64]) -> Result<
             let mut offset = if name == "fd_pread" {
                 usize::try_from(args[3]).map_err(|_| Failure::Errno(28))?
             } else {
-                descriptor.offset
+                descriptor.offset.get()
             };
             let mut read = 0usize;
             for (pointer, length) in vectors {
@@ -705,7 +828,8 @@ fn dispatch(caller: &mut Caller<'_, State>, name: &str, args: &[u64]) -> Result<
                     .descriptors
                     .get_mut(&(a[0] as u32))
                     .ok_or(Failure::Errno(8))?
-                    .offset = offset;
+                    .offset
+                    .set(offset);
             }
             put(caller, output, &(read as u32).to_le_bytes())?;
         }
@@ -717,7 +841,7 @@ fn dispatch(caller: &mut Caller<'_, State>, name: &str, args: &[u64]) -> Result<
             for (pointer, length) in vectors {
                 data.extend(bytes(caller, pointer, length)?);
             }
-            if a[0] == 1 || a[0] == 2 {
+            if let Some(index @ (1 | 2)) = stream(caller.data(), a[0] as u32) {
                 if name == "fd_pwrite" {
                     return Err(Failure::Errno(70));
                 }
@@ -725,7 +849,7 @@ fn dispatch(caller: &mut Caller<'_, State>, name: &str, args: &[u64]) -> Result<
                 if state.stdout.len() + state.stderr.len() + data.len() > state.max_output {
                     return Err(Failure::Errno(22));
                 }
-                if a[0] == 1 {
+                if index == 1 {
                     state.stdout.extend(&data);
                 } else {
                     state.stderr.extend(&data);
@@ -754,10 +878,10 @@ fn dispatch(caller: &mut Caller<'_, State>, name: &str, args: &[u64]) -> Result<
                     .bytes;
                 let offset = if name == "fd_pwrite" {
                     usize::try_from(args[3]).map_err(|_| Failure::Errno(28))?
-                } else if descriptor.flags & 1 != 0 {
+                } else if descriptor.flags.get() & 1 != 0 {
                     file.len()
                 } else {
-                    descriptor.offset
+                    descriptor.offset.get()
                 };
                 let end = offset.checked_add(data.len()).ok_or(Failure::Errno(22))?;
                 let total: usize = state.files.values().map(|file| file.bytes.len()).sum();
@@ -793,7 +917,7 @@ fn dispatch(caller: &mut Caller<'_, State>, name: &str, args: &[u64]) -> Result<
                         previous,
                         previous_length,
                         start: offset,
-                        previous_offset: descriptor.offset,
+                        previous_offset: descriptor.offset.get(),
                         offset: end,
                         positioned: name == "fd_pwrite",
                     },
@@ -861,8 +985,8 @@ fn dispatch(caller: &mut Caller<'_, State>, name: &str, args: &[u64]) -> Result<
                     previous,
                     previous_length,
                     start: size,
-                    previous_offset: descriptor.offset,
-                    offset: descriptor.offset,
+                    previous_offset: descriptor.offset.get(),
+                    offset: descriptor.offset.get(),
                     positioned: true,
                 },
             )?;
@@ -988,15 +1112,15 @@ fn dispatch(caller: &mut Caller<'_, State>, name: &str, args: &[u64]) -> Result<
                         let writing = subscription[8] == 2;
                         if state.closed.contains(&fd) {
                             errno = 8;
-                        } else if fd < 3 {
-                            if fd == 0 && !writing {
+                        } else if let Some(index) = stream(state, fd) {
+                            if index == 0 && !writing {
                                 let available =
                                     state.stdin.len().saturating_sub(state.stdin_offset);
                                 event[16..24].copy_from_slice(&(available as u64).to_le_bytes());
                                 if available == 0 {
                                     event[24..26].copy_from_slice(&1u16.to_le_bytes());
                                 }
-                            } else if fd > 0 && writing {
+                            } else if index > 0 && writing {
                                 let available = state
                                     .max_output
                                     .saturating_sub(state.stdout.len() + state.stderr.len());
@@ -1021,15 +1145,15 @@ fn dispatch(caller: &mut Caller<'_, State>, name: &str, args: &[u64]) -> Result<
                                 let available = if writing {
                                     let total: usize =
                                         state.files.values().map(|file| file.bytes.len()).sum();
-                                    let position = if descriptor.flags & 1 != 0 {
+                                    let position = if descriptor.flags.get() & 1 != 0 {
                                         file.bytes.len()
                                     } else {
-                                        descriptor.offset
+                                        descriptor.offset.get()
                                     };
                                     (MAX_BYTES - (total - file.bytes.len()))
                                         .saturating_sub(position)
                                 } else {
-                                    file.bytes.len().saturating_sub(descriptor.offset)
+                                    file.bytes.len().saturating_sub(descriptor.offset.get())
                                 };
                                 event[16..24].copy_from_slice(&(available as u64).to_le_bytes());
                             } else {
@@ -1277,8 +1401,9 @@ fn dispatch(caller: &mut Caller<'_, State>, name: &str, args: &[u64]) -> Result<
                 directory: false,
                 read,
                 write,
-                flags: (a[3] & 5) as u16,
-                offset: 0,
+                flags: Rc::new(Cell::new((a[3] & 5) as u16)),
+                offset: Rc::new(Cell::new(0)),
+                stdio: None,
                 rights,
                 inheriting: 0,
                 cache: None,
@@ -1344,8 +1469,9 @@ fn dispatch(caller: &mut Caller<'_, State>, name: &str, args: &[u64]) -> Result<
                 directory,
                 read,
                 write,
-                flags: a[7] as u16,
-                offset: 0,
+                flags: Rc::new(Cell::new(a[7] as u16)),
+                offset: Rc::new(Cell::new(0)),
+                stdio: None,
                 rights: args[5],
                 inheriting: args[6],
                 cache: None,
@@ -1377,8 +1503,8 @@ fn dispatch(caller: &mut Caller<'_, State>, name: &str, args: &[u64]) -> Result<
             if a[0] as u32 == HIDDEN_PREOPEN {
                 return Err(Failure::Errno(8));
             }
-            if a[0] < 3 {
-                caller.data_mut().closed.insert(a[0] as u32);
+            if a[0] < 3 && !caller.data().descriptors.contains_key(&(a[0] as u32)) {
+                close(caller.data_mut(), a[0] as u32);
                 return Ok(0);
             }
             if !caller.data().descriptors.contains_key(&(a[0] as u32)) {
@@ -1387,7 +1513,7 @@ fn dispatch(caller: &mut Caller<'_, State>, name: &str, args: &[u64]) -> Result<
             close(caller.data_mut(), a[0] as u32);
         }
         "fd_sync" | "fd_datasync" => {
-            if a[0] < 3 {
+            if stream(caller.data(), a[0] as u32).is_some() {
                 return Err(Failure::Errno(76));
             }
             if !caller.data().descriptors.contains_key(&(a[0] as u32)) {
@@ -1408,7 +1534,7 @@ fn dispatch(caller: &mut Caller<'_, State>, name: &str, args: &[u64]) -> Result<
         "fd_seek" | "fd_tell" => {
             let output = *a.last().ok_or(Failure::Errno(28))?;
             bytes(caller, output, 8)?;
-            if a[0] < 3 {
+            if stream(caller.data(), a[0] as u32).is_some() {
                 return Err(Failure::Errno(70));
             }
             let state = caller.data_mut();
@@ -1425,11 +1551,11 @@ fn dispatch(caller: &mut Caller<'_, State>, name: &str, args: &[u64]) -> Result<
                 return Err(Failure::Errno(76));
             }
             let offset = if name == "fd_tell" {
-                descriptor.offset
+                descriptor.offset.get()
             } else {
                 let base = match a[2] {
                     0 => 0,
-                    1 => descriptor.offset,
+                    1 => descriptor.offset.get(),
                     2 => state
                         .files
                         .get(&descriptor.cache.ok_or(Failure::Errno(8))?)
@@ -1448,7 +1574,8 @@ fn dispatch(caller: &mut Caller<'_, State>, name: &str, args: &[u64]) -> Result<
                 .descriptors
                 .get_mut(&(a[0] as u32))
                 .ok_or(Failure::Errno(8))?
-                .offset = offset;
+                .offset
+                .set(offset);
             put(caller, output, &(offset as u64).to_le_bytes())?;
         }
         "random_get" => {
@@ -1537,6 +1664,10 @@ fn linker(engine: &Engine) -> Result<Linker<State>, String> {
     bind!("wasi_snapshot_preview1","clock_time_get",a:i32,b:i64,c:i32);
     bind!("wasi_snapshot_preview1","clock_res_get",a:i32,b:i32);
     bind!("wasi_snapshot_preview1", "sched_yield");
+    bind!("host_process","fd_dup",a:i32,b:i32);
+    bind!("host_process","fd_dup2",a:i32,b:i32);
+    bind!("host_process","fd_getfd",a:i32,b:i32);
+    bind!("host_process","fd_setfd",a:i32,b:i32);
     bind!("host_user","isatty",a:i32,b:i32);
     macro_rules! bind_stat {
         ($name:literal,$result:ty,$failure:expr $(,$arg:ident:$type:ty)*) => {
@@ -1659,8 +1790,9 @@ impl WasmGuest {
             directory: true,
             read: true,
             write: true,
-            flags: 0,
-            offset: 0,
+            flags: Rc::new(Cell::new(0)),
+            offset: Rc::new(Cell::new(0)),
+            stdio: None,
             rights: (1 << 30) - 1,
             inheriting: (1 << 30) - 1,
             cache: None,
@@ -1679,6 +1811,8 @@ impl WasmGuest {
                 pending: None,
                 requests: 0,
                 closed: BTreeSet::new(),
+                cloexec: BTreeSet::new(),
+                stdio_flags: std::array::from_fn(|_| Rc::new(Cell::new(0))),
                 argv,
                 environment,
                 stdin: stdin.to_vec(),
@@ -1888,7 +2022,7 @@ impl WasmGuest {
                 .descriptors
                 .get_mut(fd)
                 .ok_or_else(|| JsValue::from_str("Missing descriptor"))?;
-            descriptor.offset = *previous_offset;
+            descriptor.offset.set(*previous_offset);
             let file = state
                 .files
                 .get_mut(
@@ -2021,7 +2155,8 @@ impl WasmGuest {
                             .descriptors
                             .get_mut(&fd)
                             .ok_or_else(|| JsValue::from_str("Missing descriptor"))?
-                            .offset = offset;
+                            .offset
+                            .set(offset);
                     }
                     if let Some(pointer) = pointer {
                         self.memory
