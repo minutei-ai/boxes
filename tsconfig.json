@@ -8,6 +8,7 @@
     "skipLibCheck": true,
     "types": ["@types/bun", "@cloudflare/workers-types"],
     "allowImportingTsExtensions": true,
+    "resolveJsonModule": true,
     "ignoreDeprecations": "6.0"
   },
   "include": ["src/**/*.ts", "tooling/**/*.ts", "tests/**/*.ts", "alchemy.run.ts"]

@@ -1,3 +1,4 @@
+import wasmModuleBytes from "./wasm-module-bytes.json";
 import { Clock, Effect, Match, Schema, Struct } from "effect";
 import compilerWasm from "cirro:compiler";
 import { createBindings } from "../dist/compiler/bindings";
@@ -40,8 +41,15 @@ export const load = Effect.fn("modules.load")(function* (
       ),
     );
     const binary = yield* Effect.gen(function* () {
-      if (action.op === "process.run")
+      if (action.op === "process.run") {
+        if (Buffer.byteLength(action.source, "base64") > wasmModuleBytes)
+          return yield* new Fault({
+            code: "EFBIG",
+            status: 413,
+            message: "Wasm source exceeds its module byte limit",
+          });
         return { source: action.source, entry: "/tmp/__cirro_inline__.wasm" };
+      }
       yield* requirePermission(capability, "read");
       const path = yield* Effect.gen(function* () {
         if (action.op === "wasm.executeFile") return action.path;
@@ -57,11 +65,11 @@ export const load = Effect.fn("modules.load")(function* (
       const stat = yield* kernelCall(() => kernel.stat(path, true)).pipe(
         Effect.flatMap(Schema.decodeUnknownEffect(Schema.fromJsonString(FileStat))),
       );
-      if (stat.size > 786_432)
+      if (stat.size > wasmModuleBytes)
         return yield* new Fault({
           code: "EFBIG",
           status: 413,
-          message: "Wasm file exceeds its encoded source limit",
+          message: "Wasm file exceeds its module byte limit",
         });
       const data = yield* read(env, capability.sandboxId, kernel, stat.path);
       if (

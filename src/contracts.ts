@@ -1,3 +1,4 @@
+import wasmModuleBytes from "./wasm-module-bytes.json";
 import { Schema, Struct } from "effect";
 
 export const Id = Schema.String.check(Schema.isPattern(/^[a-zA-Z0-9_-]{1,64}$/));
@@ -192,6 +193,7 @@ const InlineRun = Schema.Struct({
   source: Schema.String.check(Schema.isMaxLength(1_048_576)),
 });
 const ScriptSource = Schema.String.check(Schema.isMaxLength(1_048_576));
+const WasmSource = Schema.String.check(Schema.isMaxLength(Math.ceil(wasmModuleBytes / 3) * 4));
 export const WasmConfiguration = Schema.Struct({
   argv: Schema.Array(
     Schema.String.check(Schema.isMaxLength(4096), Schema.isPattern(/^[^\0]*$/)),
@@ -217,7 +219,7 @@ const WasmOptions = {
 };
 export const WasmProgram = Schema.Struct({
   language: Schema.Literal("wasm"),
-  source: ScriptSource,
+  source: WasmSource,
   ...WasmConfiguration.fields,
 });
 export const PythonAction = Schema.Union([
@@ -248,7 +250,7 @@ export const RunAction = Schema.Union([
     op: Schema.Literal("process.run"),
     id: Id,
     language: Schema.Literal("wasm"),
-    source: ScriptSource,
+    source: WasmSource,
     ...WasmOptions,
   }),
   Schema.Struct({ op: Schema.Literal("wasm.executeFile"), id: Id, path: Path, ...WasmOptions }),

@@ -13,6 +13,8 @@ struct Configuration {
     env: BTreeMap<String, String>,
 }
 
+include!(concat!(env!("OUT_DIR"), "/module_limit.rs"));
+
 const MAX_FILES: usize = 128;
 const HIDDEN_PREOPEN: u32 = 0x40000003;
 const MAX_BYTES: usize = 16_777_216;
@@ -1475,7 +1477,7 @@ impl WasmGuest {
         fuel: u64,
         max_output: usize,
     ) -> Result<Self, String> {
-        if bytes.len() > 1_048_576
+        if bytes.len() > MAX_MODULE_BYTES
             || !(4_194_304..=33_554_432).contains(&memory)
             || fuel == 0
             || fuel > 100_000_000
