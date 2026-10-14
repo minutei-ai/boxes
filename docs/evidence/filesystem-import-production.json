@@ -1,0 +1,29 @@
+{
+  "target": "https://cirro-sandbox-prod-rs7wexxow56rmsoz.manoel-carvalhoneto.workers.dev",
+  "measuredAt": "2026-10-14T16:14:55.655Z",
+  "checks": {
+    "importedBytes": true,
+    "relativeSymlink": true,
+    "roundtrip": true,
+    "exclusiveCreation": true,
+    "disposal": true
+  },
+  "deployedCommit": "9e40ba29b80be220225eb3d88046cef943c70b8d",
+  "local": {
+    "tests": 277,
+    "failures": 0,
+    "assertions": 2588,
+    "seconds": 163.4,
+    "typesPassed": true,
+    "clippyPassed": true,
+    "rustTestsPassed": true,
+    "workerReplacementVerified": true,
+    "invalidGraphsHaveNoPublishedState": true,
+    "concurrentCreateVerified": true,
+    "utf8ManifestByteQuotaVerified": true,
+    "multiChunkDeduplicationVerified": true
+  },
+  "scope": "filesystem snapshot import during exclusive sandbox creation",
+  "inPlaceRestoreImplemented": false,
+  "fullParity": false
+}
