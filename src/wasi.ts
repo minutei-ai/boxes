@@ -218,7 +218,35 @@ export const wasi = Effect.fn("wasi.execute")(function* (
                 Effect.gen(function* () {
                   yield* requirePermission(capability, "execute");
                   yield* requirePermission(capability, "read");
-                  const stat = yield* kernelCall(() => kernel.stat(input.path, true)).pipe(
+                  const location = { cwd: "/" };
+                  for (const next of input.cwdSteps) {
+                    const joined = Match.value(next.startsWith("/")).pipe(
+                      Match.when(true, () => next),
+                      Match.orElse(() => `${location.cwd}/${next}`),
+                    );
+                    const cwd = yield* kernelCall(() => kernel.realpath(joined));
+                    const directory = yield* kernelCall(() => kernel.stat(cwd, true)).pipe(
+                      Effect.flatMap(Schema.decodeUnknownEffect(Schema.fromJsonString(FileStat))),
+                    );
+                    if (directory.kind !== "directory")
+                      return yield* new Fault({
+                        code: "ENOTDIR",
+                        status: 400,
+                        message: "Child cwd is not a directory",
+                      });
+                    if ((directory.mode & 0o100) === 0)
+                      return yield* new Fault({
+                        code: "EACCES",
+                        status: 403,
+                        message: "Child cwd is not searchable",
+                      });
+                    location.cwd = directory.path;
+                  }
+                  const image = Match.value(input.path.startsWith("/")).pipe(
+                    Match.when(true, () => input.path),
+                    Match.orElse(() => `${location.cwd}/${input.path}`),
+                  );
+                  const stat = yield* kernelCall(() => kernel.stat(image, true)).pipe(
                     Effect.flatMap(Schema.decodeUnknownEffect(Schema.fromJsonString(FileStat))),
                   );
                   if (stat.kind !== "file" || (stat.mode & 0o111) === 0)
@@ -249,7 +277,8 @@ export const wasi = Effect.fn("wasi.execute")(function* (
                                   Struct.omit(fields, ["stdin"]),
                                 ),
                               ),
-                            )({ argv: input.argv, env: input.env }),
+                            )({ argv: input.argv, env: { ...input.env, PWD: location.cwd } }),
+                            location.cwd,
                           ),
                         catch: (cause) => new WasmFailure({ cause }),
                       }),

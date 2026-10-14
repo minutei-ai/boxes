@@ -199,6 +199,35 @@ await Effect.runPromise(
       "-o",
       "dist/wasi-signal-mask.wasm",
     ]);
+    for (const mode of [
+      "explicit",
+      "relative",
+      "chdir",
+      "fchdir",
+      "symlink",
+      "missing",
+      "file",
+      "closed",
+      "malformed",
+    ]) {
+      yield* run([
+        "rustc",
+        "--crate-type",
+        "cdylib",
+        "--target",
+        "wasm32-unknown-unknown",
+        "-O",
+        "-A",
+        "dead_code",
+        "-C",
+        "strip=symbols",
+        "--cfg",
+        `case="${mode}"`,
+        "tests/fixtures/wasi-cwd.rs",
+        "-o",
+        `dist/wasi-cwd-${mode}.wasm`,
+      ]);
+    }
     for (const role of [
       "parent-duplex",
       "child-duplex",

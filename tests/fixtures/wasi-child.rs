@@ -100,10 +100,10 @@ pub extern "C" fn _start() {
             proc_exit(42);
         }
         if environ_sizes_get(&mut count, &mut size) != 0
-            || count != 1
-            || size != 11
+            || count != 2
+            || size != 17
             || environ_get(pointers.as_mut_ptr(), data.as_mut_ptr()) != 0
-            || data[..11] != *b"COLOR=blue\0"
+            || data[..17] != *b"COLOR=blue\0PWD=/\0"
         {
             proc_exit(43);
         }

@@ -100,6 +100,7 @@ enum Request {
         path: String,
         argv: Vec<String>,
         env: BTreeMap<String, String>,
+        cwd_steps: Vec<String>,
     },
     Wait {
         pids: Vec<u32>,
@@ -328,6 +329,7 @@ struct State {
     requests: Rc<Cell<usize>>,
     pid: u32,
     parent_pid: u32,
+    cwd: String,
     processes: Rc<RefCell<ProcessTable>>,
     closed: BTreeSet<u32>,
     cloexec: BTreeSet<u32>,
@@ -690,15 +692,21 @@ fn dispatch(caller: &mut Caller<'_, State>, name: &str, args: &[u64]) -> Result<
                 return Err(Failure::Errno(58));
             }
             let cwd = bytes(caller, a[8], a[9])?;
-            if !cwd.is_empty() && cwd != b"/" {
-                return Err(Failure::Errno(58));
-            }
-            let raw = bytes(caller, a[0], a[1])?;
-            let executable = std::str::from_utf8(&raw).map_err(|_| Failure::Errno(25))?;
-            let path = confined("/", executable.trim_start_matches('/'))?;
-            if raw.is_empty() || raw.contains(&0) {
+            let cwd = std::str::from_utf8(&cwd).map_err(|_| Failure::Errno(25))?;
+            if cwd.len() > 4096 || cwd.contains('\0') {
                 return Err(Failure::Errno(28));
             }
+            let mut cwd_steps = vec![caller.data().cwd.clone()];
+            if !cwd.is_empty() {
+                cwd_steps.push(cwd.into());
+            }
+            let raw = bytes(caller, a[0], a[1])?;
+            if raw.is_empty() || raw.len() > 4096 || raw.contains(&0) {
+                return Err(Failure::Errno(28));
+            }
+            let path = std::str::from_utf8(&raw)
+                .map_err(|_| Failure::Errno(25))?
+                .to_string();
             let argv = spawn_strings(caller, a[2], a[3])?;
             let envp = spawn_strings(caller, a[4], a[5])?;
             if argv.len() > 129 || envp.len() > 128 {
@@ -716,37 +724,101 @@ fn dispatch(caller: &mut Caller<'_, State>, name: &str, args: &[u64]) -> Result<
                 return Err(Failure::Errno(22));
             }
             let encoded = bytes(caller, a[6], a[7])?;
-            if !encoded.len().is_multiple_of(24) || encoded.len() / 24 > 128 {
-                return Err(Failure::Errno(28));
-            }
             let mut actions = Vec::new();
-            for chunk in encoded.as_chunks::<24>().0 {
-                let fields: Vec<u32> = chunk
+            let mut shadow = caller.data().descriptors.clone();
+            for fd in 0..3 {
+                if let Ok(descriptor) = duplicate_source(caller.data(), fd) {
+                    shadow.entry(fd).or_insert(descriptor);
+                }
+            }
+            let mut offset = 0usize;
+            let mut count = 0usize;
+            while offset < encoded.len() {
+                let header = encoded.get(offset..offset + 24).ok_or(Failure::Errno(28))?;
+                let fields: Vec<u32> = header
                     .as_chunks::<4>()
                     .0
                     .iter()
                     .map(|word| u32::from_le_bytes(*word))
                     .collect();
-                if fields[0] != 1 && fields[0] != 2 {
+                offset += 24;
+                let length = fields[5] as usize;
+                let end = offset.checked_add(length).ok_or(Failure::Errno(28))?;
+                let path = encoded.get(offset..end).ok_or(Failure::Errno(28))?;
+                offset = end;
+                count += 1;
+                if count > 128 || length > 4096 {
+                    return Err(Failure::Errno(22));
+                }
+                if fields[3] != 0 || fields[4] != 0 {
                     return Err(Failure::Errno(58));
                 }
-                if fields[3] != 0 || fields[4] != 0 || fields[5] != 0 {
-                    return Err(Failure::Errno(28));
+                match fields[0] {
+                    1 => {
+                        if length != 0 {
+                            return Err(Failure::Errno(28));
+                        }
+                        if fields[1] >= MAX_FILES as u32 + 4 || shadow.remove(&fields[1]).is_none()
+                        {
+                            return Err(Failure::Errno(8));
+                        }
+                        actions.push(SpawnAction {
+                            command: 1,
+                            fd: fields[1],
+                            source: fields[2],
+                        });
+                    }
+                    2 => {
+                        if length != 0 {
+                            return Err(Failure::Errno(28));
+                        }
+                        if fields[1] >= MAX_FILES as u32 + 4 || fields[2] >= MAX_FILES as u32 + 4 {
+                            return Err(Failure::Errno(8));
+                        }
+                        let source = shadow.get(&fields[2]).ok_or(Failure::Errno(8))?.clone();
+                        if !shadow.contains_key(&fields[1]) && shadow.len() >= MAX_FILES {
+                            return Err(Failure::Errno(33));
+                        }
+                        shadow.insert(fields[1], source);
+                        actions.push(SpawnAction {
+                            command: 2,
+                            fd: fields[1],
+                            source: fields[2],
+                        });
+                    }
+                    4 => {
+                        let path = std::str::from_utf8(path).map_err(|_| Failure::Errno(25))?;
+                        if path.is_empty() || path.contains('\0') {
+                            return Err(Failure::Errno(28));
+                        }
+                        cwd_steps.push(path.into());
+                    }
+                    5 => {
+                        if length != 0 || fields[1] >= MAX_FILES as u32 + 4 {
+                            return Err(Failure::Errno(8));
+                        }
+                        let directory = shadow.get(&fields[1]).ok_or(Failure::Errno(8))?;
+                        if !directory.directory {
+                            return Err(Failure::Errno(54));
+                        }
+                        if !directory.linked {
+                            return Err(Failure::Errno(44));
+                        }
+                        cwd_steps.push(directory.path.clone());
+                    }
+                    _ => return Err(Failure::Errno(58)),
                 }
-                if fields[1] >= MAX_FILES as u32 + 4 {
-                    return Err(Failure::Errno(8));
-                }
-                actions.push(SpawnAction {
-                    command: fields[0],
-                    fd: fields[1],
-                    source: fields[2],
-                });
             }
             let mask = (u64::from(a[13] as u32) | (u64::from(a[14] as u32) << 32))
                 & !((1 << 8) | (1 << 18));
             suspend(
                 caller,
-                Request::Spawn { path, argv, env },
+                Request::Spawn {
+                    path,
+                    argv,
+                    env,
+                    cwd_steps,
+                },
                 Completion::Spawn {
                     pointer: a[16],
                     actions,
@@ -2379,6 +2451,7 @@ impl WasmGuest {
                 requests: Rc::new(Cell::new(0)),
                 pid: 1,
                 parent_pid: 0,
+                cwd: "/".into(),
                 processes: Rc::new(RefCell::new(ProcessTable {
                     next_pid: 2,
                     memory_bytes: memory,
@@ -2586,6 +2659,7 @@ impl WasmGuest {
         &mut self,
         bytes: &[u8],
         configuration: &str,
+        cwd: &str,
     ) -> Result<Option<WasmGuest>, JsValue> {
         let (actions, mask) = match self
             .store
@@ -2673,6 +2747,7 @@ impl WasmGuest {
         let pid = table.borrow().next_pid;
         state.pid = pid;
         state.parent_pid = parent.pid;
+        state.cwd = cwd.into();
         state.processes = table.clone();
         table.borrow_mut().next_pid += 1;
         table.borrow_mut().memory_bytes += self.memory_limit;

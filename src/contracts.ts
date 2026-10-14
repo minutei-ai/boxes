@@ -384,7 +384,18 @@ export const ToolStep = Schema.Union([
 export const WasmStep = Schema.Union([
   Schema.Struct({
     kind: Schema.Literal("spawn"),
-    path: Path,
+    path: Schema.String.check(
+      Schema.isMinLength(1),
+      Schema.isMaxLength(4096),
+      Schema.isPattern(/^[^\0]*$/),
+    ),
+    cwdSteps: Schema.Array(
+      Schema.String.check(
+        Schema.isMinLength(1),
+        Schema.isMaxLength(4096),
+        Schema.isPattern(/^[^\0]*$/),
+      ),
+    ).check(Schema.isMinLength(1), Schema.isMaxLength(130)),
     argv: WasmConfiguration.fields.argv,
     env: WasmConfiguration.fields.env,
   }),

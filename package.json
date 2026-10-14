@@ -19,6 +19,7 @@
     "fd-dup:proof": "bun tooling/fd-dup-proof.ts",
     "guest-spawn:proof": "bun tooling/guest-spawn-proof.ts",
     "signal-mask:proof": "bun tooling/signal-mask-proof.ts",
+    "cwd:proof": "bun tooling/cwd-proof.ts",
     "inherited-pipe:proof": "bun tooling/inherited-pipe-proof.ts",
     "wasi-child:proof": "bun tooling/wasi-child-proof.ts",
     "wasi-slices:proof": "bun tooling/wasi-slices-proof.ts",
