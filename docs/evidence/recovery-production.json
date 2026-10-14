@@ -1,7 +1,7 @@
 {
-  "measuredAt": "2026-10-14T12:37:04.806Z",
+  "measuredAt": "2026-10-14T14:21:38.357Z",
   "url": "https://cirro-sandbox-prod-rs7wexxow56rmsoz.manoel-carvalhoneto.workers.dev",
-  "sandboxId": "recovery-proof-359189da-facd-4a3f-82a2-c8ce13c05fe5",
+  "sandboxId": "recovery-proof-f42974da-d60c-4a5c-b444-816b83e95d8c",
   "profile": "minutei",
   "runtime": "standard Worker",
   "status": {
@@ -14,7 +14,7 @@
     "state": "running",
     "checkpoints": 1,
     "resumable": false,
-    "deadlineAt": 1791982271464
+    "deadlineAt": 1791988540703
   },
   "checks": {
     "spawn": true,

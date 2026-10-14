@@ -1,0 +1,94 @@
+{
+  "measuredAt": "2026-10-14T14:21:38.357Z",
+  "profile": "minutei",
+  "runtime": "standard Worker",
+  "sourceCommit": "a52ace96e1f113dfcc817fd5e5fdcc32c59b6250",
+  "url": "https://cirro-sandbox-prod-rs7wexxow56rmsoz.manoel-carvalhoneto.workers.dev",
+  "recovery": {
+    "spawn": true,
+    "completed": true,
+    "checkpointConfirmed": true,
+    "entryOnce": true,
+    "fuelContinuation": true,
+    "fileEffectsOnce": true,
+    "familySetup": true,
+    "familyCheckpoint": true,
+    "familyInput": true,
+    "stoppedParentResumed": true,
+    "inheritedStdioOnce": true,
+    "disposal": true
+  },
+  "export": {
+    "setup": true,
+    "exported": true,
+    "binary": true,
+    "metadata": true,
+    "symlink": true,
+    "root": true,
+    "exactLimit": true,
+    "bounded": true,
+    "disposal": true
+  },
+  "publishedSoftware": {
+    "artifact": "sha256:edb1cf0bbcf663d177916592d2f1b4361a02966dbf2eb44e3e61ea2a399bb43a",
+    "checks": {
+      "created": true,
+      "uploaded": true,
+      "installed": true,
+      "written": true,
+      "commands": true,
+      "pipeline": true,
+      "disposed": true
+    },
+    "receipts": [
+      {
+        "id": "version",
+        "output": {
+          "stdout": "jq-jaq-0.1.0\n",
+          "stderr": "",
+          "result": null,
+          "exitCode": 0
+        },
+        "elapsedMs": 3776.259921,
+        "ok": true
+      },
+      {
+        "id": "stdin",
+        "output": {
+          "stdout": "42\n",
+          "stderr": "",
+          "result": null,
+          "exitCode": 0
+        },
+        "elapsedMs": 3559.057907999999,
+        "ok": true
+      },
+      {
+        "id": "filter",
+        "output": {
+          "stdout": "45\n",
+          "stderr": "",
+          "result": null,
+          "exitCode": 0
+        },
+        "elapsedMs": 3718.903793999998,
+        "ok": true
+      },
+      {
+        "id": "file",
+        "output": {
+          "stdout": "73\n",
+          "stderr": "",
+          "result": null,
+          "exitCode": 0
+        },
+        "elapsedMs": 3642.773368000002,
+        "ok": true
+      }
+    ]
+  },
+  "allPassed": true,
+  "fullParity": false,
+  "allTestsMigrated": false,
+  "lowerCostThanAgentOsProven": false
+}
