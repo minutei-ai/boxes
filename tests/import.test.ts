@@ -222,7 +222,7 @@ test("UTF-8 manifest byte quota rejects a snapshot before publishing an unreadab
     root,
     ...Array.from({ length: 1200 }, (_, index) => ({
       ...root,
-      path: `/${"🦀".repeat(970)}${index}`,
+      path: `/${index}-${"🦀".repeat(970)}`,
     })),
   ];
   expect(

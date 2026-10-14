@@ -19,6 +19,10 @@ Licensed under [Apache 2.0](LICENSE). Maintained by [Minutei AI](https://github.
 
 Boxes does not currently provide Linux compatibility, a complete POSIX shell, npm/pip installation, interactive terminals or reliable background processes. Python runs in a fresh RustPython Wasm instance with native instruction and memory limits. JavaScript uses QuickJS without Node modules; use `tools.call` for durable files. Python uses `await tools.call(...)`; synchronous filesystem imports and pip remain pending.
 
+## Effect SDK
+
+Use [`@minutei-ai/boxes`](docs/sdk.md) from Effect 4 applications and Cloudflare Workers. The SDK shares the server contracts, infers results per operation and uses the native Effect HttpClient with scoped redacted credentials.
+
 ## Install and verify
 
 Requires Bun, clang, llvm-ar, Rust with the `wasm32-unknown-unknown` target, and the matching wasm-bindgen CLI:

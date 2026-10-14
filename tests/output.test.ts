@@ -25,6 +25,7 @@ const post = async (
 ) =>
   fetch(new URL(path, await instance.ready), {
     method: "POST",
+    keepalive: false,
     headers: { authorization: `Bearer ${token}`, "content-type": "application/json" },
     body: JSON.stringify(body),
   });

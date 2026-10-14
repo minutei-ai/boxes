@@ -1,18 +1,33 @@
 {
-  "name": "boxes",
+  "name": "@minutei-ai/boxes",
   "version": "0.1.0",
-  "private": true,
   "license": "Apache-2.0",
   "repository": {
     "type": "git",
     "url": "https://github.com/minutei-ai/boxes.git"
   },
+  "files": [
+    "dist/sdk",
+    "LICENSE",
+    "README.md",
+    "docs/sdk.md"
+  ],
   "type": "module",
+  "exports": {
+    ".": {
+      "types": "./dist/sdk/sdk.d.ts",
+      "import": "./dist/sdk/sdk.js"
+    },
+    "./contracts": {
+      "types": "./dist/sdk/contracts.d.ts",
+      "import": "./dist/sdk/contracts.js"
+    }
+  },
   "scripts": {
     "build": "bun tooling/build.ts",
     "typecheck": "tsc --noEmit",
     "test": "bun test",
-    "check": "bun run build && bun run typecheck && cargo clippy --workspace --all-targets -- -D warnings && cargo test --workspace && bun test",
+    "check": "bun run build && bun run build:sdk && bun run typecheck && cargo clippy --workspace --all-targets -- -D warnings && cargo test --workspace && bun test",
     "dev": "bun run build && alchemy dev alchemy.run.ts --stage dev --profile minutei",
     "deploy": "bun run build && alchemy deploy alchemy.run.ts --stage prod --profile minutei",
     "bench": "bun tooling/benchmark.ts",
@@ -42,11 +57,10 @@
     "format:check": "oxfmt --check . && cargo fmt --all -- --check && rustfmt --check tests/fixtures/*.rs",
     "plan": "bun run build && alchemy plan alchemy.run.ts --stage prod --profile minutei --no-input",
     "export:proof": "bun tooling/export-proof.ts",
-    "bench:wasi": "cargo run -p boxes-wasm-bench --release --locked --"
-  },
-  "dependencies": {
-    "alchemy": "2.0.0-beta.83",
-    "effect": "4.0.4"
+    "bench:wasi": "cargo run -p boxes-wasm-bench --release --locked --",
+    "build:sdk": "bun tooling/build-sdk.ts",
+    "prepack": "bun run build:sdk",
+    "sdk:proof": "bun tooling/sdk-proof.ts"
   },
   "devDependencies": {
     "@alchemy.run/cloudflare-runtime": "2.0.0-beta.83",
@@ -54,7 +68,12 @@
     "@effect/platform-bun": "4.0.4",
     "@effect/platform-node": "4.0.4",
     "@types/bun": "1.4.2",
+    "alchemy": "2.0.0-beta.83",
+    "effect": "4.0.4",
     "oxfmt": "0.71.0",
     "typescript": "6.0.3"
+  },
+  "peerDependencies": {
+    "effect": "^4.0.0"
   }
 }

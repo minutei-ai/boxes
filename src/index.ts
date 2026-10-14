@@ -4,28 +4,19 @@ import { initSync, Kernel } from "../dist/kernel/cirro_kernel";
 import { administrator, authorize, mint, requirePermission } from "./auth";
 import {
   Action,
+  ActionResponses,
   DispatchReceipt,
-  SoftwareCatalog,
-  PackagePreparation,
-  BatchReadResults,
-  BatchWriteResults,
-  DirectoryTree,
-  CanonicalPath,
   MigrationReceipt,
   OutputMigrationInput,
   OutputMigrationReceipt,
   CreateSandbox,
-  DirectoryEntries,
   ErrorResponse,
   Fault,
-  FileContent,
-  FileStat,
   FilesystemSnapshot,
   Head,
   Id,
   Policy,
   MintCapability,
-  NetworkResult,
   RunRecord,
   RunSummary,
   RecoveryStatus,
@@ -415,51 +406,9 @@ const route = Effect.fn("api.route")(function* (request: Request, env: Env) {
     ),
     Match.orElse((action) =>
       guestAction(env, capability, action).pipe(
-        Effect.map((result) => {
-          if (action.op === "network.fetch")
-            return Schema.encodeUnknownSync(Schema.fromJsonString(NetworkResult))(result);
-          return Match.value(action).pipe(
-            Match.when({ op: "software.install" }, () =>
-              Schema.encodeUnknownSync(Schema.fromJsonString(PackagePreparation.fields.installed))(
-                result,
-              ),
-            ),
-            Match.whenOr({ op: "software.list" }, { op: "software.installed" }, () =>
-              Schema.encodeUnknownSync(Schema.fromJsonString(SoftwareCatalog))(result),
-            ),
-            Match.when({ op: "filesystem.export" }, () =>
-              Schema.encodeUnknownSync(Schema.fromJsonString(FilesystemSnapshot))(result),
-            ),
-            Match.when({ op: "filesystem.readFiles" }, () =>
-              Schema.encodeUnknownSync(Schema.fromJsonString(BatchReadResults))(result),
-            ),
-            Match.when({ op: "filesystem.writeFiles" }, () =>
-              Schema.encodeUnknownSync(Schema.fromJsonString(BatchWriteResults))(result),
-            ),
-            Match.when({ op: "filesystem.readdirRecursive" }, () =>
-              Schema.encodeUnknownSync(Schema.fromJsonString(DirectoryTree))(result),
-            ),
-            Match.when({ op: "filesystem.realpath" }, () =>
-              Schema.encodeUnknownSync(Schema.fromJsonString(CanonicalPath))(result),
-            ),
-            Match.when({ op: "filesystem.readFile" }, () =>
-              Schema.encodeUnknownSync(Schema.fromJsonString(FileContent))(result),
-            ),
-            Match.when({ op: "filesystem.stat" }, () =>
-              Schema.encodeUnknownSync(Schema.fromJsonString(FileStat))(result),
-            ),
-            Match.when({ op: "filesystem.readdir" }, () =>
-              Schema.encodeUnknownSync(Schema.fromJsonString(DirectoryEntries))(result),
-            ),
-            Match.when({ op: "filesystem.exists" }, () =>
-              Schema.encodeUnknownSync(Schema.fromJsonString(Exists))(result),
-            ),
-            Match.when({ op: "filesystem.readlink" }, () =>
-              Schema.encodeUnknownSync(Schema.fromJsonString(Link))(result),
-            ),
-            Match.orElse(() => Schema.encodeUnknownSync(Schema.fromJsonString(Success))(result)),
-          );
-        }),
+        Effect.map((result) =>
+          Schema.encodeUnknownSync(Schema.fromJsonString(ActionResponses[action.op]))(result),
+        ),
       ),
     ),
   );
