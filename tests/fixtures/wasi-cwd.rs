@@ -45,7 +45,7 @@ unsafe extern "C" {
 #[unsafe(no_mangle)]
 pub extern "C" fn run() -> i32 {
     unsafe {
-        let mut actions = [0u8; 128];
+        let mut actions = [0u8; 256];
         let mut length = 0usize;
         if cfg!(case = "chdir") || cfg!(case = "symlink") {
             let path = if cfg!(case = "symlink") {
@@ -100,6 +100,67 @@ pub extern "C" fn run() -> i32 {
             actions[20..24].copy_from_slice(&99u32.to_le_bytes());
             length = 24;
         }
+        if cfg!(case = "redirect")
+            || cfg!(case = "open-dir")
+            || cfg!(case = "exclusive")
+            || cfg!(case = "open-close")
+        {
+            length = 0;
+            let path = if cfg!(case = "open-dir") {
+                b"work".as_slice()
+            } else if cfg!(case = "exclusive") {
+                b"work/input.json".as_slice()
+            } else {
+                b"work/output.txt".as_slice()
+            };
+            let flags = if cfg!(case = "open-dir") {
+                0x10000u32
+            } else if cfg!(case = "exclusive") {
+                0xc1
+            } else {
+                0x241
+            };
+            for (index, value) in [3u32, 12, 0, flags, 0o600, path.len() as u32]
+                .iter()
+                .enumerate()
+            {
+                actions[index * 4..index * 4 + 4].copy_from_slice(&value.to_le_bytes());
+            }
+            actions[24..24 + path.len()].copy_from_slice(path);
+            length = 24 + path.len();
+            let next = if cfg!(case = "open-dir") {
+                5u32
+            } else if cfg!(case = "open-close") {
+                1
+            } else {
+                2
+            };
+            actions[length..length + 4].copy_from_slice(&next.to_le_bytes());
+            let target = if next == 2 { 1u32 } else { 12 };
+            actions[length + 4..length + 8].copy_from_slice(&target.to_le_bytes());
+            if next == 2 {
+                actions[length + 8..length + 12].copy_from_slice(&12u32.to_le_bytes());
+            }
+            length += 24;
+            if cfg!(case = "redirect") {
+                actions[length..length + 4].copy_from_slice(&1u32.to_le_bytes());
+                actions[length + 4..length + 8].copy_from_slice(&12u32.to_le_bytes());
+                length += 24;
+            }
+            if cfg!(case = "open-close") {
+                actions[length..length + 4].copy_from_slice(&2u32.to_le_bytes());
+                actions[length + 4..length + 8].copy_from_slice(&1u32.to_le_bytes());
+                actions[length + 8..length + 12].copy_from_slice(&12u32.to_le_bytes());
+                length += 24;
+            }
+            if cfg!(case = "redirect") {
+                let offset = length;
+                actions[offset..offset + 4].copy_from_slice(&4u32.to_le_bytes());
+                actions[offset + 20..offset + 24].copy_from_slice(&4u32.to_le_bytes());
+                actions[offset + 24..offset + 28].copy_from_slice(b"work");
+                length += 28;
+            }
+        }
         let cwd = if cfg!(case = "explicit") || cfg!(case = "relative") {
             b"/tmp/work".as_slice()
         } else if cfg!(case = "missing") {
@@ -140,6 +201,8 @@ pub extern "C" fn run() -> i32 {
             || cfg!(case = "file")
             || cfg!(case = "closed")
             || cfg!(case = "malformed")
+            || cfg!(case = "exclusive")
+            || cfg!(case = "open-close")
         {
             if pid != 91 {
                 return 99;

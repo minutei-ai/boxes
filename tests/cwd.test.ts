@@ -3,7 +3,7 @@ import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { Schema } from "effect";
-import { RunRecord, TokenResponse } from "../src/contracts";
+import { RunRecord, TokenResponse, FileContent } from "../src/contracts";
 import { runtime } from "../tooling/runtime";
 const directory = await mkdtemp(join(tmpdir(), "cirro-wasi-cwd-"));
 const mf = runtime(directory);
@@ -85,7 +85,7 @@ afterAll(async () => {
   await rm(directory, { recursive: true, force: true });
 });
 
-for (const mode of ["explicit", "relative", "chdir", "fchdir", "symlink"] as const) {
+for (const mode of ["explicit", "relative", "chdir", "fchdir", "symlink", "open-dir"] as const) {
   test(`spawn ${mode} supplies the resolved cwd to published libc and opens a relative input`, async () => {
     const source = Buffer.from(
       await Bun.file(join(import.meta.dir, `../dist/wasi-cwd-${mode}.wasm`)).arrayBuffer(),
@@ -104,6 +104,8 @@ for (const [mode, errno] of [
   ["file", 54],
   ["closed", 8],
   ["malformed", 28],
+  ["exclusive", 20],
+  ["open-close", 8],
 ] as const) {
   test(`spawn ${mode} rejects before allocating a child PID`, async () => {
     const source = Buffer.from(
@@ -116,3 +118,76 @@ for (const [mode, errno] of [
     expect(record.output?.stdout).toBe("");
   });
 }
+
+test("ordered open, dup2, close and chdir redirect published jq without changing parent stdout", async () => {
+  const source = Buffer.from(
+    await Bun.file(join(import.meta.dir, "../dist/wasi-cwd-redirect.wasm")).arrayBuffer(),
+  ).toString("base64");
+  const response = await act({ op: "process.run", id: "redirect", language: "wasm", source });
+  expect(response.status).toBe(200);
+  const record = Schema.decodeUnknownSync(RunRecord)(await response.json());
+  expect(record.output?.result).toBe(0);
+  expect(record.output?.stdout).toBe("");
+  const file = await act({
+    op: "filesystem.readFile",
+    path: "/tmp/work/output.txt",
+  });
+  expect(file.status).toBe(200);
+  const content = Schema.decodeUnknownSync(FileContent)(await file.json());
+  expect(Buffer.from(content.content, content.encoding).toString()).toBe("77\n");
+});
+
+test("an earlier open creates its file even when a later descriptor action fails", async () => {
+  expect(
+    (await act({ op: "filesystem.remove", path: "/tmp/work/output.txt", recursive: false })).status,
+  ).toBe(200);
+  const source = Buffer.from(
+    await Bun.file(join(import.meta.dir, "../dist/wasi-cwd-open-close.wasm")).arrayBuffer(),
+  ).toString("base64");
+  const record = Schema.decodeUnknownSync(RunRecord)(
+    await (
+      await act({ op: "process.run", id: "failed-open-effects", language: "wasm", source })
+    ).json(),
+  );
+  expect(record.output?.result).toBe(8);
+  const file = Schema.decodeUnknownSync(FileContent)(
+    await (await act({ op: "filesystem.readFile", path: "/tmp/work/output.txt" })).json(),
+  );
+  expect(file.size).toBe(0);
+  expect(
+    (
+      await act({
+        op: "filesystem.writeFile",
+        path: "/tmp/work/output.txt",
+        content: "77\n",
+        encoding: "utf8",
+      })
+    ).status,
+  ).toBe(200);
+});
+test("spawn file creation enforces the originating capability", async () => {
+  const restricted = Schema.decodeUnknownSync(TokenResponse)(
+    await (
+      await post("/v1/sandboxes/cwd/capabilities", "cirro-local-test-credential", {
+        permissions: ["read", "execute"],
+        expiresInSeconds: 3600,
+      })
+    ).json(),
+  ).token;
+  const source = Buffer.from(
+    await Bun.file(join(import.meta.dir, "../dist/wasi-cwd-redirect.wasm")).arrayBuffer(),
+  ).toString("base64");
+  const response = await post("/v1/sandboxes/cwd/action", restricted, {
+    op: "process.run",
+    id: "denied-open",
+    language: "wasm",
+    source,
+  });
+  expect(response.status).toBe(200);
+  const record = Schema.decodeUnknownSync(RunRecord)(await response.json());
+  expect(record.output?.result).toBe(502);
+  const file = Schema.decodeUnknownSync(FileContent)(
+    await (await act({ op: "filesystem.readFile", path: "/tmp/work/output.txt" })).json(),
+  );
+  expect(Buffer.from(file.content, file.encoding).toString()).toBe("77\n");
+});

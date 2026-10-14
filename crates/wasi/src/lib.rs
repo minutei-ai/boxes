@@ -101,6 +101,7 @@ enum Request {
         argv: Vec<String>,
         env: BTreeMap<String, String>,
         cwd_steps: Vec<String>,
+        actions: Vec<SpawnAction>,
     },
     Wait {
         pids: Vec<u32>,
@@ -214,6 +215,7 @@ enum Completion {
     },
     Spawn {
         pointer: usize,
+        resources: SpawnResources,
         actions: Vec<SpawnAction>,
         mask: u64,
     },
@@ -311,11 +313,38 @@ struct ProcessTable {
     buffers: Vec<Weak<RefCell<FileBuffer>>>,
     pipes: Vec<Weak<Pipe>>,
 }
-#[derive(Clone)]
+#[derive(Clone, Serialize)]
 struct SpawnAction {
     command: u32,
     fd: u32,
     source: u32,
+    flags: u32,
+    mode: u32,
+    path: String,
+}
+#[derive(Clone)]
+struct SpawnResources {
+    descriptors: BTreeMap<u32, Descriptor>,
+    files: BTreeMap<u32, Rc<RefCell<FileBuffer>>>,
+    closed: BTreeSet<u32>,
+    cloexec: BTreeSet<u32>,
+}
+impl SpawnResources {
+    fn close(&mut self, fd: u32) {
+        self.cloexec.remove(&fd);
+        if fd < 3 {
+            self.closed.insert(fd);
+        }
+        if let Some(descriptor) = self.descriptors.remove(&fd)
+            && let Some(cache) = descriptor.cache
+            && !self
+                .descriptors
+                .values()
+                .any(|other| other.cache == Some(cache))
+        {
+            self.files.remove(&cache);
+        }
+    }
 }
 
 struct State {
@@ -725,14 +754,18 @@ fn dispatch(caller: &mut Caller<'_, State>, name: &str, args: &[u64]) -> Result<
             }
             let encoded = bytes(caller, a[6], a[7])?;
             let mut actions = Vec::new();
-            let mut shadow = caller.data().descriptors.clone();
+            let mut resources = SpawnResources {
+                descriptors: caller.data().descriptors.clone(),
+                files: caller.data().files.clone(),
+                closed: caller.data().closed.clone(),
+                cloexec: caller.data().cloexec.clone(),
+            };
             for fd in 0..3 {
                 if let Ok(descriptor) = duplicate_source(caller.data(), fd) {
-                    shadow.entry(fd).or_insert(descriptor);
+                    resources.descriptors.entry(fd).or_insert(descriptor);
                 }
             }
             let mut offset = 0usize;
-            let mut count = 0usize;
             while offset < encoded.len() {
                 let header = encoded.get(offset..offset + 24).ok_or(Failure::Errno(28))?;
                 let fields: Vec<u32> = header
@@ -744,70 +777,53 @@ fn dispatch(caller: &mut Caller<'_, State>, name: &str, args: &[u64]) -> Result<
                 offset += 24;
                 let length = fields[5] as usize;
                 let end = offset.checked_add(length).ok_or(Failure::Errno(28))?;
-                let path = encoded.get(offset..end).ok_or(Failure::Errno(28))?;
+                let raw = encoded.get(offset..end).ok_or(Failure::Errno(28))?;
                 offset = end;
-                count += 1;
-                if count > 128 || length > 4096 {
+                if actions.len() >= 128 || length > 4096 {
                     return Err(Failure::Errno(22));
                 }
-                if fields[3] != 0 || fields[4] != 0 {
-                    return Err(Failure::Errno(58));
+                let path = std::str::from_utf8(raw).map_err(|_| Failure::Errno(25))?;
+                if path.contains('\0') {
+                    return Err(Failure::Errno(28));
                 }
                 match fields[0] {
-                    1 => {
-                        if length != 0 {
-                            return Err(Failure::Errno(28));
-                        }
-                        if fields[1] >= MAX_FILES as u32 + 4 || shadow.remove(&fields[1]).is_none()
-                        {
-                            return Err(Failure::Errno(8));
-                        }
-                        actions.push(SpawnAction {
-                            command: 1,
-                            fd: fields[1],
-                            source: fields[2],
-                        });
-                    }
-                    2 => {
-                        if length != 0 {
-                            return Err(Failure::Errno(28));
-                        }
-                        if fields[1] >= MAX_FILES as u32 + 4 || fields[2] >= MAX_FILES as u32 + 4 {
-                            return Err(Failure::Errno(8));
-                        }
-                        let source = shadow.get(&fields[2]).ok_or(Failure::Errno(8))?.clone();
-                        if !shadow.contains_key(&fields[1]) && shadow.len() >= MAX_FILES {
-                            return Err(Failure::Errno(33));
-                        }
-                        shadow.insert(fields[1], source);
-                        actions.push(SpawnAction {
-                            command: 2,
-                            fd: fields[1],
-                            source: fields[2],
-                        });
-                    }
-                    4 => {
-                        let path = std::str::from_utf8(path).map_err(|_| Failure::Errno(25))?;
-                        if path.is_empty() || path.contains('\0') {
-                            return Err(Failure::Errno(28));
-                        }
-                        cwd_steps.push(path.into());
-                    }
-                    5 => {
+                    1 | 2 | 5 => {
                         if length != 0 || fields[1] >= MAX_FILES as u32 + 4 {
                             return Err(Failure::Errno(8));
                         }
-                        let directory = shadow.get(&fields[1]).ok_or(Failure::Errno(8))?;
-                        if !directory.directory {
-                            return Err(Failure::Errno(54));
+                        if fields[0] == 2 && fields[2] >= MAX_FILES as u32 + 4 {
+                            return Err(Failure::Errno(8));
                         }
-                        if !directory.linked {
-                            return Err(Failure::Errno(44));
+                        if fields[3] != 0 || fields[4] != 0 {
+                            return Err(Failure::Errno(58));
                         }
-                        cwd_steps.push(directory.path.clone());
+                    }
+                    3 => {
+                        if fields[1] >= MAX_FILES as u32 + 4 || path.is_empty() {
+                            return Err(Failure::Errno(28));
+                        }
+                        if fields[3] & !0xb0ec3 != 0 {
+                            return Err(Failure::Errno(58));
+                        }
+                        if fields[3] & 3 == 3 || fields[4] & !0o7777 != 0 {
+                            return Err(Failure::Errno(28));
+                        }
+                    }
+                    4 => {
+                        if path.is_empty() {
+                            return Err(Failure::Errno(28));
+                        }
                     }
                     _ => return Err(Failure::Errno(58)),
                 }
+                actions.push(SpawnAction {
+                    command: fields[0],
+                    fd: fields[1],
+                    source: fields[2],
+                    flags: fields[3],
+                    mode: fields[4],
+                    path: path.into(),
+                });
             }
             let mask = (u64::from(a[13] as u32) | (u64::from(a[14] as u32) << 32))
                 & !((1 << 8) | (1 << 18));
@@ -818,9 +834,11 @@ fn dispatch(caller: &mut Caller<'_, State>, name: &str, args: &[u64]) -> Result<
                     argv,
                     env,
                     cwd_steps,
+                    actions: actions.clone(),
                 },
                 Completion::Spawn {
                     pointer: a[16],
+                    resources,
                     actions,
                     mask,
                 },
@@ -2655,20 +2673,217 @@ impl WasmGuest {
         }
     }
 
+    pub fn spawn_action(&mut self, index: usize) -> Result<String, JsValue> {
+        let pending = self
+            .store
+            .data_mut()
+            .pending
+            .as_mut()
+            .ok_or_else(|| JsValue::from_str("No pending spawn"))?;
+        let Completion::Spawn {
+            actions, resources, ..
+        } = &mut pending.completion
+        else {
+            return Err(JsValue::from_str("No pending spawn"));
+        };
+        let action = actions
+            .get(index)
+            .ok_or_else(|| JsValue::from_str("Invalid spawn action"))?;
+        let mut errno = 0;
+        let mut path = None;
+        match action.command {
+            1 => {
+                if resources.descriptors.contains_key(&action.fd) {
+                    resources.close(action.fd);
+                } else {
+                    errno = 8;
+                }
+            }
+            2 => {
+                if let Some(source) = resources.descriptors.get(&action.source).cloned() {
+                    if action.fd != action.source {
+                        if !resources.descriptors.contains_key(&action.fd)
+                            && resources.descriptors.len() >= MAX_FILES
+                        {
+                            errno = 33;
+                        } else {
+                            resources.close(action.fd);
+                            resources.descriptors.insert(action.fd, source);
+                            resources.closed.remove(&action.fd);
+                            resources.cloexec.remove(&action.fd);
+                        }
+                    }
+                } else {
+                    errno = 8;
+                }
+            }
+            5 => match resources.descriptors.get(&action.fd) {
+                Some(directory) if directory.directory && directory.linked => {
+                    path = Some(directory.path.clone())
+                }
+                Some(directory) if !directory.directory => errno = 54,
+                Some(_) => errno = 44,
+                None => errno = 8,
+            },
+            _ => errno = 28,
+        }
+        serde_json::to_string(&serde_json::json!({"errno":errno,"path":path}))
+            .map_err(|error| JsValue::from_str(&error.to_string()))
+    }
+
+    pub fn spawn_open(
+        &mut self,
+        index: usize,
+        data: &[u8],
+        path: &str,
+        directory: bool,
+        metadata: &[u8],
+    ) -> Result<String, JsValue> {
+        let table = self.store.data().processes.clone();
+        let pending = self
+            .store
+            .data_mut()
+            .pending
+            .as_mut()
+            .ok_or_else(|| JsValue::from_str("No pending spawn"))?;
+        let Completion::Spawn {
+            actions, resources, ..
+        } = &mut pending.completion
+        else {
+            return Err(JsValue::from_str("No pending spawn"));
+        };
+        let action = actions
+            .get(index)
+            .ok_or_else(|| JsValue::from_str("Invalid spawn action"))?;
+        if action.command != 3 {
+            return Err(JsValue::from_str("Invalid spawn open"));
+        }
+        let metadata: [u8; 76] = metadata
+            .try_into()
+            .map_err(|_| JsValue::from_str("Invalid spawn metadata"))?;
+        let mut errno = 0;
+        let mut descriptor = Descriptor {
+            path: path.into(),
+            directory,
+            read: action.flags & 3 != 1,
+            write: action.flags & 3 != 0,
+            flags: Rc::new(Cell::new(0)),
+            offset: Rc::new(Cell::new(0)),
+            stdio: None,
+            pipe: None,
+            rights: 4 | 8 | 32 | (1 << 21) | (1 << 27),
+            inheriting: 0,
+            cache: None,
+            linked: true,
+            metadata,
+        };
+        if descriptor.read {
+            descriptor.rights |= 2;
+        }
+        if descriptor.write {
+            descriptor.rights |= 1 | 16 | 64 | (1 << 8) | (1 << 22) | (1 << 23);
+        }
+        if directory {
+            descriptor.rights = (1 << 30) - 1;
+            descriptor.inheriting = (1 << 30) - 1;
+        }
+        if action.flags & 0x400 != 0 {
+            descriptor.flags.set(descriptor.flags.get() | 1);
+        }
+        if action.flags & 0x800 != 0 {
+            descriptor.flags.set(descriptor.flags.get() | 4);
+        }
+        if !resources.descriptors.contains_key(&action.fd)
+            && resources.descriptors.len() >= MAX_FILES
+        {
+            errno = 33;
+        } else {
+            let mut retained = None;
+            if !directory {
+                let shared = table
+                    .borrow()
+                    .buffers
+                    .iter()
+                    .filter_map(Weak::upgrade)
+                    .find(|file| file.borrow().path.as_deref() == Some(path));
+                let used: usize = table
+                    .borrow()
+                    .buffers
+                    .iter()
+                    .filter_map(Weak::upgrade)
+                    .map(|file| file.borrow().bytes.len())
+                    .sum();
+                if shared.is_none() && used.saturating_add(data.len()) > 16_777_216 {
+                    return serde_json::to_string(&serde_json::json!({"errno":48,"path":null}))
+                        .map_err(|error| JsValue::from_str(&error.to_string()));
+                }
+                let buffer = if let Some(buffer) = shared {
+                    if action.flags & 0x200 != 0 {
+                        let mut file = buffer.borrow_mut();
+                        file.bytes = data.to_vec();
+                        file.metadata = metadata;
+                    }
+                    buffer
+                } else {
+                    let buffer = Rc::new(RefCell::new(FileBuffer {
+                        path: Some(path.into()),
+                        bytes: data.to_vec(),
+                        metadata,
+                    }));
+                    table
+                        .borrow_mut()
+                        .buffers
+                        .retain(|file| file.strong_count() > 0);
+                    table.borrow_mut().buffers.push(Rc::downgrade(&buffer));
+                    buffer
+                };
+                let existing = resources
+                    .files
+                    .iter()
+                    .find(|(_, file)| Rc::ptr_eq(file, &buffer))
+                    .map(|(cache, _)| *cache);
+                let cache = existing.or_else(|| {
+                    (0..MAX_FILES as u32).find(|cache| !resources.files.contains_key(cache))
+                });
+                if let Some(cache) = cache {
+                    retained = Some((cache, buffer));
+                    descriptor.cache = Some(cache);
+                } else {
+                    errno = 33;
+                }
+            }
+            if errno == 0 {
+                resources.close(action.fd);
+                if let Some((cache, buffer)) = retained {
+                    resources.files.insert(cache, buffer);
+                }
+                resources.descriptors.insert(action.fd, descriptor);
+                resources.closed.remove(&action.fd);
+                if action.flags & 0x80000 != 0 {
+                    resources.cloexec.insert(action.fd);
+                }
+            }
+        }
+        serde_json::to_string(&serde_json::json!({"errno":errno,"path":null}))
+            .map_err(|error| JsValue::from_str(&error.to_string()))
+    }
+
     pub fn spawn_child(
         &mut self,
         bytes: &[u8],
         configuration: &str,
         cwd: &str,
     ) -> Result<Option<WasmGuest>, JsValue> {
-        let (actions, mask) = match self
+        let (resources, mask) = match self
             .store
             .data()
             .pending
             .as_ref()
             .map(|pending| &pending.completion)
         {
-            Some(Completion::Spawn { actions, mask, .. }) => (actions.clone(), *mask),
+            Some(Completion::Spawn {
+                resources, mask, ..
+            }) => (resources.clone(), *mask),
             _ => return Err(JsValue::from_str("No pending spawn")),
         };
         let table = self.store.data().processes.clone();
@@ -2699,10 +2914,10 @@ impl WasmGuest {
         child.fuel_limit = self.fuel_limit;
         let parent = self.store.data();
         let state = child.store.data_mut();
-        state.descriptors = parent.descriptors.clone();
-        state.files = parent.files.clone();
-        state.closed = parent.closed.clone();
-        state.cloexec = parent.cloexec.clone();
+        state.descriptors = resources.descriptors;
+        state.files = resources.files;
+        state.closed = resources.closed;
+        state.cloexec = resources.cloexec;
         state.stdout = parent.stdout.clone();
         state.stderr = parent.stderr.clone();
         state.stdin = parent.stdin.clone();
@@ -2710,37 +2925,6 @@ impl WasmGuest {
         state.stdio_flags = parent.stdio_flags.clone();
         state.requests = parent.requests.clone();
         state.signal_mask = mask;
-        for action in actions {
-            let source = match duplicate_source(
-                state,
-                if action.command == 1 {
-                    action.fd
-                } else {
-                    action.source
-                },
-            ) {
-                Ok(source) => source,
-                Err(_) => {
-                    self.respond(8, &[], "/", false, 0, &[])?;
-                    return Ok(None);
-                }
-            };
-            if action.command == 1 {
-                close(state, action.fd);
-            } else if action.fd != action.source {
-                if stream(state, action.fd).is_none()
-                    && !state.descriptors.contains_key(&action.fd)
-                    && state.descriptors.len() >= MAX_FILES
-                {
-                    self.respond(33, &[], "/", false, 0, &[])?;
-                    return Ok(None);
-                }
-                close(state, action.fd);
-                state.descriptors.insert(action.fd, source);
-                state.closed.remove(&action.fd);
-                state.cloexec.remove(&action.fd);
-            }
-        }
         for fd in state.cloexec.clone() {
             close(state, fd);
         }

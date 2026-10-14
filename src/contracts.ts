@@ -381,6 +381,24 @@ export const ToolStep = Schema.Union([
   Schema.Struct({ kind: Schema.Literal("done"), output: Schema.fromJsonString(RunResult) }),
 ]);
 
+export const SpawnStageResult = Schema.Struct({
+  errno: Schema.Literals([0, 8, 28, 33, 44, 48, 54]),
+  path: Schema.NullOr(Path),
+});
+export const WasiOpen = Schema.Struct({
+  kind: Schema.Literal("open"),
+  path: Path,
+  base: Path,
+  read: Schema.Boolean,
+  write: Schema.Boolean,
+  create: Schema.Boolean,
+  truncate: Schema.Boolean,
+  exclusive: Schema.Boolean,
+  directory: Schema.Boolean,
+  follow: Schema.Boolean,
+  mode: Schema.Int,
+});
+
 export const WasmStep = Schema.Union([
   Schema.Struct({
     kind: Schema.Literal("spawn"),
@@ -398,6 +416,16 @@ export const WasmStep = Schema.Union([
     ).check(Schema.isMinLength(1), Schema.isMaxLength(130)),
     argv: WasmConfiguration.fields.argv,
     env: WasmConfiguration.fields.env,
+    actions: Schema.Array(
+      Schema.Struct({
+        command: Schema.Literals([1, 2, 3, 4, 5]),
+        fd: Schema.Int,
+        source: Schema.Int,
+        flags: Schema.Int,
+        mode: Schema.Int,
+        path: Schema.String.check(Schema.isMaxLength(4096)),
+      }),
+    ).check(Schema.isMaxLength(128)),
   }),
   Schema.Struct({
     kind: Schema.Literal("wait"),
@@ -409,19 +437,7 @@ export const WasmStep = Schema.Union([
     kind: Schema.Literal("yield"),
     fuelUsed: Schema.Int.check(Schema.isBetween({ minimum: 0, maximum: 100_000_000 })),
   }),
-  Schema.Struct({
-    kind: Schema.Literal("open"),
-    path: Path,
-    base: Path,
-    read: Schema.Boolean,
-    write: Schema.Boolean,
-    create: Schema.Boolean,
-    truncate: Schema.Boolean,
-    exclusive: Schema.Boolean,
-    directory: Schema.Boolean,
-    follow: Schema.Boolean,
-    mode: Schema.Int,
-  }),
+  WasiOpen,
   Schema.Struct({
     kind: Schema.Literal("tmpfile"),
     path: Path,

@@ -1,6 +1,13 @@
 import { Config, Effect, Redacted, Schema } from "effect";
 import { join } from "node:path";
-import { Action, CreateSandbox, MintCapability, TokenResponse, RunRecord } from "../src/contracts";
+import {
+  Action,
+  CreateSandbox,
+  MintCapability,
+  TokenResponse,
+  RunRecord,
+  FileContent,
+} from "../src/contracts";
 
 const configuration = await Effect.runPromise(
   Effect.gen(function* () {
@@ -78,23 +85,25 @@ const imageLinked = await action({
   path: "/tmp/work/jq",
 });
 const receipts = await Effect.runPromise(
-  Effect.forEach(["explicit", "relative", "chdir", "fchdir", "symlink"] as const, (mode) =>
-    Effect.tryPromise(async () => {
-      const source = Buffer.from(
-        await Bun.file(join(import.meta.dir, `../dist/wasi-cwd-${mode}.wasm`)).arrayBuffer(),
-      ).toString("base64");
-      const response = await action({ op: "process.run", id: mode, language: "wasm", source });
-      const record = Schema.decodeUnknownSync(RunRecord)(await response.json());
-      return {
-        mode,
-        passed:
-          response.status === 200 &&
-          record.status === "exited" &&
-          record.output?.exitCode === 0 &&
-          record.output.result === 0 &&
-          record.output.stdout === "77\n",
-      };
-    }),
+  Effect.forEach(
+    ["explicit", "relative", "chdir", "fchdir", "symlink", "open-dir"] as const,
+    (mode) =>
+      Effect.tryPromise(async () => {
+        const source = Buffer.from(
+          await Bun.file(join(import.meta.dir, `../dist/wasi-cwd-${mode}.wasm`)).arrayBuffer(),
+        ).toString("base64");
+        const response = await action({ op: "process.run", id: mode, language: "wasm", source });
+        const record = Schema.decodeUnknownSync(RunRecord)(await response.json());
+        return {
+          mode,
+          passed:
+            response.status === 200 &&
+            record.status === "exited" &&
+            record.output?.exitCode === 0 &&
+            record.output.result === 0 &&
+            record.output.stdout === "77\n",
+        };
+      }),
   ),
 );
 const rejected = await Effect.runPromise(
@@ -104,6 +113,8 @@ const rejected = await Effect.runPromise(
       ["file", 54],
       ["closed", 8],
       ["malformed", 28],
+      ["exclusive", 20],
+      ["open-close", 8],
     ] as const,
     ([mode, errno]) =>
       Effect.tryPromise(async () => {
@@ -121,6 +132,18 @@ const rejected = await Effect.runPromise(
       }),
   ),
 );
+const redirectSource = Buffer.from(
+  await Bun.file(join(import.meta.dir, "../dist/wasi-cwd-redirect.wasm")).arrayBuffer(),
+).toString("base64");
+const redirectResponse = await action({
+  op: "process.run",
+  id: "redirect",
+  language: "wasm",
+  source: redirectSource,
+});
+const redirect = Schema.decodeUnknownSync(RunRecord)(await redirectResponse.json());
+const redirectedFile = await action({ op: "filesystem.readFile", path: "/tmp/work/output.txt" });
+const redirectedContent = Schema.decodeUnknownSync(FileContent)(await redirectedFile.json());
 const disposed = await action({ op: "vm.dispose" });
 const checks = {
   setup:
@@ -132,6 +155,12 @@ const checks = {
     imageLinked.status === 200,
   publishedRelativeInput: receipts.every((receipt) => receipt.passed),
   invalidCwdAndActions: rejected.every(Boolean),
+  orderedOpenRedirection:
+    redirectResponse.status === 200 &&
+    redirect.output?.result === 0 &&
+    redirect.output.stdout === "" &&
+    redirectedFile.status === 200 &&
+    Buffer.from(redirectedContent.content, redirectedContent.encoding).toString() === "77\n",
   disposal: disposed.status === 200,
 };
 const report = {
@@ -144,7 +173,7 @@ const report = {
   receipts,
   artifactDigest,
   allPassed: Object.values(checks).every(Boolean),
-  openFileActions: false,
+  openFileActions: true,
   fullProcessParity: false,
   packageParity: false,
 };

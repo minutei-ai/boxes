@@ -209,6 +209,10 @@ await Effect.runPromise(
       "file",
       "closed",
       "malformed",
+      "redirect",
+      "open-dir",
+      "exclusive",
+      "open-close",
     ]) {
       yield* run([
         "rustc",

@@ -22,6 +22,8 @@ import {
   DirectoryEntries,
   RunResult,
   WasmStep,
+  WasiOpen,
+  SpawnStageResult,
   WasmProgram,
   WasmConfiguration,
 } from "./contracts";
@@ -120,6 +122,94 @@ export const wasi = Effect.fn("wasi.execute")(function* (
     dirty: checkpoint !== initial.head.manifest,
     checkpoint,
   };
+  const openFile = Effect.fn("wasi.openFile")(function* (
+    input: typeof WasiOpen.Type,
+    guest: InstanceType<ReturnType<typeof createBindings>["WasmGuest"]>,
+  ) {
+    if (input.read || !input.write) yield* requirePermission(capability, "read");
+    if (input.write || input.create || input.truncate)
+      yield* requirePermission(capability, "write");
+    if (
+      (input.truncate && !input.write) ||
+      (input.exclusive && !input.create) ||
+      (input.directory && input.create)
+    )
+      return yield* new Fault({
+        code: "EINVAL",
+        status: 400,
+        message: "Invalid WASI open flags",
+      });
+    const found = yield* kernelCall(() => kernel.stat(input.path, input.follow)).pipe(
+      Effect.flatMap(Schema.decodeUnknownEffect(Schema.fromJsonString(FileStat))),
+      Effect.catchTag("Fault", (fault) => {
+        if (fault.code === "ENOENT" && input.create) return Effect.succeed(null);
+        return Effect.fail(fault);
+      }),
+    );
+    if (found !== null && found.kind === "symlink")
+      return yield* new Fault({
+        code: "ELOOP",
+        status: 400,
+        message: "WASI open does not follow this symlink",
+      });
+    if (found !== null && input.create && input.exclusive)
+      return yield* new Fault({
+        code: "EEXIST",
+        status: 409,
+        message: "WASI exclusive file already exists",
+      });
+    if (found !== null && input.write && (found.mode & 0o200) === 0)
+      return yield* new Fault({
+        code: "EACCES",
+        status: 403,
+        message: "WASI file is not writable",
+      });
+    const parent = input.path.slice(0, input.path.lastIndexOf("/"));
+    const path = yield* Effect.gen(function* () {
+      if (found !== null) return found.path;
+      const directory = yield* kernelCall(() => kernel.realpath(parent || "/"));
+      if (directory === "/") return input.path.slice(input.path.lastIndexOf("/"));
+      return directory + input.path.slice(input.path.lastIndexOf("/"));
+    });
+    if (input.base !== "/" && path !== input.base && !path.startsWith(input.base + "/"))
+      return yield* new Fault({
+        code: "ENOTCAPABLE",
+        status: 403,
+        message: "WASI symlink escapes its directory descriptor",
+      });
+    if (found !== null && input.directory && found.kind !== "directory")
+      return yield* new Fault({
+        code: "ENOTDIR",
+        status: 400,
+        message: "WASI directory open requires a directory",
+      });
+    if (found !== null && found.kind === "directory") {
+      if (input.truncate || input.write)
+        return yield* new Fault({
+          code: "EISDIR",
+          status: 400,
+          message: "WASI cannot write a directory",
+        });
+      return { data: Buffer.alloc(0), path, directory: true, value: 0n };
+    }
+    const data = yield* Effect.gen(function* () {
+      if (found === null || input.truncate) {
+        yield* write(env, capability.sandboxId, kernel, path, Buffer.alloc(0));
+        if (found === null) yield* kernelCall(() => kernel.chmod(path, input.mode));
+        state.dirty = true;
+        return Buffer.alloc(0);
+      }
+      if (guest.has_file(path)) return Buffer.alloc(0);
+      if (found.size + guest.buffered_bytes() > 16_777_216)
+        return yield* new Fault({
+          code: "ENOMEM",
+          status: 413,
+          message: "WASI open buffers exceed 16 MiB",
+        });
+      return yield* read(env, capability.sandboxId, kernel, path, !input.read && input.write);
+    });
+    return { data, path, directory: false, value: 0n };
+  });
   const changes = { pending: Deferred.makeUnsafe<void>() };
   const notify = Effect.fn("wasi.notify")(() =>
     Effect.gen(function* () {
@@ -242,6 +332,108 @@ export const wasi = Effect.fn("wasi.execute")(function* (
                       });
                     location.cwd = directory.path;
                   }
+                  for (const [index, action] of input.actions.entries()) {
+                    if (action.command === 4) {
+                      const joined = Match.value(action.path.startsWith("/")).pipe(
+                        Match.when(true, () => action.path),
+                        Match.orElse(() => `${location.cwd}/${action.path}`),
+                      );
+                      const cwd = yield* kernelCall(() => kernel.realpath(joined));
+                      const directory = yield* kernelCall(() => kernel.stat(cwd, true)).pipe(
+                        Effect.flatMap(Schema.decodeUnknownEffect(Schema.fromJsonString(FileStat))),
+                      );
+                      if (directory.kind !== "directory")
+                        return yield* new Fault({
+                          code: "ENOTDIR",
+                          status: 400,
+                          message: "Child cwd is not a directory",
+                        });
+                      if ((directory.mode & 0o100) === 0)
+                        return yield* new Fault({
+                          code: "EACCES",
+                          status: 403,
+                          message: "Child cwd is not searchable",
+                        });
+                      location.cwd = directory.path;
+                      continue;
+                    }
+                    const staged = yield* Effect.gen(function* () {
+                      if (action.command === 3) {
+                        const path = Match.value(action.path.startsWith("/")).pipe(
+                          Match.when(true, () => action.path),
+                          Match.orElse(() => `${location.cwd}/${action.path}`),
+                        );
+                        const opened = yield* openFile(
+                          {
+                            kind: "open",
+                            path,
+                            base: "/",
+                            read: (action.flags & 3) !== 1,
+                            write: (action.flags & 3) !== 0,
+                            create: (action.flags & 0x40) !== 0,
+                            exclusive: (action.flags & 0x80) !== 0,
+                            truncate: (action.flags & 0x200) !== 0,
+                            directory: (action.flags & 0x10000) !== 0,
+                            follow: (action.flags & 0x20000) === 0,
+                            mode: action.mode,
+                          },
+                          guest,
+                        );
+                        const stat = yield* kernelCall(() => kernel.stat(opened.path, true)).pipe(
+                          Effect.flatMap(
+                            Schema.decodeUnknownEffect(Schema.fromJsonString(FileStat)),
+                          ),
+                        );
+                        return yield* Effect.try({
+                          try: () =>
+                            guest.spawn_open(
+                              index,
+                              opened.data,
+                              opened.path,
+                              opened.directory,
+                              statBytes(stat),
+                            ),
+                          catch: (cause) => new WasmFailure({ cause }),
+                        });
+                      }
+                      return yield* Effect.try({
+                        try: () => guest.spawn_action(index),
+                        catch: (cause) => new WasmFailure({ cause }),
+                      });
+                    }).pipe(
+                      Effect.flatMap(
+                        Schema.decodeUnknownEffect(Schema.fromJsonString(SpawnStageResult)),
+                      ),
+                    );
+                    if (staged.errno !== 0) {
+                      const code = Match.value(staged.errno).pipe(
+                        Match.when(8, () => "EBADF"),
+                        Match.when(33, () => "EMFILE"),
+                        Match.when(44, () => "ENOENT"),
+                        Match.when(48, () => "ENOMEM"),
+                        Match.when(54, () => "ENOTDIR"),
+                        Match.orElse(() => "EINVAL"),
+                      );
+                      return yield* new Fault({
+                        code,
+                        status: 400,
+                        message: "Child file action failed",
+                      });
+                    }
+                    if (action.command === 5 && staged.path !== null) {
+                      const path = staged.path;
+                      const directory = yield* kernelCall(() => kernel.stat(path, true)).pipe(
+                        Effect.flatMap(Schema.decodeUnknownEffect(Schema.fromJsonString(FileStat))),
+                      );
+                      if ((directory.mode & 0o100) === 0)
+                        return yield* new Fault({
+                          code: "EACCES",
+                          status: 403,
+                          message: "Child cwd is not searchable",
+                        });
+                      location.cwd = directory.path;
+                    }
+                  }
                   const image = Match.value(input.path.startsWith("/")).pipe(
                     Match.when(true, () => input.path),
                     Match.orElse(() => `${location.cwd}/${input.path}`),
@@ -320,103 +512,7 @@ export const wasi = Effect.fn("wasi.execute")(function* (
               ),
             )
             .pipe(
-              Match.when({ kind: "open" }, (input) =>
-                Effect.gen(function* () {
-                  if (input.read || !input.write) yield* requirePermission(capability, "read");
-                  if (input.write || input.create || input.truncate)
-                    yield* requirePermission(capability, "write");
-                  if (
-                    (input.truncate && !input.write) ||
-                    (input.exclusive && !input.create) ||
-                    (input.directory && input.create)
-                  )
-                    return yield* new Fault({
-                      code: "EINVAL",
-                      status: 400,
-                      message: "Invalid WASI open flags",
-                    });
-                  const found = yield* kernelCall(() => kernel.stat(input.path, input.follow)).pipe(
-                    Effect.flatMap(Schema.decodeUnknownEffect(Schema.fromJsonString(FileStat))),
-                    Effect.catchTag("Fault", (fault) => {
-                      if (fault.code === "ENOENT" && input.create) return Effect.succeed(null);
-                      return Effect.fail(fault);
-                    }),
-                  );
-                  if (found !== null && found.kind === "symlink")
-                    return yield* new Fault({
-                      code: "ELOOP",
-                      status: 400,
-                      message: "WASI open does not follow this symlink",
-                    });
-                  if (found !== null && input.create && input.exclusive)
-                    return yield* new Fault({
-                      code: "EEXIST",
-                      status: 409,
-                      message: "WASI exclusive file already exists",
-                    });
-                  if (found !== null && input.write && (found.mode & 0o200) === 0)
-                    return yield* new Fault({
-                      code: "EACCES",
-                      status: 403,
-                      message: "WASI file is not writable",
-                    });
-                  const parent = input.path.slice(0, input.path.lastIndexOf("/"));
-                  const path = yield* Effect.gen(function* () {
-                    if (found !== null) return found.path;
-                    const directory = yield* kernelCall(() => kernel.realpath(parent || "/"));
-                    if (directory === "/") return input.path.slice(input.path.lastIndexOf("/"));
-                    return directory + input.path.slice(input.path.lastIndexOf("/"));
-                  });
-                  if (
-                    input.base !== "/" &&
-                    path !== input.base &&
-                    !path.startsWith(input.base + "/")
-                  )
-                    return yield* new Fault({
-                      code: "ENOTCAPABLE",
-                      status: 403,
-                      message: "WASI symlink escapes its directory descriptor",
-                    });
-                  if (found !== null && input.directory && found.kind !== "directory")
-                    return yield* new Fault({
-                      code: "ENOTDIR",
-                      status: 400,
-                      message: "WASI directory open requires a directory",
-                    });
-                  if (found !== null && found.kind === "directory") {
-                    if (input.truncate || input.write)
-                      return yield* new Fault({
-                        code: "EISDIR",
-                        status: 400,
-                        message: "WASI cannot write a directory",
-                      });
-                    return { data: Buffer.alloc(0), path, directory: true, value: 0n };
-                  }
-                  const data = yield* Effect.gen(function* () {
-                    if (found === null || input.truncate) {
-                      yield* write(env, capability.sandboxId, kernel, path, Buffer.alloc(0));
-                      if (found === null) yield* kernelCall(() => kernel.chmod(path, input.mode));
-                      state.dirty = true;
-                      return Buffer.alloc(0);
-                    }
-                    if (guest.has_file(path)) return Buffer.alloc(0);
-                    if (found.size + guest.buffered_bytes() > 16_777_216)
-                      return yield* new Fault({
-                        code: "ENOMEM",
-                        status: 413,
-                        message: "WASI open buffers exceed 16 MiB",
-                      });
-                    return yield* read(
-                      env,
-                      capability.sandboxId,
-                      kernel,
-                      path,
-                      !input.read && input.write,
-                    );
-                  });
-                  return { data, path, directory: false, value: 0n };
-                }),
-              ),
+              Match.when({ kind: "open" }, (input) => openFile(input, guest)),
               Match.when({ kind: "tmpfile" }, (input) =>
                 Effect.gen(function* () {
                   yield* requirePermission(capability, "write");
@@ -835,6 +931,8 @@ export const wasi = Effect.fn("wasi.execute")(function* (
               new Map([
                 ["FORBIDDEN", 2],
                 ["EACCES", 2],
+                ["EBADF", 8],
+                ["EMFILE", 33],
                 ["EPERM", 63],
                 ["EROFS", 69],
                 ["ENOENT", 44],
