@@ -1,0 +1,192 @@
+{
+  "status": "Native Cloudflare service bindings and callback RPC passed against the existing deployed ordinary Worker with installed SDK 0.9.0 and current SDK 0.10.0.",
+  "runtimeSourceCommit": "7aee168c876f48512ac5f849433dc00ec3b4675a",
+  "backendDeliveryEvidence": "docs/evidence/published-software-delivery.json",
+  "runtimeArchiveSha256": "2c21b2611ade543a55e0764d72b8f2b14945d602ca6a2664f47cae683ff23875",
+  "consumerCheckoutCommit": "a0a2a05c40ed5fb3bd5d76b14c3baf3bfe4695c2",
+  "transport": {
+    "provisioner": "Alchemy createEdgeSession through CloudflareApiLive with profile minutei and non-interactive authentication",
+    "consumer": "Ephemeral native edge preview module; BOXES default service binding and BOXES_AGENT Agent entrypoint target the existing production Worker.",
+    "rpc": "Native Cloudflare callback RPC executed between Workers on Cloudflare, without a local callback proxy.",
+    "authority": "Only a 600-second read/write/execute capability scoped to the created sandbox enters the consumer request body. Administrator and management credentials stay in the local Effect program.",
+    "accessPolicy": "The proof refuses redirects or server failures during Access verification and never invokes interactive Access login.",
+    "lifetime": "The native preview session expires under Cloudflare lifecycle; this command has no explicit preview deletion receipt. No persistent consumer Worker is deployed."
+  },
+  "verified": [
+    "Callback input value 21 and output answer 42; exactly one callback in each run.",
+    "Void callback returns undefined; a subsequent execution has fresh globals.",
+    "Binding-written file remains readable through the separate deployed HTTP client after denied management.",
+    "Read/write/execute credential cannot dispose its sandbox (403) or execute in a different sandbox (401).",
+    "Scoped management finalizer disposes each sandbox and verifies its public file read returns 404 before the report is emitted."
+  ],
+  "reports": [
+    {
+      "measuredAt": 1792086755384,
+      "profile": "minutei",
+      "targetWorker": "cirro-sandbox-prod-rs7wexxow56rmsoz",
+      "previewOrigin": "https://boxes-binding-2b878d7e-171b-4074-94c5-e52cdb4f5408.manoel-carvalhoneto.workers.dev",
+      "consumerBundleSha256": "521a353c4a4deaaf0258663563ca41b2eeb0991aea2ef2ffe1c814a947a02f5f",
+      "sdkVersion": "0.9.0",
+      "sdkModulesSha256": {
+        "../../src/sdk": "18cd31b540c4ffe40ce9a231ac9e64e47530e7ee7d0fc8950d681beaa38f7fd3",
+        "../../src/sdk-rpc": "8fa8e7a4f3a4ae26a6984aed1d2b7a93b265eb54cc5317f0065ff5455f11c354",
+        "../../src/contracts": "297a6a573941e66c488b573117e7cd9d646a1ed58cb8c66151fabd0c29641bf7"
+      },
+      "proof": {
+        "measuredAt": 1792086754958,
+        "callback": {
+          "id": "rpc-callback",
+          "status": "exited",
+          "sourceHash": "75090090f42e508d6542184bce91b43c775c128d2ccfc04977bc226f5980cf7d",
+          "language": "typescript",
+          "startedAt": 1792086749858,
+          "finishedAt": 1792086751276,
+          "output": {
+            "stdout": "",
+            "stderr": "",
+            "result": {
+              "answer": 42,
+              "transport": "native RPC"
+            },
+            "exitCode": 0
+          }
+        },
+        "voidCallback": {
+          "id": "rpc-void",
+          "status": "exited",
+          "sourceHash": "0216a3fc5e53bcf477f59bda2cb4dc00f2f8f938fc8658ed498f019dcfbca5fa",
+          "language": "typescript",
+          "startedAt": 1792086752116,
+          "finishedAt": 1792086753769,
+          "output": {
+            "stdout": "",
+            "stderr": "",
+            "result": {
+              "wasUndefined": true,
+              "freshGlobals": true
+            },
+            "exitCode": 0
+          }
+        },
+        "file": {
+          "content": "bmF0aXZlIENsb3VkZmxhcmUgYmluZGluZw==",
+          "encoding": "base64",
+          "size": 25
+        },
+        "calls": [
+          {
+            "op": "host.call",
+            "name": "answer",
+            "input": {
+              "value": 21
+            }
+          },
+          {
+            "op": "host.call",
+            "name": "void"
+          }
+        ],
+        "managementDenied": 403,
+        "wrongSandboxDenied": 401
+      }
+    },
+    {
+      "measuredAt": 1792086784705,
+      "profile": "minutei",
+      "targetWorker": "cirro-sandbox-prod-rs7wexxow56rmsoz",
+      "previewOrigin": "https://boxes-binding-c066c172-b0cc-4e55-bfe3-85deea6d4345.manoel-carvalhoneto.workers.dev",
+      "consumerBundleSha256": "2918b8bd5962cfc1577de500888892111a207af0b4a2eab4eec93ec54755fac6",
+      "sdkVersion": "0.10.0",
+      "sdkModulesSha256": {
+        "../../src/sdk": "4d34ef4fa40ff5b3f895cd0746b142c2a700a24eb9b52d4d7d1341f91f96d301",
+        "../../src/sdk-rpc": "50a02fcdb90d81877a5fc17ce35e3e05e8d80929b32ba5d16ca855cfeafcbcb5",
+        "../../src/contracts": "de6913c6de8bc4cd1d237c6aa07678d773fe797d61682bce21033c3b4d8d5474"
+      },
+      "proof": {
+        "measuredAt": 1792086784260,
+        "callback": {
+          "id": "rpc-callback",
+          "status": "exited",
+          "sourceHash": "75090090f42e508d6542184bce91b43c775c128d2ccfc04977bc226f5980cf7d",
+          "language": "typescript",
+          "startedAt": 1792086778294,
+          "finishedAt": 1792086779827,
+          "output": {
+            "stdout": "",
+            "stderr": "",
+            "result": {
+              "answer": 42,
+              "transport": "native RPC"
+            },
+            "exitCode": 0
+          }
+        },
+        "voidCallback": {
+          "id": "rpc-void",
+          "status": "exited",
+          "sourceHash": "0216a3fc5e53bcf477f59bda2cb4dc00f2f8f938fc8658ed498f019dcfbca5fa",
+          "language": "typescript",
+          "startedAt": 1792086780687,
+          "finishedAt": 1792086782443,
+          "output": {
+            "stdout": "",
+            "stderr": "",
+            "result": {
+              "wasUndefined": true,
+              "freshGlobals": true
+            },
+            "exitCode": 0
+          }
+        },
+        "file": {
+          "content": "bmF0aXZlIENsb3VkZmxhcmUgYmluZGluZw==",
+          "encoding": "base64",
+          "size": 25
+        },
+        "calls": [
+          {
+            "op": "host.call",
+            "name": "answer",
+            "input": {
+              "value": 21
+            }
+          },
+          {
+            "op": "host.call",
+            "name": "void"
+          }
+        ],
+        "managementDenied": 403,
+        "wrongSandboxDenied": 401
+      }
+    }
+  ],
+  "sourceSha256": {
+    "tests/fixtures/remote-binding-worker.ts": "a085a6406c72c205a31d95351890ec55d84e129949ca184310a9c7aa7c8732e4",
+    "tests/remote-binding.test.ts": "6a11159728f14abf80c06eaaf4bf7b467c99b2af88e553ac85120c0ae0cbfbf7",
+    "tooling/remote-binding-proof.ts": "ba88a7bf170043e8ba7008057ca7b34a18c08ff03ee4890332ad5c5b68f3f625"
+  },
+  "validation": {
+    "remoteCommands": "Both native proof commands exited 0. Reports are emitted only after disposal and the post-disposal 404 check complete.",
+    "localGate": "bun run check passed: build, SDK declarations, TypeScript, workspace Clippy, workspace Cargo tests and native Bun tests.",
+    "artifactIdentity": "All six local production Worker files match the deployed runtime hashes. The three SDK 0.10.0 modules bundled by the remote proof match the exact delivery archive module bytes.",
+    "minuteiCheckout": "Clean at the recorded consumer commit after both remote proofs; no dependency, application or infrastructure changes.",
+    "nativeTests": {
+      "tests": 339,
+      "files": 58,
+      "assertions": 4379,
+      "seconds": 125.61,
+      "failures": 0
+    }
+  },
+  "reproduction": {
+    "command": "ALCHEMY_PROFILE=minutei CIRRO_WORKER=<deployed-worker-name> CIRRO_URL=<deployed-url> CIRRO_SDK_DIRECTORY=<installed-sdk-package-directory> bun run binding:remote:proof",
+    "credentials": "Provide CIRRO_API_KEY privately through the existing configuration owner. No token or preview authentication header is recorded here."
+  },
+  "limits": [
+    "A synthetic binding consumer uses the actual installed Minutei SDK exports and its Effect peer; the Minutei application itself is not deployed or exercised remotely.",
+    "Browser authentication, model tools, tenant lifecycle and history Queue delivery remain separate gates.",
+    "No production latency, CPU billing, cold-start or cost comparison is established.",
+    "GitHub and package publication remain deferred. Full AgentOS parity remains open."
+  ]
+}

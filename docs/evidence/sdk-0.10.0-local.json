@@ -37,10 +37,10 @@
   "validation": {
     "completeGate": "bun run check passed: build, SDK declarations, TypeScript, workspace Clippy, workspace Cargo tests and native Bun tests.",
     "nativeTests": {
-      "tests": 338,
-      "files": 57,
-      "assertions": 4372,
-      "seconds": 125.32,
+      "tests": 339,
+      "files": 58,
+      "assertions": 4379,
+      "seconds": 125.61,
       "failures": 0
     },
     "exactArchiveProof": "SDK archive exports and consumer declarations; runtime archive; filesystem snapshot restore; hard-link metadata; RPC callbacks and cooperative disposal; persistent driver contexts and cancellation; scoped authority",
@@ -59,7 +59,13 @@
       "handlerCases": 28,
       "handlerLimitCases": 2,
       "cpuSlicesAndCancellation": "finite resumption, running checkpoint, cancellation and retained stdout passed",
-      "activeWasiDisposal": "cancelled with retained acknowledged stdout and denied public reads"
+      "activeWasiDisposal": "cancelled with retained acknowledged stdout and denied public reads",
+      "nativeBindings": {
+        "evidence": "docs/evidence/remote-binding-production.json",
+        "sdkVersions": ["0.9.0", "0.10.0"],
+        "callbacksPerConsumer": 2,
+        "postDisposalReadStatus": 404
+      }
     },
     "evidence": "docs/evidence/published-software-delivery.json"
   },
@@ -77,7 +83,8 @@
     "CIRRO_URL=<deployed-url> bun run wasi-child:proof",
     "CIRRO_URL=<deployed-url> bun tooling/handlers-proof.ts",
     "CIRRO_URL=<deployed-url> bun run wasi-slices:proof",
-    "CIRRO_URL=<deployed-url> bun tooling/active-disposal-proof.ts"
+    "CIRRO_URL=<deployed-url> bun tooling/active-disposal-proof.ts",
+    "ALCHEMY_PROFILE=minutei CIRRO_WORKER=<deployed-worker-name> CIRRO_URL=<deployed-url> CIRRO_SDK_DIRECTORY=<installed-sdk-package-directory> bun run binding:remote:proof"
   ],
   "delivery": {
     "github": "Deferred at user direction; no GitHub authentication or publication attempted.",
@@ -112,7 +119,7 @@
       "health": "cirro"
     },
     "minutei": "Immutable SDK/runtime 0.9.0 dependencies retained. Prior actual consumer fixtures passed locally against this exact 0.10.0 runtime archive; current consumer commit and fixture hashes match. Remote Minutei application/authentication/model proof remains unverified.",
-    "productionAndModelProof": "The ordinary Worker passed the named authenticated HTTP probes. Remote native binding/Minutei/model validation and production performance/cost remain separate gates."
+    "productionAndModelProof": "The ordinary Worker passed the named authenticated HTTP probes and native Cloudflare binding/RPC consumers using installed Minutei SDK 0.9.0 and current SDK 0.10.0. The remote Minutei application/authentication/model path and production performance/cost remain separate gates."
   },
   "parity": "Experimental; remaining requirements in docs/parity.md stay open.",
   "localCandidateEvidence": "docs/evidence/wasi-quantum-local.json",

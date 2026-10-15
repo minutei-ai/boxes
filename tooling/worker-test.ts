@@ -159,6 +159,7 @@ export const runtime = (persist: string, options: typeof Options.Type = {}) => {
     compatibilityFlags: ["experimental", "service_binding_extra_handlers"],
   });
   return {
+    name,
     time: start + advance,
     ready: ready.then((value) => new URL(value.env.ENDPOINTS.app)),
     origin: () =>

@@ -80,7 +80,8 @@
     "dispose:proof": "bun tooling/dispose-proof.ts",
     "restore:proof": "bun tooling/restore-proof.ts",
     "cron:proof": "bun tooling/cron-proof.ts",
-    "minutei:proof": "bun tooling/minutei-proof.ts"
+    "minutei:proof": "bun tooling/minutei-proof.ts",
+    "binding:remote:proof": "bun tooling/remote-binding-proof.ts"
   },
   "devDependencies": {
     "@alchemy.run/cloudflare-runtime": "2.0.0-beta.83",

@@ -1043,6 +1043,7 @@ await Effect.runPromise(
       ["tests/fixtures/clock-worker.ts", "dist/clock-worker"],
       ["tests/fixtures/origin-worker.ts", "dist/origin-worker"],
       ["tests/fixtures/sdk-binding-worker.ts", "dist/sdk-binding-worker"],
+      ["tests/fixtures/remote-binding-worker.ts", "dist/remote-binding-worker"],
     ] as const) {
       const result = yield* Effect.promise(() =>
         Bun.build({
@@ -1075,7 +1076,8 @@ await Effect.runPromise(
       );
       if (!result.success)
         return yield* new BuildFailure({ message: "Worker bundle failed", cause: result.logs });
-      if (directory === "dist/sdk-binding-worker") continue;
+      if (directory === "dist/sdk-binding-worker" || directory === "dist/remote-binding-worker")
+        continue;
       yield* Effect.forEach(["kernel", "guest", "compiler", "wasi", "python"], (name) =>
         Effect.promise(() =>
           Bun.write(
