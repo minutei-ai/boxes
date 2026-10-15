@@ -38,5 +38,10 @@
     "Capability renewal and final disposal belong to the persistent sandbox owner.",
     "Terminal receipt observation does not roll back previously accepted external effects or promise immediate CPU termination.",
     "No cost or performance comparison with AgentOS is established."
-  ]
+  ],
+  "ci": {
+    "run": "https://github.com/minutei-ai/boxes/actions/runs/38666846242",
+    "sourceCommit": "e841f1039c4c670b06830a2038c4a731286f19b7",
+    "result": "passed"
+  }
 }
