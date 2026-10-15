@@ -1,4 +1,5 @@
 mod shell;
+pub use shell::Shell;
 mod software;
 
 use serde::ser::{SerializeSeq, Serializer};
@@ -1109,11 +1110,6 @@ impl Kernel {
         Ok(CommandResult {
             output: shell::byte_command(name, &args, stdin),
         })
-    }
-
-    pub fn shell_plan(&self, source: &str) -> Result<String, JsValue> {
-        let plan = shell::parse(source).map_err(|error| fail(&error))?;
-        serde_json::to_string(&plan).map_err(|_| fail("EIO: serialization failed"))
     }
 
     pub fn manifest(&self) -> Result<String, JsValue> {

@@ -923,16 +923,14 @@ export class Fault extends Schema.TaggedError<Fault>()("Fault", {
 
 export const ShellPlan = Schema.Array(
   Schema.Struct({
-    argv: Schema.Array(Schema.String).check(Schema.isMinLength(1)),
     gate: Schema.Literals(["always", "pipe", "success", "failure"]),
     pipe: Schema.Boolean,
     negate: Schema.Boolean,
     redirects: Schema.Array(
       Schema.Union([
-        Schema.Struct({ kind: Schema.Literal("input"), path: Schema.String }),
+        Schema.Struct({ kind: Schema.Literal("input") }),
         Schema.Struct({
           kind: Schema.Literals(["output", "error"]),
-          path: Schema.String,
           append: Schema.Boolean,
         }),
       ]),

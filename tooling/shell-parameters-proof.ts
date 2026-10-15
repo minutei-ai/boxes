@@ -1,0 +1,123 @@
+import { Clock, Config, Crypto, Effect, Redacted, Schema } from "effect";
+import { BunCrypto } from "@effect/platform-bun";
+import { FetchHttpClient } from "effect/http";
+import { make } from "../dist/sdk/sdk.js";
+
+const Report = Schema.Struct({
+  target: Schema.String,
+  measuredAt: Schema.Int,
+  checks: Schema.Array(Schema.Struct({ name: Schema.String, exitCode: Schema.Int })),
+  disposal: Schema.Boolean,
+});
+const report = await Effect.runPromise(
+  Effect.scoped(
+    Effect.gen(function* () {
+      const url = yield* Config.String("CIRRO_URL");
+      const token = yield* Config.Redacted("CIRRO_API_KEY");
+      const crypto = yield* Crypto.Crypto;
+      const id = `shell-parameters-${yield* crypto.randomUUIDv4()}`;
+      const measuredAt = yield* Clock.currentTimeMillis;
+      const admin = yield* make({ url, token });
+      yield* Effect.acquireRelease(
+        admin.create({
+          id,
+          policy: {
+            networkHosts: [],
+            interruptBudget: 1000,
+            memoryBytes: 8388608,
+            maxOutputBytes: 1048576,
+          },
+          environment: { VALUE: "a  b", EMPTY: "", TARGET: "/tmp/with space" },
+        }),
+        () =>
+          Effect.gen(function* () {
+            const grant = yield* admin.mintCapability(id, {
+              permissions: ["manage"],
+              expiresInSeconds: 60,
+            });
+            const manager = yield* make({ url, token: Redacted.make(grant.token) });
+            yield* manager.action(id, { op: "vm.dispose" });
+          }).pipe(Effect.orDie),
+      );
+      const grant = yield* admin.mintCapability(id, {
+        permissions: ["read", "write", "execute"],
+        expiresInSeconds: 600,
+      });
+      const client = yield* make({ url, token: Redacted.make(grant.token) });
+      const cases = [
+        { name: "quoted", source: 'echo "$VALUE"', stdout: "a  b\n", exitCode: 0 },
+        { name: "split", source: "echo pre${VALUE}post", stdout: "prea bpost\n", exitCode: 0 },
+        { name: "single-quoted", source: "echo '$VALUE'", stdout: "$VALUE\n", exitCode: 0 },
+        { name: "escaped", source: String.raw`echo \$VALUE`, stdout: "$VALUE\n", exitCode: 0 },
+        {
+          name: "empty",
+          source: 'echo before "$EMPTY" after',
+          stdout: "before  after\n",
+          exitCode: 0,
+        },
+        { name: "pipeline-status", source: 'false; true | echo "$?"', stdout: "1\n", exitCode: 0 },
+        { name: "negated-status", source: "! true; echo $?", stdout: "1\n", exitCode: 0 },
+        {
+          name: "quoted-redirect",
+          source: 'echo retained > "$TARGET"; cat "$TARGET"',
+          stdout: "retained\n",
+          exitCode: 0,
+        },
+      ];
+      const checks = yield* Effect.forEach(cases, (probe) =>
+        Effect.gen(function* () {
+          const run = yield* client.action(id, {
+            op: "process.run",
+            id: probe.name,
+            language: "shell",
+            source: probe.source,
+          });
+          if (
+            run.status !== "exited" ||
+            run.output?.stdout !== probe.stdout ||
+            run.output.stderr !== "" ||
+            run.output.exitCode !== probe.exitCode
+          )
+            return yield* Effect.die(`Shell parameter proof failed: ${probe.name}`);
+          return { name: probe.name, exitCode: run.output.exitCode };
+        }),
+      );
+      const ambiguous = yield* client.action(id, {
+        op: "process.run",
+        id: "ambiguous",
+        language: "shell",
+        source: "echo blocked 2> /tmp/errors > /tmp/earlier > $TARGET; cat /tmp/errors",
+      });
+      const earlier = yield* client.action(id, {
+        op: "filesystem.stat",
+        path: "/tmp/earlier",
+        follow: true,
+      });
+      if (
+        ambiguous.output?.stderr !== "" ||
+        !ambiguous.output?.stdout.includes("Ambiguous shell redirection") ||
+        earlier.size !== 0 ||
+        ambiguous.output.exitCode !== 0
+      )
+        return yield* Effect.die("Ordered expanded redirection proof failed");
+      checks.push({ name: "ordered-ambiguous-redirect", exitCode: ambiguous.output.exitCode });
+      const injection = yield* client.action(id, {
+        op: "process.run",
+        id: "injection",
+        language: "shell",
+        source: 'echo "$VALUE"',
+        env: { VALUE: "; touch /tmp/injected; echo unsafe" },
+      });
+      const absent = yield* client.action(id, { op: "filesystem.exists", path: "/tmp/injected" });
+      if (
+        injection.output?.stdout !== "; touch /tmp/injected; echo unsafe\n" ||
+        absent.exists ||
+        injection.output.exitCode !== 0
+      )
+        return yield* Effect.die("Expanded text was interpreted as shell syntax");
+      checks.push({ name: "no-reparse", exitCode: injection.output.exitCode });
+      return { target: url, measuredAt, checks, disposal: true };
+    }),
+  ).pipe(Effect.provide([FetchHttpClient.layer, BunCrypto.layer])),
+);
+console.log(await Effect.runPromise(Schema.encodeEffect(Schema.fromJsonString(Report))(report)));

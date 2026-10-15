@@ -1,9 +1,12 @@
 use serde::Serialize;
+use std::collections::BTreeMap;
+use wasm_bindgen::prelude::*;
 
 #[derive(Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Command {
-    argv: Vec<String>,
+    #[serde(skip_serializing)]
+    argv: Vec<Word>,
     gate: String,
     pipe: bool,
     negate: bool,
@@ -13,23 +16,146 @@ pub struct Command {
 #[derive(Debug, Serialize)]
 #[serde(tag = "kind", rename_all = "camelCase")]
 enum Redirection {
-    Input { path: String },
-    Output { path: String, append: bool },
-    Error { path: String, append: bool },
+    Input {
+        #[serde(skip_serializing)]
+        path: Word,
+    },
+    Output {
+        #[serde(skip_serializing)]
+        path: Word,
+        append: bool,
+    },
+    Error {
+        #[serde(skip_serializing)]
+        path: Word,
+        append: bool,
+    },
+}
+
+#[derive(Debug, PartialEq, Eq)]
+enum Part {
+    Literal { value: String, quoted: bool },
+    Parameter { name: String, quoted: bool },
+}
+
+#[derive(Debug, Default, PartialEq, Eq)]
+pub struct Word(Vec<Part>);
+
+impl Word {
+    fn literal(value: &str, quoted: bool) -> Self {
+        Self(vec![Part::Literal {
+            value: value.into(),
+            quoted,
+        }])
+    }
+
+    fn append(&mut self, value: char, quoted: bool) -> Result<(), String> {
+        if let Some(Part::Literal {
+            value: text,
+            quoted: previous,
+        }) = self.0.last_mut()
+            && *previous == quoted
+        {
+            text.push(value);
+            return Ok(());
+        }
+        if self.0.len() >= 8192 {
+            return Err("EFBIG: shell word fragment quota exceeded".into());
+        }
+        self.0.push(Part::Literal {
+            value: value.to_string(),
+            quoted,
+        });
+        Ok(())
+    }
+
+    fn plain(&self) -> Option<&str> {
+        match self.0.as_slice() {
+            [
+                Part::Literal {
+                    value,
+                    quoted: false,
+                },
+            ] => Some(value),
+            _ => None,
+        }
+    }
 }
 
 #[derive(Debug, PartialEq, Eq)]
 enum Token {
-    Word(String),
+    Word(Word),
     Bang,
     Operator(String),
 }
 
-fn word_token(word: String, quoted: bool) -> Token {
-    if word == "!" && !quoted {
-        return Token::Bang;
+fn word_token(word: Word, fragments: &mut usize) -> Result<Token, String> {
+    *fragments += word.0.len();
+    if *fragments > 8192 {
+        return Err("EFBIG: shell word fragment quota exceeded".into());
     }
-    Token::Word(word)
+    if word.plain() == Some("!") {
+        return Ok(Token::Bang);
+    }
+    Ok(Token::Word(word))
+}
+
+fn parameter(
+    chars: &mut std::iter::Peekable<std::str::Chars<'_>>,
+    quoted: bool,
+) -> Result<Part, String> {
+    let mut name = String::new();
+    if chars.peek() == Some(&'{') {
+        chars.next();
+        loop {
+            match chars.next() {
+                Some('}') => break,
+                Some(c) if c.is_ascii_alphanumeric() || c == '_' || c == '?' => name.push(c),
+                Some(_) => {
+                    return Err("ENOTSUP: shell parameter operators are not implemented".into());
+                }
+                None => return Err("EINVAL: unterminated shell parameter".into()),
+            }
+        }
+        if name != "?"
+            && !name
+                .chars()
+                .next()
+                .is_some_and(|c| c.is_ascii_alphabetic() || c == '_')
+        {
+            return Err("ENOTSUP: positional shell parameters are not implemented".into());
+        }
+        if name != "?" && name.contains('?') {
+            return Err("EINVAL: invalid shell parameter".into());
+        }
+    } else if chars.peek() == Some(&'?') {
+        chars.next();
+        name.push('?');
+    } else if chars
+        .peek()
+        .is_some_and(|c| c.is_ascii_alphabetic() || *c == '_')
+    {
+        while let Some(&c) = chars.peek() {
+            if !c.is_ascii_alphanumeric() && c != '_' {
+                break;
+            }
+            chars.next();
+            name.push(c);
+        }
+    } else if chars
+        .peek()
+        .is_some_and(|c| c.is_ascii_digit() || matches!(c, '(' | '$' | '!' | '@' | '*' | '#' | '-'))
+    {
+        return Err(
+            "ENOTSUP: command substitution and special shell parameters are not implemented".into(),
+        );
+    } else {
+        return Ok(Part::Literal {
+            value: "$".into(),
+            quoted,
+        });
+    }
+    Ok(Part::Parameter { name, quoted })
 }
 
 fn tokenize(source: &str) -> Result<Vec<Token>, String> {
@@ -37,21 +163,23 @@ fn tokenize(source: &str) -> Result<Vec<Token>, String> {
         return Err("EFBIG: shell source exceeds byte quota".into());
     }
     let mut tokens = Vec::new();
-    let mut word = String::new();
+    let mut fragments = 0;
+    let mut word = Word::default();
     let mut active = false;
-    let mut quoted = false;
     let mut quote = None;
     let mut escaped = false;
     let mut chars = source.chars().peekable();
     while let Some(c) = chars.next() {
+        if tokens.len() >= 8192 || word.0.len() >= 8192 {
+            return Err("EFBIG: shell token quota exceeded".into());
+        }
         if escaped {
             if c != '\n' {
                 if quote == Some('"') && !matches!(c, '$' | '`' | '"' | '\\') {
-                    word.push('\\');
+                    word.append('\\', true)?;
                 }
-                word.push(c);
+                word.append(c, true)?;
                 active = true;
-                quoted = true;
             }
             escaped = false;
             continue;
@@ -60,26 +188,38 @@ fn tokenize(source: &str) -> Result<Vec<Token>, String> {
             escaped = true;
             continue;
         }
+        if c == '$' && quote != Some('\'') {
+            word.0.push(parameter(&mut chars, quote == Some('"'))?);
+            active = true;
+            continue;
+        }
+        if c == '`' && quote != Some('\'') {
+            return Err("ENOTSUP: command substitution is not implemented".into());
+        }
         if let Some(q) = quote {
             if c == q {
                 quote = None;
             } else {
-                word.push(c);
+                word.append(c, true)?;
             }
             continue;
         }
         if c == '\'' || c == '"' {
             quote = Some(c);
             active = true;
-            quoted = true;
+            word.0.push(Part::Literal {
+                value: String::new(),
+                quoted: true,
+            });
         } else if c == '\n' || matches!(c, ';' | '|' | '&' | '<' | '>') {
             let mut stderr = false;
             if active {
                 if matches!(c, '<' | '>')
-                    && !quoted
-                    && word.bytes().all(|byte| byte.is_ascii_digit())
+                    && let Some(digits) = word.plain()
+                    && !digits.is_empty()
+                    && digits.bytes().all(|byte| byte.is_ascii_digit())
                 {
-                    let descriptor = word
+                    let descriptor = digits
                         .parse::<u32>()
                         .map_err(|_| "ENOTSUP: unsupported redirection descriptor")?;
                     if !((descriptor == 0 && c == '<')
@@ -88,12 +228,11 @@ fn tokenize(source: &str) -> Result<Vec<Token>, String> {
                         return Err("ENOTSUP: only stdin input and stdout/stderr output redirections are implemented".into());
                     }
                     stderr = descriptor == 2;
-                    word.clear();
+                    word = Word::default();
                 } else {
-                    tokens.push(word_token(std::mem::take(&mut word), quoted));
+                    tokens.push(word_token(std::mem::take(&mut word), &mut fragments)?);
                 }
                 active = false;
-                quoted = false;
             }
             let mut op = c.to_string();
             if matches!(c, '|' | '&' | '>') && chars.peek() == Some(&c) {
@@ -107,11 +246,10 @@ fn tokenize(source: &str) -> Result<Vec<Token>, String> {
                 return Err("ENOTSUP: background jobs require process.spawn".into());
             }
             tokens.push(Token::Operator(op));
-        } else if c.is_whitespace() {
+        } else if matches!(c, ' ' | '\t') {
             if active {
-                tokens.push(word_token(std::mem::take(&mut word), quoted));
+                tokens.push(word_token(std::mem::take(&mut word), &mut fragments)?);
                 active = false;
-                quoted = false;
             }
         } else if c == '#' && !active {
             for next in chars.by_ref() {
@@ -120,20 +258,153 @@ fn tokenize(source: &str) -> Result<Vec<Token>, String> {
                     break;
                 }
             }
-        } else if matches!(c, '$' | '`' | '(' | ')' | '{' | '}') {
-            return Err("ENOTSUP: shell expansions and compound syntax are not implemented".into());
+        } else if matches!(c, '(' | ')' | '{' | '}') {
+            return Err("ENOTSUP: shell compound syntax is not implemented".into());
         } else {
             active = true;
-            word.push(c);
+            word.append(c, false)?;
         }
     }
     if quote.is_some() || escaped {
         return Err("EINVAL: unterminated shell quote or escape".into());
     }
     if active {
-        tokens.push(word_token(word, quoted));
+        tokens.push(word_token(word, &mut fragments)?);
     }
     Ok(tokens)
+}
+
+pub fn expand(
+    words: &[Word],
+    environment: &BTreeMap<String, String>,
+    status: i32,
+) -> Result<Vec<String>, String> {
+    let mut fields = Vec::new();
+    let status_text = status.to_string();
+    let mut bytes = 0usize;
+    for word in words {
+        let mut field = String::new();
+        let mut active = false;
+        for part in &word.0 {
+            let value = match part {
+                Part::Literal { value, .. } => value.as_str(),
+                Part::Parameter { name, .. } if name == "?" => status_text.as_str(),
+                Part::Parameter { name, .. } => {
+                    environment.get(name).map(String::as_str).unwrap_or("")
+                }
+            };
+            if matches!(
+                part,
+                Part::Literal { quoted: false, .. } | Part::Parameter { quoted: false, .. }
+            ) && value.contains(['*', '?', '['])
+            {
+                return Err("ENOTSUP: shell pathname expansion is not implemented".into());
+            }
+            bytes = bytes
+                .checked_add(value.len())
+                .ok_or("EFBIG: expanded shell byte quota exceeded")?;
+            if bytes > 1_048_576 {
+                return Err("EFBIG: expanded shell byte quota exceeded".into());
+            }
+            match part {
+                Part::Parameter { quoted: false, .. } => {
+                    for c in value.chars() {
+                        if matches!(c, ' ' | '\t' | '\n') {
+                            if active {
+                                fields.push(std::mem::take(&mut field));
+                                active = false;
+                            }
+                        } else {
+                            field.push(c);
+                            active = true;
+                        }
+                        if fields.len() > 4096 {
+                            return Err("EFBIG: expanded shell word quota exceeded".into());
+                        }
+                    }
+                }
+                _ => {
+                    field.push_str(value);
+                    active = true;
+                }
+            }
+        }
+        if active {
+            fields.push(field);
+        }
+        if fields.len() > 4096 {
+            return Err("EFBIG: expanded shell word quota exceeded".into());
+        }
+    }
+    Ok(fields)
+}
+
+#[wasm_bindgen]
+pub struct Shell {
+    commands: Vec<Command>,
+    environment: BTreeMap<String, String>,
+}
+
+#[wasm_bindgen]
+impl Shell {
+    #[wasm_bindgen(constructor)]
+    pub fn new(source: &str, environment: &str) -> Result<Shell, JsValue> {
+        if environment.len() > 65_536 {
+            return Err(crate::fail("EFBIG: shell environment exceeds byte quota"));
+        }
+        let environment: BTreeMap<String, String> = serde_json::from_str(environment)
+            .map_err(|_| crate::fail("EINVAL: invalid shell environment"))?;
+        if environment.len() > 128
+            || environment.iter().any(|(key, value)| {
+                key.is_empty()
+                    || key.encode_utf16().count() > 128
+                    || key.contains(['=', '\0'])
+                    || value.len() > 4096
+                    || value.contains('\0')
+            })
+        {
+            return Err(crate::fail("EINVAL: invalid shell environment"));
+        }
+        Ok(Self {
+            commands: parse(source).map_err(|error| crate::fail(&error))?,
+            environment,
+        })
+    }
+
+    pub fn plan(&self) -> Result<String, JsValue> {
+        serde_json::to_string(&self.commands).map_err(|_| crate::fail("EIO: serialization failed"))
+    }
+
+    pub fn argv(&self, command: usize, status: i32) -> Result<String, JsValue> {
+        let command = self
+            .commands
+            .get(command)
+            .ok_or_else(|| crate::fail("EINVAL: invalid shell command index"))?;
+        let fields = expand(&command.argv, &self.environment, status)
+            .map_err(|error| crate::fail(&error))?;
+        serde_json::to_string(&fields).map_err(|_| crate::fail("EIO: serialization failed"))
+    }
+
+    pub fn redirect(
+        &self,
+        command: usize,
+        redirect: usize,
+        status: i32,
+    ) -> Result<String, JsValue> {
+        let redirect = self
+            .commands
+            .get(command)
+            .and_then(|command| command.redirects.get(redirect))
+            .ok_or_else(|| crate::fail("EINVAL: invalid shell redirect index"))?;
+        let word = match redirect {
+            Redirection::Input { path }
+            | Redirection::Output { path, .. }
+            | Redirection::Error { path, .. } => path,
+        };
+        let fields = expand(std::slice::from_ref(word), &self.environment, status)
+            .map_err(|error| crate::fail(&error))?;
+        serde_json::to_string(&fields).map_err(|_| crate::fail("EIO: serialization failed"))
+    }
 }
 
 pub fn parse(source: &str) -> Result<Vec<Command>, String> {
@@ -150,7 +421,23 @@ pub fn parse(source: &str) -> Result<Vec<Command>, String> {
     let mut iter = tokens.into_iter();
     while let Some(token) = iter.next() {
         match token {
-            Token::Word(word) => current.argv.push(word),
+            Token::Word(word) => {
+                if current.argv.is_empty()
+                    && let Some(Part::Literal {
+                        value,
+                        quoted: false,
+                    }) = word.0.first()
+                    && let Some((name, _)) = value.split_once('=')
+                    && name
+                        .chars()
+                        .next()
+                        .is_some_and(|c| c.is_ascii_alphabetic() || c == '_')
+                    && name.chars().all(|c| c.is_ascii_alphanumeric() || c == '_')
+                {
+                    return Err("ENOTSUP: shell assignments are not implemented".into());
+                }
+                current.argv.push(word);
+            }
             Token::Bang if current.argv.is_empty() && current.redirects.is_empty() => {
                 if current.gate == "pipe" {
                     return Err("EINVAL: negation must begin the pipeline".into());
@@ -158,11 +445,11 @@ pub fn parse(source: &str) -> Result<Vec<Command>, String> {
                 current.negate = !current.negate;
                 prefix = true;
             }
-            Token::Bang => current.argv.push("!".into()),
+            Token::Bang => current.argv.push(Word::literal("!", false)),
             Token::Operator(op) if matches!(op.as_str(), "<" | ">" | ">>" | "2>" | "2>>") => {
                 let path = match iter.next() {
                     Some(Token::Word(path)) => path,
-                    Some(Token::Bang) => "!".into(),
+                    Some(Token::Bang) => Word::literal("!", false),
                     _ => return Err("EINVAL: redirect requires a path".into()),
                 };
                 if current.redirects.len() >= 128 {
@@ -184,7 +471,7 @@ pub fn parse(source: &str) -> Result<Vec<Command>, String> {
             }
             Token::Operator(op) => {
                 if current.argv.is_empty() && !current.redirects.is_empty() {
-                    current.argv.push("true".into());
+                    current.argv.push(Word::literal("true", false));
                 }
                 if current.argv.is_empty() {
                     if prefix {
@@ -217,7 +504,7 @@ pub fn parse(source: &str) -> Result<Vec<Command>, String> {
         }
     }
     if current.argv.is_empty() && !current.redirects.is_empty() {
-        current.argv.push("true".into());
+        current.argv.push(Word::literal("true", false));
     }
     if !current.argv.is_empty() {
         commands.push(current);
@@ -236,14 +523,114 @@ pub fn parse(source: &str) -> Result<Vec<Command>, String> {
 mod tests {
     use super::*;
 
+    fn values(words: &[Word]) -> Vec<String> {
+        expand(words, &BTreeMap::new(), 0).unwrap()
+    }
+
+    fn path_value(word: &Word) -> String {
+        values(std::slice::from_ref(word)).pop().unwrap()
+    }
+
+    #[test]
+    fn environment_expansion_matches_native_shell_word_boundaries() -> Result<(), String> {
+        let words = [
+            "$VALUE",
+            r#""$VALUE""#,
+            "'${VALUE}'",
+            "pre${VALUE}post",
+            r#"""$VALUE"#,
+            r#"$VALUE"""#,
+            r#""a"$VALUE"b""#,
+            r#"'$VALUE'"$VALUE""#,
+            r"\$VALUE",
+            r#""$MISSING""#,
+            "$MISSING",
+            "''",
+            "one${MISSING}two",
+        ];
+        for value in [
+            "",
+            " a b ",
+            "\talpha\nbeta\t",
+            "$OTHER; echo injected",
+            " a",
+            "a ",
+            "a  b",
+            " \t\n",
+            "é  字",
+        ] {
+            let environment = BTreeMap::from([("VALUE".into(), value.into())]);
+            for word in words {
+                let command = parse(&format!("echo {word}"))?.remove(0);
+                let actual = expand(&command.argv, &environment, 0)?;
+                let oracle = std::process::Command::new("sh")
+                    .args([
+                        "-c",
+                        &format!(
+                            r#"set -- {word}; for value in "$@"; do printf '%s\000' "$value"; done"#
+                        ),
+                    ])
+                    .env("VALUE", value)
+                    .env_remove("MISSING")
+                    .output()
+                    .map_err(|error| error.to_string())?;
+                assert!(oracle.status.success(), "{word}");
+                let expected = if oracle.stdout.is_empty() {
+                    Vec::new()
+                } else {
+                    assert_eq!(oracle.stdout.last(), Some(&0));
+                    oracle.stdout[..oracle.stdout.len() - 1]
+                        .split(|byte| *byte == 0)
+                        .map(|bytes| String::from_utf8(bytes.to_vec()).unwrap())
+                        .collect::<Vec<_>>()
+                };
+                assert_eq!(&actual[1..], expected, "word={word:?}, value={value:?}");
+            }
+        }
+        Ok(())
+    }
+
+    #[test]
+    fn status_and_expansion_limits_are_explicit() -> Result<(), String> {
+        let command = parse(r#"echo $? "${?}" '$?' "\$?""#)?.remove(0);
+        assert_eq!(
+            expand(&command.argv, &BTreeMap::new(), 17)?,
+            ["echo", "17", "17", "$?", "$?"]
+        );
+        for source in [
+            r#"echo "$(true)""#,
+            r#"echo "`true`""#,
+            "echo ${VALUE:-x}",
+            "echo $1",
+            "VALUE=x echo yes",
+        ] {
+            assert!(parse(source).is_err(), "{source}");
+        }
+        let environment = BTreeMap::from([("VALUE".into(), "x".repeat(4096))]);
+        let command = parse(&format!("echo {}", "$VALUE".repeat(257)))?.remove(0);
+        assert!(
+            expand(&command.argv, &environment, 0)
+                .unwrap_err()
+                .starts_with("EFBIG:")
+        );
+        assert!(parse(&format!("echo {}", "a ".repeat(8193))).is_err());
+        let command = parse("echo *")?.remove(0);
+        assert!(
+            expand(&command.argv, &environment, 0)
+                .unwrap_err()
+                .starts_with("ENOTSUP:")
+        );
+        Ok(())
+    }
+
     #[test]
     fn preserves_quotes_pipes_and_redirection() -> Result<(), String> {
         let result = parse("echo 'a && b' | cat > /tmp/x && cat /tmp/x")?;
         assert_eq!(result.len(), 3);
-        assert_eq!(result[0].argv, vec!["echo", "a && b"]);
+        assert_eq!(values(&result[0].argv), vec!["echo", "a && b"]);
         assert!(result[0].pipe);
         assert!(
-            matches!(&result[1].redirects[0], Redirection::Output { path, append: false } if path == "/tmp/x")
+            matches!(&result[1].redirects[0], Redirection::Output { path, append: false } if path_value(path) == "/tmp/x")
         );
         assert_eq!(result[2].gate, "success");
         Ok(())
@@ -273,18 +660,21 @@ mod tests {
     fn literal_bang_and_escaped_line_breaks_retain_shell_word_boundaries() -> Result<(), String> {
         for source in ["'!' true", "\"!\" true", "\\! true", "!'' true"] {
             let commands = parse(source)?;
-            assert_eq!(commands[0].argv, vec!["!", "true"]);
+            assert_eq!(values(&commands[0].argv), vec!["!", "true"]);
             assert!(!commands[0].negate);
         }
         assert!(
-            matches!(&parse("echo ! > !")?[0].redirects[0], Redirection::Output { path, append: false } if path == "!")
+            matches!(&parse("echo ! > !")?[0].redirects[0], Redirection::Output { path, append: false } if path_value(path) == "!")
         );
         assert!(
-            matches!(&parse("cat < !")?[0].redirects[0], Redirection::Input { path } if path == "!")
+            matches!(&parse("cat < !")?[0].redirects[0], Redirection::Input { path } if path_value(path) == "!")
         );
-        assert_eq!(parse("echo \"a\\qb\"")?[0].argv, vec!["echo", "a\\qb"]);
         assert_eq!(
-            parse("echo before \\\n after")?[0].argv,
+            values(&parse("echo \"a\\qb\"")?[0].argv),
+            vec!["echo", "a\\qb"]
+        );
+        assert_eq!(
+            values(&parse("echo before \\\n after")?[0].argv),
             vec!["echo", "before", "after"]
         );
         assert!(parse("!\\\n false")?[0].negate);
@@ -295,31 +685,34 @@ mod tests {
     fn redirects_preserve_order_descriptor_spelling_and_bounded_empty_commands()
     -> Result<(), String> {
         let commands = parse("cat 0< first 1> second >> third < fourth; > empty")?;
-        assert_eq!(commands[0].argv, vec!["cat"]);
+        assert_eq!(values(&commands[0].argv), vec!["cat"]);
         assert!(
-            matches!(&commands[0].redirects[0], Redirection::Input { path } if path == "first")
+            matches!(&commands[0].redirects[0], Redirection::Input { path } if path_value(path) == "first")
         );
         assert!(
-            matches!(&commands[0].redirects[1], Redirection::Output { path, append: false } if path == "second")
+            matches!(&commands[0].redirects[1], Redirection::Output { path, append: false } if path_value(path) == "second")
         );
         assert!(
-            matches!(&commands[0].redirects[2], Redirection::Output { path, append: true } if path == "third")
+            matches!(&commands[0].redirects[2], Redirection::Output { path, append: true } if path_value(path) == "third")
         );
         assert!(
-            matches!(&commands[0].redirects[3], Redirection::Input { path } if path == "fourth")
+            matches!(&commands[0].redirects[3], Redirection::Input { path } if path_value(path) == "fourth")
         );
-        assert_eq!(commands[1].argv, vec!["true"]);
+        assert_eq!(values(&commands[1].argv), vec!["true"]);
         let errors = parse("echo 2> first 2>> second")?;
         assert!(
-            matches!(&errors[0].redirects[0], Redirection::Error { path, append: false } if path == "first")
+            matches!(&errors[0].redirects[0], Redirection::Error { path, append: false } if path_value(path) == "first")
         );
         assert!(
-            matches!(&errors[0].redirects[1], Redirection::Error { path, append: true } if path == "second")
+            matches!(&errors[0].redirects[1], Redirection::Error { path, append: true } if path_value(path) == "second")
         );
-        assert_eq!(parse("echo '2'> file")?[0].argv, vec!["echo", "2"]);
+        assert_eq!(values(&parse("echo '2'> file")?[0].argv), vec!["echo", "2"]);
 
-        assert_eq!(parse("echo 1\"\"> file")?[0].argv, vec!["echo", "1"]);
-        assert_eq!(parse("echo 2 > file")?[0].argv, vec!["echo", "2"]);
+        assert_eq!(
+            values(&parse("echo 1\"\"> file")?[0].argv),
+            vec!["echo", "1"]
+        );
+        assert_eq!(values(&parse("echo 2 > file")?[0].argv), vec!["echo", "2"]);
         for source in [
             "echo 3> file",
             "echo 0> file",

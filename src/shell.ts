@@ -14,6 +14,7 @@ import {
 } from "./contracts";
 import { kernelCall, open, publish, read, write } from "./storage";
 import { load } from "./modules";
+import { Shell } from "../dist/kernel/cirro_kernel";
 import { wasi } from "./wasi";
 import type { OutputCapture } from "./output";
 import type { Env } from "./resources";
@@ -28,21 +29,28 @@ export const shell = Effect.fn("shell.execute")(function* (
   const session = yield* open(env, capability.sandboxId);
   const kernel = session.kernel;
   const id = capability.sandboxId;
-  const plan = yield* kernelCall(() => kernel.shell_plan(source)).pipe(
+  const interpreter = yield* Effect.acquireRelease(
+    kernelCall(
+      () => new Shell(source, Schema.encodeSync(Schema.fromJsonString(Environment))(environment)),
+    ),
+    (interpreter) => Effect.sync(() => interpreter.free()),
+  );
+  const plan = yield* kernelCall(() => interpreter.plan()).pipe(
     Effect.flatMap(Schema.decodeUnknownEffect(Schema.fromJsonString(ShellPlan))),
   );
   const dirty = new Set<string>();
   const state = yield* Effect.reduce(
-    plan,
+    plan.entries(),
     () => ({
       cwd: "/home/cirro",
       exitCode: 0,
+      pipelineStatus: 0,
       stdout: Buffer.alloc(0),
       stderr: Buffer.alloc(0),
       pipe: Buffer.alloc(0),
       pipelineSkipped: false,
     }),
-    (state, command) =>
+    (state, [commandIndex, command]) =>
       Effect.gen(function* () {
         if (command.gate === "pipe" && state.pipelineSkipped) return state;
         if (command.gate === "success" && state.exitCode !== 0)
@@ -51,8 +59,22 @@ export const shell = Effect.fn("shell.execute")(function* (
           return { ...state, pipelineSkipped: true };
         const now = yield* Clock.currentTimeNanos;
         yield* kernelCall(() => kernel.set_time(now));
-        const name = command.argv[0];
-        const args = command.argv.slice(1);
+        const expansionStatus = Match.value(command.gate).pipe(
+          Match.when("pipe", () => state.pipelineStatus),
+          Match.orElse(() => state.exitCode),
+        );
+        const expansion = yield* kernelCall(() =>
+          interpreter.argv(commandIndex, expansionStatus),
+        ).pipe(
+          Effect.flatMap(Schema.decodeUnknownEffect(Schema.fromJsonString(CommandArguments))),
+          Effect.result,
+        );
+        const argv = Match.value(expansion).pipe(
+          Match.when({ _tag: "Success" }, (result) => result.success),
+          Match.orElse(() => []),
+        );
+        const name = argv[0] ?? "true";
+        const args = argv.slice(1);
         const cwd = state.cwd;
         const observed = { stdout: Buffer.alloc(0), stderr: Buffer.alloc(0) };
         const phase = { prepared: false };
@@ -63,6 +85,7 @@ export const shell = Effect.fn("shell.execute")(function* (
           error: { inode: Option.none<bigint>(), append: false },
         };
         const commandOutcome = Effect.gen(function* () {
+          yield* Effect.fromResult(expansion);
           const path = (input: string) => kernelCall(() => kernel.canonical(input, cwd));
           const file = Effect.fn("shell.read")(function* (input: string) {
             yield* requirePermission(capability, "read");
@@ -70,9 +93,26 @@ export const shell = Effect.fn("shell.execute")(function* (
             const bytes = yield* read(env, id, kernel, resolved);
             return bytes;
           });
-          yield* Effect.forEach(command.redirects, (redirect) =>
+          yield* Effect.forEach(command.redirects, (redirect, redirectIndex) =>
             Effect.gen(function* () {
-              const target = yield* path(redirect.path);
+              const fields = yield* kernelCall(() =>
+                interpreter.redirect(commandIndex, redirectIndex, expansionStatus),
+              ).pipe(
+                Effect.flatMap(Schema.decodeUnknownEffect(Schema.fromJsonString(CommandArguments))),
+              );
+              if (fields.length !== 1)
+                return yield* new Fault({
+                  code: "EINVAL",
+                  status: 400,
+                  message: "Ambiguous shell redirection",
+                });
+              if (fields[0] === "")
+                return yield* new Fault({
+                  code: "ENOENT",
+                  status: 404,
+                  message: "Empty shell redirection path",
+                });
+              const target = yield* path(fields[0]);
               if (redirect.kind === "input") {
                 yield* requirePermission(capability, "read");
                 yield* kernelCall(() => kernel.read_plan(target, 0n, 0n, false));
@@ -98,7 +138,7 @@ export const shell = Effect.fn("shell.execute")(function* (
           });
           phase.prepared = true;
           const external = yield* Effect.gen(function* () {
-            if (["cd", "pwd", "echo", "true", "false"].includes(name)) return null;
+            if (["", "cd", "pwd", "echo", "true", "false"].includes(name)) return null;
             return yield* kernelCall(() =>
               kernel.command_path(
                 name,
@@ -113,6 +153,7 @@ export const shell = Effect.fn("shell.execute")(function* (
             );
           });
           const result = yield* Effect.gen(function* () {
+            if (name === "") return { stdout: "", stderr: ": command not found\n", exitCode: 127 };
             if (external !== null) {
               const program = yield* load(
                 env,
@@ -485,6 +526,7 @@ export const shell = Effect.fn("shell.execute")(function* (
         yield* capture({ stdout, stderr });
         return {
           cwd: nextCwd,
+          pipelineStatus: expansionStatus,
           stdout,
           stderr,
           exitCode: Match.value(command.negate && !command.pipe).pipe(
@@ -506,4 +548,4 @@ export const shell = Effect.fn("shell.execute")(function* (
     result: null,
     exitCode: state.exitCode,
   } satisfies typeof RunResult.Type;
-});
+}, Effect.scoped);

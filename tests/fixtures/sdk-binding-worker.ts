@@ -475,6 +475,14 @@ export default {
         yield* Schema.decodeUnknownEffect(
           Schema.Tuple([Schema.Literal("caller"), Schema.Literal("undefined")]),
         )(environmentRun.output?.result);
+        const shellEnvironment = yield* boxes.action(id, {
+          op: "process.run",
+          id: "binding-shell-parameters",
+          language: "shell",
+          source: 'false; true | echo "$?" "$BOXES_BINDING_MARKER"',
+        });
+        if (shellEnvironment.output?.stdout !== "1 configured\n")
+          return yield* Effect.die("Binding shell parameter expansion differs");
         const environmentRpc = yield* makeAgentBinding(
           env.BOXES_AGENT,
           Redacted.make(capability.token),
