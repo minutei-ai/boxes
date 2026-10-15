@@ -28,7 +28,7 @@ import { load } from "./modules";
 import { archive, restore } from "./code";
 import { initializeInput, finishInput } from "./input";
 import { execute } from "./execution";
-import { head, open, kernelCall, StorageFailure } from "./storage";
+import { head, open, kernelCall, observeDisposal, StorageFailure } from "./storage";
 import type { Env } from "./resources";
 import type { HostBridge } from "./host";
 import { shell } from "./shell";
@@ -144,6 +144,7 @@ const complete = Effect.fn("process.complete")(function* (
   const { record, etag } = reservation;
   const key = `processes/${capability.sandboxId}/${record.id}.json`;
   const publication = { etag, cancelled: false };
+  const lifetime = { etag: Schema.decodeUnknownSync(Schema.NullOr(Schema.String))(null) };
   const snapshots: (typeof ObservedOutput.Type)[] = [];
   const retained: (typeof StoredOutput.Type)[] = [];
   const captured: (typeof CapturedBytes.Type)[] = [];
@@ -317,11 +318,15 @@ const complete = Effect.fn("process.complete")(function* (
   );
   const cancellation = Effect.gen(function* () {
     while (true) {
+      lifetime.etag = yield* observeDisposal(env, capability.sandboxId, lifetime.etag);
       yield* observeCancellation();
       yield* Effect.sleep(1000);
     }
   });
-  const supervised = Effect.raceFirst(execution, cancellation);
+  const supervised = Effect.raceFirst(
+    execution.pipe(Effect.tap(() => observeDisposal(env, capability.sandboxId, lifetime.etag))),
+    cancellation,
+  );
   const output = yield* Effect.gen(function* () {
     if (timeoutMs === null) return yield* supervised;
     return yield* supervised.pipe(Effect.timeout(timeoutMs));

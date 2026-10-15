@@ -3,7 +3,15 @@ import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { Schema } from "effect";
-import { ErrorResponse, FileContent, RunRecord, RunSummary, TokenResponse } from "../src/contracts";
+import {
+  ErrorResponse,
+  FileContent,
+  Head,
+  RunRecord,
+  RunSummary,
+  StoredRun,
+  TokenResponse,
+} from "../src/contracts";
 import { runtime } from "../tooling/worker-test";
 
 const directory = await mkdtemp(join(tmpdir(), "cirro-cancel-"));
@@ -307,3 +315,76 @@ test("scoped guest tools can request cancellation and preserve full process wait
   );
   expect(marker.status).toBe("cancelled");
 });
+
+test("disposal cancels an admitted guest instead of accepting its late result", async () => {
+  const sources = {
+    javascript:
+      'export default async ({tools}) => { console.log("entered"); await tools.call({op:"network.fetch",url:"https://allowed.example/delay"}); return "late result"; }',
+    typescript:
+      'export default async ({tools}): Promise<string> => { console.log("entered"); await tools.call({op:"network.fetch",url:"https://allowed.example/delay"}); return "late result"; }',
+    python:
+      'print("entered")\nawait tools.call({"op":"network.fetch","url":"https://allowed.example/delay"})\n"late result"',
+  };
+  for (const [language, source] of Object.entries(sources)) {
+    const id = `disposed-${language}`;
+    const token = await setup(mf, id);
+    expect(
+      (
+        await act(id, token, {
+          op: "process.spawn",
+          execution: {
+            op: "process.run",
+            id: "work",
+            language,
+            source,
+          },
+        })
+      ).status,
+    ).toBe(200);
+    await running(id, token);
+    for (const attempt of Array.from({ length: 50 }, (_, index) => index)) {
+      const record = Schema.decodeUnknownSync(RunRecord)(
+        await (await act(id, token, { op: "process.get", id: "work" })).json(),
+      );
+      if (record.output?.stdout === "entered\n") break;
+      await Bun.sleep(20);
+      expect(attempt).toBeLessThan(49);
+    }
+    const objects = await mf.objects;
+    const before = await objects.head(`sandboxes/${id}/head.json`);
+    if (before === null) return Promise.reject(new Error("Missing active sandbox"));
+    const unchanged = await objects.get(`sandboxes/${id}/head.json`, {
+      onlyIf: { etagDoesNotMatch: before.etag },
+    });
+    expect(unchanged).not.toBeNull();
+    expect(unchanged).not.toHaveProperty("body");
+    expect((await act(id, token, { op: "vm.dispose" })).status).toBe(200);
+    expect((await act(id, token, { op: "process.get", id: "work" })).status).toBe(404);
+    const changed = await objects.get(`sandboxes/${id}/head.json`, {
+      onlyIf: { etagDoesNotMatch: before.etag },
+    });
+    expect(changed).toHaveProperty("body");
+    if (changed !== null && "body" in changed) {
+      expect(
+        Schema.decodeUnknownSync(Schema.fromJsonString(Head))(await changed.text()).deleted,
+      ).toBe(true);
+    }
+    for (const attempt of Array.from({ length: 200 }, (_, index) => index)) {
+      const receipt = await objects.get(`processes/${id}/work.json`);
+      if (receipt === null) return Promise.reject(new Error("Missing disposed process receipt"));
+      const stored = Schema.decodeUnknownSync(Schema.fromJsonString(StoredRun))(
+        await receipt.text(),
+      );
+      if (stored.status !== "running") {
+        expect(stored.status).toBe("cancelled");
+        expect(stored.output?.stdout.size).toBe(8);
+        expect(stored.output?.result).toBeNull();
+        expect(stored.authority).toBeNull();
+        expect(stored.checkpoint).toBeNull();
+        break;
+      }
+      await Bun.sleep(20);
+      expect(attempt).toBeLessThan(199);
+    }
+  }
+}, 10000);

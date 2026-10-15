@@ -59,8 +59,8 @@ test("invalid credentials and sandbox identity never invoke a host callback", as
 test("disposal during an accepted callback prevents the next host effect", async () => {
   const result = await probe("disposal");
   expect(result.calls).toBe(1);
-  expect(result.record?.status).toBe("exited");
-  expect(result.record?.output?.result).toBe("ENOENT");
+  expect(result.record?.status).toBe("cancelled");
+  expect(result.record?.output?.result).toBeOneOf([null, undefined]);
 });
 test("RPC timeout terminates guest execution while accepted callback effects retain their own lifetime", async () => {
   const result = await probe("timeout");

@@ -1,0 +1,48 @@
+{
+  "scope": "Local cooperative cancellation of active execution after sandbox disposal.",
+  "baseline": {
+    "runtime": "Native Alchemy workerd, real local R2 and native Queue delivery; delayed native origin Worker.",
+    "reproduction": "A queued JavaScript guest acknowledged entered output and waited on a network request. After vm.dispose returned 200, its stored process receipt became exited and accepted the late result. The regression expected cancelled and failed with actual exited."
+  },
+  "implementation": {
+    "authority": "Existing sandbox head/deleted flag remains authoritative; no persisted schema, alternate state key or infrastructure resource.",
+    "observation": "The runner polls root lifetime alongside existing process cancellation and checks root lifetime once after execution returns before settlement. Missing or confirmed disposed root yields ECANCELED and native scope interruption.",
+    "conditionalReads": "R2 get uses etagDoesNotMatch with the last root ETag observed by this execution. An unchanged root has no body; only changed roots decode Head and advance the observation ETag. This is an additional R2 read per supervisor iteration and once at completion; output capture does not acquire another root read. Conditional reads remain requests, not free cache hits."
+  },
+  "artifactsSha256": {
+    "src/storage.ts": "7d78be5607707475d68686a6ece57f563dd4198b9566fef707aa4b1b9d9699c7",
+    "src/process.ts": "b128dab0ec8c2ae2891eaf416c7dd759bceeaae72f38cd5732f24b7b1cb22c26",
+    "tests/cancel.test.ts": "9b400af85b19663c5688678f4b87bd1865ec6effdb78b8bd3ae4f3aca5325218",
+    "tests/rpc.test.ts": "6ba85c4533c36d3302fd132f077da456f3791806527a5659d257ce4202617a4d"
+  },
+  "validation": {
+    "typecheck": "Final bun run typecheck passed.",
+    "build": "Final bun run build passed before native suite.",
+    "nativeFull": {
+      "command": "bun run test",
+      "tests": 335,
+      "files": 56,
+      "assertions": 4269,
+      "failures": 0,
+      "seconds": 131.32
+    },
+    "focused": "14 cancellation/native RPC tests passed before the final complete suite.",
+    "rootContract": "Real native R2 returned metadata without body for unchanged etagDoesNotMatch and returned a decoded deleted Head body after disposal.",
+    "coverage": [
+      "JavaScript, TypeScript and Python admitted guests blocked on network calls settle cancelled after disposal",
+      "Eight acknowledged stdout bytes retained; result null; private authority/checkpoint cleared",
+      "Public process reads remain denied after root disposal",
+      "Native service-binding callback disposal retains one accepted host invocation, prevents a second, and reports cancelled without a guest result",
+      "Existing cancellation, authority/isolation, retained output, Queue, WASI/checkpoint and all other suites remain green"
+    ],
+    "contractCorrection": "The first full run passed 334 tests and failed one older RPC expectation of exited with ENOENT after callback disposal. Updated that test to require cancelled and absent result while preserving the one-host-call assertion; the final complete suite passed."
+  },
+  "limits": [
+    "Cooperative observation includes the one-second sleep plus native R2/runtime latency, not instantaneous preemption",
+    "Synchronous native instructions cannot be interrupted midway; previously accepted external effects do not roll back",
+    "Disposal and receipt settlement are separate writes; no atomic cross-object transaction or linearizable final-result claim",
+    "Restart semantics, disposal reclamation and remaining parity gates remain open",
+    "No production latency/cost improvement or AgentOS cost advantage established",
+    "No deployment, remote proof, new Minutei delivery, GitHub action, push or publication in this change"
+  ]
+}

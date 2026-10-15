@@ -28,6 +28,42 @@ export const head = Effect.fn("sandbox.head")(function* (env: Env, id: string) {
     return yield* new Fault({ code: "ENOENT", status: 404, message: "Sandbox has been disposed" });
   return snapshot;
 });
+export const observeDisposal = Effect.fn("sandbox.observeDisposal")(function* (
+  env: Env,
+  id: string,
+  etag: string | null,
+) {
+  const object = yield* Effect.tryPromise({
+    try: () => {
+      if (etag === null) return env.OBJECTS.get(`sandboxes/${id}/head.json`);
+      return env.OBJECTS.get(`sandboxes/${id}/head.json`, {
+        onlyIf: { etagDoesNotMatch: etag },
+      });
+    },
+    catch: (cause) => new StorageFailure({ cause }),
+  });
+  if (object === null)
+    return yield* new Fault({
+      code: "ECANCELED",
+      status: 409,
+      message: "Execution sandbox disappeared",
+    });
+  if (!("body" in object)) return object.etag;
+  const text = yield* Effect.tryPromise({
+    try: () => object.text(),
+    catch: (cause) => new StorageFailure({ cause }),
+  });
+  const current = yield* Schema.decodeUnknownEffect(Schema.fromJsonString(Head))(text).pipe(
+    Effect.mapError((cause) => new StorageFailure({ cause })),
+  );
+  if (current.deleted)
+    return yield* new Fault({
+      code: "ECANCELED",
+      status: 409,
+      message: "Execution sandbox was disposed",
+    });
+  return object.etag;
+});
 export const dispose = Effect.fn("sandbox.dispose")(function* (env: Env, id: string) {
   const snapshot = yield* readHead(env, id);
   if (snapshot.head.deleted) return;
