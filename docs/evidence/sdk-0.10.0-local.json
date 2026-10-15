@@ -49,7 +49,8 @@
     "shellParameters": "Rust-owned quote-aware environment/status expansion, deferred lexical redirects, original pipeline status, scoped handle release and queued replacement snapshots passed. Exact binding/Agent RPC consumer, final ten remote parameter cases and six SDK checks passed. Fourteen remote binary-shell cases passed before the migration-only correction; see shell-parameters.json.",
     "shellVariables": "29 native-sh workloads, 64 native Rust assignment oracles, nine installed WASI environment cases, readonly execution, local state limits, pipeline/cwd isolation and queued replacement passed; see shell-variables-local.json.",
     "shellEnvironmentSharing": "Read-only preparation shares the native Rust map; mutations detach before validated commit. Native shell variable/Queue replacement suite, exact archive consumer and kernel/Worker comparisons passed; see shell-environment-cow.json. End-to-end performance improvement remains inconclusive.",
-    "readonly": "Rust-owned attributes, 27 native-sh oracles, count/name boundaries, redirect-before-mutation denial, pipeline/run/config isolation, read/execute-only authority and Queue replacement passed. Exact archive service binding/Agent RPC consumer passed; see shell-readonly.json."
+    "readonly": "Rust-owned attributes, 27 native-sh oracles, count/name boundaries, redirect-before-mutation denial, pipeline/run/config isolation, read/execute-only authority and Queue replacement passed. Exact archive service binding/Agent RPC consumer passed; see shell-readonly.json.",
+    "minuteiCompatibility": "Installed Minutei SDK 0.9.0 passed selected current-runtime 0.10.0 flows through the actual Code Mode and tenant SQLite over native Agent binding, with exact runtime archive and isolated local registry; see minutei-native-interop.json."
   },
   "reproduction": [
     "bun run check",
@@ -62,7 +63,7 @@
     "githubPublication": "Deferred at user request: continue without GitHub. This candidate is not published; credential validity is not assessed.",
     "remoteCI": "not verified for this candidate",
     "backendDeployment": "Source b4112e9b9f5c2b63e0aa9f6d84e7d6e1bea47a96 deployed successfully through native Alchemy, profile minutei, stage prod: 2 succeeded in 370.3 seconds. Worker update and unconditional paginated migration completed; bucket, Queue and bindings unchanged.",
-    "minutei": "still consumes published SDK/runtime 0.9.0; no dependency switched to an unpublished URL or local artifact",
+    "minutei": "Immutable SDK/runtime 0.9.0 dependencies retained in Minutei. A separate native compatibility gate compiles its actual consumer and verifies retention, isolation, cleanup, current filesystem/shell behavior and fresh JS globals against this exact 0.10.0 runtime archive. Minutei deployment/authentication/model proof remains unverified.",
     "productionAndModelProof": "Deployed source b4112e9b9f5c2b63e0aa9f6d84e7d6e1bea47a96 passed 24 shell checks (five readonly cases), six compiled SDK checks and 14 binary-shell checks. Native exact archive service binding/Agent RPC consumer passed locally. Minutei remote binding/model behavior and production performance/cost remain unverified."
   },
   "parity": "Experimental; the remaining requirements in docs/parity.md remain open."

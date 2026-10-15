@@ -14,4 +14,6 @@ The current [0.10.0 local candidate evidence](docs/evidence/sdk-0.10.0-local.jso
 
 Before publishing SDK/runtime archives, run `bun run package:proof <sdk.tgz> <runtime.tgz>` against the exact files to upload. It checks their matching identities and licenses, consumer declarations, public exports and native binding behavior without provisioning remote resources.
 
+`bun run minutei:proof <minutei-checkout> <runtime.tgz>` compiles the actual Minutei Code Mode/tenant fixtures against the consumer's installed SDK and runs them against the exact runtime archive through a native Agent service binding. It verifies conversation retention, authority/isolation, cleanup recovery and current filesystem/shell features without changing the consumer dependencies. The proof owns a child process with private native Alchemy registry and data directories; it requires the consumer checkout and installed dependencies, but no deployment credentials. History Queue consumption, browser authentication and model behavior are outside this gate.
+
 Before claiming release readiness, close the completion gates in `docs/parity.md`, verify remote CI, deploy through Alchemy and prove the behavior against the authenticated remote Worker. Never publish private authentication configuration or mutate another project's infrastructure.

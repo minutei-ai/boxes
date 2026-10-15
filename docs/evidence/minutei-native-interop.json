@@ -1,0 +1,64 @@
+{
+  "status": "Selected native Minutei consumer flows passed locally against the exact current runtime; remote application/model validation remains open",
+  "runtimeSourceCommit": "b4112e9b9f5c2b63e0aa9f6d84e7d6e1bea47a96",
+  "receipt": {
+    "clientVersion": "0.9.0",
+    "runtimeVersion": "0.10.0",
+    "runtimeArchiveSha256": "37da4d346432b6932bb1eb23faac1650588349bd066c8dd3bcc9c80674bdada5",
+    "consumerCommit": "a0a2a05c40ed5fb3bd5d76b14c3baf3bfe4695c2",
+    "consumerBundleSha256": "e29165da4f63ac8a3cedd29f5b13b037e9b4becb1f73b7e06047ad308db1d060",
+    "transport": "native workerd Agent service binding; actual Minutei Code Mode and tenant SQLite; local R2, KV and Queue",
+    "retention": true,
+    "isolatedRegistry": true,
+    "capabilities": true,
+    "consumerFixturesSha256": {
+      "boxes-retention.ts": "225c5d42ff36ffa2ee49ce213816546f73bacb691e646857e8588bd8149360c0",
+      "boxes-code.worker.ts": "f876f01e98358a955a9214c2f6b375f60598a461450b88a052d505531920f87a"
+    }
+  },
+  "coverage": {
+    "consumer": "Actual Minutei createAgentCodeTool and TenantWorkspace imports, compiled by its existing Vite/Alchemy fixture builder with installed SDK 0.9.0. No dependency override, SDK double or replacement service.",
+    "retention": [
+      "lazy allocation through the tenant owner",
+      "same allocation for concurrent same-authority acquisition",
+      "files retained across closed Code Mode scopes",
+      "separate conversations, agent roles and tenants",
+      "authority rotation starts empty files",
+      "archive preserves allocation",
+      "active run prevents deletion",
+      "creation confirmation failure retries the same allocation",
+      "cleanup confirmation failure retains pending work and succeeds on handler retry",
+      "disposed allocations refuse new execution while another tenant remains accessible"
+    ],
+    "capabilities": [
+      "real conversation read callback through the binding",
+      "readonly assignment rejected with status 2",
+      "hard links expose the same positive inode",
+      "append via alias changes the original bytes",
+      "truncate via alias remains visible in the next execution",
+      "base64 round-trip preserves binary bytes",
+      "a global JavaScript value exists in the first execution and is absent in the next; files remain"
+    ],
+    "isolation": "The proof owns a child process with native XDG_STATE_HOME pointing to its scoped temporary registry. It checks that both worker registrations actually exist there. Native workerd, R2, KV and tenant SQLite are released with the fixture; no developer runtime is reused.",
+    "scope": "Only local HTTP is used to drive the fixture; Minutei-to-Boxes communication is the native Agent service binding."
+  },
+  "validation": {
+    "boxesTypecheck": "passed including the new CLI",
+    "minuteiTypecheck": "Nx web:typecheck passed; app and spec references include the edited fixtures",
+    "minuteiDefaultSuite": "13 tests across four selected files passed in 7.74 seconds using the published local runtime 0.9.0. Executed in a scoped XDG process; native registry directory creation was verified.",
+    "lint": "Changed files have no lint errors; pre-existing async-function warnings remain. New callbacks add no async-function warnings.",
+    "structure": "67 files checked, no violations",
+    "boundaries": "Global check still fails on two unchanged ML imports in apps/web/worker/process/outcome-input.ts and storybook/src/stories/workspace/process-outcome-card.stories.tsx; they are outside this diff.",
+    "nxTestSelection": "web:test resolved the workspace-relative config from apps/web and found no tests for the supplied filters. The root test command executed the selected files successfully; an empty selection is not counted as a pass.",
+    "setupCorrection": "The initial capability fixture supplied no external tools, which TanStack Code Mode rejects. It now supplies and exercises a real SQLite-backed conversation reader; no no-op tool or SDK fallback was added."
+  },
+  "reproduction": "bun run minutei:proof <minutei-checkout> <exact-runtime.tgz>",
+  "limits": [
+    "This covers the selected public behavior, not a blanket cross-version guarantee for every SDK operation.",
+    "The old SDK Head schema describes private format v2; the cross-version gate does not parse current format v3 with it. It checks post-cleanup refusal through the native Code Mode path instead.",
+    "History Queue producers are registered, but no history consumer is attached; the native broker accepts/drops those messages. Queue/history delivery is not proven.",
+    "Cleanup recovery invokes the real alarm handler after making retry work due through the fixture; automatic alarm scheduling is not asserted.",
+    "Browser authentication, oRPC transport identity, full model turns, production Minutei bindings and remote CI remain unverified. No probe or application deployment was performed.",
+    "GitHub work and package publication remain deferred at user request. Default consumer dependencies stay on immutable 0.9.0 URLs."
+  ]
+}
