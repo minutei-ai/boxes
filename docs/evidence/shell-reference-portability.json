@@ -255,5 +255,6 @@
   ],
   "resolution": "The three version-dependent sources retain direct native Worker assertions for empty stdout, exact error text and exit code 2. The other 24 sources agree across both GNU versions and remain host comparisons. The production Rust implementation is unchanged. CI records Bash version and failed comparisons include their source.",
   "verification": "Native readonly Worker test passed: 1 test, 101 assertions, 1.95 seconds. TypeScript and format results recorded with delivery checks.",
-  "limits": "The runner did not previously log its Bash version, so its exact version is not claimed. This is a reproduced reference difference, not full shell conformance."
+  "limits": "The runner did not previously log its Bash version, so its exact version is not claimed. This is a reproduced reference difference, not full shell conformance.",
+  "nativeBash52Verification": "A temporary Bun preload redirected only the external host bash spawn to the actual compiled GNU 5.2.21 binary; the Worker, R2 and guest execution remained native. The readonly test passed with 101 assertions in 1.97 seconds. The normal installed 5.3.20 run passed the same 101 assertions in 1.95 seconds."
 }

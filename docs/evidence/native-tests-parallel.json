@@ -29,5 +29,22 @@
   "delivery": {
     "ci": "Not remotely verified; GitHub work remains deferred at user request.",
     "readonly": "See shell-readonly.json for runtime and deployment evidence."
+  },
+  "followUpCI": {
+    "sourceCommit": "1c7f3c57b933f893b50c16cd3ec200ddcf267b62",
+    "run": "https://github.com/minutei-ai/boxes/actions/runs/38811929193",
+    "nativeTests": {
+      "passed": 346,
+      "failed": 1,
+      "files": 63,
+      "seconds": 90.1
+    },
+    "failure": "The binary-shell aggregate test hit the implicit native Bun 5000 ms host observation deadline. All other tests, including readonly and metadata repair, passed.",
+    "priorRemoteBinaryRunsMs": [2186.76, 4544.04],
+    "timeoutRunMs": 5002.12,
+    "localRepetitionsMs": [2065.43, 1867.41, 1856.72],
+    "localRepetitionAssertions": 237,
+    "correction": "Only the aggregate binary-shell integration test gets an explicit 15000 ms observation budget. It retains all 79 assertions, real R2/WASI execution and scope cleanup. Worker execution limits, fixture sizes, test concurrency and the other test deadlines remain unchanged.",
+    "limits": "The normal native test runtime is unchanged; this is host scheduling allowance for a multi-operation integration test, not evidence of lower execution latency. A warm Rust cache restored the installed wasm-bindgen tool: the next native install step completed in one second."
   }
 }
