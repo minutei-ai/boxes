@@ -6,7 +6,7 @@ import type { Env } from "./resources";
 export class StorageFailure extends Schema.TaggedError<StorageFailure>()("StorageFailure", {
   cause: Schema.Unknown,
 }) {}
-export const head = Effect.fn("sandbox.head")(function* (env: Env, id: string) {
+const readHead = Effect.fn("sandbox.readHead")(function* (env: Env, id: string) {
   const object = yield* Effect.tryPromise({
     try: () => env.OBJECTS.get(`sandboxes/${id}/head.json`),
     catch: (cause) => new StorageFailure({ cause }),
@@ -20,9 +20,37 @@ export const head = Effect.fn("sandbox.head")(function* (env: Env, id: string) {
   const head = yield* Schema.decodeUnknownEffect(Schema.fromJsonString(Head))(text).pipe(
     Effect.mapError((cause) => new StorageFailure({ cause })),
   );
-  if (head.deleted)
-    return yield* new Fault({ code: "ENOENT", status: 404, message: "Sandbox has been disposed" });
   return { head, etag: object.etag };
+});
+export const head = Effect.fn("sandbox.head")(function* (env: Env, id: string) {
+  const snapshot = yield* readHead(env, id);
+  if (snapshot.head.deleted)
+    return yield* new Fault({ code: "ENOENT", status: 404, message: "Sandbox has been disposed" });
+  return snapshot;
+});
+export const dispose = Effect.fn("sandbox.dispose")(function* (env: Env, id: string) {
+  const snapshot = yield* readHead(env, id);
+  if (snapshot.head.deleted) return;
+  const written = yield* Effect.tryPromise({
+    try: () =>
+      env.OBJECTS.put(
+        `sandboxes/${id}/head.json`,
+        Schema.encodeSync(Schema.fromJsonString(Head))({ ...snapshot.head, deleted: true }),
+        {
+          onlyIf: { etagMatches: snapshot.etag },
+          httpMetadata: { contentType: "application/json" },
+        },
+      ),
+    catch: (cause) => new StorageFailure({ cause }),
+  });
+  if (written !== null) return;
+  const current = yield* readHead(env, id);
+  if (current.head.deleted) return;
+  return yield* new Fault({
+    code: "CONFLICT",
+    status: 409,
+    message: "Sandbox changed concurrently; read current state before retrying",
+  });
 });
 export const open = Effect.fn("filesystem.open")(function* (env: Env, id: string) {
   const snapshot = yield* head(env, id);

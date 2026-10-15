@@ -110,7 +110,7 @@ An unexpected loss while a claim is running still settles at its deadline withou
 
 A failed transport does not authorize repeating the same execution or deleting its receipt. An interrupted host can leave a `running` receipt even if the guest has stopped. Queued executions use native Queue delivery with conditional claims; deadline recovery records failed or cancelled observation without replay. Cancellation is cooperative at native yield boundaries, rather than POSIX signal handling. Results and filesystem writes are not one cross-object transaction.
 
-Disposal publishes a tombstone in the same head and invalidates future reads/writes/tool calls. It does not reclaim data or instantly terminate already-running guest CPU. Policy changes use the same root commit, require management permission and preserve files. Execution-budget changes apply to subsequently created guest runtimes; subsequent tool calls read the current network policy.
+Disposal conditionally publishes the existing head with its deletion marker. A confirmed marker makes subsequent disposals succeed without rewriting the object. A losing compare-and-swap rereads the head: another confirmed disposal succeeds, while an intervening live mutation reports a conflict. Authority is checked before this read, including for already disposed sandboxes. The retained tombstone blocks ID reuse. Disposal invalidates future reads/writes/tool calls. It does not reclaim data or instantly terminate already-running guest CPU. Policy changes use the same root commit, require management permission and preserve files. Execution-budget changes apply to subsequently created guest runtimes; subsequent tool calls read the current network policy.
 
 ## Infrastructure and production gate
 

@@ -32,14 +32,20 @@ export class Control extends WorkerEntrypoint<TestEnv> {
 export default {
   fetch(request: Request, bindings: TestEnv) {
     const advance = request.headers.get("x-boxes-test-clock-advance");
-    if (advance === null) return Effect.runPromise(handleRequest(request, bindings));
+    const start = request.headers.get("x-boxes-test-clock-start");
+    if (advance === null && start === null)
+      return Effect.runPromise(handleRequest(request, bindings));
     return Effect.runPromise(
       Effect.scoped(
         Effect.gen(function* () {
-          const elapsed = yield* Schema.decodeUnknownEffect(Schema.fromJsonString(Schema.Int))(
-            advance,
-          );
-          const started = yield* Clock.currentTimeMillis;
+          const elapsed = yield* Effect.gen(function* () {
+            if (advance === null) return 0;
+            return yield* Schema.decodeUnknownEffect(Schema.fromJsonString(Schema.Int))(advance);
+          });
+          const started = yield* Effect.gen(function* () {
+            if (start === null) return yield* Clock.currentTimeMillis;
+            return yield* Schema.decodeUnknownEffect(Schema.fromJsonString(Schema.Int))(start);
+          });
           const clock = yield* TestClock.make();
           yield* clock.setTime(started);
           const sleeping = yield* Latch.make();

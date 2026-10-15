@@ -56,7 +56,7 @@ import {
   liveOutput,
   recoveryStatus,
 } from "./process";
-import { head, kernelCall, open, publish, StorageFailure } from "./storage";
+import { head, kernelCall, open, publish, dispose, StorageFailure } from "./storage";
 import type { Env } from "./resources";
 
 initSync({ module: wasm });
@@ -325,9 +325,7 @@ const route = Effect.fn("api.route")(function* (request: Request, env: Env) {
     Match.when({ op: "vm.dispose" }, () =>
       Effect.gen(function* () {
         yield* requirePermission(capability, "manage");
-        const session = yield* open(env, id);
-        const removed = { ...session, head: { ...session.head, deleted: true } };
-        yield* publish(env, id, removed);
+        yield* dispose(env, id);
         return Schema.encodeSync(Schema.fromJsonString(Success))({ ok: true });
       }),
     ),

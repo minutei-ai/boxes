@@ -75,6 +75,7 @@
     "stdio:proof": "bun tooling/raw-stdio-proof.ts",
     "shell:binary:proof": "bun tooling/binary-shell-proof.ts",
     "guest-work:proof": "bun tooling/guest-work-proof.ts",
+    "dispose:proof": "bun tooling/dispose-proof.ts",
     "restore:proof": "bun tooling/restore-proof.ts",
     "cron:proof": "bun tooling/cron-proof.ts"
   },
