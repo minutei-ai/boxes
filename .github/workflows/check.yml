@@ -26,3 +26,7 @@ jobs:
       - run: cargo install wasm-bindgen-cli --version 0.2.129 --locked
       - run: bun run format:check
       - run: bun run check
+      - run: mkdir /tmp/boxes-package-check
+      - run: bun pm pack --ignore-scripts --destination /tmp/boxes-package-check
+      - run: bun run pack:runtime /tmp/boxes-package-check
+      - run: bun run package:proof /tmp/boxes-package-check/minutei-ai-boxes-[0-9]*.tgz /tmp/boxes-package-check/minutei-ai-boxes-runtime-[0-9]*.tgz

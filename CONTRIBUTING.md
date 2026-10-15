@@ -8,4 +8,8 @@ Maintain executable contracts at their owner. `src/contracts.ts` owns the extern
 
 `409` conflicts require reading current state before deciding to retry. A lost response does not roll back earlier writes. Guest side effects and execution receipts do not currently form an atomic multi-object transaction; do not hide this by replaying submissions.
 
+The current [0.10.0 local candidate evidence](docs/evidence/sdk-0.10.0-local.json) separates artifact validation from publication and remote deployment.
+
+Before publishing SDK/runtime archives, run `bun run package:proof <sdk.tgz> <runtime.tgz>` against the exact files to upload. It checks their matching identities and licenses, consumer declarations, public exports and native binding behavior without provisioning remote resources.
+
 Before claiming release readiness, close the completion gates in `docs/parity.md`, verify remote CI, deploy through Alchemy and prove the behavior against the authenticated remote Worker. Never publish private authentication configuration or mutate another project's infrastructure.

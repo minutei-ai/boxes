@@ -9,6 +9,10 @@ const Package = Schema.Struct({
   repository: Schema.Struct({ type: Schema.String, url: Schema.String }),
 });
 const root = Schema.decodeUnknownSync(Package)(await Bun.file("package.json").json());
+const arguments_ = Schema.decodeUnknownSync(
+  Schema.Array(Schema.String).check(Schema.isMaxLength(1)),
+)(Bun.argv.slice(2));
+const destination = arguments_[0] ?? "/tmp";
 const directory = "dist/runtime-package";
 await rm(directory, { recursive: true, force: true });
 await mkdir(directory, { recursive: true });
@@ -27,7 +31,7 @@ await Bun.write(
     exports: { "./worker": "./index.js", "./package.json": "./package.json" },
   }),
 );
-const packageProcess = Bun.spawn(["bun", "pm", "pack", "--destination", "/tmp"], {
+const packageProcess = Bun.spawn(["bun", "pm", "pack", "--destination", destination], {
   cwd: directory,
   stdout: "inherit",
   stderr: "inherit",

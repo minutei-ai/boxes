@@ -1,6 +1,6 @@
 {
   "name": "@minutei-ai/boxes",
-  "version": "0.9.0",
+  "version": "0.10.0",
   "license": "Apache-2.0",
   "repository": {
     "type": "git",
@@ -69,6 +69,7 @@
     "bench:wasi": "cargo run -p boxes-wasm-bench --release --locked --",
     "build:sdk": "bun tooling/build-sdk.ts",
     "pack:runtime": "bun tooling/package-runtime.ts",
+    "package:proof": "bun tooling/package-proof.ts",
     "prepack": "bun run build:sdk",
     "sdk:proof": "bun tooling/sdk-proof.ts",
     "timestamps:proof": "bun tooling/timestamps-proof.ts",

@@ -1,0 +1,53 @@
+{
+  "status": "local release candidate; not published or deployed",
+  "version": "0.10.0",
+  "runtimeSourceCommit": "09c9feb1a3c0881ea4c98d329b4069c3b4e8887a",
+  "runtimeArtifactsSha256": {
+    "index.js": "ae5d73592172d28cfd4903873f02d164c11516c342cdbd079574df701fd095ee",
+    "cirro_kernel_bg.wasm": "5afa573f2656fe718dbd7ef461e68b50fd10ffc0c6356bb554aac28b79bee877",
+    "cirro_wasi_bg.wasm": "a128d4d89a7403b1217b42fa1ff96771836432a0992cba07522d8846c5c6829d"
+  },
+  "archives": [
+    {
+      "file": "minutei-ai-boxes-0.10.0.tgz",
+      "name": "@minutei-ai/boxes",
+      "version": "0.10.0",
+      "bytes": 63118,
+      "sha256": "6e1934d6258dbcf47ac0c4d16c0c4f6c0064449269dec174c421ce26865c0277",
+      "entries": 16,
+      "license": "Apache-2.0"
+    },
+    {
+      "file": "minutei-ai-boxes-runtime-0.10.0.tgz",
+      "name": "@minutei-ai/boxes-runtime",
+      "version": "0.10.0",
+      "bytes": 5487043,
+      "sha256": "2b69587de0bd108963e69a662f5e7e9ec336df552c8da35cd1cd016f4e30406d",
+      "entries": 8,
+      "license": "Apache-2.0"
+    }
+  ],
+  "validation": {
+    "typecheck": "passed including packaging/proof tooling",
+    "format": "passed",
+    "exactArchiveProof": "passed: extracted public package exports and TypeScript consumer; native Alchemy workerd HTTP service binding and Agent RPC; R2; filesystem restore; hard-link metadata and shared bytes; host callbacks; persistent contexts, cancellation, denied writes and memory limits",
+    "queueScope": "Native consumer registered with producer delivery delayed for 86400 seconds. Proof verifies foreign process remains queued; it does not demonstrate queue execution or replacement Worker recovery.",
+    "publicArtifactScan": "gitleaks found no secrets in extracted archives; no .env or node_modules entries; both LICENSE files exactly match the source Apache-2.0 license",
+    "runtimeRegressionBase": "317 tests across 44 files passed on the unchanged runtime source at 09c9feb; current changes affect packaging, proof tooling, CI and documentation"
+  },
+  "reproduction": [
+    "bun run check",
+    "mkdir /tmp/boxes-package-check",
+    "bun pm pack --ignore-scripts --destination /tmp/boxes-package-check",
+    "bun run pack:runtime /tmp/boxes-package-check",
+    "bun run package:proof /tmp/boxes-package-check/minutei-ai-boxes-[0-9]*.tgz /tmp/boxes-package-check/minutei-ai-boxes-runtime-[0-9]*.tgz"
+  ],
+  "delivery": {
+    "githubPublication": "pending; authenticated gh commands timed out, including an 80-second observation; unauthenticated public API connectivity was successful",
+    "remoteCI": "not verified for this candidate",
+    "backendDeployment": "not performed for this candidate",
+    "minutei": "still consumes published SDK/runtime 0.9.0; no dependency switched to an unpublished URL or local artifact",
+    "productionAndModelProof": "not performed"
+  },
+  "parity": "Experimental; the remaining requirements in docs/parity.md remain open."
+}
