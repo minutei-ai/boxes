@@ -3,6 +3,7 @@ import guestWasm from "cirro:guest";
 import { initSync, Guest } from "../dist/guest/cirro_guest";
 import {
   Capability,
+  Policy,
   CapturedStdio,
   GuestResponse,
   Program,
@@ -45,8 +46,17 @@ export const execute = Effect.fn("execution.run")(function* (
   checkpoint: string | null,
   canHandover: boolean,
   host: HostBridge | null = null,
+  memoryLimitBytes: typeof Policy.Type.memoryBytes | null = null,
 ) {
   const policy = session.head.policy;
+  if (
+    memoryLimitBytes !== null &&
+    program.language !== "javascript" &&
+    program.language !== "typescript"
+  )
+    return yield* new InterpreterFailure({
+      cause: "Per-execution memory limits require a JavaScript or TypeScript program",
+    });
   if (program.language === "python")
     return {
       outcome: yield* python(env, capability, program, session, capture).pipe(Effect.result),
@@ -73,7 +83,7 @@ export const execute = Effect.fn("execution.run")(function* (
       try: () =>
         new Guest(
           Schema.encodeSync(Schema.fromJsonString(ScriptProgram))(program),
-          policy.memoryBytes,
+          Math.min(policy.memoryBytes, memoryLimitBytes ?? policy.memoryBytes),
           policy.interruptBudget,
           policy.maxOutputBytes,
         ),

@@ -5,7 +5,7 @@ The `@minutei-ai/boxes` SDK targets Effect 4 and ordinary Cloudflare Workers. It
 Install the SDK archive attached to the GitHub SDK release:
 
 ```sh
-bun add https://github.com/minutei-ai/boxes/releases/download/sdk-v0.8.0/minutei-ai-boxes-0.8.0.tgz
+bun add https://github.com/minutei-ai/boxes/releases/download/sdk-v0.9.0/minutei-ai-boxes-0.9.0.tgz
 ```
 
 Use the service binding from the Minutei Worker environment:
@@ -92,10 +92,26 @@ Use `makeAgentBinding` from `@minutei-ai/boxes/rpc` with that binding and a scop
 
 The Rust guest runs with the sandbox's existing fuel/memory/output policy. Source, execution outcome and acknowledged output use existing R2 process receipts. Callbacks remain with the current RPC execution and are released through native disposers. Queued processes and later executions cannot inherit them. Client interruption does not cancel a durable process; use `process.cancel`. Server timeout stops guest continuation, but already accepted callback effects retain their own lifetime and are not rolled back. Domain API errors remain `BoxesError`; native RPC transport failures are `RpcFailure`. The SDK and server both dispose native RPC result references after decoding them.
 
-`createBoxesIsolateDriver(binding, administratorToken)` from `@minutei-ai/boxes/tanstack` integrates native Code Mode context acquisition/execution/disposal. Each context creates a fresh sandbox and scoped credential with read/write/execute/manage permissions for its own files and processes. Guest code can use native `tools.call` actions to stage files, run synchronous shell commands and read their results; guest `process.run` accepts only `language: "shell"`, while other runtimes use the existing queued spawn contract. Each shell execution retains the native process receipt, quotas and cancellation path; this does not grant any additional host callback or workspace authority. Network hosts remain empty. Files and background processes belong to the context and are unavailable after disposal; return or publish useful results through an authorized host tool before finishing Code Mode. Its binding callbacks remain owned by the caller; tool authorization and the caller's aggregate budgets remain outside the guest. Context execution preserves void return values, validates injected binding identifiers and limits guest memory/fuel/output. Disposal cancels outstanding runs and writes the sandbox tombstone. Preflight abort prevents acquisition; interruption explicitly cancels the admitted process. Confirmed host effects remain confirmed.
+`createBoxesIsolateDriver(binding, target)` from `@minutei-ai/boxes/tanstack` integrates native Code Mode context acquisition/execution/disposal. With `{ kind: "ephemeral", administratorToken }`, each context creates a fresh sandbox and scoped credential with read/write/execute/manage permissions for its own files and processes. Guest code can use native `tools.call` actions to stage files, run synchronous shell commands and read their results; guest `process.run` accepts only `language: "shell"`, while other runtimes use the existing queued spawn contract. Each shell execution retains the native process receipt, quotas and cancellation path; this does not grant any additional host callback or workspace authority. Network hosts remain empty. Files and background processes belong to the context and are unavailable after disposal; return or publish useful results through an authorized host tool before finishing Code Mode. Its binding callbacks remain owned by the caller; tool authorization and the caller's aggregate budgets remain outside the guest. Context execution preserves void return values, validates injected binding identifiers and limits guest memory/fuel/output. Disposal cancels outstanding runs and writes the sandbox tombstone. Preflight abort prevents acquisition; interruption explicitly cancels the admitted process. Confirmed host effects remain confirmed.
 
 TanStack Code Mode is an optional type-only peer. The current published Code Mode 0.5.2 context signature claims an arbitrary generic result without a decoder. Minutei corrects that declaration to an unknown result, matching the adapter's validated JSON boundary. Its existing native patch also forwards AbortSignal into context configuration. The adapter never imports a TanStack runtime. Tests run the actual adapter between native workerd Workers with R2, including context reuse, void values, abort before entry, cancellation while a host operation is pending, confirmed earlier writes and disposal. The Minutei's Code Mode integration keeps its existing native tool wrappers/events and requires its control-plane `BOXES_API_KEY` binding. Live RPC/consumer and performance comparisons remain separate gates.
 
 For isolated consumer tests, `bun run pack:runtime` packages the already built Worker and Wasm kernels as `@minutei-ai/boxes-runtime`. This separate development artifact exposes `@minutei-ai/boxes-runtime/worker`; Alchemy Runtime starts those modules with local R2 and Queue bindings and connects the caller through `Service.local` with the `Agent` entrypoint. The SDK package remains independent of the runtime artifact. Runtime packaging requires `bun run build` first.
 
 `vm.dispose` requires an unexpired capability with `manage`. Repeating it after confirmed disposal succeeds, including from a replacement Worker. Concurrent disposals converge on the retained deletion marker; a competing live filesystem mutation may still return `CONFLICT`. Reads remain unavailable and the administrator cannot recreate that ID. This marker does not establish physical object reclamation. `bun run dispose:proof` verifies repeated/concurrent disposal and retained authority boundaries against `CIRRO_URL`.
+
+Persistent Code Mode uses an existing caller-owned sandbox:
+
+```ts
+const driver = createBoxesIsolateDriver(env.BOXES, {
+  kind: "persistent",
+  sandboxId,
+  capabilityToken: Redacted.make(scopedToken),
+});
+```
+
+The target contract is exported as `BoxesIsolateTarget`. The caller creates the sandbox and supplies a scoped token with `read` and `execute`, plus `write` for file mutations. The driver never mints authority in persistent mode. Closing one context cancels its outstanding process IDs and releases callbacks; the sandbox, files and other processes remain under the caller's lifecycle. New contexts and replacement Workers can attach with the same ID and valid authority. The caller owns final sandbox disposal and token renewal. Keep this driver scoped to its authorized actor/run.
+
+`memoryLimit` is sent as a per-execution byte ceiling to RPC. Rust applies the smaller of that ceiling and the current sandbox policy, without changing the persisted policy. The optional `memoryBytes` field of `runWithTools` has the same behavior for JavaScript/TypeScript executions; omission uses the sandbox policy. Files, policy and process receipts persist; JavaScript heap state and host callback closures do not persist between executions. The existing timeout and token expiry still apply.
+
+SDK 0.9 replaces the driver's former credential argument with the explicit target. Existing ephemeral callers pass `{ kind: "ephemeral", administratorToken }`; persistent callers pass `{ kind: "persistent", sandboxId, capabilityToken }`.

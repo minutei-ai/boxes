@@ -1,9 +1,9 @@
-import { Clock, Effect, Redacted, Schema } from "effect";
+import { Clock, Effect, Fiber, Latch, Redacted, Schema } from "effect";
 import { makeBinding } from "../../src/sdk";
 import { makeAgentBinding } from "../../src/sdk-rpc";
 import { createBoxesIsolateDriver } from "../../src/sdk-tanstack";
 import type { AgentProtocol } from "../../src/rpc-protocol";
-import { CronRecord, FileContent, FileStat, Id, RunRecord } from "../../src/contracts";
+import { CronRecord, FileContent, FileStat, Id, Policy, RunRecord } from "../../src/contracts";
 
 export const BindingProof = Schema.Struct({
   file: FileContent,
@@ -26,6 +26,18 @@ export const DriverProof = Schema.Struct({
   voidResult: Schema.Boolean,
   writes: Schema.Array(Schema.String),
   closed: Schema.Boolean,
+});
+export const PersistentDriverProof = Schema.Struct({
+  file: FileContent,
+  cancelled: Schema.Boolean,
+  lateWrites: Schema.Array(Schema.String),
+  lowMemoryRejected: Schema.Boolean,
+  sandboxLimitEnforced: Schema.Boolean,
+  allocation: Schema.Int,
+  writeDenied: Schema.Boolean,
+  sandboxMemoryBytes: Policy.fields.memoryBytes,
+  callbacks: Schema.Array(Schema.String),
+  foreignStatus: RunRecord.fields.status,
 });
 export const DriverAbortProof = Schema.Struct({
   preflight: Schema.String,
@@ -59,6 +71,178 @@ export default {
           memoryBytes: 8388608,
           maxOutputBytes: 1048576,
         };
+        const persistent = new URL(request.url).searchParams.get("persistent");
+        if (persistent !== null) {
+          const phase = yield* Schema.decodeUnknownEffect(Schema.Literals(["create", "read"]))(
+            persistent,
+          );
+          if (phase === "create")
+            yield* admin.create({ id, policy: { ...policy, memoryBytes: 33554432 } });
+          const grant = yield* admin.mintCapability(id, {
+            permissions: ["read", "write", "execute"],
+            expiresInSeconds: 600,
+          });
+          const client = yield* makeBinding(env.BOXES, Redacted.make(grant.token));
+          if (phase === "create")
+            yield* client.action(id, {
+              op: "process.spawn",
+              execution: {
+                op: "process.run",
+                id: "foreign",
+                language: "typescript",
+                source: 'export default () => "foreign"',
+              },
+            });
+          const driver = createBoxesIsolateDriver(env.BOXES_AGENT, {
+            kind: "persistent",
+            sandboxId: id,
+            capabilityToken: Redacted.make(grant.token),
+          });
+          const waiting = yield* Latch.make();
+          const release = yield* Latch.make();
+          const lateWrites: string[] = [];
+          const cancellation = yield* Effect.scoped(
+            Effect.gen(function* () {
+              const context = yield* Effect.acquireRelease(
+                Effect.tryPromise(() =>
+                  driver.createContext({
+                    memoryLimit: 8,
+                    timeout: 5000,
+                    bindings: {
+                      external_wait: {
+                        name: "wait",
+                        description: "Wait for scope closure",
+                        inputSchema: {},
+                        execute: () =>
+                          Effect.runPromise(
+                            Effect.gen(function* () {
+                              yield* waiting.open;
+                              yield* release.await;
+                              return null;
+                            }),
+                          ),
+                      },
+                      external_save: {
+                        name: "save",
+                        description: "Record a late mutation",
+                        inputSchema: {},
+                        execute: async () => {
+                          lateWrites.push("late");
+                          return null;
+                        },
+                      },
+                    },
+                  }),
+                ),
+                (context) =>
+                  Effect.promise(() => context.dispose()).pipe(Effect.ensuring(release.open)),
+              );
+              const running = yield* Effect.tryPromise(() =>
+                context.execute("await external_wait(); return external_save();"),
+              ).pipe(Effect.forkChild);
+              yield* waiting.await;
+              yield* Effect.promise(() => context.dispose());
+              yield* release.open;
+              return yield* Fiber.join(running);
+            }),
+          );
+          const callbacks: string[] = [];
+          const invoke = Effect.fn("fixture.persistent.invoke")(
+            (
+              driver: ReturnType<typeof createBoxesIsolateDriver>,
+              memoryLimit: number,
+              source: string,
+              label: string,
+            ) =>
+              Effect.acquireUseRelease(
+                Effect.tryPromise(() =>
+                  driver.createContext({
+                    memoryLimit,
+                    timeout: 5000,
+                    bindings: {
+                      external_label: {
+                        name: "label",
+                        description: "Caller-owned label",
+                        inputSchema: {},
+                        execute: async () => {
+                          callbacks.push(label);
+                          return label;
+                        },
+                      },
+                    },
+                  }),
+                ),
+                (context) => Effect.tryPromise(() => context.execute(source)),
+                (context) => Effect.promise(() => context.dispose()),
+              ),
+          );
+          if (phase === "create")
+            yield* invoke(
+              driver,
+              8,
+              'await tools.call({op:"filesystem.writeFile",path:"/tmp/shared",content:"confirmed",encoding:"utf8"});',
+              "create",
+            );
+          const small = yield* invoke(
+            driver,
+            8,
+            "await external_label(); return new Uint8Array(20000000).length;",
+            `${phase}:small`,
+          );
+          const large = yield* invoke(
+            driver,
+            32,
+            "await external_label(); return new Uint8Array(20000000).length;",
+            `${phase}:large`,
+          );
+          const owner = yield* admin.mintCapability(id, {
+            permissions: ["manage"],
+            expiresInSeconds: 60,
+          });
+          const ownership = yield* makeBinding(env.BOXES, Redacted.make(owner.token));
+          yield* ownership.action(id, { op: "config.patch", policy: { memoryBytes: 8388608 } });
+          const capped = yield* invoke(
+            driver,
+            32,
+            "return new Uint8Array(20000000).length;",
+            "capped",
+          );
+          yield* ownership.action(id, { op: "config.patch", policy: { memoryBytes: 33554432 } });
+          const readonly = yield* admin.mintCapability(id, {
+            permissions: ["read", "execute"],
+            expiresInSeconds: 600,
+          });
+          const readonlyDriver = createBoxesIsolateDriver(env.BOXES_AGENT, {
+            kind: "persistent",
+            sandboxId: id,
+            capabilityToken: Redacted.make(readonly.token),
+          });
+          const denied = yield* invoke(
+            readonlyDriver,
+            8,
+            'await tools.call({op:"filesystem.writeFile",path:"/tmp/shared",content:"forbidden",encoding:"utf8"});',
+            "readonly",
+          );
+          const file = yield* client.action(id, { op: "filesystem.readFile", path: "/tmp/shared" });
+          const status = yield* client.action(id, { op: "vm.status" });
+          const foreign = yield* client.action(id, { op: "process.get", id: "foreign" });
+          const proof = {
+            file,
+            cancelled: !cancellation.success,
+            lateWrites,
+            lowMemoryRejected: !small.success,
+            sandboxLimitEnforced: !capped.success,
+            allocation: yield* Schema.decodeUnknownEffect(Schema.Int)(large.value),
+            writeDenied: !denied.success,
+            sandboxMemoryBytes: status.policy.memoryBytes,
+            callbacks,
+            foreignStatus: foreign.status,
+          };
+          if (phase === "read") yield* ownership.action(id, { op: "vm.dispose" });
+          return new Response(
+            Schema.encodeSync(Schema.fromJsonString(PersistentDriverProof))(proof),
+          );
+        }
         yield* admin.create({ id, policy });
         const capability = yield* admin.mintCapability(id, {
           permissions: ["read", "write", "execute", "manage"],
@@ -66,7 +250,10 @@ export default {
         });
         const boxes = yield* makeBinding(env.BOXES, Redacted.make(capability.token));
         if (new URL(request.url).searchParams.has("driver")) {
-          const driver = createBoxesIsolateDriver(env.BOXES_AGENT, Redacted.make(env.TOKEN));
+          const driver = createBoxesIsolateDriver(env.BOXES_AGENT, {
+            kind: "ephemeral",
+            administratorToken: Redacted.make(env.TOKEN),
+          });
           if (new URL(request.url).searchParams.get("driver") === "abort") {
             const stopped = yield* Effect.tryPromise({
               try: async () =>

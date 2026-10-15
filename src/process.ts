@@ -2,6 +2,7 @@ import { Clock, Effect, Schema, Struct } from "effect";
 import { requirePermission } from "./auth";
 import {
   Capability,
+  Policy,
   Fault,
   RunAction,
   StoredRun,
@@ -128,6 +129,7 @@ const complete = Effect.fn("process.complete")(function* (
   reservation: Effect.Success<ReturnType<typeof reserve>>,
   timeoutMs: number | null,
   host: HostBridge | null = null,
+  memoryLimitBytes: typeof Policy.Type.memoryBytes | null = null,
 ) {
   const { record, etag } = reservation;
   const key = `processes/${capability.sandboxId}/${record.id}.json`;
@@ -271,6 +273,12 @@ const complete = Effect.fn("process.complete")(function* (
           status: 401,
           message: "Capability expired before program entry",
         });
+      if (program.language === "shell" && memoryLimitBytes !== null)
+        return yield* new Fault({
+          code: "EINVAL",
+          status: 400,
+          message: "Per-execution memory limits require a JavaScript or TypeScript program",
+        });
       if (program.language === "shell")
         return {
           program,
@@ -291,6 +299,7 @@ const complete = Effect.fn("process.complete")(function* (
         reservation.checkpoint,
         reservation.deadlineAt !== null,
         host,
+        memoryLimitBytes,
       );
     }),
   );
@@ -493,12 +502,13 @@ export const run = Effect.fn("process.run")(function* (
   action: typeof RunAction.Type,
   host: HostBridge | null = null,
   timeoutMs: number | null = null,
+  memoryLimitBytes: typeof Policy.Type.memoryBytes | null = null,
 ): Effect.fn.Return<
   typeof RunRecord.Type,
   Fault | StorageFailure | Schema.SchemaError | QueueFailure
 > {
   const reservation = yield* Effect.scoped(reserve(env, capability, action, false, "closed"));
-  return yield* complete(env, capability, reservation, timeoutMs, host);
+  return yield* complete(env, capability, reservation, timeoutMs, host, memoryLimitBytes);
 });
 
 const readReceipt = Effect.fn("process.readReceipt")(function* (

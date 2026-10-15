@@ -498,6 +498,7 @@ export class Agent extends AgentProtocol<Env> {
             { op: "process.run", id: input.id, language: "typescript", source: input.source },
             host,
             input.timeoutMs,
+            input.memoryBytes,
           );
           return Schema.encodeSync(AgentReply)({ ok: true, record });
         }).pipe(

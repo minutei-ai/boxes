@@ -386,6 +386,7 @@ export const HostReply = Schema.Union([
 ]);
 export const AgentInput = Schema.Struct({
   id: Id,
+  memoryBytes: Schema.optionalKey(Policy.fields.memoryBytes),
   source: InlineRun.fields.source,
   tools: Schema.Array(HostCall.fields.name).check(Schema.isMaxLength(128)),
   maxToolCalls: Schema.Int.check(Schema.isBetween({ minimum: 1, maximum: 256 })),

@@ -1,8 +1,8 @@
 import { makeAgentBinding } from "./sdk-rpc";
 import type { AgentProtocol } from "./rpc-protocol";
-import { HostCall } from "./contracts";
+import { AgentRequest, HostCall, Id, Policy } from "./contracts";
 import type { IsolateConfig, ExecutionResult } from "@tanstack/ai-code-mode";
-import { Cause, Effect, Exit, Redacted, Schema, Scope } from "effect";
+import { Cause, Effect, Exit, Match, Redacted, Schema, Scope } from "effect";
 
 const BindingName = HostCall.fields.name.check(Schema.isPattern(/^external_[a-zA-Z0-9_$]+$/));
 const ReturnedValue = Schema.Union([
@@ -10,16 +10,39 @@ const ReturnedValue = Schema.Union([
   Schema.Struct({ kind: Schema.Literal("value"), value: Schema.Json }),
 ]);
 
+export const BoxesIsolateTarget = Schema.Union([
+  Schema.Struct({
+    kind: Schema.Literal("ephemeral"),
+    administratorToken: Schema.Redacted(AgentRequest.fields.token),
+  }),
+  Schema.Struct({
+    kind: Schema.Literal("persistent"),
+    sandboxId: Id,
+    capabilityToken: Schema.Redacted(AgentRequest.fields.token),
+  }),
+]);
+
 export const createBoxesIsolateDriver = (
   binding: Fetcher<AgentProtocol>,
-  token: Redacted.Redacted<string>,
+  target: typeof BoxesIsolateTarget.Type,
 ) => ({
   createContext: (configuration: IsolateConfig & { readonly abortSignal?: AbortSignal }) => {
     configuration.abortSignal?.throwIfAborted();
     return Effect.runPromise(
       Effect.gen(function* () {
-        const administrator = yield* makeAgentBinding(binding, token);
-        const id = `context-${crypto.randomUUID()}`;
+        const credential = Match.value(target).pipe(
+          Match.when({ kind: "ephemeral" }, (target) => target.administratorToken),
+          Match.when({ kind: "persistent" }, (target) => target.capabilityToken),
+          Match.exhaustive,
+        );
+        const control = yield* makeAgentBinding(binding, credential);
+        const id = Match.value(target).pipe(
+          Match.when({ kind: "persistent" }, (target) => target.sandboxId),
+          Match.orElse(() => `context-${crypto.randomUUID()}`),
+        );
+        const memoryBytes = yield* Schema.decodeUnknownEffect(Policy.fields.memoryBytes)(
+          (configuration.memoryLimit ?? 16) * 1048576,
+        );
         const names = yield* Schema.decodeUnknownEffect(Schema.Array(BindingName))(
           Object.keys(configuration.bindings),
         );
@@ -27,40 +50,52 @@ export const createBoxesIsolateDriver = (
         const state = { closed: false };
         const active = new Set<string>();
         const acquisition = Effect.gen(function* () {
-          yield* Effect.acquireRelease(
-            administrator.create({
+          if (target.kind === "ephemeral")
+            yield* control.create({
               id,
               policy: {
                 networkHosts: [],
                 interruptBudget: 1000,
-                memoryBytes: (configuration.memoryLimit ?? 16) * 1048576,
+                memoryBytes,
                 maxOutputBytes: 1048576,
               },
-            }),
-            () =>
-              Effect.gen(function* () {
-                state.closed = true;
-                const grant = yield* administrator.mintCapability(id, {
+            });
+          yield* Effect.addFinalizer(() =>
+            Effect.gen(function* () {
+              state.closed = true;
+              const cleanup = yield* Effect.gen(function* () {
+                if (target.kind === "persistent") return control;
+                const grant = yield* control.mintCapability(id, {
                   permissions: ["read", "execute", "manage"],
                   expiresInSeconds: 60,
                 });
-                const cleanup = yield* makeAgentBinding(binding, Redacted.make(grant.token));
-                yield* Effect.forEach(
-                  active,
-                  (runId) =>
-                    cleanup.action(id, { op: "process.cancel", id: runId }).pipe(
-                      Effect.catchTag("BoxesError", (failure) => {
-                        if (failure.error === "ENOENT") return Effect.void;
-                        return Effect.fail(failure);
-                      }),
-                    ),
-                  { concurrency: 3 },
-                ).pipe(
-                  Effect.ensuring(cleanup.action(id, { op: "vm.dispose" }).pipe(Effect.orDie)),
-                );
-              }).pipe(Effect.orDie),
+                return yield* makeAgentBinding(binding, Redacted.make(grant.token));
+              });
+              yield* Effect.forEach(
+                active,
+                (runId) =>
+                  cleanup.action(id, { op: "process.cancel", id: runId }).pipe(
+                    Effect.catchTag("BoxesError", (failure) => {
+                      if (failure.error === "ENOENT") return Effect.void;
+                      return Effect.fail(failure);
+                    }),
+                  ),
+                { concurrency: 3 },
+              ).pipe(
+                Effect.ensuring(
+                  Effect.gen(function* () {
+                    if (target.kind === "ephemeral")
+                      yield* cleanup.action(id, { op: "vm.dispose" });
+                  }).pipe(Effect.orDie),
+                ),
+              );
+            }).pipe(Effect.orDie),
           );
-          const grant = yield* administrator.mintCapability(id, {
+          if (target.kind === "persistent") {
+            yield* control.action(id, { op: "vm.status" });
+            return control;
+          }
+          const grant = yield* control.mintCapability(id, {
             permissions: ["read", "write", "execute", "manage"],
             expiresInSeconds: 600,
           });
@@ -98,6 +133,7 @@ export const createBoxesIsolateDriver = (
                     tools: names,
                     maxToolCalls: 256,
                     timeoutMs: configuration.timeout ?? 30000,
+                    memoryBytes,
                   },
                   (call) =>
                     Effect.runPromise(
@@ -140,7 +176,6 @@ export const createBoxesIsolateDriver = (
                   ),
                   Effect.result,
                 );
-                active.delete(runId);
                 if (outcome._tag === "Failure")
                   return {
                     success: false,
@@ -150,6 +185,12 @@ export const createBoxesIsolateDriver = (
                     },
                   };
                 const record = outcome.success;
+                if (
+                  record.status === "exited" ||
+                  record.status === "failed" ||
+                  record.status === "cancelled"
+                )
+                  active.delete(runId);
                 if (
                   record.status !== "exited" ||
                   record.output === null ||
