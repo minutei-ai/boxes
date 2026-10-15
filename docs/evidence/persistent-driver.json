@@ -1,0 +1,42 @@
+{
+  "sourceCommit": "e841f1039c4c670b06830a2038c4a731286f19b7",
+  "release": "https://github.com/minutei-ai/boxes/releases/tag/sdk-v0.9.0",
+  "local": {
+    "command": "bun run check",
+    "result": "passed",
+    "tests": 306,
+    "files": 39,
+    "durationSeconds": 173.62,
+    "format": "passed"
+  },
+  "deployment": {
+    "provider": "native Alchemy",
+    "profile": "minutei",
+    "stage": "prod",
+    "sourceCommit": "135a1a965f60899fd36078bcd4886b200761cf62",
+    "workerArtifactSha256": "49ff27bca2de7030f2b772bcc321aec8c915b3ba5556437666984a81046e65e7",
+    "migrations": "completed",
+    "latestSdkOnlyChange": "e841f10 does not change the deployed Worker artifact"
+  },
+  "nativeCoverage": [
+    "Persistent files survive context disposal and a fully stopped Worker runtime before replacement.",
+    "Each context receives its current host callbacks without serializing caller capabilities.",
+    "A grant without manage permission can execute; a readonly grant cannot modify files.",
+    "An 8 MiB context rejects a 20 MB allocation while a 32 MiB context succeeds.",
+    "The persisted sandbox memory ceiling overrides a larger context request.",
+    "Closing a context cancels and observes its active execution without cancelling another queued process.",
+    "A callback accepted before closure may settle; subsequent host effects are denied."
+  ],
+  "artifacts": {
+    "sdkSha256": "fb7726ab604a975aeccc8514a6a952a054db80263ece008be471d57abe74812d",
+    "runtimeSha256": "0c5429635d8e40a6edbe3e5da83872a167b13ceaeca5473fc7080cd26fac7eac"
+  },
+  "limitations": [
+    "Remote persistent RPC and a real Minutei model turn remain unverified.",
+    "Minutei still selects ephemeral contexts; persistent agent and tenant lifecycle is not integrated.",
+    "JavaScript heaps and host callbacks are not restored across executions.",
+    "Capability renewal and final disposal belong to the persistent sandbox owner.",
+    "Terminal receipt observation does not roll back previously accepted external effects or promise immediate CPU termination.",
+    "No cost or performance comparison with AgentOS is established."
+  ]
+}
