@@ -308,21 +308,14 @@ export const filesystem = Effect.fn("filesystem.action")(function* (
       ),
       Match.when({ op: "filesystem.appendFile" }, (input) =>
         Effect.gen(function* () {
-          yield* requirePermission(capability, "read");
-          const before = yield* read(env, id, kernel, input.path).pipe(
-            Effect.catchTag("Fault", (fault) => {
-              if (fault.code === "ENOENT") return Effect.succeed(Buffer.alloc(0));
-              return Effect.fail(fault);
-            }),
-          );
-          yield* write(
+          const changed = yield* writeRange(
             env,
             id,
             kernel,
             input.path,
-            Buffer.concat([before, Buffer.from(input.content)]),
+            Buffer.from(input.content),
           );
-          yield* publish(env, id, session);
+          if (changed) yield* publish(env, id, session);
           return { ok: true } satisfies typeof Success.Type;
         }),
       ),

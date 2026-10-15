@@ -167,6 +167,7 @@ struct PatchBlock<'a> {
 #[serde(rename_all = "camelCase")]
 struct RangeWritePlan<'a> {
     path: &'a str,
+    offset: u64,
     size: u64,
     changed: bool,
     chunks: Vec<Option<&'a str>>,
@@ -1142,13 +1143,14 @@ impl Kernel {
     pub fn write_range_plan(
         &self,
         path: &str,
-        offset: u64,
+        offset: Option<u64>,
         length: u64,
     ) -> Result<String, JsValue> {
         let path = self.resolve(path, true).map_err(|error| fail(&error))?;
         self.package_writable(&path, false)
             .map_err(|error| fail(&error))?;
         let old_size = self.state.node(&path).map_or(0, Node::size);
+        let offset = offset.unwrap_or(old_size);
         let size = if length == 0 {
             old_size
         } else {
@@ -1193,6 +1195,7 @@ impl Kernel {
         }
         serde_json::to_string(&RangeWritePlan {
             path: &path,
+            offset,
             size,
             changed,
             chunks,

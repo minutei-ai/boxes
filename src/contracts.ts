@@ -81,6 +81,9 @@ export const FilesystemSnapshot = Schema.Struct({
 const Nanoseconds = Schema.String.check(Schema.isPattern(/^(0|[1-9][0-9]{0,19})$/))
   .pipe(Schema.decodeTo(Schema.BigIntFromString))
   .check(Schema.isBetweenBigInt({ minimum: 0n, maximum: 18_446_744_073_709_551_615n }));
+const FileOffset = Schema.Int.check(
+  Schema.isBetween({ minimum: 0, maximum: Number.MAX_SAFE_INTEGER }),
+);
 export const FilesystemAction = Schema.Union([
   Schema.Struct({ op: Schema.Literal("filesystem.restore"), snapshot: FilesystemSnapshot }),
   Schema.Struct({
@@ -118,9 +121,7 @@ export const FilesystemAction = Schema.Union([
   Schema.Struct({
     op: Schema.Literal("filesystem.readFile"),
     path: Path,
-    offset: Schema.optionalKey(
-      Schema.Int.check(Schema.isBetween({ minimum: 0, maximum: Number.MAX_SAFE_INTEGER })),
-    ),
+    offset: Schema.optionalKey(FileOffset),
     length: Schema.optionalKey(
       Schema.Int.check(Schema.isBetween({ minimum: 0, maximum: 16_777_216 })),
     ),
@@ -128,9 +129,7 @@ export const FilesystemAction = Schema.Union([
   Schema.Struct({
     op: Schema.Literal("filesystem.writeFile"),
     path: Path,
-    offset: Schema.optionalKey(
-      Schema.Int.check(Schema.isBetween({ minimum: 0, maximum: Number.MAX_SAFE_INTEGER })),
-    ),
+    offset: Schema.optionalKey(FileOffset),
     content: Content,
     encoding: ContentEncoding,
   }),
@@ -516,6 +515,7 @@ export const ReadPlan = Schema.Struct({
 });
 export const RangeWritePlan = Schema.Struct({
   path: Path,
+  offset: FileOffset,
   size: Schema.Int.check(Schema.isBetween({ minimum: 0, maximum: 16_777_216 })),
   changed: Schema.Boolean,
   chunks: Schema.Array(Schema.NullOr(Digest)).check(Schema.isMaxLength(64)),

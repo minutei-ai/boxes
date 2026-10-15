@@ -1,7 +1,7 @@
 import { expect, test } from "bun:test";
 import { Schema } from "effect";
 import { initSync, Kernel, migrate_filesystem } from "../dist/kernel/cirro_kernel";
-import { FileStat, ReadPlan } from "../src/contracts";
+import { FileStat, ReadPlan, RangeWritePlan } from "../src/contracts";
 
 initSync({
   module: new WebAssembly.Module(
@@ -142,5 +142,43 @@ test("opened input and output identities retain authority without changing appen
   expect(kernel.open_output("/tmp/new", true)).toBe(true);
   kernel.chmod("/tmp/file", 0o400);
   expect(() => kernel.open_output("/tmp/file", true)).toThrow("EACCES");
+  kernel.free();
+});
+
+test("append planning distinguishes EOF from positional zero and excludes unchanged prefix blocks", () => {
+  const kernel = new Kernel();
+  const hash = "a".repeat(64);
+  kernel.write("/tmp/file", 1048576n, JSON.stringify([hash, hash, hash, hash]));
+  const append = Schema.decodeUnknownSync(Schema.fromJsonString(RangeWritePlan))(
+    kernel.write_range_plan("/tmp/file", undefined, 1n),
+  );
+  expect(append).toMatchObject({
+    offset: 1048576,
+    size: 1048577,
+    changed: true,
+    blocks: [{ index: 4, size: 1, previous: null }],
+  });
+  expect(append.chunks.slice(0, 4)).toEqual([hash, hash, hash, hash]);
+  const positioned = Schema.decodeUnknownSync(Schema.fromJsonString(RangeWritePlan))(
+    kernel.write_range_plan("/tmp/file", 0n, 1n),
+  );
+  expect(positioned.offset).toBe(0);
+  expect(positioned.size).toBe(1048576);
+  expect(positioned.blocks.map((block) => block.index)).toEqual([0]);
+  expect(
+    Schema.decodeUnknownSync(Schema.fromJsonString(RangeWritePlan))(
+      kernel.write_range_plan("/tmp/file", undefined, 0n),
+    ).changed,
+  ).toBe(false);
+  expect(
+    Schema.decodeUnknownSync(Schema.fromJsonString(RangeWritePlan))(
+      kernel.write_range_plan("/tmp/file", BigInt(Number.MAX_SAFE_INTEGER), 0n),
+    ),
+  ).toMatchObject({ offset: Number.MAX_SAFE_INTEGER, size: 1048576, changed: false });
+  expect(
+    Schema.decodeUnknownSync(Schema.fromJsonString(RangeWritePlan))(
+      kernel.write_range_plan("/tmp/missing", undefined, 0n),
+    ),
+  ).toMatchObject({ offset: 0, size: 0, changed: true });
   kernel.free();
 });

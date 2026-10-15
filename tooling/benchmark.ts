@@ -191,6 +191,15 @@ const patchFourKiB = await sample(25, async (index) => {
   });
   if (response.status !== 200) process.exit(1);
 });
+const appendToEightMiB = await sample(25, async () => {
+  const response = await call({
+    op: "filesystem.appendFile",
+    path: "/tmp/range-benchmark",
+    content: "x",
+  });
+  if (response.status !== 200) process.exit(1);
+  await response.arrayBuffer();
+});
 const report = {
   measuredAt: new Date().toISOString(),
   environment: {
@@ -210,6 +219,7 @@ const report = {
   },
   measurements: {
     fullEightMiB,
+    appendToEightMiB,
     rangeFourKiB,
     patchFourKiB,
     python,

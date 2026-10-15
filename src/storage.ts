@@ -168,11 +168,13 @@ export const writeRange = Effect.fn("filesystem.writeRange")(function* (
   kernel: Kernel,
   path: string,
   data: Uint8Array,
-  offset: number,
+  offset?: number,
 ) {
-  const plan = yield* kernelCall(() =>
-    kernel.write_range_plan(path, BigInt(offset), BigInt(data.byteLength)),
-  ).pipe(Effect.flatMap(Schema.decodeUnknownEffect(Schema.fromJsonString(RangeWritePlan))));
+  const plan = yield* kernelCall(() => {
+    if (offset === undefined)
+      return kernel.write_range_plan(path, undefined, BigInt(data.byteLength));
+    return kernel.write_range_plan(path, BigInt(offset), BigInt(data.byteLength));
+  }).pipe(Effect.flatMap(Schema.decodeUnknownEffect(Schema.fromJsonString(RangeWritePlan))));
   if (!plan.changed) return false;
   const now = yield* Clock.currentTimeNanos;
   yield* kernelCall(() => kernel.set_time(now));
@@ -184,14 +186,14 @@ export const writeRange = Effect.fn("filesystem.writeRange")(function* (
         const start = patch.index * 262_144;
         if (
           patch.previous !== null &&
-          (offset > start || offset + data.byteLength < start + patch.previous.size)
+          (plan.offset > start || plan.offset + data.byteLength < start + patch.previous.size)
         ) {
           const previous = yield* block(env, id, patch.previous);
           bytes.set(previous);
         }
-        const from = Math.max(start, offset);
-        const to = Math.min(start + patch.size, offset + data.byteLength);
-        if (to > from) bytes.set(data.subarray(from - offset, to - offset), from - start);
+        const from = Math.max(start, plan.offset);
+        const to = Math.min(start + patch.size, plan.offset + data.byteLength);
+        if (to > from) bytes.set(data.subarray(from - plan.offset, to - plan.offset), from - start);
         const digest = yield* Effect.promise(() => crypto.subtle.digest("SHA-256", bytes));
         return { index: patch.index, hash: Buffer.from(digest).toString("hex"), bytes };
       }),
