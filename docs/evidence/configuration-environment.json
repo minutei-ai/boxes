@@ -1,0 +1,162 @@
+{
+  "runtimeSourceCommit": "3bc315777895311521b44bebfbaa2affa96188fc",
+  "scope": "Persistent sandbox environment and immutable admitted inputs across JS/TS, Python, shell and WASI; native binding SDK and Agent RPC",
+  "runtimeArtifactsSha256": {
+    "index.js": "03357a5bae9838f95a3aee9b0a716f5b4d5ed7a46cc7435931ef091b12f7957f",
+    "cirro_compiler_bg.wasm": "27d9b0022a634ed4eef47b6561ad38cafde3522c17e834afed1264440678bf2f",
+    "cirro_guest_bg.wasm": "b773b74626b08bd1083860081ccd2a3d0fdff80dcd97b5ec13ed7c6e2148ef22",
+    "cirro_kernel_bg.wasm": "30654731e659d5a8df5e5c712bf52ff1da57f040e01b4ca5c1e27a1f02204aa9",
+    "cirro_python_bg.wasm": "8aa6aec5ab6fb0623637e2b6dda7318f4934e4736f4a97e45ca3312bf32e529c",
+    "cirro_wasi_bg.wasm": "a128d4d89a7403b1217b42fa1ff96771836432a0992cba07522d8846c5c6829d"
+  },
+  "contracts": {
+    "precedence": "package defaults, sandbox configuration, then execution overrides",
+    "persistence": "Head version 3; environment uses the same conditional R2 root publication as policy and filesystem state",
+    "mutation": "config.set/patch replace the supplied environment map; omission preserves; empty map clears; empty string remains a value",
+    "authority": "create is administrator-only; config mutations require manage; configuration reads require read; environment is not a secret store",
+    "guestIsolation": "Guest-local JS process.env and native Python os.environ/getenv receive only the captured map; no Worker bindings or host environment",
+    "queue": "Every archived program captures environment before process reservation; delayed delivery and replacement Worker preserve it"
+  },
+  "migration": {
+    "endpoint": "/v1/migrations/environment-v1",
+    "paging": "at most 25 roots or receipts per native R2 page",
+    "integrity": "Verify immutable digests before classifying format; corrupt archives terminalize, intact old-format jobs defer before claim",
+    "authority": "Checkpoint ETag rebases only when prior ETag and full normalized root match; stale authority remains stale",
+    "recovery": "Native tests cover interrupted conversion, replayed pages and replacement Workers; synthetic checkpoint metadata does not prove historical heap execution",
+    "historicalSources": "Sources archived by pre-module release 07463e1 were raw UTF-8 JS/TS/Python/shell. Only terminal receipts without authority, deadline or checkpoint retain these verified bytes under historical-source-text-v1; no executable program is fabricated; current JSON markers and queued sources reject malformed bodies.",
+    "memory": "At most four concurrent objects. Native request-local Semaphore uses eight size-weighted decoding permits, rounded by MiB and capped so oversized bodies take all permits. Checkpoint conversion takes all permits. This is an IO/decoding bound, not proof of maximum Worker memory."
+  },
+  "validation": {
+    "native": "Full implementation and first historical correction at 71f8520: 330 tests across 52 files; 3834 assertions; 199.60 seconds; no failures",
+    "rust": "Workspace Clippy -D warnings and workspace tests passed",
+    "build": "Worker, SDK declarations and TypeScript passed",
+    "format": "passed",
+    "focused": "20 tests across 4 files; 252 assertions; 21.03 seconds after the digest-order fix",
+    "exactArchives": "Consumer exports/declarations, native Alchemy workerd binding and Agent RPC passed; includes persisted configuration and execution override checks",
+    "scans": "Staged source and extracted archives passed gitleaks; both licenses exactly match Apache-2.0; no env or node_modules archive entries",
+    "regression": "Initial full run had a corrupt archive deferred before digest verification, causing timeout and cascading shared-server failure; moving digest verification before version classification fixed both; full suite then passed",
+    "historicalCutover": "Final migration correction: build and TypeScript passed; 17 native tests across 3 files; 235 assertions; 40.05 seconds; exact regenerated runtime archive binding/RPC consumer passed",
+    "finalCutover": "Earliest raw Python source and bounded parallel IO at 3bc315777895311521b44bebfbaa2affa96188fc: build, typecheck, format passed; 5 native tests across 3 files, 139 assertions, 9.09 seconds. Shared immutable source keys, queued-source rejection, partial checkpoint recovery, replay and replacement Workers passed. Exact final runtime archive consumer binding/Agent RPC passed."
+  },
+  "deployment": {
+    "provider": "native Alchemy",
+    "profile": "minutei",
+    "stage": "prod",
+    "status": "success",
+    "initialAttempt": {
+      "result": "Worker uploaded; roots converted; program phase stopped with HTTP 400 on page 12",
+      "seconds": 421.4,
+      "confirmedRootConversions": 113,
+      "rollback": "None; earlier pages persisted",
+      "diagnosis": "Read-only Alchemy Action against the existing bucket located a synthetic CPU-proof terminal receipt with raw pre-module JS source; hash-valid text was rejected by the JSON program migration",
+      "nativeDiagnosticGap": "Alchemy R2 HTTP get omits custom metadata; diagnosis used native list metadata instead; first metadata hypothesis was falsified"
+    },
+    "secondAttempt": {
+      "source": "71f8520bd949f70fecf68b6ba850412c804b9004",
+      "result": "20 process pages confirmed before HTTP 500; earlier writes retained",
+      "seconds": 484.8,
+      "cause": "Earliest f31771 release also archived raw Python. Read-only native R2 timestamps located the last successful receipt/code publication and adjacent Python record. Added all four text-runtime matrix and verified native red/green before admitting terminal archival retention."
+    },
+    "seconds": 576.6,
+    "workerKind": "ordinary Cloudflare Worker; no Dynamic Workers or Worker Loader",
+    "physicalResources": "Existing Worker, private R2 bucket and execution Queue retained",
+    "rootPages": 5,
+    "rootChanges": 0,
+    "programAndCheckpointPages": 47,
+    "changedReceiptReferences": 295,
+    "filesystemPages": 52,
+    "filesystemChanges": 0
+  },
+  "limitations": [
+    "Full Node and Python os/stdlib are not implemented",
+    "Guest map mutation is local and does not persist configuration",
+    "Historical interpreter heap compatibility and cross-object old-image admission races remain open",
+    "SDK/runtime publication, remote CI and Minutei binding/model delivery remain pending",
+    "No production performance or AgentOS cost advantage is established"
+  ],
+  "archives": [
+    {
+      "file": "minutei-ai-boxes-0.10.0.tgz",
+      "bytes": 65811,
+      "sha256": "bb233061b3b2896011573728caf6c6830482b1a3e02fe337a3eb4be66ada90b9",
+      "entries": 16
+    },
+    {
+      "file": "minutei-ai-boxes-runtime-0.10.0.tgz",
+      "bytes": 5504071,
+      "sha256": "0dddb8cf84ed9d3239570c98392e34582bc2604e74cdf5d5f0e5f1c426200d6f",
+      "entries": 8
+    }
+  ],
+  "remoteEnvironment": {
+    "target": "https://cirro-sandbox-prod-rs7wexxow56rmsoz.manoel-carvalhoneto.workers.dev",
+    "measuredAt": 1792052861871,
+    "checks": [
+      {
+        "name": "merged-count",
+        "status": 413,
+        "error": "E2BIG"
+      },
+      {
+        "name": "merged-bytes",
+        "status": 413,
+        "error": "E2BIG"
+      },
+      {
+        "name": "utf8-path",
+        "status": 400,
+        "error": "EINVAL"
+      },
+      {
+        "name": "utf8-key",
+        "status": 400,
+        "error": "EINVAL"
+      },
+      {
+        "name": "utf8-value",
+        "status": 400,
+        "error": "EINVAL"
+      },
+      {
+        "name": "package-union",
+        "status": 413,
+        "error": "E2BIG"
+      }
+    ],
+    "validOverride": true,
+    "configuredRuntimes": ["javascript", "typescript", "python", "shell", "wasm"],
+    "disposal": true
+  },
+  "remoteSdk": {
+    "checks": 6,
+    "passed": true,
+    "transport": "Effect FetchHttpClient",
+    "target": "production"
+  },
+  "remoteGeneral": {
+    "source": "71f8520bd949f70fecf68b6ba850412c804b9004",
+    "report": "production.json",
+    "checks": 62,
+    "allPassed": true,
+    "scope": "Before final migration-only Python/concurrency correction; ordinary execution engines unchanged"
+  },
+  "diagnosticCleanup": "Temporary read-only Alchemy Inspect and Locate Action state removed; plans dropped only those Actions and no infrastructure resources.",
+  "operationalTiming": {
+    "workload": "First ten successive already-converted process-page intervals, 25 receipts per page, same retained bucket",
+    "measurements": [
+      {
+        "mode": "serial",
+        "pageDeltaSeconds": [
+          14.491, 11.36, 10.957, 11.409, 11.189, 11.796, 10.423, 10.322, 10.338, 11.317
+        ],
+        "medianSeconds": 11.253
+      },
+      {
+        "mode": "bounded parallel",
+        "pageDeltaSeconds": [2.207, 2.143, 2.133, 2.106, 2.467, 2.118, 2.098, 2.095, 2.145, 2.224],
+        "medianSeconds": 2.138
+      }
+    ],
+    "limits": "Single sequential operational comparison, no ABBA or controlled placement. Synthetic probes added records during deployment. Does not establish general production latency, worst-case memory or an AgentOS cost advantage."
+  }
+}
