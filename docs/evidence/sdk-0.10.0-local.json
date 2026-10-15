@@ -1,5 +1,5 @@
 {
-  "status": "HOME expansion and cooperative disposal candidate passed full native checks, exact archive binding/RPC, selected Minutei interoperability and deployed Worker proof. Publication deferred.",
+  "status": "Last deployed HOME/disposal candidate passed native and remote gates. A newer execution-ETag optimization is validated locally and remains undeployed; publication is deferred.",
   "version": "0.10.0",
   "runtimeSourceCommit": "b34dd09e6fb5bfe905d6d56fdbcddf79bd0b7d32",
   "runtimeArtifactsSha256": {
@@ -100,5 +100,6 @@
     "minutei": "Immutable SDK/runtime 0.9.0 dependencies retained. Selected actual consumer fixtures passed locally against the exact new 0.10.0 runtime archive; remote Minutei application/authentication/model proof remains unverified.",
     "productionAndModelProof": "The ordinary Worker passed the named authenticated HTTP probes. Remote native binding/Minutei/model validation, performance and cost remain separate gates."
   },
-  "parity": "Experimental; remaining requirements in docs/parity.md stay open."
+  "parity": "Experimental; remaining requirements in docs/parity.md stay open.",
+  "localCandidateEvidence": "docs/evidence/lifetime-etag-local.json"
 }

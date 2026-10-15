@@ -1,0 +1,228 @@
+{
+  "scope": "Local native execution lifetime optimization; no deployment or publication.",
+  "sourceCommit": "8ecd906a023f14398027c986b8167faa5648a64d",
+  "sourceFilesSha256": {
+    "src/process.ts": "be2f1940626602efbae918bc9e2c7e9f2e92350a479425e56178c9ccb2389c0a",
+    "tooling/benchmark-lifetime.ts": "f543377843ce7899815c687b8bfa310a2994e7aa63dd57b9e13bbfd41bb3106f"
+  },
+  "change": "Carry the validated sandbox root ETag from synchronous preparation or queued preflight into the process supervisor. Its initial and completion conditional reads retain disposal checks while avoiding another full root body download/decoding when unchanged. The ETag is execution-local and is not persisted or exposed in public contracts.",
+  "requests": "R2 request count is unchanged. No billing/cost advantage or directly instrumented R2 byte-total claim is made.",
+  "artifacts": {
+    "referenceSourceCommit": "b34dd09e6fb5bfe905d6d56fdbcddf79bd0b7d32",
+    "referenceArchiveSha256": "8632841db136469906c8552b0c3712574ffee962a1e53bd42f7bec4abadae8cc",
+    "reference": {
+      "index.js": "b88d49f66c1262b8a38a4d5e5ff8b16a03550183abc9f4febd0ebd5f58d839b3",
+      "cirro_kernel_bg.wasm": "3c80cd3b32fd8a5d2b63ea6292f19813552bda74a9f4249971355513c0658d29",
+      "cirro_guest_bg.wasm": "b773b74626b08bd1083860081ccd2a3d0fdff80dcd97b5ec13ed7c6e2148ef22",
+      "cirro_compiler_bg.wasm": "27d9b0022a634ed4eef47b6561ad38cafde3522c17e834afed1264440678bf2f",
+      "cirro_wasi_bg.wasm": "a128d4d89a7403b1217b42fa1ff96771836432a0992cba07522d8846c5c6829d",
+      "cirro_python_bg.wasm": "8aa6aec5ab6fb0623637e2b6dda7318f4934e4736f4a97e45ca3312bf32e529c"
+    },
+    "current": {
+      "index.js": "c89ceeb0482177e5ed64db0bb1b18a3c13e53ba51585e53818166521ed134026",
+      "cirro_kernel_bg.wasm": "3c80cd3b32fd8a5d2b63ea6292f19813552bda74a9f4249971355513c0658d29",
+      "cirro_guest_bg.wasm": "b773b74626b08bd1083860081ccd2a3d0fdff80dcd97b5ec13ed7c6e2148ef22",
+      "cirro_compiler_bg.wasm": "27d9b0022a634ed4eef47b6561ad38cafde3522c17e834afed1264440678bf2f",
+      "cirro_wasi_bg.wasm": "a128d4d89a7403b1217b42fa1ff96771836432a0992cba07522d8846c5c6829d",
+      "cirro_python_bg.wasm": "8aa6aec5ab6fb0623637e2b6dda7318f4934e4736f4a97e45ca3312bf32e529c"
+    },
+    "sameRustWasmArtifacts": 5,
+    "currentArchive": {
+      "file": "minutei-ai-boxes-runtime-0.10.0.tgz",
+      "bytes": 5517713,
+      "sha256": "1b81d1bd8ef2b4118275d8c87269ef1b354ed11ffdc1f4fdc81843acc538d6fe"
+    },
+    "finalRebuildMatchesMeasuredArtifacts": true
+  },
+  "benchmark": {
+    "fixture": "4096 seven-byte files per fresh sandbox, acknowledged serial 128-file batches; JavaScript returns 42 with empty stdout and exit 0. Ten warmups and 25 complete validated samples per phase.",
+    "method": "Eight sequential fresh native Alchemy workerd/R2 phases, ABBA then BAAB; 100 measured samples per version. Native preparation and all measured outputs validated.",
+    "summary": {
+      "reference": {
+        "samples": 100,
+        "medianMs": 83.6084215000028,
+        "p95Ms": 108.43172900000354,
+        "minMs": 74.18552700000873,
+        "maxMs": 130.20509299999685
+      },
+      "current": {
+        "samples": 100,
+        "medianMs": 73.95061149999856,
+        "p95Ms": 111.32751300000382,
+        "minMs": 66.60811299999477,
+        "maxMs": 149.27056100000482
+      },
+      "medianReductionPercent": 11.551240684533104,
+      "p95ChangePercent": 2.6706057596851407
+    },
+    "quantiles": "Pooled medians use the mean of middle samples. P95 uses nearest rank ceil(0.95*n); phase p95s are retained from the native runner.",
+    "raw": {
+      "measuredAt": "2026-10-15T14:38:05.661Z",
+      "environment": "local native Alchemy workerd; runtime module directories; fresh R2 per phase; sequential ABBA then BAAB",
+      "workload": "JavaScript returns 42 against 4096 seven-byte files prepared in 128-file native batches",
+      "phases": [
+        {
+          "version": "reference",
+          "phase": 0,
+          "warmups": 10,
+          "samplesMs": [
+            83.17735100000027, 79.39758400000028, 79.36207300000024, 79.16698499999984,
+            82.41479199999958, 79.77703800000018, 89.87757099999908, 80.88996899999984,
+            129.64380900000106, 101.71797499999957, 96.46806300000026, 96.28780299999926,
+            83.75227200000154, 85.64982099999906, 82.62706799999978, 85.96104500000001,
+            106.27425100000073, 84.80440999999882, 81.35738700000002, 80.74645400000009,
+            78.3389330000009, 80.0960410000007, 77.88234600000033, 79.50381099999868,
+            85.83095700000013
+          ],
+          "p50Ms": 82.62706799999978,
+          "p95Ms": 106.27425100000073
+        },
+        {
+          "version": "current",
+          "phase": 1,
+          "warmups": 10,
+          "samplesMs": [
+            68.89892200000031, 68.33136599999852, 71.45955700000195, 80.1279480000012,
+            76.22972599999775, 76.30321200000253, 73.6831600000005, 76.9521249999998,
+            80.93396800000119, 79.99592100000154, 76.39145400000052, 79.21545200000037,
+            75.80598400000235, 76.16560499999832, 72.97404399999868, 77.71726299999864,
+            78.46492299999954, 75.19013199999972, 73.88977599999998, 76.48488700000235,
+            76.98267099999794, 76.76723499999935, 72.95101799999975, 69.95313100000203,
+            70.03607900000134
+          ],
+          "p50Ms": 76.22972599999775,
+          "p95Ms": 80.1279480000012
+        },
+        {
+          "version": "current",
+          "phase": 2,
+          "warmups": 10,
+          "samplesMs": [
+            89.16592600000149, 149.27056100000482, 101.76962400000048, 107.91961099999753,
+            77.53496300000552, 68.80092299999524, 72.23140300000523, 67.82894900000247,
+            71.8850289999973, 72.48663900000247, 91.17045199999848, 70.70642199999565,
+            88.87453999999707, 111.32751300000382, 102.49740200000087, 121.0575600000011,
+            89.03768900000432, 80.68682000000263, 70.1967369999984, 69.30863600000157,
+            68.86698199999955, 68.03389299999981, 68.18917900000088, 72.27503799999977,
+            68.72395700000197
+          ],
+          "p50Ms": 72.48663900000247,
+          "p95Ms": 121.0575600000011
+        },
+        {
+          "version": "reference",
+          "phase": 3,
+          "warmups": 10,
+          "samplesMs": [
+            126.1222329999946, 116.36512499999662, 85.53881700000056, 93.17598600000201,
+            102.71339699999953, 78.8532819999964, 79.7393299999967, 104.14891400000488,
+            92.70533499999874, 92.52407600000151, 89.04970899999898, 78.16270500000246,
+            86.79677300000185, 81.23342099999718, 78.14720699999452, 75.13212199999543,
+            75.50085400000535, 78.98935299999721, 78.54660500000318, 79.53610599999956,
+            78.71506299999601, 76.68781799999852, 80.96140300000116, 80.58837299999868,
+            79.56662099999812
+          ],
+          "p50Ms": 80.58837299999868,
+          "p95Ms": 116.36512499999662
+        },
+        {
+          "version": "current",
+          "phase": 4,
+          "warmups": 10,
+          "samplesMs": [
+            69.7467700000052, 70.12903300000471, 69.28917799999908, 77.73237199999858,
+            71.71850700000505, 84.91804300000513, 125.3194380000059, 110.57561800000258,
+            96.34496099999524, 114.93048599999747, 115.08824599999934, 70.46108600000298,
+            67.93416000000434, 70.40073399999528, 81.90519200000563, 68.9301689999993,
+            72.00931799999671, 75.93022799999744, 68.44005499999912, 83.72582500000135,
+            84.68093000000226, 82.07233900000574, 83.30354700000316, 85.06296999999904,
+            73.63372199999867
+          ],
+          "p50Ms": 77.73237199999858,
+          "p95Ms": 115.08824599999934
+        },
+        {
+          "version": "reference",
+          "phase": 5,
+          "warmups": 10,
+          "samplesMs": [
+            84.4455719999969, 78.97040199999174, 88.11781900000642, 93.25348099999246,
+            87.82919299999776, 92.84303000000364, 82.61615799998981, 83.91719700000249,
+            87.17206799999985, 88.12604200000351, 90.03572100000747, 95.50005499999679,
+            83.46457100000407, 89.36335400000098, 89.70461800000339, 100.96591300000728,
+            98.86515399999917, 74.94703400001163, 74.95587499999965, 75.34258599999885,
+            77.60164999999688, 96.7654920000059, 102.52791200000502, 75.99587800000154,
+            85.61245599998801
+          ],
+          "p50Ms": 87.82919299999776,
+          "p95Ms": 100.96591300000728
+        },
+        {
+          "version": "reference",
+          "phase": 6,
+          "warmups": 10,
+          "samplesMs": [
+            82.93596700001217, 79.42361600000004, 79.14697200000228, 77.51805700000841,
+            83.46237699998892, 79.45137300000351, 78.01726799999597, 78.79708899999969,
+            74.18552700000873, 75.92262099999061, 76.92148699999962, 106.19629699998768,
+            87.91726900001231, 104.46688400000858, 95.34815399999206, 95.73190099999192,
+            129.38288899998588, 91.15423400000145, 78.43515200000547, 108.43172900000354,
+            84.2379110000038, 76.31602199999907, 93.00385700000334, 130.20509299999685,
+            100.97599200000695
+          ],
+          "p50Ms": 83.46237699998892,
+          "p95Ms": 129.38288899998588
+        },
+        {
+          "version": "current",
+          "phase": 7,
+          "warmups": 10,
+          "samplesMs": [
+            67.13058799999999, 74.01144699999713, 78.17535099999805, 68.91186899998866,
+            74.4918719999987, 68.20262999999977, 69.93480499999714, 69.26214099999925,
+            66.92794300000241, 88.97298299999966, 103.33184700000857, 82.23991599999135,
+            82.1400880000001, 67.20098100000178, 66.66582200000994, 66.90692900000431,
+            72.4613529999915, 67.47243199999502, 66.65930300000764, 66.75962700000673,
+            67.71220599999651, 67.05416600000171, 66.89890000000014, 66.60811299999477,
+            79.08254400000442
+          ],
+          "p50Ms": 68.20262999999977,
+          "p95Ms": 88.97298299999966
+        }
+      ]
+    }
+  },
+  "validation": {
+    "completeGate": "bun run check passed: Rust/Wasm build, SDK declarations, TypeScript, workspace Clippy, Cargo workspace tests and 336 native Bun tests across 56 files (4285 assertions, 124.04 seconds).",
+    "focused": "29 process/cancel/dispose/RPC tests passed (476 assertions, 35.34 seconds), including active and queued disposal, native callbacks, authority boundaries and Worker replacement.",
+    "exactArchive": {
+      "version": "0.10.0",
+      "transport": "native Alchemy workerd service binding and Agent RPC; local R2 and Queue",
+      "proof": "SDK archive exports and consumer declarations; runtime archive; filesystem snapshot restore; hard-link metadata; RPC callbacks and cooperative disposal; persistent driver contexts and cancellation; scoped authority"
+    },
+    "minutei": {
+      "clientVersion": "0.9.0",
+      "runtimeVersion": "0.10.0",
+      "runtimeArchiveSha256": "1b81d1bd8ef2b4118275d8c87269ef1b354ed11ffdc1f4fdc81843acc538d6fe",
+      "consumerCommit": "a0a2a05c40ed5fb3bd5d76b14c3baf3bfe4695c2",
+      "consumerBundleSha256": "e29165da4f63ac8a3cedd29f5b13b037e9b4becb1f73b7e06047ad308db1d060",
+      "transport": "native workerd Agent service binding; actual Minutei Code Mode and tenant SQLite; local R2, KV and Queue",
+      "retention": true,
+      "isolatedRegistry": true,
+      "capabilities": true,
+      "consumerFixturesSha256": {
+        "boxes-retention.ts": "225c5d42ff36ffa2ee49ce213816546f73bacb691e646857e8588bd8149360c0",
+        "boxes-code.worker.ts": "f876f01e98358a955a9214c2f6b375f60598a461450b88a052d505531920f87a"
+      }
+    }
+  },
+  "interpretation": "All four current phase medians were lower than all four reference phase medians in this run. The pooled median improved, but pooled p95 increased. This supports a local workload median improvement only; tail latency and production performance remain unproved.",
+  "limits": [
+    "One shared-host local run, not cold-start, maximum-size or production measurement",
+    "No memory profile or request billing comparison",
+    "Benchmark covers a single warm JavaScript workload; other performance workloads remain open",
+    "Minutei fixture proof is selected SDK 0.9.0 native binding behavior, not remote application/authentication/model/history Queue delivery",
+    "Runtime candidate is local and unpublished; production remains the previously recorded b34dd09 runtime",
+    "Full AgentOS parity and global performance/cost goals remain open"
+  ]
+}

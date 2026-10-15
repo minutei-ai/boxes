@@ -10,7 +10,7 @@ Maintain executable contracts at their owner. `src/contracts.ts` owns the extern
 
 `409` conflicts require reading current state before deciding to retry. A lost response does not roll back earlier writes. Guest side effects and execution receipts do not currently form an atomic multi-object transaction; do not hide this by replaying submissions.
 
-The current [0.10.0 local candidate evidence](docs/evidence/sdk-0.10.0-local.json) separates artifact validation from publication and remote deployment.
+The [0.10.0 delivery evidence](docs/evidence/sdk-0.10.0-local.json) separates validated artifacts, publication and remote deployment. The [lifetime ETag evidence](docs/evidence/lifetime-etag-local.json) records the newer local optimization and its latency limits.
 
 Before publishing SDK/runtime archives, run `bun run package:proof <sdk.tgz> <runtime.tgz>` against the exact files to upload. It checks their matching identities and licenses, consumer declarations, public exports and native binding behavior without provisioning remote resources.
 
