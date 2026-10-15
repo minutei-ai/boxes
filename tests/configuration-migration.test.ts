@@ -480,6 +480,31 @@ test(
           expect((yield* Effect.promise(() => bucket.head(codeKey)))?.customMetadata?.format).toBe(
             "program-json",
           );
+          for (const language of ["typescript", "python", "shell"] as const) {
+            const processId = `archived-${language}`;
+            yield* Effect.promise(() =>
+              bucket.put(
+                `processes/${id}/${processId}.json`,
+                Schema.encodeSync(Schema.fromJsonString(StoredRun))({
+                  ...historical,
+                  id: processId,
+                  language,
+                }),
+                {
+                  customMetadata: Schema.encodeSync(StoredRunMetadata)({
+                    ...metadata,
+                    summary: {
+                      ...metadata.summary,
+                      sourceHash,
+                      id: processId,
+                      language,
+                      status: "failed",
+                    },
+                  }),
+                },
+              ),
+            );
+          }
           yield* Effect.promise(() => bucket.put(codeKey, source));
           expect((yield* migrate()).status).toBe(200);
           const retained = yield* Effect.promise(() => bucket.get(codeKey));
@@ -494,6 +519,13 @@ test(
           ]);
           expect((yield* migrate()).status).toBe(200);
           expect((yield* Effect.promise(() => bucket.head(codeKey)))?.etag).toBe(retained.etag);
+          for (const language of ["typescript", "python", "shell"] as const) {
+            const processId = `archived-${language}`;
+            expect((yield* client.action(id, { op: "process.get", id: processId })).status).toBe(
+              "failed",
+            );
+            yield* Effect.promise(() => bucket.delete(`processes/${id}/${processId}.json`));
+          }
           yield* Effect.promise(() => bucket.put(codeKey, source));
           yield* Effect.promise(() =>
             bucket.put(
@@ -514,6 +546,43 @@ test(
           expect(
             (yield* Effect.promise(() => bucket.head(codeKey)))?.customMetadata?.format,
           ).toBeUndefined();
+          const sources = {
+            typescript: "export default () => 42;",
+            python: "print(42)",
+            shell: "echo 42",
+          };
+          for (const language of ["typescript", "python", "shell"] as const) {
+            const text = sources[language];
+            const hash = Buffer.from(
+              yield* Effect.promise(() => crypto.subtle.digest("SHA-256", Buffer.from(text))),
+            ).toString("hex");
+            const path = `sandboxes/${id}/code/${hash}`;
+            yield* Effect.promise(() => bucket.put(path, text));
+            yield* Effect.promise(() =>
+              bucket.put(
+                key,
+                Schema.encodeSync(Schema.fromJsonString(StoredRun))({
+                  ...historical,
+                  sourceHash: hash,
+                  language,
+                }),
+                {
+                  customMetadata: Schema.encodeSync(StoredRunMetadata)({
+                    ...metadata,
+                    summary: { ...metadata.summary, sourceHash: hash, language, status: "failed" },
+                  }),
+                },
+              ),
+            );
+            expect((yield* migrate()).status).toBe(200);
+            const retained = yield* Effect.promise(() => bucket.get(path));
+            if (retained === null) return yield* Effect.die("Missing retained runtime source");
+            expect(retained.customMetadata?.format).toBe("historical-source-text-v1");
+            expect(yield* Effect.promise(() => retained.text())).toBe(text);
+            expect(
+              (yield* client.action(id, { op: "process.get", id: "historical" })).language,
+            ).toBe(language);
+          }
         }),
       ).pipe(Effect.provide(FetchHttpClient.layer)),
     ),
