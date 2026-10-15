@@ -1,0 +1,99 @@
+{
+  "runtimeSourceCommit": "e0176a2793fd0e2f8096cc9045df9eb090e7c975",
+  "scope": "WASI package/caller environment preparation, rejection semantics and executable I/O ordering; persistent sandbox-wide environment configuration is not implemented",
+  "runtimeArtifactsSha256": {
+    "index.js": "8e0d5efeca4d3ed9401555ac6e87960a71883f1a67bf76fec5618c68f62c4781",
+    "cirro_kernel_bg.wasm": "30654731e659d5a8df5e5c712bf52ff1da57f040e01b4ca5c1e27a1f02204aa9",
+    "cirro_wasi_bg.wasm": "a128d4d89a7403b1217b42fa1ff96771836432a0992cba07522d8846c5c6829d"
+  },
+  "baseline": {
+    "missingContent": "A merged environment exceeding 128 entries first tried to read the executable blob and returned Missing file content block instead of E2BIG",
+    "path": "An invalid UTF-8 PATH was used during executable lookup and returned ENOENT instead of EINVAL",
+    "packageUnion": "Two valid packages with a combined 129-variable environment returned a generic API contract failure before the dedicated E2BIG boundary"
+  },
+  "implementation": {
+    "dataOwner": "Package defaults remain in the Rust-owned catalog persisted in R2; caller overrides remain in the archived Wasm program",
+    "order": "Validate merged environment and caller argv before PATH resolution, then validate executable metadata, stdin and full serialized configuration before content reads or process reservation",
+    "limits": "Native WasmConfiguration Schema owns environment shape and 128-entry limit; valid UTF-8 and 4096-byte value/argument bounds; 64 KiB serialized argv/environment budget",
+    "persistence": "No persisted format or migration added; validated Wasm program shape and package/caller precedence unchanged",
+    "shell": "Package environment decoding validates entries without applying the final process count early; a WASI command over the combined limit becomes a shell command failure"
+  },
+  "validation": {
+    "check": "326 tests across 50 files; 3752 assertions; 190.23 seconds; build, SDK declarations, typecheck, Clippy and Rust workspace tests passed",
+    "format": "passed",
+    "nativeR2": "The real first executable content block is temporarily removed. Invalid merged count/bytes, UTF-8 PATH/key and oversized UTF-8 value still return the declared configuration failures, leave process IDs absent and preserve root ETag. Restoring the exact block permits a valid override. A second package tests combined default overflow and shell failure handling.",
+    "focusedPathStage": "1 native test; 19 assertions; 1.69 seconds before adding the final package-union cases",
+    "exactArchives": "Public SDK exports and declarations plus runtime passed native Alchemy workerd service binding/Agent RPC consumer proof; the consumer explicitly checks oversized WASI UTF-8 rejection",
+    "artifactScan": "Both Apache-2.0 LICENSE files exactly match source; no .env or node_modules archive entries; gitleaks found no secrets"
+  },
+  "deployment": {
+    "provider": "native Alchemy",
+    "profile": "minutei",
+    "stage": "prod",
+    "result": "success",
+    "seconds": 252.2,
+    "workerKind": "ordinary Cloudflare Worker; no Dynamic Workers or Worker Loader",
+    "physicalResources": "Existing Worker, private R2 bucket and Queue retained",
+    "filesystemMigrationPages": 50,
+    "filesystemMigrationChanged": 0
+  },
+  "remoteEnvironment": {
+    "target": "https://cirro-sandbox-prod-rs7wexxow56rmsoz.manoel-carvalhoneto.workers.dev",
+    "measuredAt": 1792047084714,
+    "checks": [
+      {
+        "name": "merged-count",
+        "status": 413,
+        "error": "E2BIG"
+      },
+      {
+        "name": "merged-bytes",
+        "status": 413,
+        "error": "E2BIG"
+      },
+      {
+        "name": "utf8-path",
+        "status": 400,
+        "error": "EINVAL"
+      },
+      {
+        "name": "utf8-key",
+        "status": 400,
+        "error": "EINVAL"
+      },
+      {
+        "name": "utf8-value",
+        "status": 400,
+        "error": "EINVAL"
+      },
+      {
+        "name": "package-union",
+        "status": 413,
+        "error": "E2BIG"
+      }
+    ],
+    "validOverride": true,
+    "disposal": true
+  },
+  "remoteCompiledSdk": {
+    "checks": 6,
+    "passed": true,
+    "transport": "Effect FetchHttpClient",
+    "target": "production"
+  },
+  "proofScriptSha256": "45635a8290309cc4d57c1343aaed79b5eeb920b40877054dd55a98b6b2c73b58",
+  "reproduction": [
+    "bun run check",
+    "bun run package:proof <sdk.tgz> <runtime.tgz>",
+    "CIRRO_URL=<authorized-worker-url> bun tooling/environment-proof.ts",
+    "CIRRO_URL=<authorized-worker-url> bun run sdk:proof"
+  ],
+  "remaining": [
+    "Persistent sandbox-wide environment configuration, its explicit cutover and JavaScript/Python environment access remain pending.",
+    "The missing executable-block fence is verified locally with native R2; remote probes use authenticated HTTP without an R2 binding.",
+    "Exact archive binding and Agent RPC are verified locally. Minutei remote binding and real-agent/model behavior remain unverified.",
+    "Current-source remote CI and SDK/runtime 0.10.0 archive publication remain pending; the GitHub login keyring was locked at the last direct check.",
+    "No new production performance or AgentOS cost advantage is established.",
+    "The 62-check general backend proof remains pinned to source 823882f; stderr binary-shell proof is pinned to source 1d182b2."
+  ]
+}
