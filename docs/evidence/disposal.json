@@ -1,0 +1,36 @@
+{
+  "target": "https://cirro-sandbox-prod-rs7wexxow56rmsoz.manoel-carvalhoneto.workers.dev",
+  "measuredAt": 1792025879262,
+  "concurrentDisposals": 3,
+  "repeated": true,
+  "readsDenied": true,
+  "manageRequired": true,
+  "idReuseDenied": true,
+  "sourceCommit": "16739b4dd4e3f1810d4415b8f9723ed60063ce6d",
+  "ci": {
+    "run": "https://github.com/minutei-ai/boxes/actions/runs/38662837595",
+    "result": "passed",
+    "tests": 305,
+    "files": 38
+  },
+  "deployment": {
+    "provider": "native Alchemy",
+    "profile": "minutei",
+    "stage": "prod",
+    "migrations": "completed"
+  },
+  "nativeCoverage": [
+    "A second disposal preserves the native R2 object version.",
+    "The first Worker runtime is disposed before retrying through a replacement runtime.",
+    "Concurrent management callers converge on the deletion marker.",
+    "Expired, readonly and wrong-sandbox capabilities are rejected.",
+    "Reads remain unavailable and the administrator cannot reuse the disposed ID."
+  ],
+  "limitations": [
+    "Physical object reclamation remains open.",
+    "Disposal does not instantly terminate guest CPU already executing.",
+    "Live mutations competing with disposal may return a conflict.",
+    "Remote proof uses the Effect HTTP SDK; remote Minutei RPC remains unverified.",
+    "The local benchmark overlapped the test suite and establishes no performance comparison."
+  ]
+}
