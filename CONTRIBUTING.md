@@ -4,6 +4,8 @@ Install the pinned Bun dependencies and wasm-bindgen CLI, add both `wasm32-unkno
 
 Run `bun run bench` for performance changes. `bun run bench:metadata` compares scalar and bulk snapshot metadata collection at 1,024, 4,096 and 16,384 entries, alternating five samples per algorithm and verifying identical metadata digests. It measures the Bun-hosted kernel Wasm and Effect Schema decoding, not end-to-end Worker or production latency. Record artifact size, workload, distributions and environment. A local workerd benchmark does not establish Cloudflare production latency. Keep fixtures synthetic; private HTML, source code and credentials stay outside the repository.
 
+`bun tooling/benchmark-shell.ts <reference-runtime-directory> <current-runtime-directory> <output.json>` compares two extracted, validated runtime archives in native Alchemy workerd. It alternates eight fresh-R2 phases (ABBA then BAAB), with ten warmups and 25 samples per phase. Each request runs 64 shell reads followed by `true`, using 128 environment entries below the 64 KiB contract limit. Every sample validates the complete output. Retain every phase and raw sample; shared-host results do not establish production latency or cost.
+
 Maintain executable contracts at their owner. `src/contracts.ts` owns the external Effect Schema API; `crates/kernel` owns serialized kernel persistence and its invariants. Alchemy resources live in `src/resources.ts` and `alchemy.run.ts`. Runtime imports from provisioning must remain type-only.
 
 `409` conflicts require reading current state before deciding to retry. A lost response does not roll back earlier writes. Guest side effects and execution receipts do not currently form an atomic multi-object transaction; do not hide this by replaying submissions.
