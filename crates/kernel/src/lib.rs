@@ -1,6 +1,7 @@
 mod shell;
 mod software;
 
+use serde::ser::{SerializeSeq, Serializer};
 use serde::{Deserialize, Serialize};
 use std::collections::{BTreeMap, BTreeSet};
 use wasm_bindgen::prelude::*;
@@ -487,7 +488,39 @@ impl Kernel {
             .state
             .metadata(path)
             .ok_or_else(|| fail("EIO: missing metadata"))?;
-        serde_json::to_string(&Stat {
+        let nlink = match node {
+            Node::Directory { .. } => {
+                2 + self
+                    .state
+                    .entries()
+                    .filter(|(key, node)| {
+                        key.as_str() != "/"
+                            && parent(key) == path
+                            && matches!(node, Node::Directory { .. })
+                    })
+                    .count() as u64
+            }
+            _ => self
+                .state
+                .nodes
+                .values()
+                .filter(|id| **id == metadata.inode)
+                .count() as u64,
+        };
+        serde_json::to_string(&self.stat_record(path, nlink)?)
+            .map_err(|_| fail("EIO: serialization failed"))
+    }
+
+    fn stat_record<'a>(&'a self, path: &'a str, nlink: u64) -> Result<Stat<'a>, JsValue> {
+        let node = self
+            .state
+            .node(path)
+            .ok_or_else(|| fail("ENOENT: file does not exist"))?;
+        let metadata = self
+            .state
+            .metadata(path)
+            .ok_or_else(|| fail("EIO: missing metadata"))?;
+        Ok(Stat {
             path,
             kind: node.kind(),
             size: node.size(),
@@ -495,30 +528,11 @@ impl Kernel {
             inode: metadata.inode,
             uid: metadata.uid,
             gid: metadata.gid,
-            nlink: match node {
-                Node::Directory { .. } => {
-                    2 + self
-                        .state
-                        .entries()
-                        .filter(|(key, node)| {
-                            key.as_str() != "/"
-                                && parent(key) == path
-                                && matches!(node, Node::Directory { .. })
-                        })
-                        .count() as u64
-                }
-                _ => self
-                    .state
-                    .nodes
-                    .values()
-                    .filter(|id| **id == metadata.inode)
-                    .count() as u64,
-            },
+            nlink,
             atime_ns: metadata.atime_ns.to_string(),
             mtime_ns: metadata.mtime_ns.to_string(),
             ctime_ns: metadata.ctime_ns.to_string(),
         })
-        .map_err(|_| fail("EIO: serialization failed"))
     }
 
     fn walk(&self, path: &str, max_depth: usize, exclude: &str) -> Result<Vec<TreeEntry>, String> {
@@ -1254,6 +1268,59 @@ impl Kernel {
             })
             .collect();
         serde_json::to_string(&entries).map_err(|_| fail("EIO: serialization failed"))
+    }
+
+    pub fn snapshot_metadata(&self) -> Result<String, JsValue> {
+        self.walk("/", MAX_DEPTH, "[]")
+            .map_err(|error| fail(&error))?;
+        let mut links: BTreeMap<u64, u64> = self
+            .state
+            .inodes
+            .iter()
+            .map(|(id, inode)| {
+                let count = match inode.node {
+                    Node::Directory { .. } => 2,
+                    _ => 0,
+                };
+                (*id, count)
+            })
+            .collect();
+        for (path, id) in &self.state.nodes {
+            let inode = self
+                .state
+                .inodes
+                .get(id)
+                .ok_or_else(|| fail("EIO: missing inode"))?;
+            let target = match inode.node {
+                Node::Directory { .. } if path == "/" => continue,
+                Node::Directory { .. } => self
+                    .state
+                    .nodes
+                    .get(parent(path))
+                    .ok_or_else(|| fail("EIO: missing parent"))?,
+                _ => id,
+            };
+            *links
+                .get_mut(target)
+                .ok_or_else(|| fail("EIO: missing link count"))? += 1;
+        }
+        let mut bytes = Vec::new();
+        let mut serializer = serde_json::Serializer::new(&mut bytes);
+        let mut sequence = serializer
+            .serialize_seq(Some(self.state.nodes.len()))
+            .map_err(|_| fail("EIO: serialization failed"))?;
+        for (path, inode) in &self.state.nodes {
+            let nlink = links
+                .get(inode)
+                .ok_or_else(|| fail("EIO: missing link count"))?;
+            sequence
+                .serialize_element(&self.stat_record(path, *nlink)?)
+                .map_err(|_| fail("EIO: serialization failed"))?;
+        }
+        sequence
+            .end()
+            .map_err(|_| fail("EIO: serialization failed"))?;
+        String::from_utf8(bytes).map_err(|_| fail("EIO: serialization failed"))
     }
 
     pub fn readdir_recursive(

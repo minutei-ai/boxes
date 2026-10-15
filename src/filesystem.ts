@@ -79,15 +79,10 @@ export const filesystem = Effect.fn("filesystem.action")(function* (
     .pipe(
       Match.when({ op: "filesystem.export" }, (input) =>
         Effect.gen(function* () {
-          const tree = yield* kernelCall(() => kernel.readdir_recursive("/", 64, "[]")).pipe(
-            Effect.flatMap(Schema.decodeUnknownEffect(Schema.fromJsonString(DirectoryTree))),
-          );
-          const metadata = yield* Effect.forEach(
-            ["/", ...tree.map((entry) => entry.path)],
-            (path) =>
-              kernelCall(() => kernel.stat(path, false)).pipe(
-                Effect.flatMap(Schema.decodeUnknownEffect(Schema.fromJsonString(FileStat))),
-              ),
+          const metadata = yield* kernelCall(() => kernel.snapshot_metadata()).pipe(
+            Effect.flatMap(
+              Schema.decodeUnknownEffect(Schema.fromJsonString(Schema.Array(FileStat))),
+            ),
           );
           const inodes = new Map<number, typeof FileStat.Type>();
           const entries = yield* Effect.forEach(metadata, (stat) =>

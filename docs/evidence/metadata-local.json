@@ -1,0 +1,707 @@
+{
+  "scope": "Local snapshot metadata collection optimization; no release, production latency or cost proof",
+  "baselineSourceCommit": "5a68108179506d9494a99b287d71296293d1dc94",
+  "validation": {
+    "check": "317 tests passed across 44 files; 3080 assertions; 191.25 seconds; build, SDK declarations, types, Clippy and Rust workspace tests passed",
+    "focusedNative": "8 tests passed across 4 files; 107 assertions; 11.91 seconds",
+    "maximumNativeWorkload": "16384 total entries, including 16380 empty unique-inode files; full snapshot export, exact serialized byte rejection and scoped read authority tested in native Alchemy workerd with R2",
+    "format": "passed"
+  },
+  "reproduction": "bun run build && bun run bench:metadata",
+  "benchmarkScriptSha256": "ca6f7ac1465f13bc464e30af16232339bfe0798795fe2ac6338df9ed9dbba827",
+  "summary": [
+    {
+      "entries": 1024,
+      "scalarMedianMs": 38.74356999999998,
+      "bulkMedianMs": 7.3703519999999685
+    },
+    {
+      "entries": 4096,
+      "scalarMedianMs": 219.182542,
+      "bulkMedianMs": 23.407596000000012
+    },
+    {
+      "entries": 16384,
+      "scalarMedianMs": 2360.905324,
+      "bulkMedianMs": 100.19955500000015
+    }
+  ],
+  "pairedComparison": {
+    "runtime": "Bun-hosted native kernel Wasm; alternating scalar and bulk metadata collection with Effect Schema decoding; empty unique-inode files; five samples per algorithm; not production or full snapshot latency",
+    "kernelSha256": "5afa573f2656fe718dbd7ef461e68b50fd10ffc0c6356bb554aac28b79bee877",
+    "measurements": [
+      {
+        "entries": 1024,
+        "algorithm": "scalar",
+        "sample": 0,
+        "elapsedMs": 79.72271100000003,
+        "metadataSha256": "6bcea0e3cf95b47ff58cbabce458da5d12efea5480d3c59ba5d7bf3ae9732e8c",
+        "wasmLinearMemoryBytes": 1507328
+      },
+      {
+        "entries": 1024,
+        "algorithm": "bulk",
+        "sample": 0,
+        "elapsedMs": 9.770087999999987,
+        "metadataSha256": "6bcea0e3cf95b47ff58cbabce458da5d12efea5480d3c59ba5d7bf3ae9732e8c",
+        "wasmLinearMemoryBytes": 2031616
+      },
+      {
+        "entries": 1024,
+        "algorithm": "scalar",
+        "sample": 1,
+        "elapsedMs": 43.163715000000025,
+        "metadataSha256": "6bcea0e3cf95b47ff58cbabce458da5d12efea5480d3c59ba5d7bf3ae9732e8c",
+        "wasmLinearMemoryBytes": 2031616
+      },
+      {
+        "entries": 1024,
+        "algorithm": "bulk",
+        "sample": 1,
+        "elapsedMs": 7.841883999999993,
+        "metadataSha256": "6bcea0e3cf95b47ff58cbabce458da5d12efea5480d3c59ba5d7bf3ae9732e8c",
+        "wasmLinearMemoryBytes": 2031616
+      },
+      {
+        "entries": 1024,
+        "algorithm": "scalar",
+        "sample": 2,
+        "elapsedMs": 38.74356999999998,
+        "metadataSha256": "6bcea0e3cf95b47ff58cbabce458da5d12efea5480d3c59ba5d7bf3ae9732e8c",
+        "wasmLinearMemoryBytes": 2031616
+      },
+      {
+        "entries": 1024,
+        "algorithm": "bulk",
+        "sample": 2,
+        "elapsedMs": 7.3703519999999685,
+        "metadataSha256": "6bcea0e3cf95b47ff58cbabce458da5d12efea5480d3c59ba5d7bf3ae9732e8c",
+        "wasmLinearMemoryBytes": 2031616
+      },
+      {
+        "entries": 1024,
+        "algorithm": "scalar",
+        "sample": 3,
+        "elapsedMs": 37.46321499999999,
+        "metadataSha256": "6bcea0e3cf95b47ff58cbabce458da5d12efea5480d3c59ba5d7bf3ae9732e8c",
+        "wasmLinearMemoryBytes": 2031616
+      },
+      {
+        "entries": 1024,
+        "algorithm": "bulk",
+        "sample": 3,
+        "elapsedMs": 6.856646000000012,
+        "metadataSha256": "6bcea0e3cf95b47ff58cbabce458da5d12efea5480d3c59ba5d7bf3ae9732e8c",
+        "wasmLinearMemoryBytes": 2031616
+      },
+      {
+        "entries": 1024,
+        "algorithm": "scalar",
+        "sample": 4,
+        "elapsedMs": 37.337102000000016,
+        "metadataSha256": "6bcea0e3cf95b47ff58cbabce458da5d12efea5480d3c59ba5d7bf3ae9732e8c",
+        "wasmLinearMemoryBytes": 2031616
+      },
+      {
+        "entries": 1024,
+        "algorithm": "bulk",
+        "sample": 4,
+        "elapsedMs": 5.7328240000000505,
+        "metadataSha256": "6bcea0e3cf95b47ff58cbabce458da5d12efea5480d3c59ba5d7bf3ae9732e8c",
+        "wasmLinearMemoryBytes": 2031616
+      },
+      {
+        "entries": 4096,
+        "algorithm": "scalar",
+        "sample": 0,
+        "elapsedMs": 221.41326300000003,
+        "metadataSha256": "225d4e672ac2620d4f4475847feff6999edb32c0082882133408b78fefa50d57",
+        "wasmLinearMemoryBytes": 2686976
+      },
+      {
+        "entries": 4096,
+        "algorithm": "bulk",
+        "sample": 0,
+        "elapsedMs": 23.407596000000012,
+        "metadataSha256": "225d4e672ac2620d4f4475847feff6999edb32c0082882133408b78fefa50d57",
+        "wasmLinearMemoryBytes": 3801088
+      },
+      {
+        "entries": 4096,
+        "algorithm": "scalar",
+        "sample": 1,
+        "elapsedMs": 209.67798599999992,
+        "metadataSha256": "225d4e672ac2620d4f4475847feff6999edb32c0082882133408b78fefa50d57",
+        "wasmLinearMemoryBytes": 3801088
+      },
+      {
+        "entries": 4096,
+        "algorithm": "bulk",
+        "sample": 1,
+        "elapsedMs": 23.225271999999904,
+        "metadataSha256": "225d4e672ac2620d4f4475847feff6999edb32c0082882133408b78fefa50d57",
+        "wasmLinearMemoryBytes": 3801088
+      },
+      {
+        "entries": 4096,
+        "algorithm": "scalar",
+        "sample": 2,
+        "elapsedMs": 210.2953570000002,
+        "metadataSha256": "225d4e672ac2620d4f4475847feff6999edb32c0082882133408b78fefa50d57",
+        "wasmLinearMemoryBytes": 3801088
+      },
+      {
+        "entries": 4096,
+        "algorithm": "bulk",
+        "sample": 2,
+        "elapsedMs": 23.10825899999986,
+        "metadataSha256": "225d4e672ac2620d4f4475847feff6999edb32c0082882133408b78fefa50d57",
+        "wasmLinearMemoryBytes": 3801088
+      },
+      {
+        "entries": 4096,
+        "algorithm": "scalar",
+        "sample": 3,
+        "elapsedMs": 256.3473319999998,
+        "metadataSha256": "225d4e672ac2620d4f4475847feff6999edb32c0082882133408b78fefa50d57",
+        "wasmLinearMemoryBytes": 3801088
+      },
+      {
+        "entries": 4096,
+        "algorithm": "bulk",
+        "sample": 3,
+        "elapsedMs": 28.61485700000003,
+        "metadataSha256": "225d4e672ac2620d4f4475847feff6999edb32c0082882133408b78fefa50d57",
+        "wasmLinearMemoryBytes": 3801088
+      },
+      {
+        "entries": 4096,
+        "algorithm": "scalar",
+        "sample": 4,
+        "elapsedMs": 219.182542,
+        "metadataSha256": "225d4e672ac2620d4f4475847feff6999edb32c0082882133408b78fefa50d57",
+        "wasmLinearMemoryBytes": 3801088
+      },
+      {
+        "entries": 4096,
+        "algorithm": "bulk",
+        "sample": 4,
+        "elapsedMs": 24.985489000000143,
+        "metadataSha256": "225d4e672ac2620d4f4475847feff6999edb32c0082882133408b78fefa50d57",
+        "wasmLinearMemoryBytes": 3801088
+      },
+      {
+        "entries": 16384,
+        "algorithm": "scalar",
+        "sample": 0,
+        "elapsedMs": 2360.905324,
+        "metadataSha256": "6ec90405d4c3a17049de17511737dc4dfab947dd95b1d902aaf6108f90521180",
+        "wasmLinearMemoryBytes": 7536640
+      },
+      {
+        "entries": 16384,
+        "algorithm": "bulk",
+        "sample": 0,
+        "elapsedMs": 100.19955500000015,
+        "metadataSha256": "6ec90405d4c3a17049de17511737dc4dfab947dd95b1d902aaf6108f90521180",
+        "wasmLinearMemoryBytes": 11796480
+      },
+      {
+        "entries": 16384,
+        "algorithm": "scalar",
+        "sample": 1,
+        "elapsedMs": 2339.284761,
+        "metadataSha256": "6ec90405d4c3a17049de17511737dc4dfab947dd95b1d902aaf6108f90521180",
+        "wasmLinearMemoryBytes": 11796480
+      },
+      {
+        "entries": 16384,
+        "algorithm": "bulk",
+        "sample": 1,
+        "elapsedMs": 96.47837400000026,
+        "metadataSha256": "6ec90405d4c3a17049de17511737dc4dfab947dd95b1d902aaf6108f90521180",
+        "wasmLinearMemoryBytes": 11796480
+      },
+      {
+        "entries": 16384,
+        "algorithm": "scalar",
+        "sample": 2,
+        "elapsedMs": 2291.0059709999987,
+        "metadataSha256": "6ec90405d4c3a17049de17511737dc4dfab947dd95b1d902aaf6108f90521180",
+        "wasmLinearMemoryBytes": 11796480
+      },
+      {
+        "entries": 16384,
+        "algorithm": "bulk",
+        "sample": 2,
+        "elapsedMs": 96.63690599999973,
+        "metadataSha256": "6ec90405d4c3a17049de17511737dc4dfab947dd95b1d902aaf6108f90521180",
+        "wasmLinearMemoryBytes": 11796480
+      },
+      {
+        "entries": 16384,
+        "algorithm": "scalar",
+        "sample": 3,
+        "elapsedMs": 2361.294688,
+        "metadataSha256": "6ec90405d4c3a17049de17511737dc4dfab947dd95b1d902aaf6108f90521180",
+        "wasmLinearMemoryBytes": 11796480
+      },
+      {
+        "entries": 16384,
+        "algorithm": "bulk",
+        "sample": 3,
+        "elapsedMs": 104.8536210000002,
+        "metadataSha256": "6ec90405d4c3a17049de17511737dc4dfab947dd95b1d902aaf6108f90521180",
+        "wasmLinearMemoryBytes": 11796480
+      },
+      {
+        "entries": 16384,
+        "algorithm": "scalar",
+        "sample": 4,
+        "elapsedMs": 2447.2443569999996,
+        "metadataSha256": "6ec90405d4c3a17049de17511737dc4dfab947dd95b1d902aaf6108f90521180",
+        "wasmLinearMemoryBytes": 11796480
+      },
+      {
+        "entries": 16384,
+        "algorithm": "bulk",
+        "sample": 4,
+        "elapsedMs": 111.39785699999993,
+        "metadataSha256": "6ec90405d4c3a17049de17511737dc4dfab947dd95b1d902aaf6108f90521180",
+        "wasmLinearMemoryBytes": 11796480
+      }
+    ]
+  },
+  "freshProcessDiagnostics": {
+    "method": "Earlier diagnostic ran five samples at each size in separate Bun processes using the original compiled kernel and final bulk kernel. It generated identical canonical manifests from native kernel output and used JSON parsing without Effect Schema decoding. All metadata digests match per size. Linear-memory bytes are Wasm capacity after collection, not whole-Worker RSS or live allocation.",
+    "baselineKernelSha256": "a79701f5af7c75f04e143d589c49dd6d77d25a39f59091c253a8ac80e6dd0421",
+    "scalar": {
+      "mode": "scalar",
+      "measurements": [
+        {
+          "count": 1024,
+          "samples": [
+            {
+              "ms": 26.271611,
+              "digest": "154b1216d635c4e264b399caedee9bf8fef30959a70f7bbdc7ea762129c3600c",
+              "entries": 1024
+            },
+            {
+              "ms": 16.463972,
+              "digest": "154b1216d635c4e264b399caedee9bf8fef30959a70f7bbdc7ea762129c3600c",
+              "entries": 1024
+            },
+            {
+              "ms": 20.847513000000006,
+              "digest": "154b1216d635c4e264b399caedee9bf8fef30959a70f7bbdc7ea762129c3600c",
+              "entries": 1024
+            },
+            {
+              "ms": 15.767928999999995,
+              "digest": "154b1216d635c4e264b399caedee9bf8fef30959a70f7bbdc7ea762129c3600c",
+              "entries": 1024
+            },
+            {
+              "ms": 12.688514999999995,
+              "digest": "154b1216d635c4e264b399caedee9bf8fef30959a70f7bbdc7ea762129c3600c",
+              "entries": 1024
+            }
+          ],
+          "wasmLinearMemoryBytes": 1572864
+        },
+        {
+          "count": 4096,
+          "samples": [
+            {
+              "ms": 156.592712,
+              "digest": "0c6001d0023573cac45c32975e2e3e7bb037ed6660da024d66a5b76b0053a8ed",
+              "entries": 4096
+            },
+            {
+              "ms": 137.83376200000004,
+              "digest": "0c6001d0023573cac45c32975e2e3e7bb037ed6660da024d66a5b76b0053a8ed",
+              "entries": 4096
+            },
+            {
+              "ms": 134.79201600000005,
+              "digest": "0c6001d0023573cac45c32975e2e3e7bb037ed6660da024d66a5b76b0053a8ed",
+              "entries": 4096
+            },
+            {
+              "ms": 138.20252000000005,
+              "digest": "0c6001d0023573cac45c32975e2e3e7bb037ed6660da024d66a5b76b0053a8ed",
+              "entries": 4096
+            },
+            {
+              "ms": 137.38786200000004,
+              "digest": "0c6001d0023573cac45c32975e2e3e7bb037ed6660da024d66a5b76b0053a8ed",
+              "entries": 4096
+            }
+          ],
+          "wasmLinearMemoryBytes": 2752512
+        },
+        {
+          "count": 16384,
+          "samples": [
+            {
+              "ms": 1822.047344,
+              "digest": "803ecbb4e22c7e0a3a661b19a350202c74db44d686fa02cd91d1156594971965",
+              "entries": 16384
+            },
+            {
+              "ms": 1894.327369,
+              "digest": "803ecbb4e22c7e0a3a661b19a350202c74db44d686fa02cd91d1156594971965",
+              "entries": 16384
+            },
+            {
+              "ms": 1710.1542149999996,
+              "digest": "803ecbb4e22c7e0a3a661b19a350202c74db44d686fa02cd91d1156594971965",
+              "entries": 16384
+            },
+            {
+              "ms": 1779.7205439999998,
+              "digest": "803ecbb4e22c7e0a3a661b19a350202c74db44d686fa02cd91d1156594971965",
+              "entries": 16384
+            },
+            {
+              "ms": 1776.6849710000006,
+              "digest": "803ecbb4e22c7e0a3a661b19a350202c74db44d686fa02cd91d1156594971965",
+              "entries": 16384
+            }
+          ],
+          "wasmLinearMemoryBytes": 7471104
+        }
+      ]
+    },
+    "initialVectorSerializationExperiment": {
+      "mode": "bulk",
+      "measurements": [
+        {
+          "count": 1024,
+          "samples": [
+            {
+              "ms": 12.648620999999999,
+              "digest": "154b1216d635c4e264b399caedee9bf8fef30959a70f7bbdc7ea762129c3600c",
+              "entries": 1024
+            },
+            {
+              "ms": 8.018180000000001,
+              "digest": "154b1216d635c4e264b399caedee9bf8fef30959a70f7bbdc7ea762129c3600c",
+              "entries": 1024
+            },
+            {
+              "ms": 6.151555000000002,
+              "digest": "154b1216d635c4e264b399caedee9bf8fef30959a70f7bbdc7ea762129c3600c",
+              "entries": 1024
+            },
+            {
+              "ms": 5.700172000000009,
+              "digest": "154b1216d635c4e264b399caedee9bf8fef30959a70f7bbdc7ea762129c3600c",
+              "entries": 1024
+            },
+            {
+              "ms": 5.257388000000006,
+              "digest": "154b1216d635c4e264b399caedee9bf8fef30959a70f7bbdc7ea762129c3600c",
+              "entries": 1024
+            }
+          ],
+          "wasmLinearMemoryBytes": 2228224
+        },
+        {
+          "count": 4096,
+          "samples": [
+            {
+              "ms": 25.421272000000002,
+              "digest": "0c6001d0023573cac45c32975e2e3e7bb037ed6660da024d66a5b76b0053a8ed",
+              "entries": 4096
+            },
+            {
+              "ms": 22.62997999999999,
+              "digest": "0c6001d0023573cac45c32975e2e3e7bb037ed6660da024d66a5b76b0053a8ed",
+              "entries": 4096
+            },
+            {
+              "ms": 22.27305099999998,
+              "digest": "0c6001d0023573cac45c32975e2e3e7bb037ed6660da024d66a5b76b0053a8ed",
+              "entries": 4096
+            },
+            {
+              "ms": 22.537574000000006,
+              "digest": "0c6001d0023573cac45c32975e2e3e7bb037ed6660da024d66a5b76b0053a8ed",
+              "entries": 4096
+            },
+            {
+              "ms": 21.80875100000003,
+              "digest": "0c6001d0023573cac45c32975e2e3e7bb037ed6660da024d66a5b76b0053a8ed",
+              "entries": 4096
+            }
+          ],
+          "wasmLinearMemoryBytes": 5373952
+        },
+        {
+          "count": 16384,
+          "samples": [
+            {
+              "ms": 98.15602899999999,
+              "digest": "803ecbb4e22c7e0a3a661b19a350202c74db44d686fa02cd91d1156594971965",
+              "entries": 16384
+            },
+            {
+              "ms": 78.23132599999997,
+              "digest": "803ecbb4e22c7e0a3a661b19a350202c74db44d686fa02cd91d1156594971965",
+              "entries": 16384
+            },
+            {
+              "ms": 75.69498199999998,
+              "digest": "803ecbb4e22c7e0a3a661b19a350202c74db44d686fa02cd91d1156594971965",
+              "entries": 16384
+            },
+            {
+              "ms": 76.39574600000003,
+              "digest": "803ecbb4e22c7e0a3a661b19a350202c74db44d686fa02cd91d1156594971965",
+              "entries": 16384
+            },
+            {
+              "ms": 79.52489700000001,
+              "digest": "803ecbb4e22c7e0a3a661b19a350202c74db44d686fa02cd91d1156594971965",
+              "entries": 16384
+            }
+          ],
+          "wasmLinearMemoryBytes": 17301504
+        }
+      ]
+    },
+    "finalIncrementalSerialization": {
+      "mode": "bulk",
+      "measurements": [
+        {
+          "count": 1024,
+          "samples": [
+            {
+              "ms": 11.378616000000001,
+              "digest": "154b1216d635c4e264b399caedee9bf8fef30959a70f7bbdc7ea762129c3600c",
+              "entries": 1024
+            },
+            {
+              "ms": 6.521665000000006,
+              "digest": "154b1216d635c4e264b399caedee9bf8fef30959a70f7bbdc7ea762129c3600c",
+              "entries": 1024
+            },
+            {
+              "ms": 5.7650489999999905,
+              "digest": "154b1216d635c4e264b399caedee9bf8fef30959a70f7bbdc7ea762129c3600c",
+              "entries": 1024
+            },
+            {
+              "ms": 5.673701000000008,
+              "digest": "154b1216d635c4e264b399caedee9bf8fef30959a70f7bbdc7ea762129c3600c",
+              "entries": 1024
+            },
+            {
+              "ms": 5.058431999999996,
+              "digest": "154b1216d635c4e264b399caedee9bf8fef30959a70f7bbdc7ea762129c3600c",
+              "entries": 1024
+            }
+          ],
+          "wasmLinearMemoryBytes": 2097152
+        },
+        {
+          "count": 4096,
+          "samples": [
+            {
+              "ms": 24.04499,
+              "digest": "0c6001d0023573cac45c32975e2e3e7bb037ed6660da024d66a5b76b0053a8ed",
+              "entries": 4096
+            },
+            {
+              "ms": 21.390543000000008,
+              "digest": "0c6001d0023573cac45c32975e2e3e7bb037ed6660da024d66a5b76b0053a8ed",
+              "entries": 4096
+            },
+            {
+              "ms": 21.41608100000002,
+              "digest": "0c6001d0023573cac45c32975e2e3e7bb037ed6660da024d66a5b76b0053a8ed",
+              "entries": 4096
+            },
+            {
+              "ms": 22.00177599999998,
+              "digest": "0c6001d0023573cac45c32975e2e3e7bb037ed6660da024d66a5b76b0053a8ed",
+              "entries": 4096
+            },
+            {
+              "ms": 22.591928999999993,
+              "digest": "0c6001d0023573cac45c32975e2e3e7bb037ed6660da024d66a5b76b0053a8ed",
+              "entries": 4096
+            }
+          ],
+          "wasmLinearMemoryBytes": 4456448
+        },
+        {
+          "count": 16384,
+          "samples": [
+            {
+              "ms": 84.61593099999999,
+              "digest": "803ecbb4e22c7e0a3a661b19a350202c74db44d686fa02cd91d1156594971965",
+              "entries": 16384
+            },
+            {
+              "ms": 75.39572300000003,
+              "digest": "803ecbb4e22c7e0a3a661b19a350202c74db44d686fa02cd91d1156594971965",
+              "entries": 16384
+            },
+            {
+              "ms": 82.0687190000001,
+              "digest": "803ecbb4e22c7e0a3a661b19a350202c74db44d686fa02cd91d1156594971965",
+              "entries": 16384
+            },
+            {
+              "ms": 74.49293,
+              "digest": "803ecbb4e22c7e0a3a661b19a350202c74db44d686fa02cd91d1156594971965",
+              "entries": 16384
+            },
+            {
+              "ms": 72.56112100000007,
+              "digest": "803ecbb4e22c7e0a3a661b19a350202c74db44d686fa02cd91d1156594971965",
+              "entries": 16384
+            }
+          ],
+          "wasmLinearMemoryBytes": 13893632
+        }
+      ]
+    }
+  },
+  "generalBenchmark": {
+    "measuredAt": "2026-10-15T03:48:09.543Z",
+    "environment": {
+      "runtime": "local workerd via native Alchemy",
+      "alchemy": "2.0.0-beta.83",
+      "production": false,
+      "platform": "linux",
+      "arch": "x64"
+    },
+    "artifactBytes": {
+      "javascript": 333119,
+      "kernelWasm": 1082434,
+      "wasiWasm": 1648542,
+      "pythonWasm": 10705553,
+      "guestWasm": 1120072,
+      "compilerWasm": 1943596
+    },
+    "measurements": {
+      "fullEightMiB": {
+        "count": 25,
+        "p50Ms": 96.33940900000016,
+        "p95Ms": 117.67444299999988,
+        "minMs": 82.90137200000026,
+        "maxMs": 179.643422000001
+      },
+      "rangeFourKiB": {
+        "count": 25,
+        "p50Ms": 4.6447729999999865,
+        "p95Ms": 5.033183999999892,
+        "minMs": 4.477644999999029,
+        "maxMs": 6.005686999998943
+      },
+      "patchFourKiB": {
+        "count": 25,
+        "p50Ms": 15.181833999999071,
+        "p95Ms": 16.857105999999476,
+        "minMs": 14.571232000000236,
+        "maxMs": 37.346763999999894
+      },
+      "python": {
+        "count": 25,
+        "p50Ms": 55.14714399999866,
+        "p95Ms": 69.01978400000007,
+        "minMs": 46.16443299999992,
+        "maxMs": 194.36797099999967
+      },
+      "sequentialEightFiles": {
+        "count": 25,
+        "p50Ms": 73.42281100000037,
+        "p95Ms": 86.83841399999983,
+        "minMs": 66.33783400000038,
+        "maxMs": 91.50266099999999
+      },
+      "batchEightFiles": {
+        "count": 25,
+        "p50Ms": 44.46317200000067,
+        "p95Ms": 58.896247000000585,
+        "minMs": 40.56676900000002,
+        "maxMs": 58.96250199999986
+      },
+      "status": {
+        "count": 100,
+        "p50Ms": 3.225308000000041,
+        "p95Ms": 5.3084530000001,
+        "minMs": 2.3697930000000724,
+        "maxMs": 5.9050220000001445
+      },
+      "write256KiB": {
+        "count": 25,
+        "p50Ms": 9.778800000000047,
+        "p95Ms": 19.34511899999984,
+        "minMs": 8.924558000000161,
+        "maxMs": 28.733463999999913
+      },
+      "read256KiB": {
+        "count": 25,
+        "p50Ms": 6.186564000000089,
+        "p95Ms": 7.999041999999918,
+        "minMs": 5.654279000000088,
+        "maxMs": 8.00807500000019
+      },
+      "isolatedJavascript": {
+        "count": 25,
+        "p50Ms": 13.06051800000023,
+        "p95Ms": 18.30319099999997,
+        "minMs": 11.926817000000483,
+        "maxMs": 64.48073600000043
+      },
+      "detachedJavascript": {
+        "count": 25,
+        "p50Ms": 129.9789979999996,
+        "p95Ms": 141.16157699999985,
+        "minMs": 46.063012000000526,
+        "maxMs": 144.03754099999878
+      },
+      "wasiFileAndSync": {
+        "count": 25,
+        "p50Ms": 39.9174239999993,
+        "p95Ms": 52.99351899999965,
+        "minMs": 32.23526800000036,
+        "maxMs": 151.76346000000012
+      },
+      "shellPipeline": {
+        "count": 25,
+        "p50Ms": 14.109682000000248,
+        "p95Ms": 15.828714999999647,
+        "minMs": 13.786200999998982,
+        "maxMs": 18.332476000001407
+      }
+    },
+    "wasiPublication": {
+      "samples": 25,
+      "rootPublications": 25
+    },
+    "batchPublication": {
+      "filesPerSample": 8,
+      "samples": 25,
+      "sequentialPublications": 200,
+      "batchPublications": 25
+    },
+    "contentDeduplication": {
+      "singleFileWrites": 25,
+      "uniqueBlocks": 1,
+      "singleFileLogicalBytesWritten": 6553600,
+      "storedBlockBytes": 262144
+    }
+  },
+  "limitations": [
+    "Shared host without CPU or I/O isolation; five samples per algorithm; no confidence interval.",
+    "Primary paired run alternates scalar and bulk collection within the final compiled kernel. It includes Effect Schema decoding; it is not a comparison of two deployed Worker versions.",
+    "Fresh-process runs show increased Wasm linear-memory capacity with bulk serialization; full Worker peak memory and adversarial path/content workloads remain unmeasured.",
+    "Maximum native Worker test uses empty files; binary content export and aliases have separate smaller-workload tests.",
+    "No production benchmark, billing comparison or AgentOS cost advantage established."
+  ]
+}
