@@ -1,0 +1,259 @@
+{
+  "problem": "9ec03e7 CI passed 345 native tests and failed readonly output comparison against the host Bash. Bash 5.2.21 reproduces the observed continuation; installed 5.3.20 exits instead.",
+  "referenceSource": "https://ftp.gnu.org/gnu/bash/bash-5.2.21.tar.gz",
+  "referenceArchiveSha256": "c8e31bdc59b69aaffc5b36509905ba3e5cbb12747091d27b4b977f078560d5b8",
+  "referenceBuild": "GNU source; configure --without-bash-malloc --disable-nls --disable-readline; make -j4 CFLAGS=\"-O2 -std=gnu17\" CFLAGS_FOR_BUILD=\"-O2 -std=gnu17\". GCC default C23 rejected the older build tools before these explicit GNU17 flags.",
+  "differences": [
+    {
+      "index": 3,
+      "source": "readonly A; unset A; echo after",
+      "versions": [
+        {
+          "stdout": "after\n",
+          "stderr": "bash-5.2.21: line 1: unset: A: cannot unset: readonly variable\n",
+          "exitCode": 0,
+          "version": "5.2.21"
+        },
+        {
+          "stdout": "",
+          "stderr": "bash-5.3.20: line 1: unset: A: cannot unset: readonly variable\n",
+          "exitCode": 1,
+          "version": "5.3.20"
+        }
+      ]
+    },
+    {
+      "index": 11,
+      "source": "readonly A=one; unset A; echo \"after:$A:$?\"",
+      "versions": [
+        {
+          "stdout": "after:one:1\n",
+          "stderr": "bash-5.2.21: line 1: unset: A: cannot unset: readonly variable\n",
+          "exitCode": 0,
+          "version": "5.2.21"
+        },
+        {
+          "stdout": "",
+          "stderr": "bash-5.3.20: line 1: unset: A: cannot unset: readonly variable\n",
+          "exitCode": 1,
+          "version": "5.3.20"
+        }
+      ]
+    },
+    {
+      "index": 23,
+      "source": "readonly bad-name; echo after",
+      "versions": [
+        {
+          "stdout": "after\n",
+          "stderr": "bash-5.2.21: line 1: readonly: `bad-name': not a valid identifier\n",
+          "exitCode": 0,
+          "version": "5.2.21"
+        },
+        {
+          "stdout": "",
+          "stderr": "bash-5.3.20: line 1: readonly: `bad-name': not a valid identifier\n",
+          "exitCode": 1,
+          "version": "5.3.20"
+        }
+      ]
+    }
+  ],
+  "portableCases": [
+    {
+      "source": "readonly A=one; echo \"$A\"",
+      "observed": {
+        "stdout": "one\n",
+        "success": true,
+        "hasStderr": false
+      }
+    },
+    {
+      "source": "A=one; readonly A; echo \"$A\"",
+      "observed": {
+        "stdout": "one\n",
+        "success": true,
+        "hasStderr": false
+      }
+    },
+    {
+      "source": "readonly A; echo \"[$A]\"",
+      "observed": {
+        "stdout": "[]\n",
+        "success": true,
+        "hasStderr": false
+      }
+    },
+    {
+      "source": "readonly A; export A; echo \"[$A]\"",
+      "observed": {
+        "stdout": "[]\n",
+        "success": true,
+        "hasStderr": false
+      }
+    },
+    {
+      "source": "readonly A=\"\"; A=two; echo after",
+      "observed": {
+        "stdout": "",
+        "success": false,
+        "hasStderr": true
+      }
+    },
+    {
+      "source": "readonly A=one; A=two; echo after",
+      "observed": {
+        "stdout": "",
+        "success": false,
+        "hasStderr": true
+      }
+    },
+    {
+      "source": "readonly A=one; A=one; echo after",
+      "observed": {
+        "stdout": "",
+        "success": false,
+        "hasStderr": true
+      }
+    },
+    {
+      "source": "readonly A=one; A=two echo command; echo after",
+      "observed": {
+        "stdout": "",
+        "success": false,
+        "hasStderr": true
+      }
+    },
+    {
+      "source": "readonly A=one; export A=two; echo \"after:$A:$?\"",
+      "observed": {
+        "stdout": "",
+        "success": false,
+        "hasStderr": true
+      }
+    },
+    {
+      "source": "readonly A=one; readonly A=two; echo \"after:$A:$?\"",
+      "observed": {
+        "stdout": "",
+        "success": false,
+        "hasStderr": true
+      }
+    },
+    {
+      "source": "readonly A=one; export A; echo \"$A:$?\"",
+      "observed": {
+        "stdout": "one:0\n",
+        "success": true,
+        "hasStderr": false
+      }
+    },
+    {
+      "source": "readonly A=one; readonly A; echo \"$A:$?\"",
+      "observed": {
+        "stdout": "one:0\n",
+        "success": true,
+        "hasStderr": false
+      }
+    },
+    {
+      "source": "readonly A=one | cat; A=two; echo \"$A\"",
+      "observed": {
+        "stdout": "two\n",
+        "success": true,
+        "hasStderr": false
+      }
+    },
+    {
+      "source": "readonly A=one; A=two | cat; echo \"$A:$?\"",
+      "observed": {
+        "stdout": "one:0\n",
+        "success": true,
+        "hasStderr": true
+      }
+    },
+    {
+      "source": "readonly A=one; unset A | cat; echo \"$A:$?\"",
+      "observed": {
+        "stdout": "one:0\n",
+        "success": true,
+        "hasStderr": true
+      }
+    },
+    {
+      "source": "readonly A=one; export A=two | cat; echo \"$A:$?\"",
+      "observed": {
+        "stdout": "one:0\n",
+        "success": true,
+        "hasStderr": true
+      }
+    },
+    {
+      "source": "readonly A=$VALUE; echo \"[$A]\"",
+      "observed": {
+        "stdout": "[ two words ]\n",
+        "success": true,
+        "hasStderr": false
+      }
+    },
+    {
+      "source": "CMD=readonly; $CMD A=$VALUE; echo \"[$A]\"",
+      "observed": {
+        "stdout": "[]\n",
+        "success": true,
+        "hasStderr": false
+      }
+    },
+    {
+      "source": "\"readonly\" A=$VALUE; echo \"[$A]\"",
+      "observed": {
+        "stdout": "[]\n",
+        "success": true,
+        "hasStderr": false
+      }
+    },
+    {
+      "source": "readonly -- A=one; echo \"$A\"",
+      "observed": {
+        "stdout": "one\n",
+        "success": true,
+        "hasStderr": false
+      }
+    },
+    {
+      "source": "readonly -p -- A=one; echo \"$A:$?\"",
+      "observed": {
+        "stdout": "one:0\n",
+        "success": true,
+        "hasStderr": false
+      }
+    },
+    {
+      "source": "readonly A=one; false && A=two; echo \"$A:$?\"",
+      "observed": {
+        "stdout": "one:1\n",
+        "success": true,
+        "hasStderr": false
+      }
+    },
+    {
+      "source": "readonly A=one; ! A=two; echo after",
+      "observed": {
+        "stdout": "",
+        "success": false,
+        "hasStderr": true
+      }
+    },
+    {
+      "source": "readonly HOME=/tmp; cd; pwd",
+      "observed": {
+        "stdout": "/tmp\n",
+        "success": true,
+        "hasStderr": false
+      }
+    }
+  ],
+  "resolution": "The three version-dependent sources retain direct native Worker assertions for empty stdout, exact error text and exit code 2. The other 24 sources agree across both GNU versions and remain host comparisons. The production Rust implementation is unchanged. CI records Bash version and failed comparisons include their source.",
+  "verification": "Native readonly Worker test passed: 1 test, 101 assertions, 1.95 seconds. TypeScript and format results recorded with delivery checks.",
+  "limits": "The runner did not previously log its Bash version, so its exact version is not claimed. This is a reproduced reference difference, not full shell conformance."
+}

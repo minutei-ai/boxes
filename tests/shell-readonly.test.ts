@@ -41,7 +41,6 @@ test("native readonly shell attributes reject mutations without leaking across p
           'readonly A=one; echo "$A"',
           'A=one; readonly A; echo "$A"',
           'readonly A; echo "[$A]"',
-          "readonly A; unset A; echo after",
           'readonly A; export A; echo "[$A]"',
           'readonly A=""; A=two; echo after',
           "readonly A=one; A=two; echo after",
@@ -49,7 +48,6 @@ test("native readonly shell attributes reject mutations without leaking across p
           "readonly A=one; A=two echo command; echo after",
           'readonly A=one; export A=two; echo "after:$A:$?"',
           'readonly A=one; readonly A=two; echo "after:$A:$?"',
-          'readonly A=one; unset A; echo "after:$A:$?"',
           'readonly A=one; export A; echo "$A:$?"',
           'readonly A=one; readonly A; echo "$A:$?"',
           'readonly A=one | cat; A=two; echo "$A"',
@@ -61,7 +59,6 @@ test("native readonly shell attributes reject mutations without leaking across p
           '"readonly" A=$VALUE; echo "[$A]"',
           'readonly -- A=one; echo "$A"',
           'readonly -p -- A=one; echo "$A:$?"',
-          "readonly bad-name; echo after",
           'readonly A=one; false && A=two; echo "$A:$?"',
           "readonly A=one; ! A=two; echo after",
           "readonly HOME=/tmp; cd; pwd",
@@ -86,10 +83,31 @@ test("native readonly shell attributes reject mutations without leaking across p
               language: "shell",
               source,
             });
-            expect(result.output?.stdout).toBe(stdout);
+            expect(result.output?.stdout, source).toBe(stdout);
             expect(result.output?.exitCode === 0).toBe(exitCode === 0);
             expect(result.output?.stderr.length === 0).toBe(stderr.length === 0);
             if (exitCode !== 0) expect(result.output?.exitCode).toBe(2);
+          }),
+        );
+        const fatalCases = [
+          { source: "readonly A; unset A; echo after", stderr: "unset: A: readonly variable\n" },
+          {
+            source: 'readonly A=one; unset A; echo "after:$A:$?"',
+            stderr: "unset: A: readonly variable\n",
+          },
+          { source: "readonly bad-name; echo after", stderr: "readonly: invalid variable name\n" },
+        ];
+        yield* Effect.forEach(fatalCases, ({ source, stderr }, index) =>
+          Effect.gen(function* () {
+            const result = yield* client.action("readonly", {
+              op: "process.run",
+              id: `fatal-${index}`,
+              language: "shell",
+              source,
+            });
+            expect(result.output?.stdout, source).toBe("");
+            expect(result.output?.exitCode, source).toBe(2);
+            expect(result.output?.stderr, source).toBe(stderr);
           }),
         );
         const openFailure = yield* client.action("readonly", {
