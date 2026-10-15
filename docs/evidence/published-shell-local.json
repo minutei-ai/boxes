@@ -1,0 +1,121 @@
+{
+  "scope": "Local native published-sh execution and process-local WASI creation masks; not deployed.",
+  "sourceCommit": "bd5b50fed2b5473ffa68d72b28948e944f00c129",
+  "runtimeArtifactsSha256": {
+    "index.js": "ec5069e33ccb4fe5bcb5a6430b9899834c04b31df95a2cd9798e8f940c9519b5",
+    "cirro_kernel_bg.wasm": "3c80cd3b32fd8a5d2b63ea6292f19813552bda74a9f4249971355513c0658d29",
+    "cirro_guest_bg.wasm": "b773b74626b08bd1083860081ccd2a3d0fdff80dcd97b5ec13ed7c6e2148ef22",
+    "cirro_compiler_bg.wasm": "27d9b0022a634ed4eef47b6561ad38cafde3522c17e834afed1264440678bf2f",
+    "cirro_wasi_bg.wasm": "039127d65f42f43a90c600c1d1f847fc8b7ff5a964abf235dc4aa656a1da4639",
+    "cirro_python_bg.wasm": "8aa6aec5ab6fb0623637e2b6dda7318f4934e4736f4a97e45ca3312bf32e529c"
+  },
+  "sourceFilesSha256": {
+    "crates/wasi/src/lib.rs": "d2c32d83890d329cc6df2c43456692bf548c589c9a619f08321bae8674c65492",
+    "src/contracts.ts": "8fd53c62a2b04347c7bd82cd5fc1ff7a64da98bb34427b9d2ffe43af71796acc",
+    "src/wasi.ts": "dd916041ed0923ef14f426d93bf4d935122fde2f6b221b824f132aa7591bdaa0",
+    "tests/fixtures/wasi-umask.rs": "b8d934213aa63edbde84c2089219bafdc1f14e0d79fdc31b12e105be5f2eb2ce",
+    "tests/published-shell.test.ts": "d02b6157c9c033fcfda660994c051a10a7590bdf11a1edad5ac43e5474a06555"
+  },
+  "upstream": {
+    "catalog": "https://releases.rivet.dev/agent-os/latest/software/manifest.json",
+    "catalogSha256": "fe907f86a60379c8717e7adebbe9ae56add8f768e0b71de6f69e1982949ad08c",
+    "artifact": "https://releases.rivet.dev/agent-os/latest/software/packages/sh/f606cc4caa9ba50f7022d681269ca0ea98ccffc0d29f3106a0f18ab593c59412.aospkg",
+    "sha256": "f606cc4caa9ba50f7022d681269ca0ea98ccffc0d29f3106a0f18ab593c59412",
+    "bytes": 3104428,
+    "manifest": {
+      "name": "sh",
+      "version": "0.0.1"
+    },
+    "observedVersion": "brush 0.3.0 (git:f419319)",
+    "abiReferences": [
+      "https://raw.githubusercontent.com/rivet-dev/agentos/main/toolchain/std-patches/crates/brush-builtins/0001-wasi-umask-host-import.patch",
+      "https://raw.githubusercontent.com/rivet-dev/agentos/main/toolchain/std-patches/wasi-libc-overrides/umask.c",
+      "https://raw.githubusercontent.com/rivet-dev/agentos/main/toolchain/std-patches/crates/crossterm/0001-wasi-support.patch"
+    ],
+    "binaryHandling": "Downloaded, digest/size checked and installed through native software.install. No upstream binary or implementation source was committed."
+  },
+  "baseline": "The unchanged published package installed successfully but version, echo and for-loop executions all failed before entry: missing host_process.umask with three i32 parameters and an i32 result. Binary import inspection also identified optional terminal read/raw-mode imports absent from the linker.",
+  "implementation": {
+    "umask": "One u32 mask per native process, initialized to 0022. Brush read/set and libc setter ABIs return previous low nine bits, validate output memory before mutation and reject invalid read/set flags. The mask applies to regular creation, anonymous temporary files and directories, and does not add filesystem authority.",
+    "lifetime": "Child gets an independent mask copy; exec preserves it. Actual R2 heap handover/restoration in a replacement workerd preserves the mask before subsequent creation operations.",
+    "terminal": "No attached terminal exists in this backend. Raw-mode changes return WASI ENOTTY 59. Terminal reads trap explicitly instead of returning fabricated input, EOF or timeout. Existing WASI stdin behavior is unchanged.",
+    "contracts": "The Rust mkdir request now carries its masked mode through the owning Effect Schema and native kernel publication boundary. No filesystem or process receipt persistence format change; opaque heap snapshots still require an exact Rust runtime digest."
+  },
+  "validation": {
+    "completeGate": "bun run check passed: build, SDK declarations, TypeScript, workspace Clippy and Cargo tests; 338 native Bun tests, 57 files, 4335 assertions, 122.00 seconds.",
+    "finalFocused": "After strengthening read-only failure and terminal-outcome assertions: 2 native tests, 57 assertions, 10.11 seconds; final typecheck and formatting passed.",
+    "publishedShellCases": [
+      "for loop",
+      "function and conditional",
+      "while loop with arithmetic",
+      "parameter defaults and case matching",
+      "masked file creation",
+      "fresh invocation starts at 0022",
+      "child inherits mask",
+      "child mutation leaves parent unchanged",
+      "exec preserves mask"
+    ],
+    "abiCases": [
+      "read without mutation",
+      "set returns previous value",
+      "invalid flags 2 and unsigned -1 rejected",
+      "bad output pointer rejected without mask mutation",
+      "only low permission bits retained",
+      "file mode 0600 and directory mode 0700 under 0077",
+      "anonymous temporary file inherits 0600 under 0077",
+      "mode-zero file remains writable through its original descriptor",
+      "file 0666 and directory 0777 under zero mask",
+      "raw mode denied without terminal",
+      "unavailable terminal read fails while retaining previously acknowledged stdout"
+    ],
+    "authority": "Read/execute-only sh may modify its local mask but observes guest exit 1 on redirection, and the denied file does not exist.",
+    "checkpoint": "A real queued WASI program sets 0077, acknowledges output and parks during a 31-second sleep driven by native request-local TestClock. After terminating the original worker, replacement delivery resumes with checkpointCount 1; mask queries and real creation modes pass without repeating entry.",
+    "smokeEightMiB": "Additional isolated native probe passed version, echo, for loop and child/exec inheritance at guest memoryBytes 8388608. This is an enforced guest budget, not total Worker memory measurement.",
+    "exactArchive": {
+      "version": "0.10.0",
+      "transport": "native Alchemy workerd service binding and Agent RPC; local R2 and Queue",
+      "proof": "SDK archive exports and consumer declarations; runtime archive; filesystem snapshot restore; hard-link metadata; RPC callbacks and cooperative disposal; persistent driver contexts and cancellation; scoped authority"
+    },
+    "minutei": {
+      "clientVersion": "0.9.0",
+      "runtimeVersion": "0.10.0",
+      "runtimeArchiveSha256": "674bb56411fd6590fa33c9bb0c23bb161fd72389d4210c43993fee48df107540",
+      "consumerCommit": "a0a2a05c40ed5fb3bd5d76b14c3baf3bfe4695c2",
+      "consumerBundleSha256": "e29165da4f63ac8a3cedd29f5b13b037e9b4becb1f73b7e06047ad308db1d060",
+      "transport": "native workerd Agent service binding; actual Minutei Code Mode and tenant SQLite; local R2, KV and Queue",
+      "retention": true,
+      "isolatedRegistry": true,
+      "capabilities": true,
+      "consumerFixturesSha256": {
+        "boxes-retention.ts": "225c5d42ff36ffa2ee49ce213816546f73bacb691e646857e8588bd8149360c0",
+        "boxes-code.worker.ts": "f876f01e98358a955a9214c2f6b375f60598a461450b88a052d505531920f87a"
+      }
+    }
+  },
+  "archives": [
+    {
+      "file": "minutei-ai-boxes-0.10.0.tgz",
+      "name": "@minutei-ai/boxes",
+      "version": "0.10.0",
+      "bytes": 67970,
+      "sha256": "6e62465fa3224260bf3735243731962772f8dd04dcab80959f2f2f1bdca1589e"
+    },
+    {
+      "file": "minutei-ai-boxes-runtime-0.10.0.tgz",
+      "name": "@minutei-ai/boxes-runtime",
+      "version": "0.10.0",
+      "bytes": 5518258,
+      "sha256": "674bb56411fd6590fa33c9bb0c23bb161fd72389d4210c43993fee48df107540"
+    }
+  ],
+  "limits": [
+    "No deployment, remote native binding/model proof or publication in this change",
+    "Published sh requires explicit software installation; the built-in language:shell interpreter remains bounded",
+    "Not a complete Bash/POSIX conformance claim; default command bundle and additional published package coverage remain open",
+    "PTY remains unavailable; optional terminal calls fail explicitly",
+    "Same-build heap recovery was verified; heaps from another Rust runtime remain protected by the existing version/digest guard",
+    "No peak memory, production performance, cold-start or AgentOS cost advantage established",
+    "Minutei proof covers selected SDK 0.9.0 consumer fixtures only, with no history Queue consumer or authenticated/model/browser path",
+    "Exact archive behavioral/type checks passed; no new general secret scan or publication was performed"
+  ]
+}
