@@ -51,7 +51,7 @@ WASI [`fd_fdstat_set_rights`](https://github.com/WebAssembly/WASI/blob/snapshot-
 
 [Local, CI and deployed evidence](evidence/disposal.json) verifies that `vm.dispose` validates current management authority, converges on a confirmed R2 tombstone and leaves its object version unchanged on repeated calls. Native workerd tests terminate the original Worker before retrying in a replacement, check concurrent calls and reject expired, readonly and wrong-sandbox grants. The tombstone retains ID exclusivity. Immediate guest termination, restart and object reclamation remain open.
 
-[Shared inode graph evidence](evidence/inode-graph-local.json) records native mutation/migration coverage and local before/after measurements. The performance gate remains open: the final sample worsened on multiple workloads, and controlled A/B profiling is required. Public hard-link and descriptor operations remain pending.
+[Shared inode graph evidence](evidence/inode-graph-local.json) records native mutation/migration coverage and local before/after measurements. The performance gate remains open: sequential ABBA measurements show substantial variation in both versions and do not establish an overall improvement or isolate a workload-specific regression. Maximum-scale and isolated profiling remain required. Public hard-link and descriptor operations remain pending.
 
 The [native shell control test](../tests/shell-control.test.ts) compares ten conditional-list workloads with the host POSIX `sh`, checks last-pipeline statuses and verifies that skipped redirections do not create files. Rust parser tests distinguish newline continuation and comments from invalid semicolon placement. This does not establish complete POSIX shell conformance.
 
