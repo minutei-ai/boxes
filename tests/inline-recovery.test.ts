@@ -87,7 +87,10 @@ test("inline reservations retain a recovery deadline while their execution is ac
         );
         expect(settled.deadlineAt).toBeNull();
       }),
-    ).pipe(Effect.provide(FetchHttpClient.layer)),
+    ).pipe(
+      Effect.provide(FetchHttpClient.layer),
+      Effect.provideService(FetchHttpClient.RequestInit, { keepalive: false }),
+    ),
   ));
 
 test(
@@ -222,28 +225,27 @@ test(
           const forbidden = yield* Effect.promise(() =>
             fetch(new URL("/v1/migrations/process-deadlines-v1", url), {
               method: "POST",
+              keepalive: false,
               headers: { authorization: `Bearer ${grant.token}` },
               body: "{}",
             }),
           );
           expect(forbidden.status).toBe(401);
-          yield* Effect.promise(async () => {
-            await forbidden.body?.cancel();
-          });
+          yield* Effect.promise(() => forbidden.arrayBuffer());
           const invalid = yield* Effect.promise(() =>
             fetch(new URL("/v1/migrations/process-deadlines-v1", url), {
               method: "POST",
+              keepalive: false,
               headers: { authorization: "Bearer cirro-local-test-credential" },
               body: '{"cursor":null,"ignored":true}',
             }),
           );
           expect(invalid.status).toBe(400);
-          yield* Effect.promise(async () => {
-            await invalid.body?.cancel();
-          });
+          yield* Effect.promise(() => invalid.arrayBuffer());
           const migrated = yield* Effect.promise(() =>
             fetch(new URL("/v1/migrations/process-deadlines-v1", url), {
               method: "POST",
+              keepalive: false,
               headers: { authorization: "Bearer cirro-local-test-credential" },
               body: Schema.encodeSync(Schema.fromJsonString(ProcessDeadlineMigrationInput))({
                 cursor: null,
@@ -268,6 +270,7 @@ test(
           const next = yield* Effect.promise(() =>
             fetch(new URL("/v1/migrations/process-deadlines-v1", replacementUrl), {
               method: "POST",
+              keepalive: false,
               headers: { authorization: "Bearer cirro-local-test-credential" },
               body: Schema.encodeSync(Schema.fromJsonString(ProcessDeadlineMigrationInput))({
                 cursor: page.cursor,
@@ -283,6 +286,7 @@ test(
           const repeated = yield* Effect.promise(() =>
             fetch(new URL("/v1/migrations/process-deadlines-v1", replacementUrl), {
               method: "POST",
+              keepalive: false,
               headers: { authorization: "Bearer cirro-local-test-credential" },
               body: Schema.encodeSync(Schema.fromJsonString(ProcessDeadlineMigrationInput))({
                 cursor: null,
@@ -322,6 +326,7 @@ test(
           const repair = yield* Effect.promise(() =>
             fetch(new URL("/v1/maintenance/process-dispatch", replacementUrl), {
               method: "POST",
+              keepalive: false,
               headers: { authorization: "Bearer cirro-local-test-credential" },
               body: "{}",
             }),
@@ -401,20 +406,22 @@ test(
           const rejected = yield* Effect.promise(() =>
             fetch(new URL("/v1/migrations/process-deadlines-v1", replacementUrl), {
               method: "POST",
+              keepalive: false,
               headers: { authorization: "Bearer cirro-local-test-credential" },
               body: "{}",
             }),
           );
           expect(rejected.status).toBe(500);
-          yield* Effect.promise(async () => {
-            await rejected.body?.cancel();
-          });
+          yield* Effect.promise(() => rejected.arrayBuffer());
           expect(
             (yield* Effect.promise(() => retained.head("processes/legacy/inconsistent.json")))
               ?.etag,
           ).toBe(saved?.etag);
         }),
-      ).pipe(Effect.provide(FetchHttpClient.layer)),
+      ).pipe(
+        Effect.provide(FetchHttpClient.layer),
+        Effect.provideService(FetchHttpClient.RequestInit, { keepalive: false }),
+      ),
     ),
   30000,
 );

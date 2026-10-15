@@ -58,7 +58,21 @@
       }
     },
     "typecheck": "bun run typecheck passed.",
-    "format": "bun run format:check passed."
+    "format": "bun run format:check passed.",
+    "migrationTransport": {
+      "failedCI": "https://github.com/minutei-ai/boxes/actions/runs/38817080193",
+      "observation": "346 tests passed; the migration fixture failed with ECONNRESET on its localhost migration endpoint. No migration assertion failed before the transport interruption.",
+      "change": "The two inline recovery tests use native FetchHttpClient RequestInit keepalive:false; all seven direct host fetches also disable reuse. Error response bodies are drained before subsequent requests and Worker teardown. No automatic mutation retry or timeout/coverage change.",
+      "reference": "https://bun.com/docs/runtime/networking/fetch#implementation-details",
+      "repeat": {
+        "command": "bun test --rerun-each 5 tests/inline-recovery.test.ts",
+        "tests": 10,
+        "failures": 0,
+        "assertions": 1410,
+        "seconds": 22.84
+      },
+      "limit": "The exact socket close was not traced; pooled connection lifetime was a suspected cause. Local repetitions do not prove every host transport failure is eliminated."
+    }
   },
   "previousReleaseEvidence": "docs/evidence/sdk-0.10.0-release.json",
   "limits": [
