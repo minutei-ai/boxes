@@ -1,0 +1,679 @@
+{
+  "status": "Deployed ordinary Worker and named native/remote gates verified; publication and full parity remain open.",
+  "recordedAt": "2026-10-15T17:05:02.455855+00:00",
+  "runtimeSourceCommit": "7aee168c876f48512ac5f849433dc00ec3b4675a",
+  "deploymentCheckoutCommit": "ed888957c722d150558deef2dfa875335b824d0f",
+  "previousDeploymentEvidence": "docs/evidence/home-disposal-delivery.json",
+  "runtimeArtifactsSha256": {
+    "cirro_compiler_bg.wasm": "27d9b0022a634ed4eef47b6561ad38cafde3522c17e834afed1264440678bf2f",
+    "cirro_guest_bg.wasm": "b773b74626b08bd1083860081ccd2a3d0fdff80dcd97b5ec13ed7c6e2148ef22",
+    "cirro_kernel_bg.wasm": "3c80cd3b32fd8a5d2b63ea6292f19813552bda74a9f4249971355513c0658d29",
+    "cirro_python_bg.wasm": "8aa6aec5ab6fb0623637e2b6dda7318f4934e4736f4a97e45ca3312bf32e529c",
+    "cirro_wasi_bg.wasm": "c8a585cdffb370dcf67571547d3c2df1df2f279a9ff22d7050a5d13a5bf10784",
+    "index.js": "bc3181bcbe3c3d13c9a78839a87be07d60148c554dd844a7a2e0eed38d1adc4b"
+  },
+  "archives": [
+    {
+      "file": "minutei-ai-boxes-0.10.0.tgz",
+      "bytes": 68379,
+      "sha256": "eb8026654487a04c49bd36c43a1168c74d686ab6331e7ab52f0664e768bd9ebb",
+      "entries": 16,
+      "configuredCredentialAbsent": true,
+      "licenseMatches": true,
+      "name": "@minutei-ai/boxes",
+      "version": "0.10.0",
+      "license": "Apache-2.0"
+    },
+    {
+      "file": "minutei-ai-boxes-runtime-0.10.0.tgz",
+      "bytes": 5518269,
+      "sha256": "2c21b2611ade543a55e0764d72b8f2b14945d602ca6a2664f47cae683ff23875",
+      "entries": 8,
+      "configuredCredentialAbsent": true,
+      "licenseMatches": true,
+      "name": "@minutei-ai/boxes-runtime",
+      "version": "0.10.0",
+      "license": "Apache-2.0"
+    }
+  ],
+  "local": {
+    "completeGate": "bun run check passed: build, SDK declarations, typecheck, workspace Clippy/Cargo and native tests.",
+    "nativeTests": {
+      "tests": 338,
+      "files": 57,
+      "assertions": 4372,
+      "seconds": 125.32,
+      "failures": 0
+    },
+    "compiledSoftwareProof": "Two SHA/size-pinned published packages and 22 checked executions through the compiled Effect SDK in native Alchemy workerd/R2.",
+    "publishedTests": "2 tests, 92 assertions, 15.74 seconds.",
+    "archiveBinding": {
+      "version": "0.10.0",
+      "transport": "native Alchemy workerd service binding and Agent RPC; local R2 and Queue",
+      "proof": "SDK archive exports and consumer declarations; runtime archive; filesystem snapshot restore; hard-link metadata; RPC callbacks and cooperative disposal; persistent driver contexts and cancellation; scoped authority"
+    },
+    "minuteiConsumer": {
+      "clientVersion": "0.9.0",
+      "runtimeVersion": "0.10.0",
+      "runtimeArchiveSha256": "2c21b2611ade543a55e0764d72b8f2b14945d602ca6a2664f47cae683ff23875",
+      "consumerCommit": "a0a2a05c40ed5fb3bd5d76b14c3baf3bfe4695c2",
+      "consumerBundleSha256": "e29165da4f63ac8a3cedd29f5b13b037e9b4becb1f73b7e06047ad308db1d060",
+      "transport": "native workerd Agent service binding; actual Minutei Code Mode and tenant SQLite; local R2, KV and Queue",
+      "retention": true,
+      "isolatedRegistry": true,
+      "capabilities": true,
+      "consumerFixturesSha256": {
+        "boxes-retention.ts": "225c5d42ff36ffa2ee49ce213816546f73bacb691e646857e8588bd8149360c0",
+        "boxes-code.worker.ts": "f876f01e98358a955a9214c2f6b375f60598a461450b88a052d505531920f87a"
+      }
+    },
+    "minuteiEvidenceScope": "Prior successful execution against this same exact runtime archive; current consumer commit and fixture hashes rechecked. No rerun or production Minutei/model claim.",
+    "format": "Raw benchmark JSON was normalized without changing parsed measurements. Final repository-wide format:check and git diff --check passed.",
+    "probeFixtureSha256": "90396a25988186e5d6989f131d257db0265e102bcb84645dffa19889c8a04506"
+  },
+  "deployment": {
+    "provider": "Alchemy project-local CLI; profile minutei; stage prod",
+    "workerKind": "Existing ordinary Cloudflare Worker; no Dynamic Workers or Worker Loader.",
+    "target": "https://cirro-sandbox-prod-rs7wexxow56rmsoz.manoel-carvalhoneto.workers.dev",
+    "result": "2 succeeded",
+    "seconds": 526.1,
+    "plan": "One existing Worker update and unconditional migration action; bucket, Queue, consumer and bindings unchanged.",
+    "migrationProgress": {
+      "environment-v1": {
+        "reportedReceipts": 61,
+        "maxReportedPage": 55,
+        "converted": 0
+      },
+      "filesystem-v4": {
+        "reportedReceipts": 61,
+        "maxReportedPage": 61,
+        "converted": 0
+      },
+      "process-input-v4": {
+        "reportedReceipts": 28,
+        "maxReportedPage": 28,
+        "converted": 0
+      }
+    },
+    "migrationReceiptScope": "Unique timestamped native progress events; environment page counters restart between head/program phases. All reported conversions were zero.",
+    "approvalFlag": "--yes --no-input used for the authorized non-interactive deployment.",
+    "artifactIdentity": "The six Worker files match the tested runtime archive and the measured quantum candidate.",
+    "health": "cirro"
+  },
+  "remote": {
+    "software": {
+      "target": "https://cirro-sandbox-prod-rs7wexxow56rmsoz.manoel-carvalhoneto.workers.dev",
+      "measuredAt": 1792083123852,
+      "packages": [
+        {
+          "packageId": "f606cc4caa9ba50f7022d681269ca0ea98ccffc0d29f3106a0f18ab593c59412",
+          "digest": "sha256:f606cc4caa9ba50f7022d681269ca0ea98ccffc0d29f3106a0f18ab593c59412",
+          "sizeBytes": 3104428,
+          "manifest": {
+            "name": "sh",
+            "version": "0.0.1",
+            "provides": null,
+            "commands": [
+              {
+                "command": "sh",
+                "entry": "bin/sh"
+              }
+            ],
+            "man_pages": []
+          }
+        },
+        {
+          "packageId": "edb1cf0bbcf663d177916592d2f1b4361a02966dbf2eb44e3e61ea2a399bb43a",
+          "digest": "sha256:edb1cf0bbcf663d177916592d2f1b4361a02966dbf2eb44e3e61ea2a399bb43a",
+          "sizeBytes": 716972,
+          "manifest": {
+            "name": "jq",
+            "version": "0.3.3",
+            "provides": null,
+            "commands": [
+              {
+                "command": "jq",
+                "entry": "bin/jq"
+              }
+            ],
+            "man_pages": []
+          }
+        }
+      ],
+      "runs": [
+        {
+          "id": "jq-0",
+          "status": "exited",
+          "sourceHash": "0f4c3e26b488ce3d9ac7e4bbd4eb8e41d85f5cda439e58a461ad382db2b59a0d",
+          "language": "wasm",
+          "startedAt": 1792082993567,
+          "finishedAt": 1792082996360,
+          "output": {
+            "stdout": "jq-jaq-0.1.0\n",
+            "stderr": "",
+            "result": null,
+            "exitCode": 0
+          }
+        },
+        {
+          "id": "jq-1",
+          "status": "exited",
+          "sourceHash": "f85bdeb7bc5ccfbd4984eaa5d3d8291d7a6c52c68759746f05b9164077b914c2",
+          "language": "wasm",
+          "startedAt": 1792082997564,
+          "finishedAt": 1792083001818,
+          "output": {
+            "stdout": "42\n",
+            "stderr": "",
+            "result": null,
+            "exitCode": 0
+          }
+        },
+        {
+          "id": "jq-2",
+          "status": "exited",
+          "sourceHash": "c433e8dd81d5e420551ce6d2ac57efebe3b85ab20ea7b6900f410ecd09ced7b3",
+          "language": "wasm",
+          "startedAt": 1792083003007,
+          "finishedAt": 1792083005663,
+          "output": {
+            "stdout": "45\n",
+            "stderr": "",
+            "result": null,
+            "exitCode": 0
+          }
+        },
+        {
+          "id": "jq-3",
+          "status": "exited",
+          "sourceHash": "dba7b0361b8089927f6645e9f1ed1e3f943aec054258079084cd4b4932b9c040",
+          "language": "wasm",
+          "startedAt": 1792083006959,
+          "finishedAt": 1792083010047,
+          "output": {
+            "stdout": "73\n",
+            "stderr": "",
+            "result": null,
+            "exitCode": 0
+          }
+        },
+        {
+          "id": "sh-0",
+          "status": "exited",
+          "sourceHash": "e0bb9baa9eecd25891f56b0a51edbf9b0c5d33cf65f94b555e2b9feb413d0a35",
+          "language": "wasm",
+          "startedAt": 1792083021290,
+          "finishedAt": 1792083025996,
+          "output": {
+            "stdout": "one\ntwo\n",
+            "stderr": "",
+            "result": null,
+            "exitCode": 0
+          }
+        },
+        {
+          "id": "sh-1",
+          "status": "exited",
+          "sourceHash": "41b812ea30d049c717df6d7e671f2561392d67c354745e677b0050f8e08cc38b",
+          "language": "wasm",
+          "startedAt": 1792083027521,
+          "finishedAt": 1792083030605,
+          "output": {
+            "stdout": "function\n",
+            "stderr": "",
+            "result": null,
+            "exitCode": 0
+          }
+        },
+        {
+          "id": "sh-2",
+          "status": "exited",
+          "sourceHash": "4e0db22e675fa7193356b3121d7c8877b8405f67e2c9966da18118aab816f496",
+          "language": "wasm",
+          "startedAt": 1792083032128,
+          "finishedAt": 1792083037397,
+          "output": {
+            "stdout": "0\n1\n2\n",
+            "stderr": "",
+            "result": null,
+            "exitCode": 0
+          }
+        },
+        {
+          "id": "sh-3",
+          "status": "exited",
+          "sourceHash": "7e387215c605d48410b897c2db3c7bafb23b11b7b4528e6592f9a8e268052568",
+          "language": "wasm",
+          "startedAt": 1792083038964,
+          "finishedAt": 1792083043781,
+          "output": {
+            "stdout": "default\nmatched\n",
+            "stderr": "",
+            "result": null,
+            "exitCode": 0
+          }
+        },
+        {
+          "id": "sh-4",
+          "status": "exited",
+          "sourceHash": "9be95ebd1581d773197d03ddb17e0d713b2b2d430896e03bbf22f5ced12d5df0",
+          "language": "wasm",
+          "startedAt": 1792083045436,
+          "finishedAt": 1792083049822,
+          "output": {
+            "stdout": "0077\n",
+            "stderr": "",
+            "result": null,
+            "exitCode": 0
+          }
+        },
+        {
+          "id": "sh-5",
+          "status": "exited",
+          "sourceHash": "79ddae80a3eaeef6759bd4868a70d661d5be58fe7756962306ef82e777c6aa73",
+          "language": "wasm",
+          "startedAt": 1792083051408,
+          "finishedAt": 1792083054399,
+          "output": {
+            "stdout": "0022\n",
+            "stderr": "",
+            "result": null,
+            "exitCode": 0
+          }
+        },
+        {
+          "id": "sh-6",
+          "status": "exited",
+          "sourceHash": "40c275b8ea52aa1000641b69b95a634ab155e50de2770df4c1a548f92f27f853",
+          "language": "wasm",
+          "startedAt": 1792083056036,
+          "finishedAt": 1792083060637,
+          "output": {
+            "stdout": "0077\n0077\n",
+            "stderr": "",
+            "result": null,
+            "exitCode": 0
+          }
+        },
+        {
+          "id": "sh-7",
+          "status": "exited",
+          "sourceHash": "db575d6414d41152d3dab9128946a45f2b2bfb626921222c37236cc07d815d80",
+          "language": "wasm",
+          "startedAt": 1792083062143,
+          "finishedAt": 1792083065331,
+          "output": {
+            "stdout": "0077\n",
+            "stderr": "",
+            "result": null,
+            "exitCode": 0
+          }
+        },
+        {
+          "id": "sh-8",
+          "status": "exited",
+          "sourceHash": "7e08df717a774067a4c4a5742fc499b0bae06537307261f934a2be0d03177016",
+          "language": "wasm",
+          "startedAt": 1792083067091,
+          "finishedAt": 1792083070500,
+          "output": {
+            "stdout": "0077\n",
+            "stderr": "",
+            "result": null,
+            "exitCode": 0
+          }
+        },
+        {
+          "id": "sh-9",
+          "status": "exited",
+          "sourceHash": "9e40c43c492c5163277009c056e57d3101a55017760afe8e9b1e278b8f3d3714",
+          "language": "wasm",
+          "startedAt": 1792083071937,
+          "finishedAt": 1792083074583,
+          "output": {
+            "stdout": "42\n",
+            "stderr": "",
+            "result": null,
+            "exitCode": 0
+          }
+        },
+        {
+          "id": "sh-10",
+          "status": "exited",
+          "sourceHash": "be51dfd2f9af5f6fa503993c99aa26d7ed876a1c773afee8fb913c5ac309ac89",
+          "language": "wasm",
+          "startedAt": 1792083076228,
+          "finishedAt": 1792083078935,
+          "output": {
+            "stdout": "42\n",
+            "stderr": "",
+            "result": null,
+            "exitCode": 0
+          }
+        },
+        {
+          "id": "sh-11",
+          "status": "exited",
+          "sourceHash": "15dfac7a355de73dc466e777835bca5f3c583f9caffb693bd527c6494015a0ca",
+          "language": "wasm",
+          "startedAt": 1792083080504,
+          "finishedAt": 1792083083379,
+          "output": {
+            "stdout": "73\n",
+            "stderr": "",
+            "result": null,
+            "exitCode": 0
+          }
+        },
+        {
+          "id": "sh-12",
+          "status": "exited",
+          "sourceHash": "8a1281c568389beb5cbf60392dc6b3e72093706e9ccea7d46a81a3f46d3349a0",
+          "language": "wasm",
+          "startedAt": 1792083084958,
+          "finishedAt": 1792083089313,
+          "output": {
+            "stdout": "first\nsecond\n",
+            "stderr": "",
+            "result": null,
+            "exitCode": 0
+          }
+        },
+        {
+          "id": "sh-13",
+          "status": "exited",
+          "sourceHash": "2954c1398c088477b2ade378d5012c0d03a170026fd5cb22335faf43588c38d3",
+          "language": "wasm",
+          "startedAt": 1792083090908,
+          "finishedAt": 1792083099224,
+          "output": {
+            "stdout": "\"outerr\"\n",
+            "stderr": "",
+            "result": null,
+            "exitCode": 0
+          }
+        },
+        {
+          "id": "sh-14",
+          "status": "exited",
+          "sourceHash": "0b0c1eeafe28903baa32af5fca429db4b912facc9b3c704a1fc487f38f971d46",
+          "language": "wasm",
+          "startedAt": 1792083100968,
+          "finishedAt": 1792083104333,
+          "output": {
+            "stdout": "1\n",
+            "stderr": "",
+            "result": null,
+            "exitCode": 0
+          }
+        },
+        {
+          "id": "sh-15",
+          "status": "exited",
+          "sourceHash": "59ff2467151ab422f753e5f8d98c7512efcccb724722914b1fd03686d8baafb2",
+          "language": "wasm",
+          "startedAt": 1792083105834,
+          "finishedAt": 1792083111718,
+          "output": {
+            "stdout": "1\n2\n3\n",
+            "stderr": "",
+            "result": null,
+            "exitCode": 0
+          }
+        },
+        {
+          "id": "sh-16",
+          "status": "exited",
+          "sourceHash": "f82db8cf49f1218e5ba0e04e567a679f4e5f0e2a95ab18eceb6118aa83813cc1",
+          "language": "wasm",
+          "startedAt": 1792083113164,
+          "finishedAt": 1792083116771,
+          "output": {
+            "stdout": "",
+            "stderr": "",
+            "result": null,
+            "exitCode": 0
+          }
+        },
+        {
+          "id": "pipeline",
+          "status": "exited",
+          "sourceHash": "f80a8287545608f9df43163350753cf00c9a8ce365d4221ed9f929ac9d547726",
+          "language": "shell",
+          "startedAt": 1792083118182,
+          "finishedAt": 1792083123168,
+          "output": {
+            "stdout": "91\n",
+            "stderr": "",
+            "result": null,
+            "exitCode": 0
+          }
+        }
+      ]
+    },
+    "softwareDisposal": "Scoped release completed before the terminal report; process exited 0.",
+    "compiledSdk": {
+      "checks": 6,
+      "passed": true,
+      "transport": "Effect FetchHttpClient",
+      "target": "production"
+    },
+    "activeWasiDisposal": {
+      "target": "https://cirro-sandbox-prod-rs7wexxow56rmsoz.manoel-carvalhoneto.workers.dev",
+      "measuredAt": 1792083495629,
+      "runtime": "wasm",
+      "status": "cancelled",
+      "stdout": "continuation entered\n",
+      "readsDenied": true
+    },
+    "wasiChild": {
+      "evidence": "docs/evidence/wasi-child-production.json",
+      "report": {
+        "measuredAt": "2026-10-15T16:54:51.745Z",
+        "url": "https://cirro-sandbox-prod-rs7wexxow56rmsoz.manoel-carvalhoneto.workers.dev",
+        "sandboxId": "wasi-child-proof-1f9be38d-6576-461c-956d-665ba1c32f1e",
+        "profile": "minutei",
+        "runtime": "standard Worker",
+        "checks": {
+          "setup": true,
+          "spawnWaitInheritance": true,
+          "stdioOrder": true,
+          "persistedWrite": true,
+          "inheritedInodeAfterRename": true,
+          "childTrapIsolation": true,
+          "spawnClosefromPreservesParent": true,
+          "disposal": true
+        },
+        "trapped": [
+          {
+            "mode": "child-trap",
+            "passed": true
+          },
+          {
+            "mode": "child-oob",
+            "passed": true
+          }
+        ],
+        "allPassed": true,
+        "fullProcessParity": false,
+        "durableChildReceipts": false,
+        "packageParity": false
+      }
+    },
+    "handlers": {
+      "evidence": "docs/evidence/handlers-production.json",
+      "report": {
+        "measuredAt": "2026-10-15T16:57:50.895Z",
+        "url": "https://cirro-sandbox-prod-rs7wexxow56rmsoz.manoel-carvalhoneto.workers.dev",
+        "sandboxId": "handlers-proof-41a11955-d63f-4cd5-916d-67f6ed064239",
+        "profile": "minutei",
+        "runtime": "standard Worker",
+        "receipts": [
+          {
+            "mode": "self",
+            "passed": true
+          },
+          {
+            "mode": "coalesce",
+            "passed": true
+          },
+          {
+            "mode": "sliced",
+            "passed": true
+          },
+          {
+            "mode": "missing",
+            "passed": true
+          },
+          {
+            "mode": "bad-signature",
+            "passed": true
+          },
+          {
+            "mode": "defer",
+            "passed": true
+          },
+          {
+            "mode": "nodefer",
+            "passed": true
+          },
+          {
+            "mode": "sa-mask",
+            "passed": true
+          },
+          {
+            "mode": "reset",
+            "passed": true
+          },
+          {
+            "mode": "upper",
+            "passed": true
+          },
+          {
+            "mode": "io",
+            "passed": true
+          },
+          {
+            "mode": "external",
+            "passed": true
+          },
+          {
+            "mode": "restart",
+            "passed": true
+          },
+          {
+            "mode": "external-io",
+            "passed": true
+          },
+          {
+            "mode": "inherit",
+            "passed": true
+          },
+          {
+            "mode": "inherit-default",
+            "passed": true
+          },
+          {
+            "mode": "chld",
+            "passed": true
+          },
+          {
+            "mode": "chld-stop",
+            "passed": true
+          },
+          {
+            "mode": "nocldstop",
+            "passed": true
+          },
+          {
+            "mode": "autoreap-ignore",
+            "passed": true
+          },
+          {
+            "mode": "autoreap-default",
+            "passed": true
+          },
+          {
+            "mode": "autoreap-user",
+            "passed": true
+          },
+          {
+            "mode": "autoreap-late",
+            "passed": true
+          },
+          {
+            "mode": "autoreap-many",
+            "passed": true
+          },
+          {
+            "mode": "autoreap-multi",
+            "passed": true
+          },
+          {
+            "mode": "cont-handler",
+            "passed": true
+          },
+          {
+            "mode": "ignore-cont",
+            "passed": true
+          },
+          {
+            "mode": "restart-poll",
+            "passed": true
+          }
+        ],
+        "limits": [
+          {
+            "mode": "infinite",
+            "passed": true
+          },
+          {
+            "mode": "nest-limit",
+            "passed": true
+          }
+        ],
+        "disposal": true,
+        "allPassed": true,
+        "automaticChildReaping": true,
+        "alternateSignalStack": false,
+        "fullProcessParity": false
+      }
+    },
+    "wasiSlices": {
+      "evidence": "docs/evidence/wasi-slices-production.json",
+      "report": {
+        "measuredAt": "2026-10-15T16:58:07.462Z",
+        "url": "https://cirro-sandbox-prod-rs7wexxow56rmsoz.manoel-carvalhoneto.workers.dev",
+        "sandboxId": "wasi-slices-proof-447aff2b-76eb-4fbc-a5b6-d10d2e85000c",
+        "profile": "minutei",
+        "runtime": "standard Worker",
+        "checks": {
+          "resumption": true,
+          "runningCheckpoint": true,
+          "cancellation": true,
+          "retainedOutput": true,
+          "disposal": true
+        },
+        "receipts": {
+          "observationStatus": 408,
+          "cancelStatus": 200,
+          "waitStatus": 409,
+          "waitError": "ECANCELED",
+          "finalStatus": "cancelled"
+        },
+        "allPassed": true,
+        "fullProcessParity": false,
+        "packageParity": false
+      }
+    }
+  },
+  "limits": [
+    "No GitHub authentication, repository publication or package registry publication attempted.",
+    "Remote probes exercise authenticated HTTP; exact archive binding/RPC and selected actual Minutei consumer fixtures are verified locally.",
+    "Minutei application deployment, authentication/model/browser paths and history Queue delivery remain unverified.",
+    "Local performance measurements are not production latency, peak memory, cold-start, scale or AgentOS cost proof.",
+    "Guest admission is 8 MiB for the software proof, not a measurement of total Worker memory.",
+    "Full process/package/POSIX, PTY, arbitrary-crash/cross-build recovery and remaining docs/parity.md gates stay open.",
+    "Archive audit checks the configured control credential, expected paths and exact root license; no general secret or full dependency-license scan was performed."
+  ]
+}

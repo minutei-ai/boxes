@@ -1,78 +1,83 @@
 {
-  "status": "Last deployed HOME/disposal candidate passed native and remote gates. A newer WASI fuel-quantum candidate passed local native tests, paired performance measurements and archive consumer checks and remains undeployed; publication is deferred.",
+  "status": "Current published-sh/jq and WASI quantum candidate passed native/archive and named deployed Worker gates; repository and package publication remain deferred.",
   "version": "0.10.0",
-  "runtimeSourceCommit": "b34dd09e6fb5bfe905d6d56fdbcddf79bd0b7d32",
+  "runtimeSourceCommit": "7aee168c876f48512ac5f849433dc00ec3b4675a",
   "runtimeArtifactsSha256": {
-    "index.js": "b88d49f66c1262b8a38a4d5e5ff8b16a03550183abc9f4febd0ebd5f58d839b3",
-    "cirro_kernel_bg.wasm": "3c80cd3b32fd8a5d2b63ea6292f19813552bda74a9f4249971355513c0658d29",
-    "cirro_guest_bg.wasm": "b773b74626b08bd1083860081ccd2a3d0fdff80dcd97b5ec13ed7c6e2148ef22",
     "cirro_compiler_bg.wasm": "27d9b0022a634ed4eef47b6561ad38cafde3522c17e834afed1264440678bf2f",
-    "cirro_wasi_bg.wasm": "a128d4d89a7403b1217b42fa1ff96771836432a0992cba07522d8846c5c6829d",
-    "cirro_python_bg.wasm": "8aa6aec5ab6fb0623637e2b6dda7318f4934e4736f4a97e45ca3312bf32e529c"
+    "cirro_guest_bg.wasm": "b773b74626b08bd1083860081ccd2a3d0fdff80dcd97b5ec13ed7c6e2148ef22",
+    "cirro_kernel_bg.wasm": "3c80cd3b32fd8a5d2b63ea6292f19813552bda74a9f4249971355513c0658d29",
+    "cirro_python_bg.wasm": "8aa6aec5ab6fb0623637e2b6dda7318f4934e4736f4a97e45ca3312bf32e529c",
+    "cirro_wasi_bg.wasm": "c8a585cdffb370dcf67571547d3c2df1df2f279a9ff22d7050a5d13a5bf10784",
+    "index.js": "bc3181bcbe3c3d13c9a78839a87be07d60148c554dd844a7a2e0eed38d1adc4b"
   },
   "archives": [
     {
       "file": "minutei-ai-boxes-0.10.0.tgz",
-      "bytes": 67303,
-      "sha256": "b587b278c0c131fb1e4d700cc4f06ee81681715a03421566729d46f359a0db27",
+      "bytes": 68379,
+      "sha256": "eb8026654487a04c49bd36c43a1168c74d686ab6331e7ab52f0664e768bd9ebb",
       "entries": 16,
+      "configuredCredentialAbsent": true,
+      "licenseMatches": true,
       "name": "@minutei-ai/boxes",
       "version": "0.10.0",
-      "license": "Apache-2.0",
-      "configuredCredentialAbsent": true,
-      "licenseMatches": true
+      "license": "Apache-2.0"
     },
     {
       "file": "minutei-ai-boxes-runtime-0.10.0.tgz",
-      "bytes": 5517679,
-      "sha256": "8632841db136469906c8552b0c3712574ffee962a1e53bd42f7bec4abadae8cc",
+      "bytes": 5518269,
+      "sha256": "2c21b2611ade543a55e0764d72b8f2b14945d602ca6a2664f47cae683ff23875",
       "entries": 8,
+      "configuredCredentialAbsent": true,
+      "licenseMatches": true,
       "name": "@minutei-ai/boxes-runtime",
       "version": "0.10.0",
-      "license": "Apache-2.0",
-      "configuredCredentialAbsent": true,
-      "licenseMatches": true
+      "license": "Apache-2.0"
     }
   ],
   "validation": {
     "completeGate": "bun run check passed: build, SDK declarations, TypeScript, workspace Clippy, workspace Cargo tests and native Bun tests.",
     "nativeTests": {
-      "tests": 336,
-      "files": 56,
-      "assertions": 4285,
-      "seconds": 121.38,
+      "tests": 338,
+      "files": 57,
+      "assertions": 4372,
+      "seconds": 125.32,
       "failures": 0
     },
     "exactArchiveProof": "SDK archive exports and consumer declarations; runtime archive; filesystem snapshot restore; hard-link metadata; RPC callbacks and cooperative disposal; persistent driver contexts and cancellation; scoped authority",
-    "archiveScan": "All 24 entries have expected identities/licenses, matching Apache-2.0 license text, no env/node_modules entries and no exact configured control credential. General secret scanning remains unverified; gitleaks is unavailable.",
+    "archiveScan": "All 24 entries have expected identities/licenses, exact Apache-2.0 root license text, no env/node_modules entries and no exact configured control credential. A general secret/dependency-license scan was not performed in this delivery.",
     "minuteiCompatibility": {
       "clientVersion": "0.9.0",
       "runtimeVersion": "0.10.0",
-      "runtimeArchiveSha256": "8632841db136469906c8552b0c3712574ffee962a1e53bd42f7bec4abadae8cc",
+      "runtimeArchiveSha256": "2c21b2611ade543a55e0764d72b8f2b14945d602ca6a2664f47cae683ff23875",
       "consumerCommit": "a0a2a05c40ed5fb3bd5d76b14c3baf3bfe4695c2",
-      "scope": "Actual Code Mode/tenant SQLite fixtures; isolated native Agent binding; retention, authority/isolation, cleanup recovery, filesystem/shell features and fresh globals. Remote application/authentication/model/history delivery remain unverified."
+      "scope": "Prior successful execution against this same exact runtime archive; current consumer commit and fixture hashes rechecked. No rerun or production Minutei/model claim. Authentication/model/browser paths and history delivery remain unverified."
     },
     "remote": {
-      "shellChecks": 34,
+      "publishedSoftwareRuns": 22,
       "compiledSdkChecks": 6,
-      "binaryShellChecks": 14,
-      "activeWasiDisposal": "cancelled with retained acknowledged stdout and denied public reads",
-      "disposal": "concurrent and repeated disposal; authority/read/ID-exclusivity boundaries verified"
+      "nativeChildChecks": 8,
+      "handlerCases": 28,
+      "handlerLimitCases": 2,
+      "cpuSlicesAndCancellation": "finite resumption, running checkpoint, cancellation and retained stdout passed",
+      "activeWasiDisposal": "cancelled with retained acknowledged stdout and denied public reads"
     },
-    "evidence": "docs/evidence/home-disposal-delivery.json"
+    "evidence": "docs/evidence/published-software-delivery.json"
   },
   "reproduction": [
     "bun run check",
+    "bun run format:check",
     "bun pm pack --destination <archive-directory>",
     "bun run pack:runtime <archive-directory>",
     "bun run package:proof <sdk.tgz> <runtime.tgz>",
     "bun run minutei:proof <minutei-checkout> <runtime.tgz>",
+    "bun node_modules/alchemy/bin/cli.js plan alchemy.run.ts --stage prod --profile minutei --no-input",
     "bun node_modules/alchemy/bin/cli.js deploy alchemy.run.ts --stage prod --profile minutei --yes --no-input",
-    "CIRRO_URL=<deployed-url> bun tooling/shell-parameters-proof.ts",
-    "CIRRO_URL=<deployed-url> bun tooling/active-disposal-proof.ts",
+    "CIRRO_URL=<deployed-url> bun run software:proof",
     "CIRRO_URL=<deployed-url> bun run sdk:proof",
-    "CIRRO_URL=<deployed-url> bun run shell:binary:proof",
-    "CIRRO_URL=<deployed-url> bun run dispose:proof"
+    "CIRRO_URL=<deployed-url> bun run wasi-child:proof",
+    "CIRRO_URL=<deployed-url> bun tooling/handlers-proof.ts",
+    "CIRRO_URL=<deployed-url> bun run wasi-slices:proof",
+    "CIRRO_URL=<deployed-url> bun tooling/active-disposal-proof.ts"
   ],
   "delivery": {
     "github": "Deferred at user direction; no GitHub authentication or publication attempted.",
@@ -82,24 +87,35 @@
       "workerKind": "Existing ordinary Cloudflare Worker; no Dynamic Workers or Worker Loader.",
       "target": "https://cirro-sandbox-prod-rs7wexxow56rmsoz.manoel-carvalhoneto.workers.dev",
       "result": "2 succeeded",
-      "seconds": 412.9,
-      "plan": "One Worker update plus unconditional migration action; bucket, Queue, consumer and bindings retained.",
-      "migrationPages": {
+      "seconds": 526.1,
+      "plan": "One existing Worker update and unconditional migration action; bucket, Queue, consumer and bindings unchanged.",
+      "migrationProgress": {
         "environment-v1": {
-          "receipts": 59,
+          "reportedReceipts": 61,
+          "maxReportedPage": 55,
           "converted": 0
         },
         "filesystem-v4": {
-          "receipts": 59,
+          "reportedReceipts": 61,
+          "maxReportedPage": 61,
+          "converted": 0
+        },
+        "process-input-v4": {
+          "reportedReceipts": 28,
+          "maxReportedPage": 28,
           "converted": 0
         }
       },
-      "approvalFlag": "Initial non-interactive CLI invocation exited before any changes and explicitly required --yes. The already-authorized reviewed deployment then completed using --yes --no-input.",
-      "artifactIdentity": "The six deployed dist/worker files exactly match the extracted runtime archive digests."
+      "migrationReceiptScope": "Unique timestamped native progress events; environment page counters restart between head/program phases. All reported conversions were zero.",
+      "approvalFlag": "--yes --no-input used for the authorized non-interactive deployment.",
+      "artifactIdentity": "The six Worker files match the tested runtime archive and the measured quantum candidate.",
+      "health": "cirro"
     },
-    "minutei": "Immutable SDK/runtime 0.9.0 dependencies retained. Selected actual consumer fixtures passed locally against the exact new 0.10.0 runtime archive; remote Minutei application/authentication/model proof remains unverified.",
-    "productionAndModelProof": "The ordinary Worker passed the named authenticated HTTP probes. Remote native binding/Minutei/model validation, performance and cost remain separate gates."
+    "minutei": "Immutable SDK/runtime 0.9.0 dependencies retained. Prior actual consumer fixtures passed locally against this exact 0.10.0 runtime archive; current consumer commit and fixture hashes match. Remote Minutei application/authentication/model proof remains unverified.",
+    "productionAndModelProof": "The ordinary Worker passed the named authenticated HTTP probes. Remote native binding/Minutei/model validation and production performance/cost remain separate gates."
   },
   "parity": "Experimental; remaining requirements in docs/parity.md stay open.",
-  "localCandidateEvidence": "docs/evidence/wasi-quantum-local.json"
+  "localCandidateEvidence": "docs/evidence/wasi-quantum-local.json",
+  "deploymentCheckoutCommit": "ed888957c722d150558deef2dfa875335b824d0f",
+  "deliveryEvidence": "docs/evidence/published-software-delivery.json"
 }

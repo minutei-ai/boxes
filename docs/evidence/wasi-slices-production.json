@@ -1,7 +1,7 @@
 {
-  "measuredAt": "2026-10-14T05:13:42.483Z",
+  "measuredAt": "2026-10-15T16:58:07.462Z",
   "url": "https://cirro-sandbox-prod-rs7wexxow56rmsoz.manoel-carvalhoneto.workers.dev",
-  "sandboxId": "wasi-slices-proof-dae3719f-1598-4f49-9092-225be57c88e9",
+  "sandboxId": "wasi-slices-proof-447aff2b-76eb-4fbc-a5b6-d10d2e85000c",
   "profile": "minutei",
   "runtime": "standard Worker",
   "checks": {

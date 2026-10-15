@@ -1,5 +1,5 @@
 {
-  "scope": "Local native WASI fuel-quantum comparison; not deployed, published or a production latency/cost claim.",
+  "scope": "Local native WASI fuel-quantum comparison. The validated runtime was later deployed; measurements remain local and do not establish production latency or cost.",
   "supersedesLocalCandidateEvidence": "docs/evidence/wasi-family-fairness-local.json",
   "baseline": {
     "sourceCommit": "8afb500",
@@ -675,7 +675,7 @@
     "focused": "23 native tests across 3 files, 241 assertions, 21.38 seconds; published sh/jq, signals, CPU-loop cancellation and queued umask handover.",
     "handlerRecoveryFocused": "34 native tests across 2 files, 222 assertions, 7.41 seconds; signal handlers and actual heap recovery in a replacement Worker.",
     "fullCheck": "bun run check passed: native build, SDK declarations, typecheck, workspace Clippy and Cargo, 338 native tests across 57 files, 4348 assertions, 137.95 seconds.",
-    "format": "Code formatting and git diff --check passed. Raw measurement JSON required normalization during delivery verification; see delivery evidence for the final repository-wide formatting result.",
+    "format": "Raw measurement JSON was normalized during delivery verification without changing parsed measurements; the repository-wide format:check and git diff --check then passed.",
     "archiveBinding": {
       "version": "0.10.0",
       "transport": "native Alchemy workerd service binding and Agent RPC; local R2 and Queue",
@@ -701,7 +701,7 @@
     "Coarser fuel slices reduce bridge traffic but increase the maximum uninterrupted guest CPU work between checks. Bun-hosted step timings are not a production interruption bound.",
     "The native family host-call ceiling remains finite; this does not prove arbitrary-length shell scripts or complete POSIX conformance.",
     "The pinned Brush inherited-stream 2>&1 spawn-action omission remains open.",
-    "No deployment, remote Minutei binding/model proof, publication or GitHub operation in this revision.",
+    "Later backend deployment and named HTTP execution gates are recorded in deliveryEvidence. Remote Minutei binding/model proof, publication and GitHub operations remain unverified or deferred.",
     "Minutei proof covers selected SDK 0.9.0 consumer fixtures only; its history Queue has no consumer and authenticated/model/browser paths were not exercised."
   ],
   "sourceCommit": "7aee168c876f48512ac5f849433dc00ec3b4675a",
@@ -861,5 +861,6 @@
       "bytes": 5518269,
       "sha256": "2c21b2611ade543a55e0764d72b8f2b14945d602ca6a2664f47cae683ff23875"
     }
-  ]
+  ],
+  "deliveryEvidence": "docs/evidence/published-software-delivery.json"
 }
