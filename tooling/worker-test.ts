@@ -11,6 +11,8 @@ import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { PluginContext } from "@alchemy.run/cloudflare-runtime/core";
 import { RegistryProxy } from "@alchemy.run/cloudflare-runtime/core/registry/RegistryProxy";
+import { connect } from "@alchemy.run/cloudflare-runtime/core/platform-proxy/connect";
+import { BINDING_PLATFORM_PROXY_TOKEN } from "@alchemy.run/cloudflare-runtime/core/platform-proxy/PlatformProxyProtocol";
 import * as Plugin from "@alchemy.run/cloudflare-runtime/core/Plugin";
 import type { Env } from "../src/resources";
 import type { Control } from "../tests/fixtures/clock-worker";
@@ -23,7 +25,7 @@ const Endpoints = Schema.Struct({
   origin: Schema.UndefinedOr(Schema.String),
   binding: Schema.UndefinedOr(Schema.String),
 });
-type TestEnv = Env & { ENDPOINTS: typeof Endpoints.Type; CONTROL: Fetcher<Control> };
+type TestEnv = { ENDPOINTS: typeof Endpoints.Type; CONTROL: Fetcher<Control> };
 const Options = Schema.Struct({
   binding: Schema.optionalKey(Schema.Boolean),
   origin: Schema.optionalKey(Schema.Struct({ delay: Schema.Int, body: Schema.String })),
@@ -36,6 +38,7 @@ const Options = Schema.Struct({
 export const runtime = (persist: string, options: typeof Options.Type = {}) => {
   const advance = options.advance ?? 0;
   const name = `boxes-test-${crypto.randomUUID()}`;
+  const proxyToken = crypto.randomUUID();
   const consumers: QueueConsumer[] = [
     {
       queueName: name,
@@ -49,6 +52,7 @@ export const runtime = (persist: string, options: typeof Options.Type = {}) => {
   const start = options.clockStart ?? Effect.runSync(Clock.currentTimeMillis);
   const workerBindings = [
     R2Bucket.local({ binding: "OBJECTS", id: "boxes-test" }),
+    Text.local(BINDING_PLATFORM_PROXY_TOKEN, proxyToken),
     Text.local("API_KEY", "cirro-local-test-credential"),
     Json.local("CLOCK_START", start),
     Json.local("CLOCK_ADVANCE", advance),
@@ -72,7 +76,6 @@ export const runtime = (persist: string, options: typeof Options.Type = {}) => {
     })),
   ];
   const bindings = [
-    R2Bucket.local({ binding: "OBJECTS", id: "boxes-test" }),
     Effect.gen(function* () {
       const workerRuntime = yield* Runtime;
       const originName = `${name}-origin`;
@@ -174,7 +177,10 @@ export const runtime = (persist: string, options: typeof Options.Type = {}) => {
           return Promise.reject(new Error("SDK fixture requires binding mode"));
         return new URL(value.env.ENDPOINTS.binding);
       }),
-    objects: ready.then((value) => value.env.OBJECTS),
+    objects: ready.then(async (value) => {
+      const proxy = await connect<Env>({ url: value.env.ENDPOINTS.app, token: proxyToken });
+      return proxy.env.OBJECTS;
+    }),
     control: ready.then((value) => value.env.CONTROL),
     dispose: () => ready.then((value) => value.dispose()),
   };

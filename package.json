@@ -104,5 +104,8 @@
     "@tanstack/ai-code-mode": {
       "optional": true
     }
+  },
+  "patchedDependencies": {
+    "@alchemy.run/cloudflare-runtime@2.0.0-beta.83": "patches/@alchemy.run%2Fcloudflare-runtime@2.0.0-beta.83.patch"
   }
 }

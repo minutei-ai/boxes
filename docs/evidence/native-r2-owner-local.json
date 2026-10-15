@@ -1,0 +1,78 @@
+{
+  "status": "Local native inspection lifetime fixed and verified; no production deployment or SDK/runtime publication in this increment.",
+  "baseCommit": "d8786774ba0bb306d5196b5d49155dbaff0f5aaf",
+  "environment": {
+    "bun": "1.4.3",
+    "alchemyRuntime": "2.0.0-beta.83",
+    "runtime": "Native Alchemy workerd, R2 and Queue on local Linux"
+  },
+  "failure": {
+    "operation": "R2 get of an admitted process receipt while the Worker publishes its cancellation",
+    "key": "processes/disposed-3-python/work.json",
+    "observedResult": "Native get returned null although head found the object with an ETag.",
+    "simulatorTrace": "The installed simulator found object metadata, then blob.get returned null. That branch raises NoSuchKey, implemented as status 404 / provider code 10007.",
+    "writerInstance": "46c9f58e-e486-40ad-be9c-de0a77bb3466",
+    "readerInstance": "83065bad-1902-4f72-988b-6395a421adc4",
+    "cause": "The fixture opened one local bucket store in the application Worker and again in its outer platform-proxy Worker. These independent workerd instances shared disk metadata/blobs but not blob reader lifetimes. The writer removed an overwritten blob while the second instance was still reading it.",
+    "beforeFix": "The 32-read disposal regression failed in the tracked cancellation test. Repeated expanded runs also failed after 1, 10 and 16 sandbox admissions."
+  },
+  "resolution": {
+    "resourceOwner": "Only the application Worker binds the local R2 bucket. Node inspection uses native PlatformProxy.connect against the native handler in that same Worker.",
+    "fixtures": [
+      "tooling/worker-test.ts",
+      "tests/fixtures/clock-worker.ts",
+      "tests/fixtures/checkpoint-worker.ts"
+    ],
+    "dependencyPatch": {
+      "path": "patches/@alchemy.run%2Fcloudflare-runtime@2.0.0-beta.83.patch",
+      "surface": "Exports the existing native platform-proxy Worker handler plus declarations emitted from that source by TypeScript. No custom binding codec or bucket implementation is introduced.",
+      "types": "Native incoming Request and inferred handler declarations are retained.",
+      "removal": "Remove when the resolved Alchemy runtime exports an equivalent embeddable platform-proxy handler; switch both fixture imports in that cutover."
+    },
+    "storageImplementation": "An attempted per-instance reader reference guard did not solve cross-instance ownership and was removed. The native R2 implementation remains unchanged.",
+    "nativeR2BundleSha256BeforeAndAfter": "8b75dd9d66bb929ffac31f2ddede7f3614a67f62ab65751f71068254ba715678",
+    "authorization": "The embedded handler uses the provider's native protocol and a fresh per-runtime token. Missing and incorrect tokens both returned 401.",
+    "isolation": "Two separate native runtimes with identical bucket/key names retain separate contents."
+  },
+  "verification": {
+    "frozenInstall": "bun install --frozen-lockfile passed with the declared patch.",
+    "regression": {
+      "file": "tests/cancel.test.ts",
+      "parallelReadsPerReceipt": 32,
+      "runtimes": ["javascript", "typescript", "python"],
+      "result": "Passed; every fetched body is decoded and disposal retains cancellation/output/authority checks."
+    },
+    "expandedStress": {
+      "sandboxes": 48,
+      "parallelReadsPerReceipt": 32,
+      "assertions": 1383,
+      "seconds": 54.23,
+      "failures": 0,
+      "description": "Temporary expansion of the same disposal seam to sixteen rounds of all three runtimes; native execution, storage and Queue delivery remain real."
+    },
+    "focused": {
+      "tests": 12,
+      "files": 3,
+      "assertions": 242,
+      "seconds": 21.84,
+      "failures": 0
+    },
+    "completeGate": "bun run check passed: runtime/SDK build, TypeScript, workspace Clippy and Cargo tests, then native Bun tests.",
+    "nativeTests": {
+      "tests": 350,
+      "files": 65,
+      "assertions": 4748,
+      "seconds": 128.72,
+      "failures": 0
+    },
+    "format": "bun run format:check passed; final evidence files formatted with the same native formatter.",
+    "cleanup": "Temporary native provider instrumentation was removed; the delivered dependency patch contains only the public export and generated declarations."
+  },
+  "limits": [
+    "This fixes the Boxes local inspection harness; it is not evidence of an R2 production storage defect.",
+    "No retries, fake storage responses or timing grace periods were added to hide missing objects.",
+    "Stress and suite durations are verification observations, not production latency or cost benchmarks.",
+    "Minutei code/deployment, production deployment and published SDK/runtime archives were not changed.",
+    "The broader AgentOS parity gates remain open."
+  ]
+}

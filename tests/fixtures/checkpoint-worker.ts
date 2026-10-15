@@ -1,4 +1,6 @@
 import { Effect, Schema } from "effect";
+import platformProxy from "@alchemy.run/cloudflare-runtime/core/platform-proxy/worker";
+import { PLATFORM_PROXY_PREFIX } from "@alchemy.run/cloudflare-runtime/core/platform-proxy/PlatformProxyProtocol";
 import wasm from "cirro:wasi";
 import { createBindings } from "../../dist/wasi/bindings";
 import { saveHeap, restoreHeap } from "../../src/checkpoint";
@@ -7,7 +9,9 @@ import type { Env } from "../../src/resources";
 
 import { CheckpointRequest, CheckpointProof } from "./checkpoint-contract";
 export default {
-  fetch(request: globalThis.Request, env: Pick<Env, "OBJECTS">) {
+  fetch(request: Parameters<typeof platformProxy.fetch>[0], env: Pick<Env, "OBJECTS">) {
+    if (new URL(request.url).pathname.startsWith(`${PLATFORM_PROXY_PREFIX}/`))
+      return platformProxy.fetch(request, env);
     return Effect.runPromise(
       Effect.scoped(
         Effect.gen(function* () {

@@ -1,6 +1,8 @@
 import { env, WorkerEntrypoint } from "cloudflare:workers";
 import { Clock, Effect, Fiber, Schema, Schedule, Latch } from "effect";
 import * as TestClock from "effect/testing/TestClock";
+import platformProxy from "@alchemy.run/cloudflare-runtime/core/platform-proxy/worker";
+import { PLATFORM_PROXY_PREFIX } from "@alchemy.run/cloudflare-runtime/core/platform-proxy/PlatformProxyProtocol";
 import type { Fetcher } from "@cloudflare/workers-types/experimental";
 import { consume, handleRequest } from "../../src/index";
 export { Agent } from "../../src/index";
@@ -54,7 +56,9 @@ export class Control extends WorkerEntrypoint<TestEnv> {
   }
 }
 export default {
-  fetch(request: Request, bindings: TestEnv) {
+  fetch(request: Parameters<typeof platformProxy.fetch>[0], bindings: TestEnv) {
+    if (new URL(request.url).pathname.startsWith(`${PLATFORM_PROXY_PREFIX}/`))
+      return platformProxy.fetch(request, bindings);
     const advance = request.headers.get("x-boxes-test-clock-advance");
     const start = request.headers.get("x-boxes-test-clock-start");
     if (advance === null && start === null)

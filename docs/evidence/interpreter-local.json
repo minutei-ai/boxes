@@ -37,6 +37,12 @@
       "observedFailure": "The 25 ms deadline elapsed before callback admission: calls was zero. Other 347 tests passed.",
       "change": "The fixture requests 1000 ms, holds its accepted callback until at least 1100 ms and awaits a native latch proving callback completion after guest failure. Production runtime deadlines and limits are unchanged.",
       "nativeMilliseconds": 1156.24
+    },
+    "sourceCI": {
+      "commit": "d8786774ba0bb306d5196b5d49155dbaff0f5aaf",
+      "result": "success",
+      "url": "https://github.com/minutei-ai/boxes/actions/runs/38823543806",
+      "scope": "Interpreter source increment before the native inspection-owner fix."
     }
   },
   "limits": [
@@ -47,16 +53,14 @@
     "No new release archives, production deployment, remote binding proof or Minutei deployment in this increment.",
     "Test duration is not a benchmark of production latency, throughput or cost."
   ],
-  "unresolvedReceiptRead": {
-    "observation": "One full native run reported a missing disposed process receipt after guest entry had been observed. That gate had 348 passes and one failure. The cause is not established.",
-    "followup": "An isolated cancellation file passed all seven tests; native overwrite stress observed no missing objects in 3000 reads with one writer or 6000 reads with four writers. The final full gate passed, including disposal.",
-    "diagnostic": "The cancellation test still fails immediately on a missing receipt and now records sandbox ID and current metadata ETag.",
-    "limits": "These passes do not prove the intermittent failure is fixed. No application storage retry or unproven Alchemy patch was added."
-  },
   "upstreamExecAbi": {
     "commit": "4d48628304c1ddedafc9d55f60752093fcf6f3d2",
     "execTransport": "https://github.com/rivet-dev/agentos/blob/4d48628304c1ddedafc9d55f60752093fcf6f3d2/toolchain/crates/wasi-ext/src/lib.rs",
     "brushCaller": "https://github.com/rivet-dev/agentos/blob/4d48628304c1ddedafc9d55f60752093fcf6f3d2/toolchain/std-patches/crates/brush-builtins/0001-wasi-exec-builtin.patch",
     "observedGap": "Direct cd /tmp/context; exec ./script hello returned 127 with no output. Its exec ABI provides path, argv, env and closed descriptors, but no live libc cwd. The native process retains its inherited cwd."
+  },
+  "receiptReadResolution": {
+    "status": "Resolved in the native fixture resource owner; R2 inspection now executes inside the Worker owning the bucket.",
+    "evidence": "native-r2-owner-local.json"
   }
 }

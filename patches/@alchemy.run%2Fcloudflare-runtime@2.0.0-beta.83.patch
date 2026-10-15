@@ -1,0 +1,39 @@
+diff --git a/dist/core/node/platform-proxy/PlatformProxy.worker.d.mts b/dist/core/node/platform-proxy/PlatformProxy.worker.d.mts
+new file mode 100644
+index 0000000000000000000000000000000000000000..493ee4f39b7c7f536f864d4a5fe6f3605ed23453
+--- /dev/null
++++ b/dist/core/node/platform-proxy/PlatformProxy.worker.d.mts
+@@ -0,0 +1,14 @@
++/**
++ * The platform-proxy worker: runs as the user-worker service inside workerd
++ * with the caller's bindings attached, and exposes them to Node over HTTP.
++ * See {@link ./PlatformProxyProtocol.shared.ts} for the protocol.
++ */
++/** The request type `ExportedHandler["fetch"]` receives (ambient workers-types globals). */
++type WorkerRequest = Request<unknown, IncomingRequestCfProperties<unknown>>;
++interface Env {
++    [binding: string]: unknown;
++}
++declare const _default: {
++    fetch(request: WorkerRequest, env: Env): Promise<Response>;
++};
++export default _default;
+diff --git a/package.json b/package.json
+index b4b4acf51b8ea2108c76cfeb2163671509f062a8..1623099aed73a175ed01db482be03cbd3abcac08 100644
+--- a/package.json
++++ b/package.json
+@@ -710,7 +710,13 @@
+       "worker": "./src/vite/plugin.ts",
+       "import": "./dist/vite/node/plugin.mjs"
+     },
+-    "./package.json": "./package.json"
++    "./package.json": "./package.json",
++    "./core/platform-proxy/worker": {
++      "types": "./dist/core/node/platform-proxy/PlatformProxy.worker.d.mts",
++      "bun": "./src/core/platform-proxy/PlatformProxy.worker.ts",
++      "worker": "./src/core/platform-proxy/PlatformProxy.worker.ts",
++      "default": "./src/core/platform-proxy/PlatformProxy.worker.ts"
++    }
+   },
+   "publishConfig": {
+     "access": "public"
