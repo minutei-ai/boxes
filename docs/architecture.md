@@ -14,6 +14,8 @@ Multi-file writes execute in input order, create parent directories and report d
 
 Rename modifies the metadata tree and publishes one new root; it does not rewrite file content. Shell scripts retain one private kernel and publish their filesystem changes in one commit after command execution. JavaScript/TypeScript tools commit each filesystem action independently. Consequently, a failed guest can have already committed files, while a rejected shell commit leaves its private changes invisible.
 
+Conditional shell lists gate an entire pipeline. A skipped pipeline does not resolve commands, read inputs or apply redirections; its stages preserve the last executed status for the next conditional list. Newline continuation after `&&`, `||` and `|` is distinct from a semicolon, which requires a preceding command. Pipelines still pass bounded captured byte buffers between stages rather than running concurrent POSIX processes.
+
 Full bounded metadata is loaded per operation. That is acceptable for the initial validated workloads but is not proof of performance at 16,384 files. Paged metadata, descriptor APIs, hard links, ownership/timestamps and safe block reclamation remain unimplemented.
 
 ## Background process lifetime

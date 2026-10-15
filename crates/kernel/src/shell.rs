@@ -62,9 +62,6 @@ fn tokenize(source: &str) -> Result<Vec<Token>, String> {
                 chars.next();
                 op.push(c);
             }
-            if c == '\n' {
-                op = ";".into();
-            }
             if op == "&" {
                 return Err("ENOTSUP: background jobs require process.spawn".into());
             }
@@ -77,7 +74,7 @@ fn tokenize(source: &str) -> Result<Vec<Token>, String> {
         } else if c == '#' && !active {
             for next in chars.by_ref() {
                 if next == '\n' {
-                    tokens.push(Token::Operator(";".into()));
+                    tokens.push(Token::Operator("\n".into()));
                     break;
                 }
             }
@@ -131,7 +128,7 @@ pub fn parse(source: &str) -> Result<Vec<Command>, String> {
             }
             Token::Operator(op) => {
                 if current.argv.is_empty() {
-                    if op == ";" {
+                    if op == "\n" {
                         continue;
                     }
                     return Err("EINVAL: operator requires a command".into());
@@ -142,7 +139,7 @@ pub fn parse(source: &str) -> Result<Vec<Command>, String> {
                     "&&" => "success",
                     "||" => "failure",
                     "|" => "pipe",
-                    ";" => "always",
+                    ";" | "\n" => "always",
                     _ => return Err("ENOTSUP: unsupported shell operator".into()),
                 };
                 current = Command {
@@ -195,6 +192,26 @@ mod tests {
             assert!(parse(source).is_err(), "{source}");
         }
     }
+    #[test]
+    fn separates_line_breaks_from_list_terminators() -> Result<(), String> {
+        for source in [
+            "; echo x",
+            "echo x;; echo y",
+            "echo x && ; echo y",
+            "echo x | ; cat",
+            "echo x || ; echo y",
+        ] {
+            assert!(parse(source).is_err(), "{source}");
+        }
+        let commands = parse("\ntrue &&\n# continued condition\necho x |\ncat;\n\necho done\n")?;
+        assert_eq!(commands.len(), 4);
+        assert_eq!(commands[1].gate, "success");
+        assert!(commands[1].pipe);
+        assert_eq!(commands[2].gate, "pipe");
+        assert_eq!(commands[3].gate, "always");
+        Ok(())
+    }
+
     #[test]
     fn empty_and_unterminated_byte_filters_preserve_boundaries() {
         for name in ["head", "tail", "sort", "uniq"] {

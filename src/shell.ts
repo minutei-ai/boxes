@@ -41,11 +41,15 @@ export const shell = Effect.fn("shell.execute")(function* (
       stdout: Buffer.alloc(0),
       stderr: Buffer.alloc(0),
       pipe: Buffer.alloc(0),
+      pipelineSkipped: false,
     }),
     (state, command) =>
       Effect.gen(function* () {
-        if (command.gate === "success" && state.exitCode !== 0) return state;
-        if (command.gate === "failure" && state.exitCode === 0) return state;
+        if (command.gate === "pipe" && state.pipelineSkipped) return state;
+        if (command.gate === "success" && state.exitCode !== 0)
+          return { ...state, pipelineSkipped: true };
+        if (command.gate === "failure" && state.exitCode === 0)
+          return { ...state, pipelineSkipped: true };
         const now = yield* Clock.currentTimeNanos;
         yield* kernelCall(() => kernel.set_time(now));
         const name = command.argv[0];
@@ -408,7 +412,14 @@ export const shell = Effect.fn("shell.execute")(function* (
           Match.orElse(() => Buffer.alloc(0)),
         );
         yield* capture({ stdout, stderr });
-        return { cwd: nextCwd, stdout, stderr, exitCode: outcome.exitCode, pipe };
+        return {
+          cwd: nextCwd,
+          stdout,
+          stderr,
+          exitCode: outcome.exitCode,
+          pipe,
+          pipelineSkipped: false,
+        };
       }),
   );
   if (dirty.size > 0) yield* publish(env, id, session);
