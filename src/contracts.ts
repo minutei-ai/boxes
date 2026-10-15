@@ -891,7 +891,7 @@ export const ShellPlan = Schema.Array(
       Schema.Union([
         Schema.Struct({ kind: Schema.Literal("input"), path: Schema.String }),
         Schema.Struct({
-          kind: Schema.Literal("output"),
+          kind: Schema.Literals(["output", "error"]),
           path: Schema.String,
           append: Schema.Boolean,
         }),

@@ -64,7 +64,22 @@ const report = await Effect.runPromise(
         content: filterInput.toString("base64"),
         encoding: "base64",
       });
+      const binaryError = Buffer.from([255, 0, 128, 195, 40, 254]);
       const cases = [
+        {
+          name: "stderr",
+          source: "probe failure > /tmp/stderr-out 2> /tmp/stderr",
+          path: "/tmp/stderr",
+          bytes: binaryError,
+          exitCode: 7,
+        },
+        {
+          name: "stderr-append",
+          source: "probe failure > /tmp/stderr-out 2>> /tmp/stderr",
+          path: "/tmp/stderr",
+          bytes: Buffer.concat([binaryError, binaryError]),
+          exitCode: 7,
+        },
         {
           name: "pipe",
           source: "probe | cat > /tmp/pipe",
@@ -165,6 +180,25 @@ const report = await Effect.runPromise(
           });
           if (record.output?.stdout !== "" || record.output.exitCode !== item.exitCode)
             return yield* Effect.die("Unexpected shell output or exit code");
+          if (item.name.startsWith("stderr")) {
+            if (record.output.stderr !== "")
+              return yield* Effect.die("Redirected stderr leaked into process output");
+            const replay = yield* client.action(id, {
+              op: "process.output.read",
+              id: item.name,
+              after: null,
+              maxBytes: 65536,
+              maxEvents: 128,
+            });
+            if (replay.events.length !== 0)
+              return yield* Effect.die("Redirected streams leaked into replay");
+            const output = yield* client.action(id, {
+              op: "filesystem.readFile",
+              path: "/tmp/stderr-out",
+            });
+            if (!Buffer.from(output.content, output.encoding).equals(input))
+              return yield* Effect.die("Stderr redirection changed stdout bytes");
+          }
           const file = yield* client.action(id, { op: "filesystem.readFile", path: item.path });
           const bytes = Buffer.from(file.content, file.encoding);
           if (!bytes.equals(item.bytes)) return yield* Effect.die("Shell file bytes differ");

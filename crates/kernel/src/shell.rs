@@ -15,6 +15,7 @@ pub struct Command {
 enum Redirection {
     Input { path: String },
     Output { path: String, append: bool },
+    Error { path: String, append: bool },
 }
 
 #[derive(Debug, PartialEq, Eq)]
@@ -72,6 +73,7 @@ fn tokenize(source: &str) -> Result<Vec<Token>, String> {
             active = true;
             quoted = true;
         } else if c == '\n' || matches!(c, ';' | '|' | '&' | '<' | '>') {
+            let mut stderr = false;
             if active {
                 if matches!(c, '<' | '>')
                     && !quoted
@@ -80,9 +82,12 @@ fn tokenize(source: &str) -> Result<Vec<Token>, String> {
                     let descriptor = word
                         .parse::<u32>()
                         .map_err(|_| "ENOTSUP: unsupported redirection descriptor")?;
-                    if !((descriptor == 0 && c == '<') || (descriptor == 1 && c == '>')) {
-                        return Err("ENOTSUP: only stdin input and stdout output redirections are implemented".into());
+                    if !((descriptor == 0 && c == '<')
+                        || ((descriptor == 1 || descriptor == 2) && c == '>'))
+                    {
+                        return Err("ENOTSUP: only stdin input and stdout/stderr output redirections are implemented".into());
                     }
+                    stderr = descriptor == 2;
                     word.clear();
                 } else {
                     tokens.push(word_token(std::mem::take(&mut word), quoted));
@@ -94,6 +99,9 @@ fn tokenize(source: &str) -> Result<Vec<Token>, String> {
             if matches!(c, '|' | '&' | '>') && chars.peek() == Some(&c) {
                 chars.next();
                 op.push(c);
+            }
+            if stderr {
+                op.insert(0, '2');
             }
             if op == "&" {
                 return Err("ENOTSUP: background jobs require process.spawn".into());
@@ -151,7 +159,7 @@ pub fn parse(source: &str) -> Result<Vec<Command>, String> {
                 prefix = true;
             }
             Token::Bang => current.argv.push("!".into()),
-            Token::Operator(op) if matches!(op.as_str(), "<" | ">" | ">>") => {
+            Token::Operator(op) if matches!(op.as_str(), "<" | ">" | ">>" | "2>" | "2>>") => {
                 let path = match iter.next() {
                     Some(Token::Word(path)) => path,
                     Some(Token::Bang) => "!".into(),
@@ -162,6 +170,11 @@ pub fn parse(source: &str) -> Result<Vec<Command>, String> {
                 }
                 if op == "<" {
                     current.redirects.push(Redirection::Input { path });
+                } else if op.starts_with('2') {
+                    current.redirects.push(Redirection::Error {
+                        path,
+                        append: op == "2>>",
+                    });
                 } else {
                     current.redirects.push(Redirection::Output {
                         path,
@@ -296,9 +309,24 @@ mod tests {
             matches!(&commands[0].redirects[3], Redirection::Input { path } if path == "fourth")
         );
         assert_eq!(commands[1].argv, vec!["true"]);
+        let errors = parse("echo 2> first 2>> second")?;
+        assert!(
+            matches!(&errors[0].redirects[0], Redirection::Error { path, append: false } if path == "first")
+        );
+        assert!(
+            matches!(&errors[0].redirects[1], Redirection::Error { path, append: true } if path == "second")
+        );
+        assert_eq!(parse("echo '2'> file")?[0].argv, vec!["echo", "2"]);
+
         assert_eq!(parse("echo 1\"\"> file")?[0].argv, vec!["echo", "1"]);
         assert_eq!(parse("echo 2 > file")?[0].argv, vec!["echo", "2"]);
-        for source in ["echo 2> file", "echo 0> file", "cat 1< file"] {
+        for source in [
+            "echo 3> file",
+            "echo 0> file",
+            "cat 1< file",
+            "cat 2< file",
+            "true 2>&1",
+        ] {
             assert!(parse(source).is_err(), "{source}");
         }
         assert!(parse(&format!("true{}", " > file".repeat(128))).is_ok());

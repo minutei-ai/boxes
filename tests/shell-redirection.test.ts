@@ -24,6 +24,13 @@ test(
           const url = (yield* Effect.promise(() => worker.ready)).toString();
           const admin = yield* make({ url, token: Redacted.make("cirro-local-test-credential") });
           const cases = [
+            "echo visible 2> file",
+            "true 2>> file",
+            "false 2> file",
+            "cat input 2> first > second",
+            "echo 2 > file 2> second",
+            "true 2> first 2> second",
+            "2> file",
             "cat file > file",
             "cat 0< input 1> file",
             "echo 2 > file",

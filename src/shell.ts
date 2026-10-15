@@ -58,12 +58,12 @@ export const shell = Effect.fn("shell.execute")(function* (
         const observed = { stdout: Buffer.alloc(0), stderr: Buffer.alloc(0) };
         const phase = { prepared: false };
         const hasOutput = command.redirects.some((redirect) => redirect.kind === "output");
-        const outcome = yield* Effect.gen(function* () {
-          const redirected = {
-            input: Option.none<bigint>(),
-            output: Option.none<bigint>(),
-            append: false,
-          };
+        const redirected = {
+          input: Option.none<bigint>(),
+          output: { inode: Option.none<bigint>(), append: false },
+          error: { inode: Option.none<bigint>(), append: false },
+        };
+        const commandOutcome = Effect.gen(function* () {
           const path = (input: string) => kernelCall(() => kernel.canonical(input, cwd));
           const file = Effect.fn("shell.read")(function* (input: string) {
             yield* requirePermission(capability, "read");
@@ -89,8 +89,8 @@ export const shell = Effect.fn("shell.execute")(function* (
                 Effect.flatMap(Schema.decodeUnknownEffect(Schema.fromJsonString(FileStat))),
               );
               if (changed) dirty.add(stat.path);
-              redirected.output = Option.some(BigInt(stat.inode));
-              redirected.append = redirect.append;
+              redirected[redirect.kind].inode = Option.some(BigInt(stat.inode));
+              redirected[redirect.kind].append = redirect.append;
             }),
           );
           const input = yield* Option.match(redirected.input, {
@@ -134,7 +134,10 @@ export const shell = Effect.fn("shell.execute")(function* (
                   Match.when(true, () => state.stdout),
                   Match.orElse(() => Buffer.concat([state.stdout, observed.stdout])),
                 );
-                const stderr = Buffer.concat([state.stderr, observed.stderr]);
+                const stderr = Match.value(Option.isSome(redirected.error.inode)).pipe(
+                  Match.when(true, () => state.stderr),
+                  Match.orElse(() => Buffer.concat([state.stderr, observed.stderr])),
+                );
                 if (stdout.length + stderr.length > session.head.policy.maxOutputBytes)
                   return Effect.fail(
                     new Fault({
@@ -381,51 +384,77 @@ export const shell = Effect.fn("shell.execute")(function* (
               status: 413,
               message: "Command output limit exceeded",
             });
-          if (Option.isSome(redirected.output)) {
-            const inode = redirected.output.value;
-            const remaining = yield* kernelCall(() => kernel.inode_path(inode));
-            if (remaining !== undefined && bytes.stdout.length > 0) {
-              const before = yield* read(env, id, kernel, inode);
-              const data = yield* Effect.sync(() => {
-                if (redirected.append) return Buffer.concat([before, bytes.stdout]);
-                if (before.length <= bytes.stdout.length) return bytes.stdout;
-                bytes.stdout.copy(before);
-                return before;
-              });
-              yield* write(env, id, kernel, inode, data);
-              dirty.add(remaining);
-            }
-            return { ...bytes, stdout: Buffer.alloc(0) };
-          }
           return bytes;
-        }).pipe(
-          Effect.catchTag("Fault", (fault) => {
-            if (
-              fault.code === "CONFLICT" ||
-              fault.code === "UNAUTHORIZED" ||
-              fault.code === "ECANCELED"
-            )
-              return Effect.fail(fault);
-            const exitCode = Match.value(phase.prepared).pipe(
-              Match.when(false, () => 1),
-              Match.orElse(() =>
-                Match.value(fault.code).pipe(
-                  Match.when("ENOENT", () => 127),
-                  Match.when("EACCES", () => 126),
-                  Match.orElse(() => 1),
-                ),
+        });
+        const failed = Effect.fn("shell.commandFailure")(function* (fault: Fault) {
+          if (
+            fault.code === "CONFLICT" ||
+            fault.code === "UNAUTHORIZED" ||
+            fault.code === "ECANCELED"
+          )
+            return yield* Effect.fail(fault);
+          const exitCode = Match.value(phase.prepared).pipe(
+            Match.when(false, () => 1),
+            Match.orElse(() =>
+              Match.value(fault.code).pipe(
+                Match.when("ENOENT", () => 127),
+                Match.when("EACCES", () => 126),
+                Match.orElse(() => 1),
               ),
-            );
-            return Effect.succeed({
-              stdout: Match.value(hasOutput).pipe(
-                Match.when(true, () => Buffer.alloc(0)),
-                Match.orElse(() => observed.stdout),
-              ),
-              stderr: Buffer.concat([observed.stderr, Buffer.from(`${name}: ${fault.message}\n`)]),
-              exitCode,
+            ),
+          );
+          return {
+            stdout: Match.value(hasOutput).pipe(
+              Match.when(true, () => Buffer.alloc(0)),
+              Match.orElse(() => observed.stdout),
+            ),
+            stderr: Buffer.concat([observed.stderr, Buffer.from(`${name}: ${fault.message}\n`)]),
+            exitCode,
+          };
+        });
+        const result = yield* commandOutcome.pipe(Effect.catchTag("Fault", failed));
+        const outcome = yield* Effect.gen(function* () {
+          if (result.stdout.length + result.stderr.length > session.head.policy.maxOutputBytes)
+            return yield* new Fault({
+              code: "EFBIG",
+              status: 413,
+              message: "Command output limit exceeded",
             });
-          }),
-        );
+          yield* Effect.forEach(
+            [
+              { stream: "stdout", target: redirected.output },
+              { stream: "stderr", target: redirected.error },
+            ] as const,
+            ({ stream, target }) =>
+              Effect.gen(function* () {
+                if (Option.isNone(target.inode)) return;
+                const inode = target.inode.value;
+                const remaining = yield* kernelCall(() => kernel.inode_path(inode));
+                const bytes = result[stream];
+                if (remaining === undefined || bytes.length === 0) return;
+                const before = yield* read(env, id, kernel, inode);
+                const data = yield* Effect.sync(() => {
+                  if (target.append) return Buffer.concat([before, bytes]);
+                  if (before.length <= bytes.length) return bytes;
+                  bytes.copy(before);
+                  return before;
+                });
+                yield* write(env, id, kernel, inode, data);
+                dirty.add(remaining);
+              }),
+          );
+          return {
+            ...result,
+            stdout: Match.value(Option.isSome(redirected.output.inode)).pipe(
+              Match.when(true, () => Buffer.alloc(0)),
+              Match.orElse(() => result.stdout),
+            ),
+            stderr: Match.value(Option.isSome(redirected.error.inode)).pipe(
+              Match.when(true, () => Buffer.alloc(0)),
+              Match.orElse(() => result.stderr),
+            ),
+          };
+        }).pipe(Effect.catchTag("Fault", failed));
         const nextCwd = Match.value("cwd" in outcome).pipe(
           Match.when(true, () => {
             if ("cwd" in outcome && Schema.is(Schema.String)(outcome.cwd)) return outcome.cwd;

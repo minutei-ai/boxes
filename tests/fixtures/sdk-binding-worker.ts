@@ -499,6 +499,23 @@ export default {
         });
         if (restoredFile.content !== file.content)
           return yield* Effect.die("Restore lost file bytes");
+        const stderrRun = yield* boxes.action(id, {
+          op: "process.run",
+          id: "binding-stderr",
+          language: "shell",
+          source: "head -n invalid 2> /tmp/binding-errors; head -n invalid 2>> /tmp/binding-errors",
+        });
+        const stderrFile = yield* boxes.action(id, {
+          op: "filesystem.readFile",
+          path: "/tmp/binding-errors",
+        });
+        if (
+          stderrRun.output?.exitCode !== 2 ||
+          stderrRun.output.stderr !== "" ||
+          Buffer.from(stderrFile.content, stderrFile.encoding).toString() !==
+            "invalid filter count\ninvalid filter count\n"
+        )
+          return yield* Effect.die("Binding stderr redirection differs");
         const run = yield* boxes.action(id, {
           op: "typescript.evaluate",
           id: "binding-run",
