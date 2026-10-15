@@ -3333,7 +3333,6 @@ impl WasmGuest {
             .instances(1)
             .tables(1)
             .memories(1)
-            .trap_on_grow_failure(true)
             .build();
         let root = Descriptor {
             path: "/".into(),

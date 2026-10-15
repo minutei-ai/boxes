@@ -1345,6 +1345,7 @@ export const wasi = Effect.fn("wasi.execute")(function* (
           }
         }),
       );
+      if (children.size > 0) yield* Effect.yieldNow;
     }
     return completed[0];
   });

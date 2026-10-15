@@ -1635,9 +1635,9 @@ test("WASI traps discard uncommitted changes while explicit sync preserves its c
   expect(Buffer.from(file.content, "base64").toString()).toBe("before trap");
 });
 
-test("WASI fuel and memory limits fail safely while JSON escaping cannot consume the raw output quota", async () => {
+test("WASI fuel and host-call exhaustion fail safely while denied memory growth recovers within quota", async () => {
   const token = await setup("wasi-limits");
-  for (const name of ["fuel", "memory", "budget"]) {
+  for (const name of ["fuel", "budget"]) {
     const record = Schema.decodeUnknownSync(RunRecord)(
       await (
         await act("wasi-limits", token, {
@@ -1652,6 +1652,19 @@ test("WASI fuel and memory limits fail safely while JSON escaping cannot consume
     expect(record.output).toBeNull();
     expect((await act("wasi-limits", token, { op: "vm.status" })).status).toBe(200);
   }
+  const memory = Schema.decodeUnknownSync(RunRecord)(
+    await (
+      await act("wasi-limits", token, {
+        op: "process.run",
+        id: "memory",
+        language: "wasm",
+        source: await wasmFixture("memory"),
+      })
+    ).json(),
+  );
+  expect(memory.status).toBe("exited");
+  expect(memory.output?.result).toBe(42);
+  expect(memory.output?.exitCode).toBe(0);
   const response = await act("wasi-limits", token, {
     op: "process.run",
     id: "output",

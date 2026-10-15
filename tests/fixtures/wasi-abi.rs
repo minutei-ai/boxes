@@ -625,7 +625,25 @@ pub extern "C" fn run() -> i32 {
         }
     }
     if cfg!(case = "memory") {
-        return core::arch::wasm32::memory_grow::<0>(4096) as i32;
+        let pages = core::arch::wasm32::memory_size::<0>();
+        if core::arch::wasm32::memory_grow::<0>(4096) != usize::MAX
+            || core::arch::wasm32::memory_size::<0>() != pages
+            || core::arch::wasm32::memory_grow::<0>(1) != pages
+            || core::arch::wasm32::memory_size::<0>() != pages + 1
+        {
+            return -1;
+        }
+        unsafe {
+            let byte = (pages * 65536) as *mut u8;
+            if core::ptr::read_volatile(byte) != 0 {
+                return -2;
+            }
+            core::ptr::write_volatile(byte, 42);
+            if core::ptr::read_volatile(byte) != 42 {
+                return -3;
+            }
+        }
+        return 42;
     }
     if cfg!(case = "exit") {
         unsafe { proc_exit(7) };

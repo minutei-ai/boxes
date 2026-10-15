@@ -100,8 +100,12 @@ test(
             source: `printf 'first\\nsecond\\n' | while read line; do echo "$line"; done`,
             stdout: "first\nsecond\n",
           },
-          { source: `sh -c 'printf out; printf err >&2' > /tmp/composed 2>&1`, stdout: "" },
-          { source: `jq -Rs . /tmp/composed`, stdout: '\"outerr\"\n' },
+          {
+            source: `sh -c 'printf out; printf err >&2' > /tmp/composed 2>&1; jq -Rs . /tmp/composed`,
+            stdout: '\"outerr\"\n',
+          },
+          { source: "jq -n 1", stdout: "1\n" },
+          { source: "sh -c true; sh -c true; sh -c true", stdout: "" },
         ];
         yield* Effect.forEach(cases, (probe, index) =>
           Effect.gen(function* () {
