@@ -365,7 +365,14 @@ test(
               op: "filesystem.readFile",
               path: "/tmp/hidden/alias",
             })).content,
-          ).toBe(Buffer.from("hidden").toString("base64"));
+          ).toBe(Buffer.from("upda").toString("base64"));
+          expect(
+            yield* client.action("wasi-links", {
+              op: "filesystem.stat",
+              path: "/tmp/hidden/alias",
+              follow: true,
+            }),
+          ).toMatchObject({ size: 4, nlink: 1, atimeNs: "111", mtimeNs: "222" });
           expect(
             yield* client.action("wasi-links", { op: "filesystem.exists", path: "/tmp/visible" }),
           ).toEqual({ exists: false });

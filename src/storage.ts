@@ -234,7 +234,7 @@ export const write = Effect.fn("filesystem.write")(function* (
   env: Env,
   id: string,
   kernel: Kernel,
-  path: string,
+  target: string | bigint,
   data: Uint8Array,
 ) {
   if (data.byteLength > 16_777_216)
@@ -253,13 +253,12 @@ export const write = Effect.fn("filesystem.write")(function* (
       }),
     { concurrency: 4 },
   );
-  const needed = yield* kernelCall(() =>
-    kernel.prepare_write(
-      path,
-      BigInt(data.byteLength),
-      Schema.encodeSync(Schema.fromJsonString(Chunks))(hashes),
-    ),
-  ).pipe(Effect.flatMap(Schema.decodeUnknownEffect(Schema.fromJsonString(Chunks))));
+  const encoded = Schema.encodeSync(Schema.fromJsonString(Chunks))(hashes);
+  const needed = yield* kernelCall(() => {
+    if (typeof target === "bigint")
+      return kernel.prepare_inode_write(target, BigInt(data.byteLength), encoded);
+    return kernel.prepare_write(target, BigInt(data.byteLength), encoded);
+  }).pipe(Effect.flatMap(Schema.decodeUnknownEffect(Schema.fromJsonString(Chunks))));
   yield* Effect.forEach(
     needed,
     (hash) =>
@@ -272,11 +271,9 @@ export const write = Effect.fn("filesystem.write")(function* (
       }),
     { concurrency: 4 },
   );
-  yield* kernelCall(() =>
-    kernel.write(
-      path,
-      BigInt(data.byteLength),
-      Schema.encodeSync(Schema.fromJsonString(Chunks))(hashes),
-    ),
-  );
+  yield* kernelCall(() => {
+    if (typeof target === "bigint")
+      return kernel.write_inode(target, BigInt(data.byteLength), encoded);
+    return kernel.write(target, BigInt(data.byteLength), encoded);
+  });
 });

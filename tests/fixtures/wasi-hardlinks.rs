@@ -5,6 +5,7 @@ use std::os::fd::AsRawFd;
 #[link(wasm_import_module = "wasi_snapshot_preview1")]
 unsafe extern "C" {
     fn fd_filestat_get(fd: u32, output: *mut u8) -> i32;
+    fn fd_filestat_set_times(fd: u32, atime: u64, mtime: u64, flags: u32) -> i32;
     fn path_open(
         fd: u32,
         lookup: u32,
@@ -53,13 +54,36 @@ fn main() -> std::io::Result<()> {
         return Ok(());
     }
     if std::env::args().any(|arg| arg == "--hidden") {
-        let mut file = File::open("/tmp/visible")?;
+        let mut file = OpenOptions::new()
+            .read(true)
+            .write(true)
+            .open("/tmp/visible")?;
         assert_eq!(stat(&file).1, 2);
         remove_file("/tmp/visible")?;
         assert_eq!(stat(&file).1, 1);
+        file.write_all(b"updated")?;
+        file.set_len(4)?;
+        file.seek(SeekFrom::Start(0))?;
         let mut bytes = String::new();
         file.read_to_string(&mut bytes)?;
-        assert_eq!(bytes, "hidden");
+        assert_eq!(bytes, "upda");
+        assert_eq!(
+            unsafe { fd_filestat_set_times(file.as_raw_fd() as u32, 111, 222, 5) },
+            0
+        );
+        let mut metadata = [0u8; 64];
+        assert_eq!(
+            unsafe { fd_filestat_get(file.as_raw_fd() as u32, metadata.as_mut_ptr()) },
+            0
+        );
+        assert_eq!(
+            u64::from_le_bytes(metadata[40..48].try_into().unwrap()),
+            111
+        );
+        assert_eq!(
+            u64::from_le_bytes(metadata[48..56].try_into().unwrap()),
+            222
+        );
         println!("hidden alias retained");
         return Ok(());
     }

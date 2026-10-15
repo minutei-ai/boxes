@@ -430,6 +430,54 @@ impl Node {
 }
 
 impl Kernel {
+    fn set_times_resolved(
+        &mut self,
+        path: &str,
+        atime: u64,
+        mtime: u64,
+        flags: u32,
+    ) -> Result<(), JsValue> {
+        if flags & !15 != 0 || flags & 3 == 3 || flags & 12 == 12 {
+            return Err(fail("EINVAL: invalid timestamp flags"));
+        }
+        self.package_writable(path, false)
+            .map_err(|error| fail(&error))?;
+        let metadata = self
+            .state
+            .metadata_mut(path)
+            .ok_or_else(|| fail("ENOENT: file does not exist"))?;
+        if flags == 0 {
+            return Ok(());
+        }
+        if flags & 1 != 0 {
+            metadata.atime_ns = atime;
+        }
+        if flags & 2 != 0 {
+            metadata.atime_ns = self.now;
+        }
+        if flags & 4 != 0 {
+            metadata.mtime_ns = mtime;
+        }
+        if flags & 8 != 0 {
+            metadata.mtime_ns = self.now;
+        }
+        metadata.ctime_ns = self.now;
+        Ok(())
+    }
+
+    fn commit_write(&mut self, plan: WritePlan, size: u64) -> Result<String, JsValue> {
+        self.insert(
+            plan.path,
+            Node::File {
+                mode: plan.mode,
+                size,
+                chunks: plan.chunks,
+            },
+        )
+        .map_err(|error| fail(&error))?;
+        serde_json::to_string(&plan.uploads).map_err(|_| fail("EIO: serialization failed"))
+    }
+
     fn stat_resolved(&self, path: &str) -> Result<String, JsValue> {
         let node = self
             .state
@@ -699,9 +747,9 @@ impl Kernel {
             .sum()
     }
 
-    fn writable_file(&self, path: &str, size: u64) -> Result<u32, String> {
+    fn writable_file(&self, path: &str, size: u64, descriptor: bool) -> Result<u32, String> {
         let mode = match self.state.node(path) {
-            Some(Node::File { mode, .. }) if mode & 0o200 != 0 => *mode,
+            Some(Node::File { mode, .. }) if descriptor || mode & 0o200 != 0 => *mode,
             Some(Node::File { .. }) => return Err("EACCES: file is not writable".into()),
             Some(_) => return Err("EISDIR: not a regular file".into()),
             None => {
@@ -721,6 +769,16 @@ impl Kernel {
 
     fn write_plan(&self, path: &str, size: u64, chunks: &str) -> Result<WritePlan, String> {
         let path = self.resolve(path, true)?;
+        self.write_plan_resolved(path, size, chunks, false)
+    }
+
+    fn write_plan_resolved(
+        &self,
+        path: String,
+        size: u64,
+        chunks: &str,
+        descriptor: bool,
+    ) -> Result<WritePlan, String> {
         self.package_writable(&path, false)?;
         let hashes: Vec<String> = serde_json::from_str(chunks)
             .map_err(|_| "EINVAL: invalid chunk references".to_string())?;
@@ -737,7 +795,7 @@ impl Kernel {
         }) {
             return Err("EINVAL: invalid content digest".into());
         }
-        let mode = self.writable_file(&path, size)?;
+        let mode = self.writable_file(&path, size, descriptor)?;
         let existing: BTreeSet<_> = match self.state.node(&path) {
             Some(Node::File { chunks, .. }) => chunks.iter().cloned().collect(),
             _ => BTreeSet::new(),
@@ -1045,7 +1103,7 @@ impl Kernel {
         if size > MAX_FILE {
             return Err(fail("EFBIG: file limit exceeded"));
         }
-        self.writable_file(&path, size)
+        self.writable_file(&path, size, false)
             .map_err(|error| fail(&error))?;
         let old = match self.state.node(&path) {
             Some(Node::File { chunks, .. }) => chunks.as_slice(),
@@ -1097,16 +1155,32 @@ impl Kernel {
         let plan = self
             .write_plan(path, size, chunks)
             .map_err(|error| fail(&error))?;
-        self.insert(
-            plan.path,
-            Node::File {
-                mode: plan.mode,
-                size,
-                chunks: plan.chunks,
-            },
-        )
-        .map_err(|error| fail(&error))?;
+        self.commit_write(plan, size)
+    }
+
+    pub fn prepare_inode_write(
+        &self,
+        inode: u64,
+        size: u64,
+        chunks: &str,
+    ) -> Result<String, JsValue> {
+        let path = self
+            .inode_path(inode)
+            .ok_or_else(|| fail("ENOENT: inode does not exist"))?;
+        let plan = self
+            .write_plan_resolved(path, size, chunks, true)
+            .map_err(|error| fail(&error))?;
         serde_json::to_string(&plan.uploads).map_err(|_| fail("EIO: serialization failed"))
+    }
+
+    pub fn write_inode(&mut self, inode: u64, size: u64, chunks: &str) -> Result<String, JsValue> {
+        let path = self
+            .inode_path(inode)
+            .ok_or_else(|| fail("ENOENT: inode does not exist"))?;
+        let plan = self
+            .write_plan_resolved(path, size, chunks, true)
+            .map_err(|error| fail(&error))?;
+        self.commit_write(plan, size)
     }
 
     pub fn inode_path(&self, inode: u64) -> Option<String> {
@@ -1350,33 +1424,21 @@ impl Kernel {
         mtime: u64,
         flags: u32,
     ) -> Result<(), JsValue> {
-        if flags & !15 != 0 || flags & 3 == 3 || flags & 12 == 12 {
-            return Err(fail("EINVAL: invalid timestamp flags"));
-        }
         let path = self.resolve(path, follow).map_err(|error| fail(&error))?;
-        self.package_writable(&path, false)
-            .map_err(|error| fail(&error))?;
-        let metadata = self
-            .state
-            .metadata_mut(&path)
-            .ok_or_else(|| fail("ENOENT: file does not exist"))?;
-        if flags == 0 {
-            return Ok(());
-        }
-        if flags & 1 != 0 {
-            metadata.atime_ns = atime;
-        }
-        if flags & 2 != 0 {
-            metadata.atime_ns = self.now;
-        }
-        if flags & 4 != 0 {
-            metadata.mtime_ns = mtime;
-        }
-        if flags & 8 != 0 {
-            metadata.mtime_ns = self.now;
-        }
-        metadata.ctime_ns = self.now;
-        Ok(())
+        self.set_times_resolved(&path, atime, mtime, flags)
+    }
+
+    pub fn set_inode_times(
+        &mut self,
+        inode: u64,
+        atime: u64,
+        mtime: u64,
+        flags: u32,
+    ) -> Result<(), JsValue> {
+        let path = self
+            .inode_path(inode)
+            .ok_or_else(|| fail("ENOENT: inode does not exist"))?;
+        self.set_times_resolved(&path, atime, mtime, flags)
     }
 
     pub fn temporary_file(&mut self, directory: &str, mode: u32) -> Result<String, JsValue> {
@@ -1664,6 +1726,71 @@ mod tests {
         kernel.finish_snapshot_root().map_err(|_| "finish failed")?;
         assert!(!kernel.snapshot_import);
         assert!(kernel.package_writable("/opt/cirro", false).is_err());
+        kernel.validate()
+    }
+
+    #[test]
+    fn descriptor_writes_preserve_authorized_inode_and_enforce_storage_limits() -> Result<(), String>
+    {
+        let mut kernel = Kernel::fresh();
+        kernel.insert("/tmp/hidden".into(), Node::Directory { mode: 0o700 })?;
+        kernel.insert(
+            "/tmp/hidden/file".into(),
+            Node::File {
+                mode: 0,
+                size: 0,
+                chunks: vec![],
+            },
+        )?;
+        let inode = kernel
+            .state
+            .metadata("/tmp/hidden/file")
+            .ok_or("missing inode")?
+            .inode;
+        assert!(kernel.write_plan("/tmp/hidden/file", 0, "[]").is_err());
+        kernel.chmod("/tmp/hidden", 0).map_err(|_| "chmod failed")?;
+        assert!(kernel.resolve("/tmp/hidden/file", true).is_err());
+        let hashes = format!("[\"{}\"]", "a".repeat(64));
+        kernel
+            .prepare_inode_write(inode, 3, &hashes)
+            .map_err(|_| "inode preparation failed")?;
+        kernel
+            .write_inode(inode, 3, &hashes)
+            .map_err(|_| "inode write failed")?;
+        kernel.set_time(55);
+        kernel
+            .set_inode_times(inode, 111, 222, 5)
+            .map_err(|_| "inode times failed")?;
+        let stat: serde_json::Value =
+            serde_json::from_str(&kernel.stat_inode(inode).map_err(|_| "inode stat failed")?)
+                .map_err(|error| error.to_string())?;
+        assert_eq!(stat["inode"], inode);
+        assert_eq!(stat["mode"], 0);
+        assert_eq!(stat["size"], 3);
+        assert_eq!(stat["atimeNs"], "111");
+        assert_eq!(stat["mtimeNs"], "222");
+        assert!(
+            kernel
+                .write_plan_resolved("/tmp/hidden/file".into(), MAX_FILE + 1, "[]", true)
+                .is_err()
+        );
+        assert!(
+            kernel
+                .write_plan_resolved("/tmp/hidden/file".into(), 1, "[]", true)
+                .is_err()
+        );
+        assert!(
+            kernel
+                .write_plan_resolved("/tmp/hidden".into(), 0, "[]", true)
+                .is_err()
+        );
+        kernel.insert("/opt".into(), Node::Directory { mode: 0o700 })?;
+        kernel.insert("/opt/cirro".into(), Node::Directory { mode: 0o700 })?;
+        assert!(
+            kernel
+                .write_plan_resolved("/opt/cirro/immutable".into(), 0, "[]", true)
+                .is_err()
+        );
         kernel.validate()
     }
 

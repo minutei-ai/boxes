@@ -838,7 +838,13 @@ export const wasi = Effect.fn("wasi.execute")(function* (
                     metadata.writeBigUInt64LE(timestamp, 56);
                     return { data: metadata, path: "/", directory: false, value: 0n };
                   }
-                  yield* write(env, capability.sandboxId, kernel, input.path, Buffer.from(data));
+                  yield* write(
+                    env,
+                    capability.sandboxId,
+                    kernel,
+                    Buffer.from(guest.file_metadata(input.fd)).readBigUInt64LE(8),
+                    Buffer.from(data),
+                  );
                   state.dirty = true;
                   return { data: Buffer.alloc(0), path: "/", directory: false, value: 0n };
                 }),
@@ -855,18 +861,17 @@ export const wasi = Effect.fn("wasi.execute")(function* (
                     if (input.flags !== 0) metadata.writeBigUInt64LE(timestamp, 56);
                     return { data: metadata, path: "/", directory: false, value: 0n };
                   }
-                  const path = input.path;
+                  const inode = Buffer.from(guest.file_metadata(input.fd)).readBigUInt64LE(8);
                   yield* kernelCall(() =>
-                    kernel.set_times(
-                      path,
-                      true,
+                    kernel.set_inode_times(
+                      inode,
                       BigInt(input.atime),
                       BigInt(input.mtime),
                       input.flags,
                     ),
                   );
                   if (input.flags !== 0) state.dirty = true;
-                  const stat = yield* kernelCall(() => kernel.stat(path, true)).pipe(
+                  const stat = yield* kernelCall(() => kernel.stat_inode(inode)).pipe(
                     Effect.flatMap(Schema.decodeUnknownEffect(Schema.fromJsonString(FileStat))),
                   );
                   return {
@@ -1284,8 +1289,8 @@ export const wasi = Effect.fn("wasi.execute")(function* (
               }
               if (step.kind === "flush") {
                 if (step.path === null) return value.data;
-                const path = step.path;
-                const stat = yield* kernelCall(() => kernel.stat(path, true)).pipe(
+                const inode = Buffer.from(guest.file_metadata(step.fd)).readBigUInt64LE(8);
+                const stat = yield* kernelCall(() => kernel.stat_inode(inode)).pipe(
                   Effect.flatMap(Schema.decodeUnknownEffect(Schema.fromJsonString(FileStat))),
                 );
                 return statBytes(stat);

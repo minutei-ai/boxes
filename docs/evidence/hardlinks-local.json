@@ -137,5 +137,147 @@
       "singleFileLogicalBytesWritten": 6553600,
       "storedBlockBytes": 262144
     }
+  },
+  "descriptorLifecycle": {
+    "scope": "WASI descriptor writes, truncation, stat and timestamps retain inode authority under unsearchable ancestors; path-based checks and immutable-package policy remain enforced",
+    "validation": {
+      "kernel": "27 tests passed; 0.17 seconds",
+      "focusedNative": "5 tests passed across 3 files; 54 assertions; 5.71 seconds",
+      "check": "315 tests passed across 43 files; 3060 assertions; 176.60 seconds; build, SDK declarations, types, Clippy and Rust workspace tests passed",
+      "format": "passed"
+    },
+    "artifactsSha256": {
+      "dist/worker/index.js": "234e506e66cc29bf3ed3162772ebfba894b341b803e02d0dddd120220cb6b5c8",
+      "dist/worker/cirro_kernel_bg.wasm": "a79701f5af7c75f04e143d589c49dd6d77d25a39f59091c253a8ac80e6dd0421",
+      "dist/worker/cirro_wasi_bg.wasm": "a128d4d89a7403b1217b42fa1ff96771836432a0992cba07522d8846c5c6829d"
+    },
+    "performanceAssessment": "Single local workerd sample on a shared host; no isolated paired comparison, production latency or cost advantage established.",
+    "benchmark": {
+      "measuredAt": "2026-10-15T03:38:24.902Z",
+      "environment": {
+        "runtime": "local workerd via native Alchemy",
+        "alchemy": "2.0.0-beta.83",
+        "production": false,
+        "platform": "linux",
+        "arch": "x64"
+      },
+      "artifactBytes": {
+        "javascript": 332861,
+        "kernelWasm": 1071826,
+        "wasiWasm": 1648542,
+        "pythonWasm": 10705553,
+        "guestWasm": 1120072,
+        "compilerWasm": 1943596
+      },
+      "measurements": {
+        "fullEightMiB": {
+          "count": 25,
+          "p50Ms": 91.56881799999974,
+          "p95Ms": 112.0501860000004,
+          "minMs": 86.42381199999909,
+          "maxMs": 139.06392899999992
+        },
+        "rangeFourKiB": {
+          "count": 25,
+          "p50Ms": 4.800537999999506,
+          "p95Ms": 5.7349859999994806,
+          "minMs": 4.394750999999815,
+          "maxMs": 75.5014089999986
+        },
+        "patchFourKiB": {
+          "count": 25,
+          "p50Ms": 15.045791000000463,
+          "p95Ms": 15.919379999999364,
+          "minMs": 14.632163000000219,
+          "maxMs": 18.0743939999993
+        },
+        "python": {
+          "count": 25,
+          "p50Ms": 54.28987600000073,
+          "p95Ms": 78.42014299999937,
+          "minMs": 45.52878899999996,
+          "maxMs": 308.43936700000086
+        },
+        "sequentialEightFiles": {
+          "count": 25,
+          "p50Ms": 71.85191099999975,
+          "p95Ms": 90.86168499999985,
+          "minMs": 65.79604500000005,
+          "maxMs": 92.90747999999985
+        },
+        "batchEightFiles": {
+          "count": 25,
+          "p50Ms": 41.05914500000017,
+          "p95Ms": 54.46092399999998,
+          "minMs": 36.98464299999978,
+          "maxMs": 62.4711269999998
+        },
+        "status": {
+          "count": 100,
+          "p50Ms": 2.7181040000000394,
+          "p95Ms": 4.999301999999943,
+          "minMs": 2.345638000000008,
+          "maxMs": 6.055593999999928
+        },
+        "write256KiB": {
+          "count": 25,
+          "p50Ms": 9.36863500000004,
+          "p95Ms": 12.970468999999866,
+          "minMs": 8.031645000000026,
+          "maxMs": 23.029058000000077
+        },
+        "read256KiB": {
+          "count": 25,
+          "p50Ms": 6.212114999999812,
+          "p95Ms": 8.084487999999965,
+          "minMs": 5.519101999999975,
+          "maxMs": 8.212672999999995
+        },
+        "isolatedJavascript": {
+          "count": 25,
+          "p50Ms": 13.095651999999973,
+          "p95Ms": 18.832069999999476,
+          "minMs": 12.327933999999914,
+          "maxMs": 48.89854500000001
+        },
+        "detachedJavascript": {
+          "count": 25,
+          "p50Ms": 132.6983339999997,
+          "p95Ms": 143.27767099999983,
+          "minMs": 26.196608999999626,
+          "maxMs": 144.22808600000008
+        },
+        "wasiFileAndSync": {
+          "count": 25,
+          "p50Ms": 41.919724999999744,
+          "p95Ms": 69.28439100000105,
+          "minMs": 32.807794000000285,
+          "maxMs": 129.88023000000067
+        },
+        "shellPipeline": {
+          "count": 25,
+          "p50Ms": 14.223939999999857,
+          "p95Ms": 15.999057000000903,
+          "minMs": 13.656224999998813,
+          "maxMs": 18.823075999998764
+        }
+      },
+      "wasiPublication": {
+        "samples": 25,
+        "rootPublications": 25
+      },
+      "batchPublication": {
+        "filesPerSample": 8,
+        "samples": 25,
+        "sequentialPublications": 200,
+        "batchPublications": 25
+      },
+      "contentDeduplication": {
+        "singleFileWrites": 25,
+        "uniqueBlocks": 1,
+        "singleFileLogicalBytesWritten": 6553600,
+        "storedBlockBytes": 262144
+      }
+    }
   }
 }
