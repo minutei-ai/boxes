@@ -1,0 +1,33 @@
+{
+  "applicationSourceCommit": "b4112e9b9f5c2b63e0aa9f6d84e7d6e1bea47a96",
+  "runtime": "Bun 1.4.3; native Alchemy workerd, R2 and Queue; local shared Linux host",
+  "contract": "The installed bun test --help declares --parallel=N as file-level worker processes with isolation enabled by default. --concurrent is not used; order inside files stays unchanged. CI already pins Bun 1.4.3.",
+  "change": {
+    "test": "bun test --parallel=2",
+    "check": "Build, SDK generation, typecheck, Clippy and Cargo remain ordered before bun run test. The test script owns the concurrency argument.",
+    "bounds": "Two worker processes instead of the machine CPU count; all per-suite runtime, R2 persistence and Queue scopes are retained. No new runner, mocked services, removed tests or relaxed timeouts."
+  },
+  "measurements": [
+    {
+      "command": "bun test",
+      "tests": 334,
+      "files": 56,
+      "failures": 0,
+      "assertions": 4069,
+      "seconds": 215.24
+    },
+    {
+      "command": "bun test --parallel=2",
+      "tests": 334,
+      "files": 56,
+      "failures": 0,
+      "assertions": 4071,
+      "seconds": 114.68
+    }
+  ],
+  "limits": "Observed local wall times, not a controlled CI or memory benchmark. Host is shared. Between runs the final SDK consumer fixture gained readonly mutation rejection and was rebuilt and verified by four focused SDK tests and exact archive binding proof. The application behavior and test count remain the same; assertion counts can vary with asynchronous observation. Production latency/cost is unrelated to this test scheduling change.",
+  "delivery": {
+    "ci": "Not remotely verified; GitHub work remains deferred at user request.",
+    "readonly": "See shell-readonly.json for runtime and deployment evidence."
+  }
+}

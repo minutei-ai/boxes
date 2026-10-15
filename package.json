@@ -34,8 +34,8 @@
   "scripts": {
     "build": "bun tooling/build.ts",
     "typecheck": "tsc --noEmit",
-    "test": "bun test",
-    "check": "bun run build && bun run build:sdk && bun run typecheck && cargo clippy --workspace --all-targets -- -D warnings && cargo test --workspace && bun test",
+    "test": "bun test --parallel=2",
+    "check": "bun run build && bun run build:sdk && bun run typecheck && cargo clippy --workspace --all-targets -- -D warnings && cargo test --workspace && bun run test",
     "dev": "bun run build && alchemy dev alchemy.run.ts --stage dev --profile minutei",
     "deploy": "bun run build && alchemy deploy alchemy.run.ts --stage prod --profile minutei",
     "bench": "bun tooling/benchmark.ts",
