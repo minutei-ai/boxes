@@ -99,6 +99,7 @@ const migrate = Alchemy.Action(
             page: progress.pages,
             migrated: page.migrated,
             nextPhase: page.cursor?.phase ?? "done",
+            cursor: page.cursor,
           });
           if (cursor === undefined || cursor === null || cursor.phase === "heads") {
             if (page.cursor?.phase === "processes") return { ...progress, cursor: page.cursor };

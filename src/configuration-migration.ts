@@ -171,7 +171,7 @@ export const migrateConfiguration = Effect.fn("migration.configuration")(functio
           });
         const key = `sandboxes/${id}/code/${record.sourceHash}`;
         const code = yield* Effect.tryPromise({
-          try: () => env.OBJECTS.get(key),
+          try: () => env.OBJECTS.head(key),
           catch: (cause) => new StorageFailure({ cause }),
         });
         if (code === null || code.size > 18_000_000)
@@ -180,8 +180,16 @@ export const migrateConfiguration = Effect.fn("migration.configuration")(functio
           });
         const sourceHash = yield* Effect.gen(function* () {
           if (code.customMetadata?.format === "program-json-v2") return record.sourceHash;
+          const source = yield* Effect.tryPromise({
+            try: () => env.OBJECTS.get(key, { onlyIf: { etagMatches: code.etag } }),
+            catch: (cause) => new StorageFailure({ cause }),
+          });
+          if (source === null || !("body" in source))
+            return yield* new StorageFailure({
+              cause: "Archived configuration input changed during read",
+            });
           const bytes = yield* Effect.tryPromise({
-            try: () => code.arrayBuffer(),
+            try: () => source.arrayBuffer(),
             catch: (cause) => new StorageFailure({ cause }),
           });
           const digest = Buffer.from(
