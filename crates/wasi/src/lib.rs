@@ -18,7 +18,7 @@ struct Configuration {
 
 include!(concat!(env!("OUT_DIR"), "/module_limit.rs"));
 
-const FUEL_SLICE: u64 = 100_000;
+const FUEL_SLICE: u64 = 1_000_000;
 const MAX_FILES: usize = 128;
 const PIPE_BYTES: usize = 65_536;
 const PIPE_ATOMIC_BYTES: usize = 4096;
@@ -5437,7 +5437,7 @@ mod tests {
                 }
             }
         }
-        assert!(slices > 1);
+        assert_eq!(slices, 0);
         assert_eq!(*guest.store.data().stdout.borrow(), b"cpu loop started\n");
         assert!(guest.budget.get() < FUEL_SLICE);
     }

@@ -105,6 +105,7 @@ test(
             stdout: '\"outerr\"\n',
           },
           { source: "jq -n 1", stdout: "1\n" },
+          { source: "jq -n 1; jq -n 2; jq -n 3", stdout: "1\n2\n3\n" },
           { source: "sh -c true; sh -c true; sh -c true", stdout: "" },
         ];
         yield* Effect.forEach(cases, (probe, index) =>

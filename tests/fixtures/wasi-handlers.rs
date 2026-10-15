@@ -122,11 +122,11 @@ pub extern "C" fn __wasi_signal_trampoline(signal: u32) {
         }
         if cfg!(case = "sliced") {
             let mut checksum = 0u32;
-            for index in 0..20000u32 {
+            for index in 0..200000u32 {
                 checksum = checksum
                     .wrapping_add(std::ptr::read_volatile(std::ptr::addr_of!(CALLS)) + index);
             }
-            if checksum != 200010000 {
+            if checksum != 2820230816 {
                 proc_exit(101);
             }
         }

@@ -23,7 +23,7 @@ const created = await post(
     id,
     policy: {
       networkHosts: [],
-      interruptBudget: 1000,
+      interruptBudget: 10000,
       memoryBytes: 8388608,
       maxOutputBytes: 1048576,
     },
