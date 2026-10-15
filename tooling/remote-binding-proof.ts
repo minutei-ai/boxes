@@ -11,6 +11,10 @@ import {
   RemoteBindingInput,
   VerifiedRemoteBindingProof,
 } from "../tests/fixtures/remote-binding-worker";
+import {
+  PersistentBindingInput,
+  VerifiedPersistentBindingProof,
+} from "../tests/fixtures/remote-persistent-binding";
 
 const PublicPreviewAccess = Layer.succeed(
   Access.Access,
@@ -44,10 +48,16 @@ const Report = Schema.Struct({
   profile: Schema.String,
   targetWorker: Schema.String,
   previewOrigin: Schema.String,
+  replacementPreviewOrigin: Schema.String,
   consumerBundleSha256: Schema.String,
   sdkVersion: Schema.String,
   sdkModulesSha256: Schema.Record(Schema.String, Schema.String),
   proof: VerifiedRemoteBindingProof,
+  persistent: Schema.Struct({
+    created: VerifiedPersistentBindingProof,
+    resumed: VerifiedPersistentBindingProof,
+    previousReceiptRetained: Schema.Literal(true),
+  }),
 });
 const report = await Effect.runPromise(
   Effect.scoped(
@@ -65,6 +75,7 @@ const report = await Effect.runPromise(
       const sdkModules = new Map([
         ["../../src/sdk", Bun.resolveSync("@minutei-ai/boxes", sdkDirectory)],
         ["../../src/sdk-rpc", Bun.resolveSync("@minutei-ai/boxes/rpc", sdkDirectory)],
+        ["../../src/sdk-tanstack", Bun.resolveSync("@minutei-ai/boxes/tanstack", sdkDirectory)],
         ["../../src/contracts", Bun.resolveSync("@minutei-ai/boxes/contracts", sdkDirectory)],
       ]);
       const sdkModulesSha256 = Object.fromEntries(
@@ -90,7 +101,7 @@ const report = await Effect.runPromise(
               name: "installed-boxes-sdk",
               setup(builder) {
                 builder.onResolve(
-                  { filter: /^\.\.\/\.\.\/src\/(sdk|sdk-rpc|contracts)$/ },
+                  { filter: /^\.\.\/\.\.\/src\/(sdk|sdk-rpc|sdk-tanstack|contracts)$/ },
                   (args) => {
                     const path = sdkModules.get(args.path);
                     if (path === undefined) return;
@@ -179,6 +190,81 @@ const report = await Effect.runPromise(
       const proof = yield* Schema.decodeUnknownEffect(
         Schema.fromJsonString(VerifiedRemoteBindingProof),
       )(body);
+      const createdResponse = yield* Effect.promise(() =>
+        fetch(new URL("/persistent", session.url), {
+          method: "POST",
+          headers: { ...session.headers, "content-type": "application/json" },
+          body: Schema.encodeSync(Schema.fromJsonString(PersistentBindingInput))({
+            phase: "create",
+            sandboxId: id,
+            token: grant.token,
+          }),
+          signal: AbortSignal.timeout(120000),
+        }),
+      );
+      const createdBody = yield* Effect.promise(() => createdResponse.text());
+      if (createdResponse.status !== 200)
+        return yield* Effect.die({
+          message: "Persistent binding writer failed",
+          status: createdResponse.status,
+          body: createdBody,
+        });
+      const created = yield* Schema.decodeUnknownEffect(
+        Schema.fromJsonString(VerifiedPersistentBindingProof),
+      )(createdBody);
+      if (created.phase !== "create")
+        return yield* Effect.die("Persistent binding writer returned the wrong phase");
+      const readonly = yield* admin.mintCapability(id, {
+        permissions: ["read", "execute"],
+        expiresInSeconds: 600,
+      });
+      const replacement = yield* createEdgeSession({
+        scriptName: `boxes-replacement-${nonce}`,
+        compatibilityDate: "2026-10-06",
+        files: [new File([bytes], "index.js", { type: "application/javascript+module" })],
+        bindings: [
+          { name: "BOXES", type: "service", service: targetWorker },
+          { name: "BOXES_AGENT", type: "service", service: targetWorker, entrypoint: "Agent" },
+        ],
+      });
+      const resumedResponse = yield* Effect.promise(() =>
+        fetch(new URL("/persistent", replacement.url), {
+          method: "POST",
+          headers: { ...replacement.headers, "content-type": "application/json" },
+          body: Schema.encodeSync(Schema.fromJsonString(PersistentBindingInput))({
+            phase: "resume",
+            sandboxId: id,
+            token: readonly.token,
+          }),
+          signal: AbortSignal.timeout(120000),
+        }),
+      );
+      const resumedBody = yield* Effect.promise(() => resumedResponse.text());
+      if (resumedResponse.status !== 200)
+        return yield* Effect.die({
+          message: "Persistent binding reader failed",
+          status: resumedResponse.status,
+          body: resumedBody,
+        });
+      const resumed = yield* Schema.decodeUnknownEffect(
+        Schema.fromJsonString(VerifiedPersistentBindingProof),
+      )(resumedBody);
+      if (resumed.phase !== "resume")
+        return yield* Effect.die("Persistent binding reader returned the wrong phase");
+      const persistentFile = yield* manager.action(id, {
+        op: "filesystem.readFile",
+        path: "/persistent.txt",
+      });
+      if (
+        persistentFile.content !== created.value.content ||
+        persistentFile.encoding !== created.value.encoding ||
+        persistentFile.content !== resumed.value.content ||
+        persistentFile.encoding !== resumed.value.encoding
+      )
+        return yield* Effect.die("Persistent binding retained an unauthorized mutation");
+      const previous = yield* manager.action(id, { op: "process.get", id: "rpc-callback" });
+      if (previous.status !== "exited" || previous.output?.exitCode !== 0)
+        return yield* Effect.die("Context disposal changed an unrelated process receipt");
       const retained = yield* manager.action(id, {
         op: "filesystem.readFile",
         path: "/binding.txt",
@@ -190,10 +276,12 @@ const report = await Effect.runPromise(
         profile,
         targetWorker,
         previewOrigin: session.url,
+        replacementPreviewOrigin: replacement.url,
         consumerBundleSha256,
         sdkVersion: sdkPackage.version,
         sdkModulesSha256,
         proof,
+        persistent: { created, resumed, previousReceiptRetained: true as const },
       };
     }),
   ).pipe(

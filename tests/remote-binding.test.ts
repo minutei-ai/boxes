@@ -8,10 +8,14 @@ import { Json, Service } from "@alchemy.run/cloudflare-runtime/core/bindings";
 import { make } from "../src/sdk";
 import { runtime } from "../tooling/worker-test";
 import { RemoteBindingInput, VerifiedRemoteBindingProof } from "./fixtures/remote-binding-worker";
+import {
+  PersistentBindingInput,
+  VerifiedPersistentBindingProof,
+} from "./fixtures/remote-persistent-binding";
 
-const Endpoints = Schema.Struct({ URL: Schema.String });
+const Endpoints = Schema.Struct({ URLS: Schema.Array(Schema.String) });
 test(
-  "binding consumer retains callbacks and void values with bounded authority and fresh globals",
+  "native binding consumers reconnect persistent Code Mode with scoped authority and fresh callbacks",
   () =>
     Effect.runPromise(
       Effect.scoped(
@@ -54,21 +58,26 @@ test(
           const bindings = [
             Effect.gen(function* () {
               const native = yield* Runtime;
-              const endpoint = yield* native.start({
-                name: `${worker.name}-proof`,
-                compatibilityDate: "2026-10-06",
-                compatibilityFlags: ["nodejs_compat"],
-                bindings: [
-                  Service.local({ binding: "BOXES", scriptName: worker.name }),
-                  Service.local({
-                    binding: "BOXES_AGENT",
-                    scriptName: worker.name,
-                    entrypoint: "Agent",
-                  }),
-                ],
-                modules: [{ name: "index.js", type: "ESModule", content }],
-              });
-              return yield* Json.local("URL", endpoint.href);
+              const endpoints = yield* Effect.forEach(["initial", "replacement"], (phase) =>
+                native.start({
+                  name: `${worker.name}-proof-${phase}`,
+                  compatibilityDate: "2026-10-06",
+                  compatibilityFlags: ["nodejs_compat"],
+                  bindings: [
+                    Service.local({ binding: "BOXES", scriptName: worker.name }),
+                    Service.local({
+                      binding: "BOXES_AGENT",
+                      scriptName: worker.name,
+                      entrypoint: "Agent",
+                    }),
+                  ],
+                  modules: [{ name: "index.js", type: "ESModule", content }],
+                }),
+              );
+              return yield* Json.local(
+                "URLS",
+                endpoints.map((endpoint) => endpoint.href),
+              );
             }).pipe(Effect.orDie),
           ];
           const proxy = yield* Effect.acquireRelease(
@@ -82,7 +91,7 @@ test(
             (value) => Effect.promise(() => value.dispose()),
           );
           const response = yield* Effect.promise(() =>
-            fetch(proxy.env.URL, {
+            fetch(proxy.env.URLS[0], {
               method: "POST",
               body: Schema.encodeSync(Schema.fromJsonString(RemoteBindingInput))({
                 sandboxId: id,
@@ -109,6 +118,39 @@ test(
             "rpc-callback",
             "rpc-void",
           ]);
+          const readonly = yield* admin.mintCapability(id, {
+            permissions: ["read", "execute"],
+            expiresInSeconds: 600,
+          });
+          for (const [phase, endpoint, token] of [
+            ["create", proxy.env.URLS[0], grant.token],
+            ["resume", proxy.env.URLS[1], readonly.token],
+          ] as const) {
+            const response = yield* Effect.promise(() =>
+              fetch(new URL("/persistent", endpoint), {
+                method: "POST",
+                body: Schema.encodeSync(Schema.fromJsonString(PersistentBindingInput))({
+                  phase,
+                  sandboxId: id,
+                  token,
+                }),
+              }),
+            );
+            expect(response.status).toBe(200);
+            const proof = yield* Schema.decodeUnknownEffect(
+              Schema.fromJsonString(VerifiedPersistentBindingProof),
+            )(yield* Effect.promise(() => response.text()));
+            expect(proof.phase).toBe(phase);
+          }
+          const retained = yield* manager.action(id, {
+            op: "filesystem.readFile",
+            path: "/persistent.txt",
+          });
+          expect(Buffer.from(retained.content, retained.encoding).toString()).toBe(
+            "persistent native binding",
+          );
+          const previous = yield* manager.action(id, { op: "process.get", id: "rpc-callback" });
+          expect(previous.status).toBe("exited");
         }),
       ).pipe(Effect.provide(FetchHttpClient.layer)),
     ),

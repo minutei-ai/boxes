@@ -39,8 +39,8 @@
     "nativeTests": {
       "tests": 339,
       "files": 58,
-      "assertions": 4379,
-      "seconds": 125.61,
+      "assertions": 4353,
+      "seconds": 171.31,
       "failures": 0
     },
     "exactArchiveProof": "SDK archive exports and consumer declarations; runtime archive; filesystem snapshot restore; hard-link metadata; RPC callbacks and cooperative disposal; persistent driver contexts and cancellation; scoped authority",
@@ -65,6 +65,11 @@
         "sdkVersions": ["0.9.0", "0.10.0"],
         "callbacksPerConsumer": 2,
         "postDisposalReadStatus": 404
+      },
+      "persistentCodeMode": {
+        "evidence": "docs/evidence/persistent-binding-production.json",
+        "sdkVersions": ["0.9.0", "0.10.0"],
+        "scope": "Two native Cloudflare consumers; closed contexts, fresh callbacks, retained files, read-only reconnection and memory ceilings. Initial preview 1101 remains unresolved."
       }
     },
     "evidence": "docs/evidence/published-software-delivery.json"

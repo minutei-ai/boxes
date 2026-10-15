@@ -1,0 +1,398 @@
+{
+  "status": "Synthetic persistent Code Mode consumers passed locally and remotely with installed Minutei SDK 0.9.0 and current SDK 0.10.0; an initial preview exception remains unexplained.",
+  "runtimeSourceCommit": "7aee168c876f48512ac5f849433dc00ec3b4675a",
+  "baseProofCommit": "8661aa7",
+  "runtimeArchiveSha256": "2c21b2611ade543a55e0764d72b8f2b14945d602ca6a2664f47cae683ff23875",
+  "backendDeliveryEvidence": "docs/evidence/published-software-delivery.json",
+  "consumerCheckoutCommit": "a0a2a05c40ed5fb3bd5d76b14c3baf3bfe4695c2",
+  "transport": "Alchemy createEdgeSession with profile minutei, native default and Agent service bindings to the existing deployed ordinary Worker. Each proof uses two separate preview consumers sequentially. No Dynamic Workers, local callback proxy or persistent consumer deployment.",
+  "authority": "The writer receives a 600-second read/write/execute capability; the second consumer receives only read/execute for the same sandbox. Administrator and management credentials never enter either consumer.",
+  "verified": [
+    "The writer creates a file through native Code Mode tools and closes its contexts without disposing the caller-owned sandbox.",
+    "A second preview consumer creates a fresh context and reads the same retained file using the installed SDK driver.",
+    "Each consumer invokes only its own caller-owned external_label callback; guest globals do not survive between executions.",
+    "Closed contexts return AbortError and cannot invoke a late callback.",
+    "A read/execute-only context fails to overwrite the file; a separate management client confirms its original bytes remain intact.",
+    "A 6,000,000-byte guest buffer fails in a 4 MiB context and succeeds when the requested limit is 32 MiB under an 8 MiB sandbox policy. A 20,000,000-byte allocation still fails under that sandbox policy.",
+    "An earlier completed RPC process receipt remains exited after context closure.",
+    "The management scope disposes the sandbox and requires a public file read to return 404 before emitting the final report."
+  ],
+  "reports": [
+    {
+      "measuredAt": 1792087704792,
+      "profile": "minutei",
+      "targetWorker": "cirro-sandbox-prod-rs7wexxow56rmsoz",
+      "previewOrigin": "https://boxes-binding-8fd1b09a-7989-4742-a691-9106f4154f1f.manoel-carvalhoneto.workers.dev",
+      "replacementPreviewOrigin": "https://boxes-replacement-8fd1b09a-7989-4742-a691-9106f4154f1f.manoel-carvalhoneto.workers.dev",
+      "consumerBundleSha256": "8524b26824f57957aeff6b2d1deca9a130cca7d3e574cff03ef55ae6a4981cb6",
+      "sdkVersion": "0.9.0",
+      "sdkModulesSha256": {
+        "../../src/sdk": "18cd31b540c4ffe40ce9a231ac9e64e47530e7ee7d0fc8950d681beaa38f7fd3",
+        "../../src/sdk-rpc": "8fa8e7a4f3a4ae26a6984aed1d2b7a93b265eb54cc5317f0065ff5455f11c354",
+        "../../src/sdk-tanstack": "9379a2fab94319daba07c314e63e6b6824f3d9ab1a914d1366e05019bd474a2c",
+        "../../src/contracts": "297a6a573941e66c488b573117e7cd9d646a1ed58cb8c66151fabd0c29641bf7"
+      },
+      "proof": {
+        "measuredAt": 1792087672316,
+        "callback": {
+          "id": "rpc-callback",
+          "status": "exited",
+          "sourceHash": "75090090f42e508d6542184bce91b43c775c128d2ccfc04977bc226f5980cf7d",
+          "language": "typescript",
+          "startedAt": 1792087667195,
+          "finishedAt": 1792087668794,
+          "output": {
+            "stdout": "",
+            "stderr": "",
+            "result": {
+              "answer": 42,
+              "transport": "native RPC"
+            },
+            "exitCode": 0
+          }
+        },
+        "voidCallback": {
+          "id": "rpc-void",
+          "status": "exited",
+          "sourceHash": "0216a3fc5e53bcf477f59bda2cb4dc00f2f8f938fc8658ed498f019dcfbca5fa",
+          "language": "typescript",
+          "startedAt": 1792087669698,
+          "finishedAt": 1792087671209,
+          "output": {
+            "stdout": "",
+            "stderr": "",
+            "result": {
+              "wasUndefined": true,
+              "freshGlobals": true
+            },
+            "exitCode": 0
+          }
+        },
+        "file": {
+          "content": "bmF0aXZlIENsb3VkZmxhcmUgYmluZGluZw==",
+          "encoding": "base64",
+          "size": 25
+        },
+        "calls": [
+          {
+            "op": "host.call",
+            "name": "answer",
+            "input": {
+              "value": 21
+            }
+          },
+          {
+            "op": "host.call",
+            "name": "void"
+          }
+        ],
+        "managementDenied": 403,
+        "wrongSandboxDenied": 401
+      },
+      "persistent": {
+        "created": {
+          "phase": "create",
+          "value": {
+            "content": "cGVyc2lzdGVudCBuYXRpdmUgYmluZGluZw==",
+            "encoding": "base64",
+            "freshGlobals": true,
+            "label": "create"
+          },
+          "callbacks": ["create"],
+          "closedContextDenied": true,
+          "writeDenied": null,
+          "lowMemoryDenied": true,
+          "policyMemoryDenied": true,
+          "allowedAllocation": 6000000
+        },
+        "resumed": {
+          "phase": "resume",
+          "value": {
+            "content": "cGVyc2lzdGVudCBuYXRpdmUgYmluZGluZw==",
+            "encoding": "base64",
+            "freshGlobals": true,
+            "label": "resume"
+          },
+          "callbacks": ["resume"],
+          "closedContextDenied": true,
+          "writeDenied": true,
+          "lowMemoryDenied": true,
+          "policyMemoryDenied": true,
+          "allowedAllocation": 6000000
+        },
+        "previousReceiptRetained": true
+      }
+    },
+    {
+      "measuredAt": 1792087535073,
+      "profile": "minutei",
+      "targetWorker": "cirro-sandbox-prod-rs7wexxow56rmsoz",
+      "previewOrigin": "https://boxes-binding-2064bfb4-de76-43bb-8cde-82e4b42abb60.manoel-carvalhoneto.workers.dev",
+      "replacementPreviewOrigin": "https://boxes-replacement-2064bfb4-de76-43bb-8cde-82e4b42abb60.manoel-carvalhoneto.workers.dev",
+      "consumerBundleSha256": "efab1fa780c34e6bb1a384c61f1d9779bf7cb92a8a2dcb356e784032100f6ec9",
+      "sdkVersion": "0.10.0",
+      "sdkModulesSha256": {
+        "../../src/sdk": "4d34ef4fa40ff5b3f895cd0746b142c2a700a24eb9b52d4d7d1341f91f96d301",
+        "../../src/sdk-rpc": "50a02fcdb90d81877a5fc17ce35e3e05e8d80929b32ba5d16ca855cfeafcbcb5",
+        "../../src/sdk-tanstack": "626567e612bb1feee23dd27e51ad1cc9f385c729cf575826c586622301bc97da",
+        "../../src/contracts": "de6913c6de8bc4cd1d237c6aa07678d773fe797d61682bce21033c3b4d8d5474"
+      },
+      "proof": {
+        "measuredAt": 1792087500129,
+        "callback": {
+          "id": "rpc-callback",
+          "status": "exited",
+          "sourceHash": "75090090f42e508d6542184bce91b43c775c128d2ccfc04977bc226f5980cf7d",
+          "language": "typescript",
+          "startedAt": 1792087494476,
+          "finishedAt": 1792087496204,
+          "output": {
+            "stdout": "",
+            "stderr": "",
+            "result": {
+              "answer": 42,
+              "transport": "native RPC"
+            },
+            "exitCode": 0
+          }
+        },
+        "voidCallback": {
+          "id": "rpc-void",
+          "status": "exited",
+          "sourceHash": "0216a3fc5e53bcf477f59bda2cb4dc00f2f8f938fc8658ed498f019dcfbca5fa",
+          "language": "typescript",
+          "startedAt": 1792087497106,
+          "finishedAt": 1792087498828,
+          "output": {
+            "stdout": "",
+            "stderr": "",
+            "result": {
+              "wasUndefined": true,
+              "freshGlobals": true
+            },
+            "exitCode": 0
+          }
+        },
+        "file": {
+          "content": "bmF0aXZlIENsb3VkZmxhcmUgYmluZGluZw==",
+          "encoding": "base64",
+          "size": 25
+        },
+        "calls": [
+          {
+            "op": "host.call",
+            "name": "answer",
+            "input": {
+              "value": 21
+            }
+          },
+          {
+            "op": "host.call",
+            "name": "void"
+          }
+        ],
+        "managementDenied": 403,
+        "wrongSandboxDenied": 401
+      },
+      "persistent": {
+        "created": {
+          "phase": "create",
+          "value": {
+            "content": "cGVyc2lzdGVudCBuYXRpdmUgYmluZGluZw==",
+            "encoding": "base64",
+            "freshGlobals": true,
+            "label": "create"
+          },
+          "callbacks": ["create"],
+          "closedContextDenied": true,
+          "writeDenied": null,
+          "lowMemoryDenied": true,
+          "policyMemoryDenied": true,
+          "allowedAllocation": 6000000
+        },
+        "resumed": {
+          "phase": "resume",
+          "value": {
+            "content": "cGVyc2lzdGVudCBuYXRpdmUgYmluZGluZw==",
+            "encoding": "base64",
+            "freshGlobals": true,
+            "label": "resume"
+          },
+          "callbacks": ["resume"],
+          "closedContextDenied": true,
+          "writeDenied": true,
+          "lowMemoryDenied": true,
+          "policyMemoryDenied": true,
+          "allowedAllocation": 6000000
+        },
+        "previousReceiptRetained": true
+      }
+    },
+    {
+      "measuredAt": 1792087611409,
+      "profile": "minutei",
+      "targetWorker": "cirro-sandbox-prod-rs7wexxow56rmsoz",
+      "previewOrigin": "https://boxes-binding-6e416e4c-6062-4a0d-b9f7-21767aa7c9e6.manoel-carvalhoneto.workers.dev",
+      "replacementPreviewOrigin": "https://boxes-replacement-6e416e4c-6062-4a0d-b9f7-21767aa7c9e6.manoel-carvalhoneto.workers.dev",
+      "consumerBundleSha256": "efab1fa780c34e6bb1a384c61f1d9779bf7cb92a8a2dcb356e784032100f6ec9",
+      "sdkVersion": "0.10.0",
+      "sdkModulesSha256": {
+        "../../src/sdk": "4d34ef4fa40ff5b3f895cd0746b142c2a700a24eb9b52d4d7d1341f91f96d301",
+        "../../src/sdk-rpc": "50a02fcdb90d81877a5fc17ce35e3e05e8d80929b32ba5d16ca855cfeafcbcb5",
+        "../../src/sdk-tanstack": "626567e612bb1feee23dd27e51ad1cc9f385c729cf575826c586622301bc97da",
+        "../../src/contracts": "de6913c6de8bc4cd1d237c6aa07678d773fe797d61682bce21033c3b4d8d5474"
+      },
+      "proof": {
+        "measuredAt": 1792087580619,
+        "callback": {
+          "id": "rpc-callback",
+          "status": "exited",
+          "sourceHash": "75090090f42e508d6542184bce91b43c775c128d2ccfc04977bc226f5980cf7d",
+          "language": "typescript",
+          "startedAt": 1792087575302,
+          "finishedAt": 1792087576963,
+          "output": {
+            "stdout": "",
+            "stderr": "",
+            "result": {
+              "answer": 42,
+              "transport": "native RPC"
+            },
+            "exitCode": 0
+          }
+        },
+        "voidCallback": {
+          "id": "rpc-void",
+          "status": "exited",
+          "sourceHash": "0216a3fc5e53bcf477f59bda2cb4dc00f2f8f938fc8658ed498f019dcfbca5fa",
+          "language": "typescript",
+          "startedAt": 1792087577878,
+          "finishedAt": 1792087579430,
+          "output": {
+            "stdout": "",
+            "stderr": "",
+            "result": {
+              "wasUndefined": true,
+              "freshGlobals": true
+            },
+            "exitCode": 0
+          }
+        },
+        "file": {
+          "content": "bmF0aXZlIENsb3VkZmxhcmUgYmluZGluZw==",
+          "encoding": "base64",
+          "size": 25
+        },
+        "calls": [
+          {
+            "op": "host.call",
+            "name": "answer",
+            "input": {
+              "value": 21
+            }
+          },
+          {
+            "op": "host.call",
+            "name": "void"
+          }
+        ],
+        "managementDenied": 403,
+        "wrongSandboxDenied": 401
+      },
+      "persistent": {
+        "created": {
+          "phase": "create",
+          "value": {
+            "content": "cGVyc2lzdGVudCBuYXRpdmUgYmluZGluZw==",
+            "encoding": "base64",
+            "freshGlobals": true,
+            "label": "create"
+          },
+          "callbacks": ["create"],
+          "closedContextDenied": true,
+          "writeDenied": null,
+          "lowMemoryDenied": true,
+          "policyMemoryDenied": true,
+          "allowedAllocation": 6000000
+        },
+        "resumed": {
+          "phase": "resume",
+          "value": {
+            "content": "cGVyc2lzdGVudCBuYXRpdmUgYmluZGluZw==",
+            "encoding": "base64",
+            "freshGlobals": true,
+            "label": "resume"
+          },
+          "callbacks": ["resume"],
+          "closedContextDenied": true,
+          "writeDenied": true,
+          "lowMemoryDenied": true,
+          "policyMemoryDenied": true,
+          "allowedAllocation": 6000000
+        },
+        "previousReceiptRetained": true
+      }
+    }
+  ],
+  "initialFailure": {
+    "sdkVersion": "0.10.0",
+    "stage": "Persistent binding writer",
+    "httpStatus": 500,
+    "cloudflareCode": 1101,
+    "rayId": "a4b0bcff9b8d464c",
+    "responseBodySha256": "8438f9a0909c56425355010ff2906fcf962dbda844092db10ace1e8ed9b29458",
+    "outcome": "The native edge preview returned Worker threw exception before the fixture exposed Effect causes. The CLI failed and its management finalizer ran; no final success report was emitted.",
+    "investigation": "The fixture now returns native Cause.pretty at its synthetic HTTP boundary. Two subsequent runs with the same instrumented SDK 0.10.0 bundle passed; SDK driver and production runtime code were not changed.",
+    "cause": "Unresolved. Passing repetitions do not establish that the initial exception was fixed or that production transport is stable.",
+    "persistedCleanupReceipt": {
+      "sandboxId": "remote-binding-4b02bb11-974e-45a9-9814-9bcd2cc2dd47",
+      "disposed": true,
+      "cleanupRequired": false,
+      "observedStatus": 404,
+      "observedMessage": "Sandbox has been disposed"
+    },
+    "cleanupVerification": "A later native administrator capability request reads the root before minting. It returned 404 Sandbox has been disposed, confirming the failed attempt had already been disposed; no further cleanup was required."
+  },
+  "priorAttempt": "The installed SDK 0.9.0 also passed before transport diagnostics were added. The final SDK 0.9.0 report above uses the same final fixture source as the two SDK 0.10.0 reports.",
+  "sourceSha256": {
+    "tests/fixtures/remote-persistent-binding.ts": "1eaf69020469d6c96b8b31bdcffa7b61ae8eecac638ba627a934ba3c0177242a",
+    "tests/fixtures/remote-binding-worker.ts": "99fc55f336110a208105678d4cab5032799f307f752636286210e17ee27ee4c3",
+    "tests/remote-binding.test.ts": "7f9f7c1b5802a7191894ed6cfd50267a2438de177bfcb39e56488b2f5a82fe95",
+    "tooling/remote-binding-proof.ts": "b145cb0f4e7a3799d9b390f645c09fc8142e2de837b92cd3f50ebdf9cd8188b3"
+  },
+  "validation": {
+    "focusedNativeTest": {
+      "tests": 1,
+      "files": 1,
+      "assertions": 9,
+      "seconds": 2.56,
+      "failures": 0
+    },
+    "sdkArchiveIdentity": "All 12 archived SDK module/declaration entries match current dist/sdk bytes.",
+    "completeGate": "bun run check passed: build, SDK declarations, TypeScript, workspace Clippy, workspace Cargo tests and native Bun tests.",
+    "nativeTests": {
+      "tests": 339,
+      "files": 58,
+      "assertions": 4353,
+      "seconds": 171.31,
+      "failures": 0
+    },
+    "changedTestInFullGate": "(pass) native binding consumers reconnect persistent Code Mode with scoped authority and fresh callbacks [3872.19ms]",
+    "format": "bun run format:check passed (TypeScript/JSON, workspace Rust and native Rust fixtures)."
+  },
+  "reproduction": "ALCHEMY_PROFILE=minutei CIRRO_WORKER=<existing-worker-name> CIRRO_URL=<deployed-url> CIRRO_SDK_DIRECTORY=<installed-sdk-directory> bun run binding:remote:proof; provide CIRRO_API_KEY privately.",
+  "limits": [
+    "Both preview consumers use the same deployed backend; no forced backend restart or cross-build heap restoration is exercised.",
+    "The original preview consumer is not explicitly terminated. Its Code Mode contexts are closed and its preview expires through the native platform lifecycle.",
+    "The preserved foreign receipt is already completed; isolation of an unrelated active or queued run remains a local test gate.",
+    "The actual Minutei application, tenant lifecycle, browser authentication, model tools and history Queue delivery are not exercised remotely.",
+    "No production latency, cold-start, CPU billing or cost comparison follows. The initial 1101 remains an open stability observation.",
+    "GitHub/package publication and the remaining AgentOS parity requirements stay open."
+  ],
+  "sandboxPolicy": {
+    "networkHosts": [],
+    "interruptBudget": 10000,
+    "memoryBytes": 8388608,
+    "maxOutputBytes": 1048576
+  }
+}

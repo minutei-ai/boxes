@@ -1,8 +1,9 @@
-import { Clock, Effect, Redacted, Schema, Struct } from "effect";
+import { Cause, Clock, Effect, Redacted, Schema, Struct } from "effect";
 import { makeBinding } from "../../src/sdk";
 import { makeAgentBinding } from "../../src/sdk-rpc";
 import type { AgentProtocol } from "../../src/rpc-protocol";
 import { AgentRequest, FileContent, HostCall, RunRecord } from "../../src/contracts";
+import { persistentBindingProof } from "./remote-persistent-binding";
 
 export const RemoteBindingInput = AgentRequest.mapFields((fields) =>
   Struct.pick(fields, ["sandboxId", "token"]),
@@ -51,6 +52,8 @@ export default {
   fetch(request: Request, env: { BOXES: Fetcher; BOXES_AGENT: Fetcher<AgentProtocol> }) {
     return Effect.runPromise(
       Effect.gen(function* () {
+        if (new URL(request.url).pathname === "/persistent")
+          return yield* persistentBindingProof(request, env.BOXES_AGENT);
         const input = yield* Schema.decodeUnknownEffect(Schema.fromJsonString(RemoteBindingInput), {
           onExcessProperty: "error",
         })(yield* Effect.promise(() => request.text()));
@@ -132,7 +135,16 @@ export default {
           }),
           { headers: { "content-type": "application/json", "cache-control": "no-store" } },
         );
-      }),
+      }).pipe(
+        Effect.catchCause((cause) =>
+          Effect.succeed(
+            new Response(Cause.pretty(cause), {
+              status: 500,
+              headers: { "content-type": "text/plain", "cache-control": "no-store" },
+            }),
+          ),
+        ),
+      ),
     );
   },
 };
