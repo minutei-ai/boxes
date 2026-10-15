@@ -391,3 +391,131 @@ test(
     ),
   20000,
 );
+
+test(
+  "configuration cutover retains pre-module terminal sources without accepting malformed program archives",
+  () =>
+    Effect.runPromise(
+      Effect.scoped(
+        Effect.gen(function* () {
+          const directory = yield* Effect.acquireRelease(
+            Effect.promise(() => mkdtemp(join(tmpdir(), "boxes-historical-source-"))),
+            (path) => Effect.promise(() => rm(path, { recursive: true, force: true })),
+          );
+          const worker = yield* Effect.acquireRelease(
+            Effect.sync(() => runtime(directory)),
+            (value) => Effect.promise(() => value.dispose()),
+          );
+          const url = (yield* Effect.promise(() => worker.ready)).toString();
+          const admin = yield* make({ url, token: Redacted.make("cirro-local-test-credential") });
+          const id = "historical-source";
+          yield* admin.create({
+            id,
+            policy: {
+              networkHosts: [],
+              interruptBudget: 1000,
+              memoryBytes: 8388608,
+              maxOutputBytes: 1048576,
+            },
+          });
+          const grant = yield* admin.mintCapability(id, {
+            permissions: ["read", "execute"],
+            expiresInSeconds: 600,
+          });
+          const client = yield* make({ url, token: Redacted.make(grant.token) });
+          yield* client.action(id, {
+            op: "javascript.evaluate",
+            id: "historical",
+            expression: "42",
+          });
+          const bucket = yield* Effect.promise(() => worker.objects);
+          const key = `processes/${id}/historical.json`;
+          const object = yield* Effect.promise(() => bucket.get(key));
+          if (object === null) return yield* Effect.die("Missing historical seed");
+          const seed = yield* Schema.decodeUnknownEffect(Schema.fromJsonString(StoredRun))(
+            yield* Effect.promise(() => object.text()),
+          );
+          const metadata = yield* Schema.decodeUnknownEffect(StoredRunMetadata)(
+            object.customMetadata,
+          );
+          const source = "export default () => { while (true) {} };";
+          const sourceHash = Buffer.from(
+            yield* Effect.promise(() => crypto.subtle.digest("SHA-256", Buffer.from(source))),
+          ).toString("hex");
+          const codeKey = `sandboxes/${id}/code/${sourceHash}`;
+          const historical = {
+            ...seed,
+            sourceHash,
+            status: "failed" as const,
+            output: null,
+            authority: null,
+            deadlineAt: null,
+          };
+          yield* Effect.promise(() =>
+            bucket.put(key, Schema.encodeSync(Schema.fromJsonString(StoredRun))(historical), {
+              customMetadata: Schema.encodeSync(StoredRunMetadata)({
+                ...metadata,
+                summary: { ...metadata.summary, sourceHash, status: "failed" },
+              }),
+            }),
+          );
+          yield* Effect.promise(() =>
+            bucket.put(codeKey, source, { customMetadata: { format: "program-json" } }),
+          );
+          const migrate = Effect.fn("test.configuration.historical")(function* () {
+            return yield* Effect.promise(() =>
+              fetch(new URL("/v1/migrations/environment-v1", url), {
+                method: "POST",
+                headers: {
+                  authorization: "Bearer cirro-local-test-credential",
+                  "content-type": "application/json",
+                },
+                body: Schema.encodeSync(Schema.fromJsonString(EnvironmentMigrationInput))({
+                  cursor: { phase: "processes", continuation: null },
+                }),
+              }),
+            );
+          });
+          expect((yield* migrate()).status).toBe(500);
+          expect((yield* Effect.promise(() => bucket.head(codeKey)))?.customMetadata?.format).toBe(
+            "program-json",
+          );
+          yield* Effect.promise(() => bucket.put(codeKey, source));
+          expect((yield* migrate()).status).toBe(200);
+          const retained = yield* Effect.promise(() => bucket.get(codeKey));
+          if (retained === null) return yield* Effect.die("Historical source was lost");
+          expect(retained.customMetadata?.format).toBe("historical-source-text-v1");
+          expect(yield* Effect.promise(() => retained.text())).toBe(source);
+          const observed = yield* client.action(id, { op: "process.get", id: "historical" });
+          expect([observed.status, observed.sourceHash, observed.output]).toEqual([
+            "failed",
+            sourceHash,
+            null,
+          ]);
+          expect((yield* migrate()).status).toBe(200);
+          expect((yield* Effect.promise(() => bucket.head(codeKey)))?.etag).toBe(retained.etag);
+          yield* Effect.promise(() => bucket.put(codeKey, source));
+          yield* Effect.promise(() =>
+            bucket.put(
+              key,
+              Schema.encodeSync(Schema.fromJsonString(StoredRun))({
+                ...historical,
+                status: "queued",
+              }),
+              {
+                customMetadata: Schema.encodeSync(StoredRunMetadata)({
+                  ...metadata,
+                  summary: { ...metadata.summary, sourceHash, status: "queued" },
+                }),
+              },
+            ),
+          );
+          expect((yield* migrate()).status).toBe(500);
+          expect(
+            (yield* Effect.promise(() => bucket.head(codeKey)))?.customMetadata?.format,
+          ).toBeUndefined();
+        }),
+      ).pipe(Effect.provide(FetchHttpClient.layer)),
+    ),
+  15000,
+);

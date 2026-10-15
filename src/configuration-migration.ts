@@ -174,13 +174,48 @@ export const migrateConfiguration = Effect.fn("migration.configuration")(functio
           return yield* new StorageFailure({
             cause: "Configuration migration program digest mismatch",
           });
+        const text = yield* Effect.try({
+          try: () => new TextDecoder("utf-8", { fatal: true }).decode(bytes),
+          catch: (cause) => new StorageFailure({ cause }),
+        });
         const previous = yield* Schema.decodeUnknownEffect(
           Schema.fromJsonString(MigratingProgram),
           { onExcessProperty: "error" },
-        )(Buffer.from(bytes).toString());
+        )(text).pipe(Effect.result);
+        if (previous._tag === "Failure") {
+          const historical =
+            (code.customMetadata?.format === undefined ||
+              code.customMetadata.format === "historical-source-text-v1") &&
+            (record.language === "javascript" ||
+              record.language === "typescript" ||
+              record.language === "shell") &&
+            (record.status === "exited" ||
+              record.status === "failed" ||
+              record.status === "cancelled") &&
+            record.authority === null &&
+            record.deadlineAt === null &&
+            record.checkpoint === null;
+          if (!historical) return yield* new StorageFailure({ cause: previous.failure });
+          yield* Schema.decodeUnknownEffect(Schema.String.check(Schema.isMaxLength(1_048_576)))(
+            text,
+          ).pipe(Effect.mapError((cause) => new StorageFailure({ cause })));
+          if (code.customMetadata?.format === "historical-source-text-v1") return record.sourceHash;
+          const retained = yield* Effect.tryPromise({
+            try: () =>
+              env.OBJECTS.put(key, bytes, {
+                onlyIf: { etagMatches: code.etag },
+                customMetadata: { format: "historical-source-text-v1" },
+                httpMetadata: { contentType: "text/plain; charset=utf-8" },
+              }),
+            catch: (cause) => new StorageFailure({ cause }),
+          });
+          if (retained === null)
+            return yield* new StorageFailure({ cause: "Historical source changed concurrently" });
+          return record.sourceHash;
+        }
         const program = yield* Effect.sync(() => {
-          if ("env" in previous) return previous;
-          return { ...previous, env: {} };
+          if ("env" in previous.success) return previous.success;
+          return { ...previous.success, env: {} };
         });
         const hash = yield* archive(env, id, program);
         if (hash === record.sourceHash) {
