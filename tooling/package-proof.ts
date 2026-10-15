@@ -214,6 +214,15 @@ await Effect.runPromise(
         }),
       )(rpc.record?.output?.result);
       if (rpc.calls !== 1) return yield* Effect.die("Packaged RPC callback count mismatch");
+      const disposed = yield* Schema.decodeUnknownEffect(RpcProbe)(
+        yield* request("/?rpc=disposal", "package-disposal"),
+      );
+      if (
+        disposed.calls !== 1 ||
+        disposed.record?.status !== "cancelled" ||
+        (disposed.record.output !== null && disposed.record.output.result !== null)
+      )
+        return yield* Effect.die("Packaged RPC disposal did not cancel the admitted guest");
       for (const phase of ["create", "read"] as const) {
         const persistent = yield* Schema.decodeUnknownEffect(PersistentDriverProof)(
           yield* request(`/?persistent=${phase}`, "package-persistent"),
@@ -242,7 +251,7 @@ await Effect.runPromise(
           version: sdk.version,
           transport: "native Alchemy workerd service binding and Agent RPC; local R2 and Queue",
           proof:
-            "SDK archive exports and consumer declarations; runtime archive; filesystem snapshot restore; hard-link metadata; RPC callbacks; persistent driver contexts and cancellation; scoped authority",
+            "SDK archive exports and consumer declarations; runtime archive; filesystem snapshot restore; hard-link metadata; RPC callbacks and cooperative disposal; persistent driver contexts and cancellation; scoped authority",
         }),
       );
     }),

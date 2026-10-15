@@ -46,6 +46,77 @@ const report = await Effect.runPromise(
       const client = yield* make({ url, token: Redacted.make(grant.token) });
       const cases = [
         {
+          name: "home-word",
+          source: 'HOME="/tmp/home with space"; echo ~ ~/file',
+          stdout: "/tmp/home with space /tmp/home with space/file\n",
+          diagnostic: "",
+          exitCode: 0,
+        },
+        {
+          name: "home-quotes",
+          source: String.raw`HOME=/tmp/home; echo '~' \~ ~'' ~/''file`,
+          stdout: "~ ~ ~ /tmp/home/file\n",
+          diagnostic: "",
+          exitCode: 0,
+        },
+        {
+          name: "home-assignment",
+          source: 'HOME="/tmp/home with space"; A=~:~/bin:/bin:~; echo "$A"',
+          stdout: "/tmp/home with space:/tmp/home with space/bin:/bin:/tmp/home with space\n",
+          diagnostic: "",
+          exitCode: 0,
+        },
+        {
+          name: "home-declarations",
+          source: 'HOME=/tmp/home; export A=~/export; readonly B=~/readonly; echo "$A:$B"',
+          stdout: "/tmp/home/export:/tmp/home/readonly\n",
+          diagnostic: "",
+          exitCode: 0,
+        },
+        {
+          name: "home-sequential",
+          source: 'HOME=/tmp/old; HOME=/tmp/new A=~/file; echo "$A"',
+          stdout: "/tmp/new/file\n",
+          diagnostic: "",
+          exitCode: 0,
+        },
+        {
+          name: "home-temporary",
+          source: "HOME=/tmp/old; HOME=/tmp/new echo ~; echo ~",
+          stdout: "/tmp/old\n/tmp/old\n",
+          diagnostic: "",
+          exitCode: 0,
+        },
+        {
+          name: "home-redirect",
+          source:
+            'HOME="/tmp/home with space"; mkdir -p "$HOME"; echo retained > ~/file; cat ~/file',
+          stdout: "retained\n",
+          diagnostic: "",
+          exitCode: 0,
+        },
+        {
+          name: "home-empty",
+          source: 'HOME=""; echo before ~ after',
+          stdout: "before  after\n",
+          diagnostic: "",
+          exitCode: 0,
+        },
+        {
+          name: "home-missing",
+          source: "unset HOME; A=~",
+          stdout: "",
+          diagnostic: "requires HOME",
+          exitCode: 1,
+        },
+        {
+          name: "home-login-denied",
+          source: "HOME=/tmp/home; A=~root/file",
+          stdout: "",
+          diagnostic: "login-name tilde expansion",
+          exitCode: 1,
+        },
+        {
           name: "readonly-value",
           source: 'readonly A="retained value"; echo "$A"',
           stdout: "retained value\n",
@@ -202,7 +273,7 @@ const report = await Effect.runPromise(
             (probe.diagnostic !== "" && !run.output.stderr.includes(probe.diagnostic)) ||
             run.output.exitCode !== probe.exitCode
           )
-            return yield* Effect.die(`Shell parameter proof failed: ${probe.name}`);
+            return yield* Effect.die({ probe: probe.name, run });
           return { name: probe.name, exitCode: run.output.exitCode };
         }),
       );
