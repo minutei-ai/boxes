@@ -35,12 +35,15 @@ import { shell } from "./shell";
 import { restoreExecutionCheckpoint } from "./checkpoint";
 import { archiveOutput, restoreOutput, readOutputRange } from "./output";
 
+export const executionWindowMs = 900_000;
+
 const reserve = Effect.fn("process.reserve")(function* (
   env: Env,
   capability: typeof Capability.Type,
   action: typeof RunAction.Type,
   detached: boolean,
   stdinMode: typeof StoredRun.Type.stdinMode,
+  timeoutMs: number | null,
 ) {
   yield* requirePermission(capability, "execute");
   const session = yield* open(env, capability.sandboxId);
@@ -75,8 +78,12 @@ const reserve = Effect.fn("process.reserve")(function* (
     });
   const sourceHash = yield* archive(env, capability.sandboxId, program);
   const launch = yield* Effect.sync(() => {
-    if (detached) return { status: "queued" as const, authority: capability };
-    return { status: "running" as const, authority: null };
+    if (detached) return { status: "queued" as const, authority: capability, deadlineAt: null };
+    return {
+      status: "running" as const,
+      authority: null,
+      deadlineAt: startedAt + Math.min(executionWindowMs, timeoutMs ?? executionWindowMs),
+    };
   });
   const record: typeof RunRecord.Type = {
     id: action.id,
@@ -91,7 +98,7 @@ const reserve = Effect.fn("process.reserve")(function* (
     ...record,
     output: null,
     authority: launch.authority,
-    deadlineAt: null,
+    deadlineAt: launch.deadlineAt,
     stdinMode,
     checkpoint: null,
     checkpointCount: 0,
@@ -130,7 +137,8 @@ const reserve = Effect.fn("process.reserve")(function* (
     program: prepared,
     etag: receipt.etag,
     sandboxEtag: session.etag,
-    deadlineAt: Schema.decodeUnknownSync(Schema.NullOr(Schema.Int))(null),
+    deadlineAt: launch.deadlineAt,
+    allowCheckpoint: detached,
   };
 });
 
@@ -285,6 +293,12 @@ const complete = Effect.fn("process.complete")(function* (
           status: 401,
           message: "Capability expired before program entry",
         });
+      if (reservation.deadlineAt !== null && reservation.deadlineAt <= admittedAt)
+        return yield* new Fault({
+          code: "ETIMEDOUT",
+          status: 408,
+          message: "Execution deadline elapsed before program entry",
+        });
       if (program.language === "shell" && memoryLimitBytes !== null)
         return yield* new Fault({
           code: "EINVAL",
@@ -311,7 +325,7 @@ const complete = Effect.fn("process.complete")(function* (
           return null;
         }),
         reservation.checkpoint,
-        reservation.deadlineAt !== null,
+        reservation.allowCheckpoint,
         host,
         memoryLimitBytes,
       );
@@ -329,8 +343,13 @@ const complete = Effect.fn("process.complete")(function* (
     cancellation,
   );
   const output = yield* Effect.gen(function* () {
-    if (timeoutMs === null) return yield* supervised;
-    return yield* supervised.pipe(Effect.timeout(timeoutMs));
+    if (reservation.deadlineAt === null) {
+      if (timeoutMs === null) return yield* supervised;
+      return yield* supervised.pipe(Effect.timeout(timeoutMs));
+    }
+    const remaining = Math.max(1, reservation.deadlineAt - (yield* Clock.currentTimeMillis));
+    if (timeoutMs === null) return yield* supervised.pipe(Effect.timeout(remaining));
+    return yield* supervised.pipe(Effect.timeout(Math.min(timeoutMs, remaining)));
   }).pipe(Effect.result);
   if (
     output._tag === "Success" &&
@@ -525,7 +544,9 @@ export const run = Effect.fn("process.run")(function* (
   typeof RunRecord.Type,
   Fault | StorageFailure | Schema.SchemaError | QueueFailure
 > {
-  const reservation = yield* Effect.scoped(reserve(env, capability, action, false, "closed"));
+  const reservation = yield* Effect.scoped(
+    reserve(env, capability, action, false, "closed", timeoutMs),
+  );
   return yield* complete(env, capability, reservation, timeoutMs, host, memoryLimitBytes);
 });
 
@@ -774,7 +795,7 @@ export const dispatch = Effect.fn("process.dispatch")(function* (env: Env, body:
     }),
     authority: null,
     checkpoint: null,
-    deadlineAt: stored.deadlineAt ?? now + 900_000,
+    deadlineAt: stored.deadlineAt ?? now + executionWindowMs,
   };
   const claimed = yield* Effect.tryPromise({
     try: () =>
@@ -816,6 +837,7 @@ export const dispatch = Effect.fn("process.dispatch")(function* (env: Env, body:
       etag: claimed.etag,
       sandboxEtag: lifetime.success,
       deadlineAt: running.deadlineAt,
+      allowCheckpoint: true,
       stdinMode: running.stdinMode,
       checkpoint: stored.checkpoint,
       checkpointCount: stored.checkpointCount,
@@ -836,7 +858,7 @@ export const spawn = Effect.fn("process.spawn")(function* (
   action: typeof RunAction.Type,
   stdinMode: typeof StoredRun.Type.stdinMode,
 ) {
-  const reservation = yield* Effect.scoped(reserve(env, capability, action, true, stdinMode));
+  const reservation = yield* Effect.scoped(reserve(env, capability, action, true, stdinMode, null));
   yield* Effect.tryPromise({
     try: () =>
       env.EVENTS.send(

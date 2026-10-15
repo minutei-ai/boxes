@@ -18,6 +18,8 @@ import {
   FilesystemMigrationReceipt,
   OutputMigrationInput,
   OutputMigrationReceipt,
+  ProcessDeadlineMigrationInput,
+  ProcessDeadlineMigrationReceipt,
   CreateSandbox,
   ErrorResponse,
   Fault,
@@ -47,7 +49,7 @@ import { tick } from "./cron";
 import { guestAction } from "./capabilities";
 import { migrateConfiguration } from "./configuration-migration";
 import { migrateFilesystem } from "./filesystem-migration";
-import { migrateProcesses, migrateOutput } from "./process-migration";
+import { migrateProcesses, migrateOutput, migrateDeadlines } from "./process-migration";
 import { migrateWasm } from "./wasm-migration";
 import { readBounded } from "./http";
 import {
@@ -129,6 +131,21 @@ const route = Effect.fn("api.route")(function* (request: Request, env: Env) {
     return new Response(Schema.encodeSync(Schema.fromJsonString(OutputMigrationReceipt))(receipt), {
       headers: { "content-type": "application/json", "cache-control": "no-store" },
     });
+  }
+  if (url.pathname === "/v1/migrations/process-deadlines-v1") {
+    yield* administrator(env, token);
+    const bytes = yield* readBounded(request.body, 4096);
+    const input = yield* Schema.decodeUnknownEffect(
+      Schema.fromJsonString(ProcessDeadlineMigrationInput),
+      { onExcessProperty: "error" },
+    )(bytes.toString("utf8"));
+    const receipt = yield* migrateDeadlines(env, input.cursor ?? null);
+    return new Response(
+      Schema.encodeSync(Schema.fromJsonString(ProcessDeadlineMigrationReceipt))(receipt),
+      {
+        headers: { "content-type": "application/json", "cache-control": "no-store" },
+      },
+    );
   }
   if (url.pathname === "/v1/migrations/wasm-inputs-v1") {
     yield* administrator(env, token);

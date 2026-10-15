@@ -59,6 +59,7 @@ const RpcCase = Schema.Literals([
   "disposal",
   "error",
   "timeout",
+  "deadline",
   "credentials",
   "wrong-sandbox",
   "oversize",
@@ -403,6 +404,7 @@ export default {
               'export default async ({tools}) => { await tools.call({op:"filesystem.writeFile",path:"/tmp/source",content:"old",encoding:"utf8"}); await tools.call({op:"filesystem.link",from:"/tmp/source",to:"/tmp/alias",follow:false}); await tools.call({op:"filesystem.writeFile",path:"/tmp/alias",content:"binding",encoding:"utf8"}); const a = await tools.call({op:"filesystem.stat",path:"/tmp/source",follow:true}); const b = await tools.call({op:"filesystem.stat",path:"/tmp/alias",follow:true}); const file = await tools.call({op:"filesystem.readFile",path:"/tmp/source"}); return {same:a.inode===b.inode,links:a.nlink,content:file.content,callback:await tools.call({op:"host.call",name:"lookup",input:{}})}; }';
           }
           if (mode === "timeout") input.timeoutMs = 25;
+          if (mode === "deadline") input.timeoutMs = 5000;
           if (mode === "undefined")
             input.source =
               'export default async ({tools}) => (await tools.call({op:"host.call",name:"lookup"})) === undefined';
@@ -438,6 +440,18 @@ export default {
                 return { ok: true, value: "disposed" };
               }
               if (mode === "error") return { ok: false, message: "declared callback failure" };
+              if (mode === "deadline") {
+                const record = await Effect.runPromise(
+                  boxes.action(id, { op: "process.get", id: input.id }),
+                );
+                const recovery = await Effect.runPromise(
+                  boxes.action(id, { op: "process.recovery.status", id: input.id }),
+                );
+                return {
+                  ok: true,
+                  value: recovery.deadlineAt === record.startedAt + input.timeoutMs,
+                };
+              }
               if (mode === "timeout")
                 return Effect.runPromise(
                   Effect.sleep(100).pipe(Effect.as({ ok: true as const, value: "late" })),

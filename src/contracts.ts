@@ -975,6 +975,13 @@ export const OutputMigrationReceipt = Schema.Struct({
   migrated: Schema.Int,
   cursor: Schema.NullOr(Schema.String),
 });
+export const ProcessDeadlineMigrationInput = Schema.Struct({
+  cursor: Schema.optionalKey(Schema.NullOr(Schema.String.check(Schema.isMaxLength(2048)))),
+});
+export const ProcessDeadlineMigrationReceipt = Schema.Struct({
+  migrated: Schema.Int,
+  cursor: Schema.NullOr(Schema.String.check(Schema.isMaxLength(2048))),
+});
 const FilesystemMigrationCursor = Schema.Struct({
   phase: Schema.Literals(["heads", "checkpoints"]),
   continuation: Schema.NullOr(Schema.String.check(Schema.isMaxLength(2048))),

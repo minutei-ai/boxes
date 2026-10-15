@@ -1,0 +1,65 @@
+{
+  "status": "Local native validation complete; new inline deadline behavior and migration have not been deployed. Production remains the previous batch-write delivery.",
+  "baseCommit": "ec8f3e4",
+  "runtimePolicy": "Inline reservations persist the earlier of their requested RPC timeout and a 900000 ms execution window. Running instructions enforce the remaining absolute budget. Queued claims retain their existing deadline and checkpoint policy; inline work cannot hand over request-scoped capabilities.",
+  "migration": "process-deadlines-v1 runs unconditionally at stack deployment after the prior migrations. Native pages contain at most 50 receipts; only active bodies are read, identity/metadata are validated and missing deadlines are conditionally filled from startedAt. Existing deadlines, queued/terminal receipts and acknowledged outputs are preserved.",
+  "verification": {
+    "completeGate": "bun run check passed: build, SDK declarations, TypeScript, workspace Clippy and Cargo tests, then native Bun tests.",
+    "nativeTests": {
+      "tests": 346,
+      "files": 62,
+      "assertions": 4739,
+      "seconds": 134.35,
+      "failures": 0
+    },
+    "changedBoundary": "Two new native recovery/cutover tests passed, including 51 seeded pre-cutover orphans, Worker replacement and native R2 cursor continuation, repeated-page idempotence, unchanged existing deadlines and queued/terminal ETags, 51 expired settlements plus one future deadline, no program replay, preserved stdout, collection, control authorization, rejected unknown inputs and inconsistent metadata. The native Agent RPC test verifies the requested 5000 ms deadline while the callback is active.",
+    "redEvidence": "The active inline reservation test failed against the prior runtime because deadlineAt was null; it passes against the candidate.",
+    "fixtureCorrection": "The initial migration test expected 403 for a scoped token at the administrator boundary. Native administrator authentication returns 401; the test was corrected without changing that boundary.",
+    "exactArchiveProof": "bun run package:proof passed against these exact archives: consumer declarations/public exports, native default and Agent binding, snapshots/hard links, cooperative disposal, reclamation and persistent-driver authority/cancellation.",
+    "format": "bun run format:check passed; maintained evidence is formatted again after adding package receipts."
+  },
+  "runtimeArtifactsSha256": {
+    "cirro_compiler_bg.wasm": "27d9b0022a634ed4eef47b6561ad38cafde3522c17e834afed1264440678bf2f",
+    "cirro_guest_bg.wasm": "b773b74626b08bd1083860081ccd2a3d0fdff80dcd97b5ec13ed7c6e2148ef22",
+    "cirro_kernel_bg.wasm": "3c80cd3b32fd8a5d2b63ea6292f19813552bda74a9f4249971355513c0658d29",
+    "cirro_python_bg.wasm": "8aa6aec5ab6fb0623637e2b6dda7318f4934e4736f4a97e45ca3312bf32e529c",
+    "cirro_wasi_bg.wasm": "c8a585cdffb370dcf67571547d3c2df1df2f279a9ff22d7050a5d13a5bf10784",
+    "index.js": "8037884aaef2bb97ad22283492199ca9d7430e051d8f1b12da92551fb271790e"
+  },
+  "sourceSha256": {
+    "src/process.ts": "e43fbeef2051a2c5eaaf86d78a433fe41e53c74aedbe47015e9469a5b0932c7b",
+    "src/process-migration.ts": "0f9240317c382446b31a0645ead1b9809b56a7e77b4e73b013466522f233f583",
+    "src/contracts.ts": "f0b2a2dfa984e5e47be46f426fcff239359b1973e79dd2c0362c69d8e25ce198",
+    "src/index.ts": "63f36cd04220d9e46d732baf34263410b8f5fde995c8a47ec4d5e89f8bb7c034",
+    "alchemy.run.ts": "73087cf37ed82630375731404b629cf909d91e022c13c45f8ed880a1cbb4b649",
+    "tests/inline-recovery.test.ts": "223113896ea9e0f90549e664662dc445550cd5f2e635b0b33cfbfb745021bc49",
+    "tests/rpc.test.ts": "8a82da688bfcee6871879379f1879b74ecf8be1aab19cc5e15141354c7cddcb5",
+    "tests/fixtures/sdk-binding-worker.ts": "68977b4f3a75d5521eaf6a73f232af3919c1974bae5ca379a8f7fb701a23fc8f"
+  },
+  "limits": [
+    "The orphan receipts were seeded from real native execution/output, not produced by an actual Cloudflare crash. Arbitrary-crash recovery remains unproven.",
+    "A deadline settles expired observation; it does not resume inline instructions, undo acknowledged effects or revoke an already issued external operation.",
+    "The five-minute native repair cadence and Queue delivery determine observation latency.",
+    "No heartbeat or additional per-request R2 lease writes were added. Billing, peak memory and production latency were not measured.",
+    "No new deploy, new archive publication or CI result is claimed by this record."
+  ],
+  "archives": [
+    {
+      "file": "minutei-ai-boxes-0.10.0.tgz",
+      "bytes": 70888,
+      "sha256": "c720e7c9810b03d632709231e4502fccaabd222365837f741dd049bfbc7f39a5",
+      "entries": 16,
+      "configuredCredentialAbsent": true,
+      "licenseMatches": true
+    },
+    {
+      "file": "minutei-ai-boxes-runtime-0.10.0.tgz",
+      "bytes": 5520902,
+      "sha256": "674193ac632b5d5757b39b0a45f067ee9a2f8acb2cb326fbc7d516194ff32de4",
+      "entries": 8,
+      "configuredCredentialAbsent": true,
+      "licenseMatches": true
+    }
+  ],
+  "archiveAuditLimit": "Expected paths, exact Apache-2.0 licenses and absence of the exact configured control credential; not a general secret or dependency-license audit."
+}

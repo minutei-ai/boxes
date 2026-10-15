@@ -68,6 +68,12 @@ test("RPC timeout terminates guest execution while accepted callback effects ret
   expect(result.record?.status).toBe("failed");
   expect(result.record?.output?.result).not.toBe("late");
 });
+test("native RPC persists its requested timeout as the inline recovery deadline", async () => {
+  const result = await probe("deadline");
+  expect(result.calls).toBe(1);
+  expect(result.record?.status).toBe("exited");
+  expect(result.record?.output?.result).toBe(true);
+});
 test("a queued execution cannot recover request-scoped callbacks", async () => {
   const result = await probe("queue");
   expect(result.calls).toBe(0);

@@ -8,6 +8,8 @@ import {
   EnvironmentMigrationReceipt,
   OutputMigrationInput,
   OutputMigrationReceipt,
+  ProcessDeadlineMigrationInput,
+  ProcessDeadlineMigrationReceipt,
   FilesystemMigrationInput,
   FilesystemMigrationReceipt,
 } from "./src/contracts";
@@ -196,11 +198,55 @@ const migrate = Alchemy.Action(
         });
         if (page.cursor !== null) filesystemCursors.push(page.cursor);
       }
+      const deadlines = { pages: 0, migrated: 0 };
+      const deadlineCursors: (typeof ProcessDeadlineMigrationReceipt.Type.cursor)[] = [null];
+      while (deadlineCursors.length > 0) {
+        const cursor = deadlineCursors.shift();
+        const response = yield* Effect.tryPromise({
+          try: () =>
+            fetch(new URL("/v1/migrations/process-deadlines-v1", url), {
+              method: "POST",
+              headers: {
+                authorization: `Bearer ${Redacted.value(key)}`,
+                "content-type": "application/json",
+              },
+              body: Schema.encodeSync(Schema.fromJsonString(ProcessDeadlineMigrationInput))({
+                cursor,
+              }),
+              signal: AbortSignal.timeout(120_000),
+            }),
+          catch: (cause) =>
+            new MigrationRequestFailure({ cause, path: "/v1/migrations/process-deadlines-v1" }),
+        });
+        if (!response.ok)
+          return yield* new MigrationRequestFailure({
+            cause: response.status,
+            path: "/v1/migrations/process-deadlines-v1",
+          });
+        const text = yield* Effect.tryPromise({
+          try: () => response.text(),
+          catch: (cause) =>
+            new MigrationRequestFailure({ cause, path: "/v1/migrations/process-deadlines-v1" }),
+        });
+        const page = yield* Schema.decodeUnknownEffect(
+          Schema.fromJsonString(ProcessDeadlineMigrationReceipt),
+        )(text);
+        deadlines.pages += 1;
+        deadlines.migrated += page.migrated;
+        yield* Effect.logInfo({
+          migration: "process-deadlines-v1",
+          page: deadlines.pages,
+          migrated: page.migrated,
+          hasMore: page.cursor !== null,
+        });
+        if (page.cursor !== null) deadlineCursors.push(page.cursor);
+      }
       return {
         receipts,
         filesystemMigration: filesystem,
         environmentMigration: { heads: configurationHeads, programs: configurationPrograms },
         inputMigration: progress,
+        deadlineMigration: deadlines,
         deployedAt: input.deployedAt,
       };
     });

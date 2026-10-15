@@ -3,6 +3,89 @@ import { RunRecord, RunMetadata, StoredRun, StoredRunMetadata, Id, Capability } 
 import { StorageFailure } from "./storage";
 import type { Env } from "./resources";
 import { archiveOutput } from "./output";
+import { executionWindowMs } from "./process";
+
+export const migrateDeadlines = Effect.fn("migration.processDeadlines")(function* (
+  env: Env,
+  cursor: string | null,
+) {
+  const progress = { migrated: 0 };
+  const page = yield* Effect.tryPromise({
+    try: () =>
+      env.OBJECTS.list({
+        prefix: "processes/",
+        cursor: cursor ?? undefined,
+        limit: 50,
+        include: ["customMetadata"],
+      }),
+    catch: (cause) => new StorageFailure({ cause }),
+  });
+  yield* Effect.forEach(
+    page.objects,
+    (object) =>
+      Effect.gen(function* () {
+        const metadata = yield* Schema.decodeUnknownEffect(StoredRunMetadata)(
+          object.customMetadata,
+        );
+        if (metadata.summary.status !== "running" && metadata.summary.status !== "cancelling")
+          return;
+        const parts = object.key.split("/");
+        const sandboxId = yield* Schema.decodeUnknownEffect(Id)(parts[1]);
+        if (
+          parts.length !== 3 ||
+          object.key !== `processes/${sandboxId}/${metadata.summary.id}.json`
+        )
+          return yield* new StorageFailure({
+            cause: "Deadline migration process identity mismatch",
+          });
+        const stored = yield* Effect.tryPromise({
+          try: () => env.OBJECTS.get(object.key, { onlyIf: { etagMatches: object.etag } }),
+          catch: (cause) => new StorageFailure({ cause }),
+        });
+        if (stored === null || !("body" in stored) || stored.size > 8_388_608)
+          return yield* new StorageFailure({ cause: "Process changed during deadline migration" });
+        const text = yield* Effect.tryPromise({
+          try: () => stored.text(),
+          catch: (cause) => new StorageFailure({ cause }),
+        });
+        const record = yield* Schema.decodeUnknownEffect(Schema.fromJsonString(StoredRun))(text);
+        const summary = Struct.omit(record, [
+          "output",
+          "authority",
+          "deadlineAt",
+          "stdinMode",
+          "checkpoint",
+          "checkpointCount",
+        ]);
+        if (!Schema.toEquivalence(StoredRunMetadata.fields.summary)(metadata.summary, summary))
+          return yield* new StorageFailure({
+            cause: "Deadline migration metadata does not match the receipt",
+          });
+        if (record.deadlineAt !== null) return;
+        const updated = { ...record, deadlineAt: record.startedAt + executionWindowMs };
+        const saved = yield* Effect.tryPromise({
+          try: () =>
+            env.OBJECTS.put(
+              object.key,
+              Schema.encodeSync(Schema.fromJsonString(StoredRun))(updated),
+              {
+                onlyIf: { etagMatches: stored.etag },
+                customMetadata: Schema.encodeSync(StoredRunMetadata)(metadata),
+              },
+            ),
+          catch: (cause) => new StorageFailure({ cause }),
+        });
+        if (saved === null)
+          return yield* new StorageFailure({
+            cause: "Process changed during deadline publication",
+          });
+        progress.migrated += 1;
+      }),
+    { concurrency: 4 },
+  );
+  if (page.truncated) return { migrated: progress.migrated, cursor: page.cursor };
+  return { migrated: progress.migrated, cursor: null };
+});
 
 export const migrateProcesses = Effect.fn("migration.processReceipts")(function* (env: Env) {
   const cursors: (string | undefined)[] = [undefined];
