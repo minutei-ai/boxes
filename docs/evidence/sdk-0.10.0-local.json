@@ -45,7 +45,7 @@
     "bun run package:proof /tmp/boxes-package-check/minutei-ai-boxes-[0-9]*.tgz /tmp/boxes-package-check/minutei-ai-boxes-runtime-[0-9]*.tgz"
   ],
   "delivery": {
-    "githubPublication": "pending; authenticated gh commands timed out, including an 80-second observation; unauthenticated public API connectivity was successful",
+    "githubPublication": "pending; authenticated CLI request returned HTTP 401. The configured credential is in a locked local keyring; publication awaits restored credential access. Token validity is not yet verified.",
     "remoteCI": "not verified for this candidate",
     "backendDeployment": "not performed for this candidate",
     "minutei": "still consumes published SDK/runtime 0.9.0; no dependency switched to an unpublished URL or local artifact",
