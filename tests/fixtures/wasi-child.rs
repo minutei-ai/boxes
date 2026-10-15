@@ -220,7 +220,11 @@ pub extern "C" fn run() -> i32 {
             return 2;
         }
         let mut offset = 0;
-        if fd_seek(fd, 2, 0, &mut offset) != 0 || fd_dup2(fd, 9) != 0 || fd_setfd(fd, 1) != 0 {
+        if fd_seek(fd, 2, 0, &mut offset) != 0
+            || fd_dup2(fd, 9) != 0
+            || fd_setfd(fd, 1) != 0
+            || fd_setfd(9, 1) != 0
+        {
             return 3;
         }
         let mut marker = *b"parent\n";
@@ -235,7 +239,7 @@ pub extern "C" fn run() -> i32 {
         let path = b"/tmp/child.wasm";
         let argv = b"kept argv0\0\0two\0";
         let env = b"COLOR=blue\0";
-        let mut actions = [0u8; 48];
+        let mut actions = [0u8; 72];
         actions[..4].copy_from_slice(&2u32.to_le_bytes());
         actions[4..8].copy_from_slice(&10u32.to_le_bytes());
         actions[8..12].copy_from_slice(&9u32.to_le_bytes());
@@ -248,6 +252,9 @@ pub extern "C" fn run() -> i32 {
             .to_le_bytes(),
         );
         actions[28..32].copy_from_slice(&10u32.to_le_bytes());
+        actions[48..52].copy_from_slice(&2u32.to_le_bytes());
+        actions[52..56].copy_from_slice(&9u32.to_le_bytes());
+        actions[56..60].copy_from_slice(&9u32.to_le_bytes());
         let mut child = 91;
         let status = proc_spawn_v3(
             path.as_ptr(),
@@ -293,6 +300,8 @@ pub extern "C" fn run() -> i32 {
         if fd_tell(fd, &mut offset) != 0
             || offset != 4
             || fd_getfd(fd, &mut flags) != 0
+            || flags != 1
+            || fd_getfd(9, &mut flags) != 0
             || flags != 1
         {
             return 8;

@@ -3966,8 +3966,10 @@ impl WasmGuest {
                             resources.close(action.fd);
                             resources.descriptors.insert(action.fd, source);
                             resources.closed.remove(&action.fd);
-                            resources.cloexec.remove(&action.fd);
                         }
+                    }
+                    if errno == 0 {
+                        resources.cloexec.remove(&action.fd);
                     }
                 } else {
                     errno = 8;

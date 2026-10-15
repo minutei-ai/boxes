@@ -14,7 +14,7 @@ afterAll(async () => {
 });
 
 test(
-  "published sh executes compound syntax and applies process-local creation masks",
+  "published sh and jq compose through native pipes, files and process-local creation masks",
   () =>
     Effect.runPromise(
       Effect.gen(function* () {
@@ -26,7 +26,7 @@ test(
           policy: {
             networkHosts: [],
             interruptBudget: 100000,
-            memoryBytes: 33554432,
+            memoryBytes: 8388608,
             maxOutputBytes: 1048576,
           },
         });
@@ -35,31 +35,48 @@ test(
           expiresInSeconds: 600,
         });
         const client = yield* make({ url, token: Redacted.make(grant.token) });
-        const digest = "f606cc4caa9ba50f7022d681269ca0ea98ccffc0d29f3106a0f18ab593c59412";
-        const response = yield* Effect.promise(() =>
-          fetch(
-            `https://releases.rivet.dev/agent-os/latest/software/packages/sh/${digest}.aospkg`,
-            { signal: AbortSignal.timeout(30000) },
-          ),
+        yield* Effect.forEach(
+          [
+            {
+              name: "sh",
+              digest: "f606cc4caa9ba50f7022d681269ca0ea98ccffc0d29f3106a0f18ab593c59412",
+              size: 3104428,
+            },
+            {
+              name: "jq",
+              digest: "edb1cf0bbcf663d177916592d2f1b4361a02966dbf2eb44e3e61ea2a399bb43a",
+              size: 716972,
+            },
+          ],
+          (software) =>
+            Effect.gen(function* () {
+              const response = yield* Effect.promise(() =>
+                fetch(
+                  `https://releases.rivet.dev/agent-os/latest/software/packages/${software.name}/${software.digest}.aospkg`,
+                  { signal: AbortSignal.timeout(30000) },
+                ),
+              );
+              expect(response.status).toBe(200);
+              const bytes = yield* Effect.promise(() => response.arrayBuffer());
+              expect(bytes.byteLength).toBe(software.size);
+              expect(
+                Buffer.from(
+                  yield* Effect.promise(() => crypto.subtle.digest("SHA-256", bytes)),
+                ).toString("hex"),
+              ).toBe(software.digest);
+              const path = `/tmp/${software.name}.aospkg`;
+              yield* client.action(id, {
+                op: "filesystem.writeFile",
+                path,
+                content: Buffer.from(bytes).toString("base64"),
+                encoding: "base64",
+              });
+              yield* client.action(id, {
+                op: "software.install",
+                source: { path, digest: `sha256:${software.digest}` },
+              });
+            }),
         );
-        expect(response.status).toBe(200);
-        const bytes = yield* Effect.promise(() => response.arrayBuffer());
-        expect(bytes.byteLength).toBe(3104428);
-        expect(
-          Buffer.from(yield* Effect.promise(() => crypto.subtle.digest("SHA-256", bytes))).toString(
-            "hex",
-          ),
-        ).toBe(digest);
-        yield* client.action(id, {
-          op: "filesystem.writeFile",
-          path: "/tmp/sh.aospkg",
-          content: Buffer.from(bytes).toString("base64"),
-          encoding: "base64",
-        });
-        yield* client.action(id, {
-          op: "software.install",
-          source: { path: "/tmp/sh.aospkg", digest: `sha256:${digest}` },
-        });
         const cases = [
           { source: "for x in one two; do echo $x; done", stdout: "one\ntwo\n" },
           { source: "f() { echo function; }; if true; then f; fi", stdout: "function\n" },
@@ -76,6 +93,15 @@ test(
           { source: "umask 077; sh -c umask; umask", stdout: "0077\n0077\n" },
           { source: "umask 077; sh -c 'umask 022'; umask", stdout: "0077\n" },
           { source: "umask 077; exec sh -c umask", stdout: "0077\n" },
+          { source: `echo '{"value":42}' | jq .value`, stdout: "42\n" },
+          { source: `answer=$(jq -n '21*2'); echo "$answer"`, stdout: "42\n" },
+          { source: `jq .value <<'JSON'\n{"value":73}\nJSON`, stdout: "73\n" },
+          {
+            source: `printf 'first\\nsecond\\n' | while read line; do echo "$line"; done`,
+            stdout: "first\nsecond\n",
+          },
+          { source: `sh -c 'printf out; printf err >&2' > /tmp/composed 2>&1`, stdout: "" },
+          { source: `jq -Rs . /tmp/composed`, stdout: '\"outerr\"\n' },
         ];
         yield* Effect.forEach(cases, (probe, index) =>
           Effect.gen(function* () {
@@ -144,7 +170,7 @@ test(
         yield* client.action(id, { op: "vm.dispose" });
       }).pipe(Effect.provide(FetchHttpClient.layer)),
     ),
-  20000,
+  30000,
 );
 
 test(
