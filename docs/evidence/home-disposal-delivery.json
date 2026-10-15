@@ -1,0 +1,345 @@
+{
+  "status": "Native distribution and deployed ordinary Worker verified; publication deferred.",
+  "runtimeSourceCommit": "b34dd09e6fb5bfe905d6d56fdbcddf79bd0b7d32",
+  "deploymentCheckoutCommit": "ea48f62bbced488a309b4c34733f82451b62bd8e",
+  "runtimeArtifactsSha256": {
+    "index.js": "b88d49f66c1262b8a38a4d5e5ff8b16a03550183abc9f4febd0ebd5f58d839b3",
+    "cirro_kernel_bg.wasm": "3c80cd3b32fd8a5d2b63ea6292f19813552bda74a9f4249971355513c0658d29",
+    "cirro_guest_bg.wasm": "b773b74626b08bd1083860081ccd2a3d0fdff80dcd97b5ec13ed7c6e2148ef22",
+    "cirro_compiler_bg.wasm": "27d9b0022a634ed4eef47b6561ad38cafde3522c17e834afed1264440678bf2f",
+    "cirro_wasi_bg.wasm": "a128d4d89a7403b1217b42fa1ff96771836432a0992cba07522d8846c5c6829d",
+    "cirro_python_bg.wasm": "8aa6aec5ab6fb0623637e2b6dda7318f4934e4736f4a97e45ca3312bf32e529c"
+  },
+  "archives": [
+    {
+      "file": "minutei-ai-boxes-0.10.0.tgz",
+      "bytes": 67303,
+      "sha256": "b587b278c0c131fb1e4d700cc4f06ee81681715a03421566729d46f359a0db27",
+      "entries": 16,
+      "name": "@minutei-ai/boxes",
+      "version": "0.10.0",
+      "license": "Apache-2.0",
+      "configuredCredentialAbsent": true,
+      "licenseMatches": true
+    },
+    {
+      "file": "minutei-ai-boxes-runtime-0.10.0.tgz",
+      "bytes": 5517679,
+      "sha256": "8632841db136469906c8552b0c3712574ffee962a1e53bd42f7bec4abadae8cc",
+      "entries": 8,
+      "name": "@minutei-ai/boxes-runtime",
+      "version": "0.10.0",
+      "license": "Apache-2.0",
+      "configuredCredentialAbsent": true,
+      "licenseMatches": true
+    }
+  ],
+  "local": {
+    "completeGate": "bun run check passed: build, SDK declarations, TypeScript, workspace Clippy, workspace Cargo tests and native Bun tests.",
+    "nativeTests": {
+      "tests": 336,
+      "files": 56,
+      "assertions": 4285,
+      "seconds": 121.38,
+      "failures": 0
+    },
+    "kernelTests": 43,
+    "exactArchive": {
+      "version": "0.10.0",
+      "transport": "native Alchemy workerd service binding and Agent RPC; local R2 and Queue",
+      "proof": "SDK archive exports and consumer declarations; runtime archive; filesystem snapshot restore; hard-link metadata; RPC callbacks and cooperative disposal; persistent driver contexts and cancellation; scoped authority"
+    },
+    "minutei": {
+      "clientVersion": "0.9.0",
+      "runtimeVersion": "0.10.0",
+      "runtimeArchiveSha256": "8632841db136469906c8552b0c3712574ffee962a1e53bd42f7bec4abadae8cc",
+      "consumerCommit": "a0a2a05c40ed5fb3bd5d76b14c3baf3bfe4695c2",
+      "consumerBundleSha256": "e29165da4f63ac8a3cedd29f5b13b037e9b4becb1f73b7e06047ad308db1d060",
+      "transport": "native workerd Agent service binding; actual Minutei Code Mode and tenant SQLite; local R2, KV and Queue",
+      "retention": true,
+      "isolatedRegistry": true,
+      "capabilities": true,
+      "consumerFixturesSha256": {
+        "boxes-retention.ts": "225c5d42ff36ffa2ee49ce213816546f73bacb691e646857e8588bd8149360c0",
+        "boxes-code.worker.ts": "f876f01e98358a955a9214c2f6b375f60598a461450b88a052d505531920f87a"
+      }
+    },
+    "additionalProofs": "Maintained HOME shell and active WASI disposal CLI proofs passed against an owned native local workerd before deployment.",
+    "archiveScan": "All 24 entries have expected identities/licenses, matching Apache-2.0 license text, no env/node_modules entries and no exact configured control credential. General secret scanning remains unverified; gitleaks is unavailable.",
+    "verifierCorrection": "The first negative HOME probe appended a succeeding echo, so the program status correctly became zero. The final probe ends on the rejected assignment and requires its actual diagnostic and status 1. No runtime change or artifact rebuild was needed."
+  },
+  "deployment": {
+    "provider": "Alchemy project-local CLI; profile minutei; stage prod",
+    "workerKind": "Existing ordinary Cloudflare Worker; no Dynamic Workers or Worker Loader.",
+    "target": "https://cirro-sandbox-prod-rs7wexxow56rmsoz.manoel-carvalhoneto.workers.dev",
+    "result": "2 succeeded",
+    "seconds": 412.9,
+    "plan": "One Worker update plus unconditional migration action; bucket, Queue, consumer and bindings retained.",
+    "migrationPages": {
+      "environment-v1": {
+        "receipts": 59,
+        "converted": 0
+      },
+      "filesystem-v4": {
+        "receipts": 59,
+        "converted": 0
+      }
+    },
+    "approvalFlag": "Initial non-interactive CLI invocation exited before any changes and explicitly required --yes. The already-authorized reviewed deployment then completed using --yes --no-input.",
+    "artifactIdentity": "The six deployed dist/worker files exactly match the extracted runtime archive digests."
+  },
+  "remote": {
+    "sdk": {
+      "checks": 6,
+      "passed": true,
+      "transport": "Effect FetchHttpClient",
+      "target": "production"
+    },
+    "shell": {
+      "target": "https://cirro-sandbox-prod-rs7wexxow56rmsoz.manoel-carvalhoneto.workers.dev",
+      "measuredAt": 1792074362507,
+      "checks": [
+        {
+          "name": "home-word",
+          "exitCode": 0
+        },
+        {
+          "name": "home-quotes",
+          "exitCode": 0
+        },
+        {
+          "name": "home-assignment",
+          "exitCode": 0
+        },
+        {
+          "name": "home-declarations",
+          "exitCode": 0
+        },
+        {
+          "name": "home-sequential",
+          "exitCode": 0
+        },
+        {
+          "name": "home-temporary",
+          "exitCode": 0
+        },
+        {
+          "name": "home-redirect",
+          "exitCode": 0
+        },
+        {
+          "name": "home-empty",
+          "exitCode": 0
+        },
+        {
+          "name": "home-missing",
+          "exitCode": 1
+        },
+        {
+          "name": "home-login-denied",
+          "exitCode": 1
+        },
+        {
+          "name": "readonly-value",
+          "exitCode": 0
+        },
+        {
+          "name": "readonly-assignment",
+          "exitCode": 2
+        },
+        {
+          "name": "readonly-unset",
+          "exitCode": 2
+        },
+        {
+          "name": "readonly-export",
+          "exitCode": 2
+        },
+        {
+          "name": "readonly-pipeline",
+          "exitCode": 0
+        },
+        {
+          "name": "local-variable",
+          "exitCode": 0
+        },
+        {
+          "name": "temporary-prefix",
+          "exitCode": 0
+        },
+        {
+          "name": "sequential-prefix",
+          "exitCode": 0
+        },
+        {
+          "name": "special-prefix",
+          "exitCode": 0
+        },
+        {
+          "name": "export-word",
+          "exitCode": 0
+        },
+        {
+          "name": "unset-variable",
+          "exitCode": 0
+        },
+        {
+          "name": "pipeline-variable",
+          "exitCode": 0
+        },
+        {
+          "name": "effective-home",
+          "exitCode": 0
+        },
+        {
+          "name": "quoted",
+          "exitCode": 0
+        },
+        {
+          "name": "split",
+          "exitCode": 0
+        },
+        {
+          "name": "single-quoted",
+          "exitCode": 0
+        },
+        {
+          "name": "escaped",
+          "exitCode": 0
+        },
+        {
+          "name": "empty",
+          "exitCode": 0
+        },
+        {
+          "name": "pipeline-status",
+          "exitCode": 0
+        },
+        {
+          "name": "negated-status",
+          "exitCode": 0
+        },
+        {
+          "name": "quoted-redirect",
+          "exitCode": 0
+        },
+        {
+          "name": "ordered-ambiguous-redirect",
+          "exitCode": 0
+        },
+        {
+          "name": "no-reparse",
+          "exitCode": 0
+        },
+        {
+          "name": "configuration-isolation",
+          "exitCode": 0
+        }
+      ],
+      "disposal": true
+    },
+    "binary": {
+      "target": "https://cirro-sandbox-prod-rs7wexxow56rmsoz.manoel-carvalhoneto.workers.dev",
+      "measuredAt": 1792074362480,
+      "checks": [
+        {
+          "name": "stderr",
+          "bytes": 6,
+          "exitCode": 7
+        },
+        {
+          "name": "stderr-append",
+          "bytes": 12,
+          "exitCode": 7
+        },
+        {
+          "name": "pipe",
+          "bytes": 70003,
+          "exitCode": 0
+        },
+        {
+          "name": "append",
+          "bytes": 140006,
+          "exitCode": 0
+        },
+        {
+          "name": "failure",
+          "bytes": 70003,
+          "exitCode": 7
+        },
+        {
+          "name": "trap",
+          "bytes": 70003,
+          "exitCode": 126
+        },
+        {
+          "name": "head-lines",
+          "bytes": 5,
+          "exitCode": 0
+        },
+        {
+          "name": "tail-lines",
+          "bytes": 4,
+          "exitCode": 0
+        },
+        {
+          "name": "head-bytes",
+          "bytes": 3,
+          "exitCode": 0
+        },
+        {
+          "name": "tail-bytes",
+          "bytes": 4,
+          "exitCode": 0
+        },
+        {
+          "name": "wc-bytes",
+          "bytes": 3,
+          "exitCode": 0
+        },
+        {
+          "name": "sort",
+          "bytes": 16,
+          "exitCode": 0
+        },
+        {
+          "name": "uniq",
+          "bytes": 13,
+          "exitCode": 0
+        },
+        {
+          "name": "grep",
+          "bytes": 5,
+          "exitCode": 0
+        }
+      ],
+      "disposal": true
+    },
+    "active": {
+      "target": "https://cirro-sandbox-prod-rs7wexxow56rmsoz.manoel-carvalhoneto.workers.dev",
+      "measuredAt": 1792074372005,
+      "runtime": "wasm",
+      "status": "cancelled",
+      "stdout": "continuation entered\n",
+      "readsDenied": true
+    },
+    "dispose": {
+      "target": "https://cirro-sandbox-prod-rs7wexxow56rmsoz.manoel-carvalhoneto.workers.dev",
+      "measuredAt": 1792074365765,
+      "concurrentDisposals": 3,
+      "repeated": true,
+      "readsDenied": true,
+      "manageRequired": true,
+      "idReuseDenied": true
+    }
+  },
+  "limits": [
+    "Native fixture compatibility is selected Minutei SDK 0.9.0 flows over Agent binding against runtime 0.10.0; old private persistence contracts are not blanket-compatible.",
+    "Minutei application deployment, authenticated/model/browser path and history Queue delivery are not proved by these local fixtures.",
+    "Queued disposal while waiting for an incompatible program format remains a native local proof; no remote bucket format mutation was performed.",
+    "Cancellation is cooperative; synchronous native instructions and previously accepted external effects cannot be revoked midway. Root disposal and process settlement are separate writes.",
+    "No production performance or AgentOS cost advantage is established.",
+    "No GitHub action, SDK/runtime publication or Minutei dependency update was performed.",
+    "Full AgentOS parity remains unachieved; docs/parity.md retains the completion gates."
+  ]
+}

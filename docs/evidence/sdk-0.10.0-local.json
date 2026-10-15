@@ -1,70 +1,104 @@
 {
-  "status": "Readonly shell candidate passed native serial/parallel regression, exact archive binding/RPC proof, backend deployment and 44 remote checks; publication deferred at user request",
+  "status": "HOME expansion and cooperative disposal candidate passed full native checks, exact archive binding/RPC, selected Minutei interoperability and deployed Worker proof. Publication deferred.",
   "version": "0.10.0",
-  "runtimeSourceCommit": "b4112e9b9f5c2b63e0aa9f6d84e7d6e1bea47a96",
+  "runtimeSourceCommit": "b34dd09e6fb5bfe905d6d56fdbcddf79bd0b7d32",
   "runtimeArtifactsSha256": {
-    "cirro_compiler_bg.wasm": "27d9b0022a634ed4eef47b6561ad38cafde3522c17e834afed1264440678bf2f",
+    "index.js": "b88d49f66c1262b8a38a4d5e5ff8b16a03550183abc9f4febd0ebd5f58d839b3",
+    "cirro_kernel_bg.wasm": "3c80cd3b32fd8a5d2b63ea6292f19813552bda74a9f4249971355513c0658d29",
     "cirro_guest_bg.wasm": "b773b74626b08bd1083860081ccd2a3d0fdff80dcd97b5ec13ed7c6e2148ef22",
-    "cirro_kernel_bg.wasm": "4681272bc5df237a99bc9996bd587a7cb13854fddf4cd2c0bedfbfa295682b7c",
-    "cirro_python_bg.wasm": "8aa6aec5ab6fb0623637e2b6dda7318f4934e4736f4a97e45ca3312bf32e529c",
+    "cirro_compiler_bg.wasm": "27d9b0022a634ed4eef47b6561ad38cafde3522c17e834afed1264440678bf2f",
     "cirro_wasi_bg.wasm": "a128d4d89a7403b1217b42fa1ff96771836432a0992cba07522d8846c5c6829d",
-    "index.js": "7d2636344d2bca0cdaca827e745ca065cc6ff1a7744ef62887dd824247298ee8"
+    "cirro_python_bg.wasm": "8aa6aec5ab6fb0623637e2b6dda7318f4934e4736f4a97e45ca3312bf32e529c"
   },
   "archives": [
     {
       "file": "minutei-ai-boxes-0.10.0.tgz",
-      "bytes": 66909,
-      "sha256": "a4b0290fd9523f87339c92ce253125cc04738e799084a78e6ac3b9ec4ce7c4f0",
+      "bytes": 67303,
+      "sha256": "b587b278c0c131fb1e4d700cc4f06ee81681715a03421566729d46f359a0db27",
       "entries": 16,
       "name": "@minutei-ai/boxes",
       "version": "0.10.0",
-      "license": "Apache-2.0"
+      "license": "Apache-2.0",
+      "configuredCredentialAbsent": true,
+      "licenseMatches": true
     },
     {
       "file": "minutei-ai-boxes-runtime-0.10.0.tgz",
-      "bytes": 5516757,
-      "sha256": "37da4d346432b6932bb1eb23faac1650588349bd066c8dd3bcc9c80674bdada5",
+      "bytes": 5517679,
+      "sha256": "8632841db136469906c8552b0c3712574ffee962a1e53bd42f7bec4abadae8cc",
       "entries": 8,
       "name": "@minutei-ai/boxes-runtime",
       "version": "0.10.0",
-      "license": "Apache-2.0"
+      "license": "Apache-2.0",
+      "configuredCredentialAbsent": true,
+      "licenseMatches": true
     }
   ],
   "validation": {
-    "typecheck": "passed including packaging/proof tooling",
-    "format": "passed",
-    "exactArchiveProof": "passed: extracted public package exports and TypeScript consumer; native Alchemy workerd HTTP service binding and Agent RPC; R2; filesystem restore; hard-link metadata and shared bytes; host callbacks; persistent contexts, cancellation, denied writes and memory limits; current consumer also verifies ordered stderr overwrite/append through the native service binding; current consumer rejects oversized WASI UTF-8 environment through the native service binding; latest consumer verifies shell local/exported/readonly variable scope and rejected mutation through the native Agent service binding",
-    "queueScope": "Native consumer registered with producer delivery delayed for 86400 seconds. Proof verifies foreign process remains queued; it does not demonstrate queue execution or replacement Worker recovery.",
-    "publicArtifactScan": "All six runtime assets match dist/worker byte-for-byte. Apache-2.0 licenses match source; no .env/node_modules entries. The exact configured control credential is absent from all 24 extracted files. Gitleaks is unavailable in this resumed session; general secret scanning is unverified for this exact pair. Earlier candidate scans do not cover these archives.",
-    "runtimeRegressionBase": "334 native tests, 56 files, 4069 assertions, 215.24 seconds; full build/SDK/typecheck/workspace Clippy/Cargo passed. Final kernel boundary tests, workspace Clippy and rebuilt native SDK binding suite passed; exact archive consumer additionally verifies readonly mutation rejection.",
-    "shellNegation": "Native host-sh comparison and binary WASI tests passed; see shell-negation-local.json. The regenerated SDK/runtime archive consumer proof also passed.",
-    "shellRedirection": "24 host-sh workloads and native authority/inode checks passed; see shell-redirection-local.json. SDK/runtime archives regenerated and native archive consumer proof passed.",
-    "append": "Write-only append, byte boundaries, aliases, quota rejection, no-op publication and concurrent CAS passed; append-local.json retains all local benchmark samples. Regenerated SDK/runtime archive proof passed.",
-    "truncate": "Write-only truncate, retained bytes, aliases, zero-filled growth, boundary-only reads, quota rejection and concurrent CAS passed; resize-local.json retains all six local reports including final rebuilt artifacts. Regenerated exact SDK/runtime archives passed native consumer binding proof.",
-    "deploymentMigration": "Native paginated R2 cutover and checkpoint authority tests passed; deployed migration completed in 45 pages, then a subsequent unconditional deployment converged in 48 pages with zero changes; see backend-0.10.0.json.",
-    "poll": "Production 1 ns sleep reproduced HTTP 503 / provider 1102 with a running receipt while the 1 ms control passed. Minimum 1 ms host wait fixed the real provider case; both remote controls and 62 general checks passed. Native full suite and exact archive consumer proof passed.",
-    "stderr": "Ordered stderr overwrite/append, binary replay isolation, open failures, write-only authority, retained inode identity and output bounds passed. Native binding archive consumer and 14 remote binary-shell cases plus six SDK checks passed; see stderr-redirection.json.",
-    "environment": "Merged caller/package and package-union count/byte limits, UTF-8 PATH/key/value, pre-content-I/O fence and reservation absence passed. Six remote environment cases, valid override, shell handling and six SDK checks passed; see environment-preflight.json.",
-    "persistentEnvironment": "Native replacement/queue snapshots, all four historical text runtimes, scoped binding and Agent RPC, shared immutable archive keys and partial migration recovery passed; see configuration-environment.json.",
-    "shellParameters": "Rust-owned quote-aware environment/status expansion, deferred lexical redirects, original pipeline status, scoped handle release and queued replacement snapshots passed. Exact binding/Agent RPC consumer, final ten remote parameter cases and six SDK checks passed. Fourteen remote binary-shell cases passed before the migration-only correction; see shell-parameters.json.",
-    "shellVariables": "29 native-sh workloads, 64 native Rust assignment oracles, nine installed WASI environment cases, readonly execution, local state limits, pipeline/cwd isolation and queued replacement passed; see shell-variables-local.json.",
-    "shellEnvironmentSharing": "Read-only preparation shares the native Rust map; mutations detach before validated commit. Native shell variable/Queue replacement suite, exact archive consumer and kernel/Worker comparisons passed; see shell-environment-cow.json. End-to-end performance improvement remains inconclusive.",
-    "readonly": "Rust-owned attributes, 27 native-sh oracles, count/name boundaries, redirect-before-mutation denial, pipeline/run/config isolation, read/execute-only authority and Queue replacement passed. Exact archive service binding/Agent RPC consumer passed; see shell-readonly.json.",
-    "minuteiCompatibility": "Installed Minutei SDK 0.9.0 passed selected current-runtime 0.10.0 flows through the actual Code Mode and tenant SQLite over native Agent binding, with exact runtime archive and isolated local registry; see minutei-native-interop.json."
+    "completeGate": "bun run check passed: build, SDK declarations, TypeScript, workspace Clippy, workspace Cargo tests and native Bun tests.",
+    "nativeTests": {
+      "tests": 336,
+      "files": 56,
+      "assertions": 4285,
+      "seconds": 121.38,
+      "failures": 0
+    },
+    "exactArchiveProof": "SDK archive exports and consumer declarations; runtime archive; filesystem snapshot restore; hard-link metadata; RPC callbacks and cooperative disposal; persistent driver contexts and cancellation; scoped authority",
+    "archiveScan": "All 24 entries have expected identities/licenses, matching Apache-2.0 license text, no env/node_modules entries and no exact configured control credential. General secret scanning remains unverified; gitleaks is unavailable.",
+    "minuteiCompatibility": {
+      "clientVersion": "0.9.0",
+      "runtimeVersion": "0.10.0",
+      "runtimeArchiveSha256": "8632841db136469906c8552b0c3712574ffee962a1e53bd42f7bec4abadae8cc",
+      "consumerCommit": "a0a2a05c40ed5fb3bd5d76b14c3baf3bfe4695c2",
+      "scope": "Actual Code Mode/tenant SQLite fixtures; isolated native Agent binding; retention, authority/isolation, cleanup recovery, filesystem/shell features and fresh globals. Remote application/authentication/model/history delivery remain unverified."
+    },
+    "remote": {
+      "shellChecks": 34,
+      "compiledSdkChecks": 6,
+      "binaryShellChecks": 14,
+      "activeWasiDisposal": "cancelled with retained acknowledged stdout and denied public reads",
+      "disposal": "concurrent and repeated disposal; authority/read/ID-exclusivity boundaries verified"
+    },
+    "evidence": "docs/evidence/home-disposal-delivery.json"
   },
   "reproduction": [
     "bun run check",
-    "mkdir /tmp/boxes-package-check",
-    "bun pm pack --ignore-scripts --destination /tmp/boxes-package-check",
-    "bun run pack:runtime /tmp/boxes-package-check",
-    "bun run package:proof /tmp/boxes-package-check/minutei-ai-boxes-[0-9]*.tgz /tmp/boxes-package-check/minutei-ai-boxes-runtime-[0-9]*.tgz"
+    "bun pm pack --destination <archive-directory>",
+    "bun run pack:runtime <archive-directory>",
+    "bun run package:proof <sdk.tgz> <runtime.tgz>",
+    "bun run minutei:proof <minutei-checkout> <runtime.tgz>",
+    "bun node_modules/alchemy/bin/cli.js deploy alchemy.run.ts --stage prod --profile minutei --yes --no-input",
+    "CIRRO_URL=<deployed-url> bun tooling/shell-parameters-proof.ts",
+    "CIRRO_URL=<deployed-url> bun tooling/active-disposal-proof.ts",
+    "CIRRO_URL=<deployed-url> bun run sdk:proof",
+    "CIRRO_URL=<deployed-url> bun run shell:binary:proof",
+    "CIRRO_URL=<deployed-url> bun run dispose:proof"
   ],
   "delivery": {
-    "githubPublication": "Deferred at user request: continue without GitHub. This candidate is not published; credential validity is not assessed.",
-    "remoteCI": "not verified for this candidate",
-    "backendDeployment": "Source b4112e9b9f5c2b63e0aa9f6d84e7d6e1bea47a96 deployed successfully through native Alchemy, profile minutei, stage prod: 2 succeeded in 370.3 seconds. Worker update and unconditional paginated migration completed; bucket, Queue and bindings unchanged.",
-    "minutei": "Immutable SDK/runtime 0.9.0 dependencies retained in Minutei. A separate native compatibility gate compiles its actual consumer and verifies retention, isolation, cleanup, current filesystem/shell behavior and fresh JS globals against this exact 0.10.0 runtime archive. Minutei deployment/authentication/model proof remains unverified.",
-    "productionAndModelProof": "Deployed source b4112e9b9f5c2b63e0aa9f6d84e7d6e1bea47a96 passed 24 shell checks (five readonly cases), six compiled SDK checks and 14 binary-shell checks. Native exact archive service binding/Agent RPC consumer passed locally. Minutei remote binding/model behavior and production performance/cost remain unverified."
+    "github": "Deferred at user direction; no GitHub authentication or publication attempted.",
+    "sdkRuntimePublication": "Not performed; exact archives remain local candidates.",
+    "backendDeployment": {
+      "provider": "Alchemy project-local CLI; profile minutei; stage prod",
+      "workerKind": "Existing ordinary Cloudflare Worker; no Dynamic Workers or Worker Loader.",
+      "target": "https://cirro-sandbox-prod-rs7wexxow56rmsoz.manoel-carvalhoneto.workers.dev",
+      "result": "2 succeeded",
+      "seconds": 412.9,
+      "plan": "One Worker update plus unconditional migration action; bucket, Queue, consumer and bindings retained.",
+      "migrationPages": {
+        "environment-v1": {
+          "receipts": 59,
+          "converted": 0
+        },
+        "filesystem-v4": {
+          "receipts": 59,
+          "converted": 0
+        }
+      },
+      "approvalFlag": "Initial non-interactive CLI invocation exited before any changes and explicitly required --yes. The already-authorized reviewed deployment then completed using --yes --no-input.",
+      "artifactIdentity": "The six deployed dist/worker files exactly match the extracted runtime archive digests."
+    },
+    "minutei": "Immutable SDK/runtime 0.9.0 dependencies retained. Selected actual consumer fixtures passed locally against the exact new 0.10.0 runtime archive; remote Minutei application/authentication/model proof remains unverified.",
+    "productionAndModelProof": "The ordinary Worker passed the named authenticated HTTP probes. Remote native binding/Minutei/model validation, performance and cost remain separate gates."
   },
-  "parity": "Experimental; the remaining requirements in docs/parity.md remain open."
+  "parity": "Experimental; remaining requirements in docs/parity.md stay open."
 }
