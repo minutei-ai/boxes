@@ -68,7 +68,7 @@ test("native readonly shell attributes reject mutations without leaking across p
         ];
         yield* Effect.forEach(cases, (source, index) =>
           Effect.gen(function* () {
-            const oracle = Bun.spawn(["sh", "-c", source], {
+            const oracle = Bun.spawn(["bash", "--posix", "-c", source], {
               env: { PATH: "/usr/bin:/bin", ...environment },
               stdout: "pipe",
               stderr: "pipe",
@@ -112,7 +112,7 @@ test("native readonly shell attributes reject mutations without leaking across p
         });
         expect(listing.output?.stdout).toBe("readonly A='a'\\''b'\nreadonly UNSET\n");
         const replay = Bun.spawn(
-          ["sh", "-c", `${listing.output?.stdout}echo "$A"; A=changed; echo after`],
+          ["bash", "--posix", "-c", `${listing.output?.stdout}echo "$A"; A=changed; echo after`],
           { env: { PATH: "/usr/bin:/bin" }, stdout: "pipe", stderr: "pipe" },
         );
         const [replayed, rejected, replayStatus] = yield* Effect.promise(() =>

@@ -69,7 +69,7 @@ test(
             for (const [name, content] of initial)
               yield* Effect.promise(() => writeFile(join(oracleDirectory, name), content));
             const oracle = yield* Effect.sync(() =>
-              Bun.spawn(["sh", "-c", source], {
+              Bun.spawn(["bash", "--posix", "-c", source], {
                 cwd: oracleDirectory,
                 stdout: "pipe",
                 stderr: "ignore",

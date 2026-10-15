@@ -1,4 +1,4 @@
-import { Clock, Config, Crypto, Effect, Redacted, Schema } from "effect";
+import { Clock, Config, Crypto, Effect, Fiber, Redacted, Schedule, Schema } from "effect";
 import { join } from "node:path";
 import * as BunServices from "@effect/platform-bun/BunServices";
 import { FetchHttpClient } from "effect/http";
@@ -7,11 +7,14 @@ import { currentProfileName } from "alchemy/Auth/Profile";
 import { AuthProviders } from "alchemy/Auth/AuthProvider";
 import { layerNonInteractive } from "alchemy/Interaction";
 import { make } from "../dist/sdk/sdk.js";
+import { RecoveryStatus, RunRecord } from "../dist/sdk/contracts.js";
 import { PublicPreviewAccess } from "./preview-access";
 import {
   RemoteBindingInput,
   VerifiedRemoteBindingProof,
-} from "../tests/fixtures/remote-binding-worker";
+  remoteRpcTimeoutMs,
+  remoteDeadlinePath,
+} from "../tests/fixtures/remote-binding-contracts";
 import {
   PersistentBindingInput,
   VerifiedPersistentBindingProof,
@@ -27,6 +30,11 @@ const Report = Schema.Struct({
   consumerBundleSha256: Schema.String,
   sdkVersion: Schema.String,
   sdkModulesSha256: Schema.Record(Schema.String, Schema.String),
+  inlineDeadline: Schema.Struct({
+    requestedMs: Schema.Literal(remoteRpcTimeoutMs),
+    startedAt: RunRecord.fields.startedAt,
+    recovery: RecoveryStatus,
+  }),
   proof: VerifiedRemoteBindingProof,
   persistent: Schema.Struct({
     created: VerifiedPersistentBindingProof,
@@ -102,6 +110,7 @@ const report = await Effect.runPromise(
       const nonce = yield* cryptoService.randomUUIDv4();
       const id = `remote-binding-${nonce}`;
       const admin = yield* make({ url, token });
+      yield* Effect.logInfo({ phase: "selected", sandboxId: id, sdkVersion: sdkPackage.version });
       yield* admin.create({
         id,
         policy: {
@@ -111,6 +120,7 @@ const report = await Effect.runPromise(
           maxOutputBytes: 1048576,
         },
       });
+      yield* Effect.logInfo({ phase: "created", sandboxId: id });
       const management = yield* admin.mintCapability(id, {
         permissions: ["read", "write", "execute", "manage"],
         expiresInSeconds: 600,
@@ -144,28 +154,61 @@ const report = await Effect.runPromise(
           { name: "BOXES_AGENT", type: "service", service: targetWorker, entrypoint: "Agent" },
         ],
       });
-      const response = yield* Effect.promise(() =>
-        fetch(session.url, {
-          method: "POST",
-          keepalive: false,
-          headers: { ...session.headers, "content-type": "application/json" },
-          body: Schema.encodeSync(Schema.fromJsonString(RemoteBindingInput))({
-            sandboxId: id,
-            token: grant.token,
+      const pending = yield* Effect.gen(function* () {
+        const response = yield* Effect.promise(() =>
+          fetch(session.url, {
+            method: "POST",
+            keepalive: false,
+            headers: { ...session.headers, "content-type": "application/json" },
+            body: Schema.encodeSync(Schema.fromJsonString(RemoteBindingInput))({
+              sandboxId: id,
+              token: grant.token,
+            }),
+            signal: AbortSignal.timeout(120000),
           }),
-          signal: AbortSignal.timeout(120000),
+        );
+        const body = yield* Effect.promise(() => response.text());
+        if (response.status !== 200)
+          return yield* Effect.die({
+            message: "Remote binding consumer failed",
+            status: response.status,
+            body,
+          });
+        return yield* Schema.decodeUnknownEffect(Schema.fromJsonString(VerifiedRemoteBindingProof))(
+          body,
+        );
+      }).pipe(Effect.forkChild);
+      const active = yield* manager.action(id, { op: "process.get", id: "rpc-callback" }).pipe(
+        Effect.retry({
+          times: 40,
+          schedule: Schedule.spaced("100 millis"),
+          while: (failure) => failure._tag === "BoxesError" && failure.status === 404,
         }),
       );
-      const body = yield* Effect.promise(() => response.text());
-      if (response.status !== 200)
-        return yield* Effect.die({
-          message: "Remote binding consumer failed",
-          status: response.status,
-          body,
-        });
-      const proof = yield* Schema.decodeUnknownEffect(
-        Schema.fromJsonString(VerifiedRemoteBindingProof),
-      )(body);
+      const recovery = yield* manager.action(id, {
+        op: "process.recovery.status",
+        id: "rpc-callback",
+      });
+      if (
+        active.status !== "running" ||
+        recovery.state !== "running" ||
+        recovery.resumable ||
+        recovery.checkpoints !== 0 ||
+        recovery.deadlineAt !== active.startedAt + remoteRpcTimeoutMs
+      )
+        return yield* Effect.die("Native RPC did not persist its requested inline deadline");
+      const inlineDeadline = {
+        requestedMs: remoteRpcTimeoutMs,
+        startedAt: active.startedAt,
+        recovery,
+      } as const;
+      yield* manager.action(id, {
+        op: "filesystem.writeFile",
+        path: remoteDeadlinePath,
+        content: "observed",
+        encoding: "utf8",
+      });
+      const proof = yield* Fiber.join(pending);
       const createdResponse = yield* Effect.promise(() =>
         fetch(new URL("/persistent", session.url), {
           method: "POST",
@@ -259,6 +302,7 @@ const report = await Effect.runPromise(
         consumerBundleSha256,
         sdkVersion: sdkPackage.version,
         sdkModulesSha256,
+        inlineDeadline,
         proof,
         persistent: { created, resumed, previousReceiptRetained: true as const },
       };

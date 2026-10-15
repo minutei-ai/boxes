@@ -74,7 +74,7 @@ test(
           yield* Effect.forEach(cases, (source, index) =>
             Effect.gen(function* () {
               const oracle = yield* Effect.sync(() =>
-                Bun.spawn(["sh", "-c", source], {
+                Bun.spawn(["bash", "--posix", "-c", source], {
                   env: { PATH: "/usr/bin:/bin", ...variables },
                   stdout: "pipe",
                   stderr: "pipe",

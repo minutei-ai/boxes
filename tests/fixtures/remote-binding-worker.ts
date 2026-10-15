@@ -1,53 +1,17 @@
-import { Cause, Clock, Effect, Redacted, Schema, Struct } from "effect";
+import { Cause, Clock, Effect, Redacted, Schedule, Schema } from "effect";
 import { makeBinding } from "../../src/sdk";
 import { makeAgentBinding } from "../../src/sdk-rpc";
 import type { AgentProtocol } from "../../src/rpc-protocol";
-import { AgentRequest, FileContent, HostCall, RunRecord } from "../../src/contracts";
+import type { HostCall } from "../../src/contracts";
 import { persistentBindingProof } from "./remote-persistent-binding";
 
-export const RemoteBindingInput = AgentRequest.mapFields((fields) =>
-  Struct.pick(fields, ["sandboxId", "token"]),
-);
-export const RemoteBindingProof = Schema.Struct({
-  measuredAt: Schema.Int,
-  callback: RunRecord,
-  voidCallback: RunRecord,
-  file: FileContent,
-  calls: Schema.Array(HostCall),
-  managementDenied: Schema.Int,
-  wrongSandboxDenied: Schema.Int,
-});
-const CallbackValue = Schema.Struct({
-  answer: Schema.Literal(42),
-  transport: Schema.Literal("native RPC"),
-});
-const VoidValue = Schema.Struct({
-  wasUndefined: Schema.Literal(true),
-  freshGlobals: Schema.Literal(true),
-});
-export const VerifiedRemoteBindingProof = RemoteBindingProof.check(
-  Schema.makeFilter(
-    (proof) =>
-      proof.callback.status === "exited" &&
-      proof.callback.output?.exitCode === 0 &&
-      Schema.is(CallbackValue)(proof.callback.output.result) &&
-      proof.voidCallback.status === "exited" &&
-      proof.voidCallback.output?.exitCode === 0 &&
-      Schema.is(VoidValue)(proof.voidCallback.output.result),
-  ),
-  Schema.makeFilter(
-    (proof) =>
-      proof.managementDenied === 403 &&
-      proof.wrongSandboxDenied === 401 &&
-      Buffer.from(proof.file.content, proof.file.encoding).toString() ===
-        "native Cloudflare binding" &&
-      proof.calls.length === 2 &&
-      proof.calls[0]?.name === "answer" &&
-      Schema.is(Schema.Struct({ value: Schema.Literal(21) }))(proof.calls[0]?.input) &&
-      proof.calls[1]?.name === "void" &&
-      proof.calls[1]?.input === undefined,
-  ),
-);
+import {
+  RemoteBindingInput,
+  RemoteBindingProof,
+  remoteRpcTimeoutMs,
+  remoteDeadlinePath,
+} from "./remote-binding-contracts";
+
 export default {
   fetch(request: Request, env: { BOXES: Fetcher; BOXES_AGENT: Fetcher<AgentProtocol> }) {
     return Effect.runPromise(
@@ -75,10 +39,23 @@ export default {
               'export default async ({ tools }) => { globalThis.probe = 1; const reply = await tools.call({ op: "host.call", name: "answer", input: { value: 21 } }); return reply; }',
             tools: ["answer"],
             maxToolCalls: 1,
-            timeoutMs: 15000,
+            timeoutMs: remoteRpcTimeoutMs,
           },
           async (call) => {
             calls.push(call);
+            const observed = await Effect.runPromise(
+              client
+                .action(input.sandboxId, { op: "filesystem.readFile", path: remoteDeadlinePath })
+                .pipe(
+                  Effect.retry({
+                    schedule: Schedule.spaced("100 millis"),
+                    while: (failure) => failure._tag === "BoxesError" && failure.status === 404,
+                  }),
+                  Effect.timeout("10 seconds"),
+                ),
+            );
+            if (observed.content !== Buffer.from("observed").toString("base64"))
+              return { ok: false, message: "Inline deadline observation was not acknowledged" };
             return { ok: true, value: { answer: 42, transport: "native RPC" } };
           },
         );
@@ -90,7 +67,7 @@ export default {
               'export default async ({ tools }) => { const reply = await tools.call({ op: "host.call", name: "void" }); return { wasUndefined: reply === undefined, freshGlobals: typeof globalThis.probe === "undefined" }; }',
             tools: ["void"],
             maxToolCalls: 1,
-            timeoutMs: 15000,
+            timeoutMs: remoteRpcTimeoutMs,
           },
           async (call) => {
             calls.push(call);
@@ -110,7 +87,7 @@ export default {
               source: "export default () => 42",
               tools: [],
               maxToolCalls: 1,
-              timeoutMs: 15000,
+              timeoutMs: remoteRpcTimeoutMs,
             },
             async () => {
               return { ok: true };

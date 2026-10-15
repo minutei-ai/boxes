@@ -1,13 +1,18 @@
 import { expect, test } from "bun:test";
 import { mkdtemp, rm } from "node:fs/promises";
 import { join } from "node:path";
-import { Effect, Redacted, Schema } from "effect";
+import { Effect, Fiber, Redacted, Schedule, Schema } from "effect";
 import { FetchHttpClient } from "effect/http";
 import { PlatformProxy, Runtime } from "@alchemy.run/cloudflare-runtime/core";
 import { Json, Service } from "@alchemy.run/cloudflare-runtime/core/bindings";
 import { make } from "../src/sdk";
 import { runtime } from "../tooling/worker-test";
-import { RemoteBindingInput, VerifiedRemoteBindingProof } from "./fixtures/remote-binding-worker";
+import {
+  RemoteBindingInput,
+  VerifiedRemoteBindingProof,
+  remoteRpcTimeoutMs,
+  remoteDeadlinePath,
+} from "./fixtures/remote-binding-contracts";
 import {
   PersistentBindingInput,
   VerifiedPersistentBindingProof,
@@ -90,20 +95,47 @@ test(
             ),
             (value) => Effect.promise(() => value.dispose()),
           );
-          const response = yield* Effect.promise(() =>
-            fetch(proxy.env.URLS[0], {
-              method: "POST",
-              body: Schema.encodeSync(Schema.fromJsonString(RemoteBindingInput))({
-                sandboxId: id,
-                token: grant.token,
+          const pending = yield* Effect.gen(function* () {
+            const response = yield* Effect.promise(() =>
+              fetch(proxy.env.URLS[0], {
+                method: "POST",
+                body: Schema.encodeSync(Schema.fromJsonString(RemoteBindingInput))({
+                  sandboxId: id,
+                  token: grant.token,
+                }),
               }),
+            );
+            expect(response.status).toBe(200);
+            const body = yield* Effect.promise(() => response.text());
+            return yield* Schema.decodeUnknownEffect(
+              Schema.fromJsonString(VerifiedRemoteBindingProof),
+            )(body);
+          }).pipe(Effect.forkChild);
+          const active = yield* manager.action(id, { op: "process.get", id: "rpc-callback" }).pipe(
+            Effect.retry({
+              times: 40,
+              schedule: Schedule.spaced("10 millis"),
+              while: (failure) => failure._tag === "BoxesError" && failure.status === 404,
             }),
           );
-          expect(response.status).toBe(200);
-          const body = yield* Effect.promise(() => response.text());
-          const proof = yield* Schema.decodeUnknownEffect(
-            Schema.fromJsonString(VerifiedRemoteBindingProof),
-          )(body);
+          const recovery = yield* manager.action(id, {
+            op: "process.recovery.status",
+            id: "rpc-callback",
+          });
+          expect(active.status).toBe("running");
+          expect(recovery).toMatchObject({
+            state: "running",
+            checkpoints: 0,
+            resumable: false,
+            deadlineAt: active.startedAt + remoteRpcTimeoutMs,
+          });
+          yield* manager.action(id, {
+            op: "filesystem.writeFile",
+            path: remoteDeadlinePath,
+            content: "observed",
+            encoding: "utf8",
+          });
+          const proof = yield* Fiber.join(pending);
           const file = yield* manager.action(id, {
             op: "filesystem.readFile",
             path: "/binding.txt",

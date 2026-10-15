@@ -69,7 +69,7 @@ test("conditional lists skip whole pipelines without executing redirected writes
           (source, index) =>
             Effect.gen(function* () {
               const oracle = yield* Effect.sync(() =>
-                Bun.spawn(["sh", "-c", source], { stdout: "pipe", stderr: "pipe" }),
+                Bun.spawn(["bash", "--posix", "-c", source], { stdout: "pipe", stderr: "pipe" }),
               );
               const stdout = yield* Effect.promise(() => new Response(oracle.stdout).text());
               const stderr = yield* Effect.promise(() => new Response(oracle.stderr).text());

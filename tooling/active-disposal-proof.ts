@@ -2,14 +2,19 @@ import { Clock, Config, Crypto, Effect, Fiber, Redacted, Schema } from "effect";
 import { BunCrypto } from "@effect/platform-bun";
 import { FetchHttpClient } from "effect/http";
 import { make } from "../dist/sdk/sdk.js";
+import { Id, RunRecord, RecoveryStatus, ReclamationProgress } from "../dist/sdk/contracts.js";
 
 const Report = Schema.Struct({
   target: Schema.String,
+  sandboxId: Id,
   measuredAt: Schema.Int,
   runtime: Schema.Literal("wasm"),
   status: Schema.Literal("cancelled"),
   stdout: Schema.String,
   readsDenied: Schema.Literal(true),
+  startedAt: RunRecord.fields.startedAt,
+  inlineDeadline: RecoveryStatus,
+  reclaimed: ReclamationProgress,
 });
 
 const report = await Effect.runPromise(
@@ -29,6 +34,7 @@ const report = await Effect.runPromise(
           maxOutputBytes: 1048576,
         },
       });
+      yield* Effect.logInfo({ phase: "created", sandboxId: id });
       const grant = yield* admin.mintCapability(id, {
         permissions: ["read", "execute", "manage"],
         expiresInSeconds: 600,
@@ -73,6 +79,17 @@ const report = await Effect.runPromise(
           "WASI guest did not acknowledge entry before the observation deadline",
         );
       });
+      const inlineDeadline = yield* client.action(id, {
+        op: "process.recovery.status",
+        id: "blocked",
+      });
+      if (
+        inlineDeadline.state !== "running" ||
+        inlineDeadline.resumable ||
+        inlineDeadline.checkpoints !== 0 ||
+        inlineDeadline.deadlineAt !== observed.startedAt + 900000
+      )
+        return yield* Effect.die("Inline WASI did not retain its default recovery deadline");
       yield* client.action(id, { op: "vm.dispose" });
       const completed = yield* Fiber.join(pending);
       if (
@@ -91,15 +108,27 @@ const report = await Effect.runPromise(
         .pipe(Effect.flip);
       if (denied._tag !== "BoxesError" || denied.error !== "ENOENT")
         return yield* Effect.die("Disposed process remained publicly readable");
+      const reclaimed = yield* client
+        .action(id, { op: "vm.reclaim", limit: 1000 })
+        .pipe(Effect.repeat({ until: (progress) => progress.status !== "pending", times: 16 }));
+      if (reclaimed.status !== "complete")
+        return yield* Effect.die("Inline WASI proof collection did not finish");
       return {
         target: url,
+        sandboxId: id,
         measuredAt: yield* Clock.currentTimeMillis,
         runtime: "wasm" as const,
         status: "cancelled" as const,
         stdout: completed.output.stdout,
         readsDenied: true as const,
+        startedAt: observed.startedAt,
+        inlineDeadline,
+        reclaimed,
       };
     }),
-  ).pipe(Effect.provide([FetchHttpClient.layer, BunCrypto.layer])),
+  ).pipe(
+    Effect.provide([FetchHttpClient.layer, BunCrypto.layer]),
+    Effect.provideService(FetchHttpClient.RequestInit, { keepalive: false }),
+  ),
 );
 console.log(Schema.encodeSync(Schema.fromJsonString(Report))(report));
