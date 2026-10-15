@@ -1,0 +1,481 @@
+{
+  "status": "Inline deadlines deployed to the existing ordinary Worker; both SDK versions passed native Cloudflare binding/RPC deadline observation and scoped cleanup.",
+  "runtimeSourceCommit": "d2a5348de517f303c01a956bed52824c68a44e71",
+  "proofSourceCommit": "9ec03e7f2834f4a270fef038bdfc5c7bda394415",
+  "localEvidence": "docs/evidence/inline-deadline-local.json",
+  "runtimeArtifactsSha256": {
+    "cirro_compiler_bg.wasm": "27d9b0022a634ed4eef47b6561ad38cafde3522c17e834afed1264440678bf2f",
+    "cirro_guest_bg.wasm": "b773b74626b08bd1083860081ccd2a3d0fdff80dcd97b5ec13ed7c6e2148ef22",
+    "cirro_kernel_bg.wasm": "3c80cd3b32fd8a5d2b63ea6292f19813552bda74a9f4249971355513c0658d29",
+    "cirro_python_bg.wasm": "8aa6aec5ab6fb0623637e2b6dda7318f4934e4736f4a97e45ca3312bf32e529c",
+    "cirro_wasi_bg.wasm": "c8a585cdffb370dcf67571547d3c2df1df2f279a9ff22d7050a5d13a5bf10784",
+    "index.js": "8037884aaef2bb97ad22283492199ca9d7430e051d8f1b12da92551fb271790e"
+  },
+  "backendDeployment": {
+    "provider": "Alchemy project-local CLI; profile minutei; stage prod",
+    "worker": "cirro-sandbox-prod-rs7wexxow56rmsoz",
+    "bucket": "cirro-objects-prod-vbk2p6ruhs2m645y",
+    "target": "https://cirro-sandbox-prod-rs7wexxow56rmsoz.manoel-carvalhoneto.workers.dev",
+    "result": "2 succeeded",
+    "seconds": 528.4,
+    "migrationSeconds": 514.8,
+    "migrationProgress": {
+      "process-input-v4": {
+        "reportedReceipts": 30,
+        "maxPage": 30,
+        "converted": 0,
+        "completed": true
+      },
+      "filesystem-v4": {
+        "reportedReceipts": 67,
+        "maxPage": 67,
+        "converted": 0,
+        "completed": true
+      },
+      "process-deadlines-v1": {
+        "reportedReceipts": 30,
+        "maxPage": 30,
+        "converted": 2,
+        "completed": true
+      },
+      "environment-v1": {
+        "reportedReceipts": 67,
+        "maxPage": 60,
+        "converted": 0,
+        "lastPhase": "done"
+      }
+    },
+    "workerKind": "Existing ordinary Worker update and unconditional Migrations action; existing R2, Queue, consumer and bindings unchanged. No Dynamic Workers or Worker Loader.",
+    "artifactIdentity": "Exact tested local assets uploaded through native Alchemy. The public health route does not attest remote commit or digests."
+  },
+  "bindings": [
+    {
+      "measuredAt": 1792098942106,
+      "profile": "minutei",
+      "targetWorker": "cirro-sandbox-prod-rs7wexxow56rmsoz",
+      "sandboxId": "remote-binding-595fed0b-bf4b-4b4b-826f-01180bfef873",
+      "previewOrigin": "https://boxes-binding-595fed0b-bf4b-4b4b-826f-01180bfef873.manoel-carvalhoneto.workers.dev",
+      "replacementPreviewOrigin": "https://boxes-replacement-595fed0b-bf4b-4b4b-826f-01180bfef873.manoel-carvalhoneto.workers.dev",
+      "consumerBundleSha256": "03d34b1adeaeb3ddbe7b77b34a375f3c0e1290f51dc3950170820198dc8dbc2a",
+      "sdkVersion": "0.9.0",
+      "sdkModulesSha256": {
+        "../../src/sdk": "18cd31b540c4ffe40ce9a231ac9e64e47530e7ee7d0fc8950d681beaa38f7fd3",
+        "../../src/sdk-rpc": "8fa8e7a4f3a4ae26a6984aed1d2b7a93b265eb54cc5317f0065ff5455f11c354",
+        "../../src/sdk-tanstack": "9379a2fab94319daba07c314e63e6b6824f3d9ab1a914d1366e05019bd474a2c",
+        "../../src/contracts": "297a6a573941e66c488b573117e7cd9d646a1ed58cb8c66151fabd0c29641bf7"
+      },
+      "inlineDeadline": {
+        "requestedMs": 15000,
+        "startedAt": 1792098894903,
+        "recovery": {
+          "state": "running",
+          "checkpoints": 0,
+          "resumable": false,
+          "deadlineAt": 1792098909903
+        }
+      },
+      "proof": {
+        "measuredAt": 1792098904105,
+        "callback": {
+          "id": "rpc-callback",
+          "status": "exited",
+          "sourceHash": "75090090f42e508d6542184bce91b43c775c128d2ccfc04977bc226f5980cf7d",
+          "language": "typescript",
+          "startedAt": 1792098894903,
+          "finishedAt": 1792098900031,
+          "output": {
+            "stdout": "",
+            "stderr": "",
+            "result": {
+              "answer": 42,
+              "transport": "native RPC"
+            },
+            "exitCode": 0
+          }
+        },
+        "voidCallback": {
+          "id": "rpc-void",
+          "status": "exited",
+          "sourceHash": "0216a3fc5e53bcf477f59bda2cb4dc00f2f8f938fc8658ed498f019dcfbca5fa",
+          "language": "typescript",
+          "startedAt": 1792098900986,
+          "finishedAt": 1792098902738,
+          "output": {
+            "stdout": "",
+            "stderr": "",
+            "result": {
+              "wasUndefined": true,
+              "freshGlobals": true
+            },
+            "exitCode": 0
+          }
+        },
+        "file": {
+          "content": "bmF0aXZlIENsb3VkZmxhcmUgYmluZGluZw==",
+          "encoding": "base64",
+          "size": 25
+        },
+        "calls": [
+          {
+            "op": "host.call",
+            "name": "answer",
+            "input": {
+              "value": 21
+            }
+          },
+          {
+            "op": "host.call",
+            "name": "void"
+          }
+        ],
+        "managementDenied": 403,
+        "wrongSandboxDenied": 401
+      },
+      "persistent": {
+        "created": {
+          "phase": "create",
+          "value": {
+            "content": "cGVyc2lzdGVudCBuYXRpdmUgYmluZGluZw==",
+            "encoding": "base64",
+            "freshGlobals": true,
+            "label": "create"
+          },
+          "callbacks": ["create"],
+          "closedContextDenied": true,
+          "writeDenied": null,
+          "lowMemoryDenied": true,
+          "policyMemoryDenied": true,
+          "allowedAllocation": 6000000
+        },
+        "resumed": {
+          "phase": "resume",
+          "value": {
+            "content": "cGVyc2lzdGVudCBuYXRpdmUgYmluZGluZw==",
+            "encoding": "base64",
+            "freshGlobals": true,
+            "label": "resume"
+          },
+          "callbacks": ["resume"],
+          "closedContextDenied": true,
+          "writeDenied": true,
+          "lowMemoryDenied": true,
+          "policyMemoryDenied": true,
+          "allowedAllocation": 6000000
+        },
+        "previousReceiptRetained": true
+      }
+    },
+    {
+      "measuredAt": 1792098996328,
+      "profile": "minutei",
+      "targetWorker": "cirro-sandbox-prod-rs7wexxow56rmsoz",
+      "sandboxId": "remote-binding-6017aeda-75fe-4c77-8f42-24b4383a0caf",
+      "previewOrigin": "https://boxes-binding-6017aeda-75fe-4c77-8f42-24b4383a0caf.manoel-carvalhoneto.workers.dev",
+      "replacementPreviewOrigin": "https://boxes-replacement-6017aeda-75fe-4c77-8f42-24b4383a0caf.manoel-carvalhoneto.workers.dev",
+      "consumerBundleSha256": "446e64c7c845bc0c6b4cf2eae33b93d6196c1e6b6f23e7d282922ff8746bc412",
+      "sdkVersion": "0.10.0",
+      "sdkModulesSha256": {
+        "../../src/sdk": "ef83eed1563a34d060e8c86fba584359914ab73c4653babaeebfc63b36683ca6",
+        "../../src/sdk-rpc": "4a7bfd49874b3053ca0c6782d524b11a642be7723b3e585952c2c615cf277035",
+        "../../src/sdk-tanstack": "837e1b0b08db4f87ab8a35a362e7d3b3129287907006bdf6fbff163f2ebd6aa0",
+        "../../src/contracts": "875496158b9435808c462a2b038e47b5a1be52a3ba24169ebb17c2b83dd48e38"
+      },
+      "inlineDeadline": {
+        "requestedMs": 15000,
+        "startedAt": 1792098953947,
+        "recovery": {
+          "state": "running",
+          "checkpoints": 0,
+          "resumable": false,
+          "deadlineAt": 1792098968947
+        }
+      },
+      "proof": {
+        "measuredAt": 1792098961756,
+        "callback": {
+          "id": "rpc-callback",
+          "status": "exited",
+          "sourceHash": "75090090f42e508d6542184bce91b43c775c128d2ccfc04977bc226f5980cf7d",
+          "language": "typescript",
+          "startedAt": 1792098953947,
+          "finishedAt": 1792098958086,
+          "output": {
+            "stdout": "",
+            "stderr": "",
+            "result": {
+              "answer": 42,
+              "transport": "native RPC"
+            },
+            "exitCode": 0
+          }
+        },
+        "voidCallback": {
+          "id": "rpc-void",
+          "status": "exited",
+          "sourceHash": "0216a3fc5e53bcf477f59bda2cb4dc00f2f8f938fc8658ed498f019dcfbca5fa",
+          "language": "typescript",
+          "startedAt": 1792098958994,
+          "finishedAt": 1792098960546,
+          "output": {
+            "stdout": "",
+            "stderr": "",
+            "result": {
+              "wasUndefined": true,
+              "freshGlobals": true
+            },
+            "exitCode": 0
+          }
+        },
+        "file": {
+          "content": "bmF0aXZlIENsb3VkZmxhcmUgYmluZGluZw==",
+          "encoding": "base64",
+          "size": 25
+        },
+        "calls": [
+          {
+            "op": "host.call",
+            "name": "answer",
+            "input": {
+              "value": 21
+            }
+          },
+          {
+            "op": "host.call",
+            "name": "void"
+          }
+        ],
+        "managementDenied": 403,
+        "wrongSandboxDenied": 401
+      },
+      "persistent": {
+        "created": {
+          "phase": "create",
+          "value": {
+            "content": "cGVyc2lzdGVudCBuYXRpdmUgYmluZGluZw==",
+            "encoding": "base64",
+            "freshGlobals": true,
+            "label": "create"
+          },
+          "callbacks": ["create"],
+          "closedContextDenied": true,
+          "writeDenied": null,
+          "lowMemoryDenied": true,
+          "policyMemoryDenied": true,
+          "allowedAllocation": 6000000
+        },
+        "resumed": {
+          "phase": "resume",
+          "value": {
+            "content": "cGVyc2lzdGVudCBuYXRpdmUgYmluZGluZw==",
+            "encoding": "base64",
+            "freshGlobals": true,
+            "label": "resume"
+          },
+          "callbacks": ["resume"],
+          "closedContextDenied": true,
+          "writeDenied": true,
+          "lowMemoryDenied": true,
+          "policyMemoryDenied": true,
+          "allowedAllocation": 6000000
+        },
+        "previousReceiptRetained": true
+      }
+    }
+  ],
+  "activeDisposal": {
+    "target": "https://cirro-sandbox-prod-rs7wexxow56rmsoz.manoel-carvalhoneto.workers.dev",
+    "sandboxId": "active-disposal-675f7112-d73e-46da-b84d-2288e866d778",
+    "measuredAt": 1792099016650,
+    "runtime": "wasm",
+    "status": "cancelled",
+    "stdout": "continuation entered\n",
+    "readsDenied": true,
+    "startedAt": 1792098999524,
+    "inlineDeadline": {
+      "state": "running",
+      "checkpoints": 0,
+      "resumable": false,
+      "deadlineAt": 1792099899524
+    },
+    "reclaimed": {
+      "phase": "complete",
+      "status": "complete",
+      "removed": 0,
+      "blocking": []
+    }
+  },
+  "cleanup": [
+    {
+      "measuredAt": 1792099284490,
+      "profile": "minutei",
+      "targetWorker": "cirro-sandbox-prod-rs7wexxow56rmsoz",
+      "sandboxId": "remote-binding-595fed0b-bf4b-4b4b-826f-01180bfef873",
+      "previewOrigins": [
+        "https://boxes-reclaim-6349aa52-e4c5-4c2e-8b01-06d93dbd5f3f.manoel-carvalhoneto.workers.dev",
+        "https://boxes-reclaim-replacement-6349aa52-e4c5-4c2e-8b01-06d93dbd5f3f.manoel-carvalhoneto.workers.dev"
+      ],
+      "consumerBundleSha256": "157e90797267aa7fd667b025237745be418e67f2c521ccebb496f06977d6829a",
+      "first": {
+        "phase": "processes",
+        "status": "pending",
+        "removed": 1,
+        "blocking": []
+      },
+      "resumed": [
+        {
+          "phase": "processes",
+          "status": "pending",
+          "removed": 11,
+          "blocking": []
+        },
+        {
+          "phase": "inputs",
+          "status": "pending",
+          "removed": 0,
+          "blocking": []
+        },
+        {
+          "phase": "schedules",
+          "status": "pending",
+          "removed": 0,
+          "blocking": []
+        },
+        {
+          "phase": "objects",
+          "status": "pending",
+          "removed": 0,
+          "blocking": []
+        },
+        {
+          "phase": "objects",
+          "status": "pending",
+          "removed": 13,
+          "blocking": []
+        },
+        {
+          "phase": "complete",
+          "status": "complete",
+          "removed": 0,
+          "blocking": []
+        }
+      ],
+      "recreateDenied": 409,
+      "nonManagementGrantDenied": 403,
+      "status": "complete",
+      "kind": "existing"
+    },
+    {
+      "measuredAt": 1792099306327,
+      "profile": "minutei",
+      "targetWorker": "cirro-sandbox-prod-rs7wexxow56rmsoz",
+      "sandboxId": "remote-binding-6017aeda-75fe-4c77-8f42-24b4383a0caf",
+      "previewOrigins": [
+        "https://boxes-reclaim-3f04491a-a423-4f73-a171-49d79356dac3.manoel-carvalhoneto.workers.dev",
+        "https://boxes-reclaim-replacement-3f04491a-a423-4f73-a171-49d79356dac3.manoel-carvalhoneto.workers.dev"
+      ],
+      "consumerBundleSha256": "157e90797267aa7fd667b025237745be418e67f2c521ccebb496f06977d6829a",
+      "first": {
+        "phase": "processes",
+        "status": "pending",
+        "removed": 1,
+        "blocking": []
+      },
+      "resumed": [
+        {
+          "phase": "processes",
+          "status": "pending",
+          "removed": 11,
+          "blocking": []
+        },
+        {
+          "phase": "inputs",
+          "status": "pending",
+          "removed": 0,
+          "blocking": []
+        },
+        {
+          "phase": "schedules",
+          "status": "pending",
+          "removed": 0,
+          "blocking": []
+        },
+        {
+          "phase": "objects",
+          "status": "pending",
+          "removed": 0,
+          "blocking": []
+        },
+        {
+          "phase": "objects",
+          "status": "pending",
+          "removed": 13,
+          "blocking": []
+        },
+        {
+          "phase": "complete",
+          "status": "complete",
+          "removed": 0,
+          "blocking": []
+        }
+      ],
+      "recreateDenied": 409,
+      "nonManagementGrantDenied": 403,
+      "status": "complete",
+      "kind": "existing"
+    }
+  ],
+  "minuteiCompatibility": {
+    "clientVersion": "0.9.0",
+    "runtimeVersion": "0.10.0",
+    "runtimeArchiveSha256": "674193ac632b5d5757b39b0a45f067ee9a2f8acb2cb326fbc7d516194ff32de4",
+    "consumerCommit": "a0a2a05c40ed5fb3bd5d76b14c3baf3bfe4695c2",
+    "consumerBundleSha256": "e29165da4f63ac8a3cedd29f5b13b037e9b4becb1f73b7e06047ad308db1d060",
+    "transport": "native workerd Agent service binding; actual Minutei Code Mode and tenant SQLite; local R2, KV and Queue",
+    "retention": true,
+    "isolatedRegistry": true,
+    "capabilities": true,
+    "consumerFixturesSha256": {
+      "boxes-retention.ts": "225c5d42ff36ffa2ee49ce213816546f73bacb691e646857e8588bd8149360c0",
+      "boxes-code.worker.ts": "f876f01e98358a955a9214c2f6b375f60598a461450b88a052d505531920f87a"
+    }
+  },
+  "verification": {
+    "nativeSuite": {
+      "tests": 346,
+      "files": 62,
+      "assertions": 4741,
+      "seconds": 131.17,
+      "failures": 0
+    },
+    "followUp": "Explicit bash --posix host references passed the six affected native test files: 6 tests, 774 assertions, 15.18 seconds. TypeScript and full formatting passed.",
+    "github": "main published at 9ec03e7; CI 38809126460 in progress at evidence creation. Previous d2a5348 CI failed five implicit host sh comparisons; Rust/build/typechecking passed. The new commit pins that reference to Bash POSIX mode.",
+    "exactArchiveProof": "The final SDK archive with refreshed documentation passed package:proof against the unchanged exact runtime archive: declarations/public exports, native default and Agent bindings, filesystem snapshots/hard links, callbacks, cooperative disposal, scoped authority and persistent contexts."
+  },
+  "limits": [
+    "The orphan receipts were seeded from real native execution/output, not produced by an actual Cloudflare crash. Arbitrary-crash recovery remains unproven.",
+    "A deadline settles expired observation; it does not resume inline instructions, undo acknowledged effects or revoke an already issued external operation.",
+    "The five-minute native repair cadence and Queue delivery determine observation latency.",
+    "No heartbeat or additional per-request R2 lease writes were added. Billing, peak memory and production latency were not measured.",
+    "Synthetic Cloudflare consumers used scoped credentials and native preview expiry. Actual authenticated Minutei application, browser, history Queue delivery and model behavior were not tested.",
+    "The local consumer fixtures used the actual installed SDK 0.9.0; its history Queue had no consumer.",
+    "No production latency, cost, peak-memory or arbitrary-crash proof. SDK/runtime archives remain unpublished candidates."
+  ],
+  "archives": [
+    {
+      "file": "minutei-ai-boxes-0.10.0.tgz",
+      "bytes": 70931,
+      "sha256": "f93345c7d51e41ac1109e0fb534042a43d7bf98e0212098f414c125c75d32749",
+      "entries": 16,
+      "configuredCredentialAbsent": true,
+      "licenseMatches": true
+    },
+    {
+      "file": "minutei-ai-boxes-runtime-0.10.0.tgz",
+      "bytes": 5520902,
+      "sha256": "674193ac632b5d5757b39b0a45f067ee9a2f8acb2cb326fbc7d516194ff32de4",
+      "entries": 8,
+      "configuredCredentialAbsent": true,
+      "licenseMatches": true
+    }
+  ]
+}

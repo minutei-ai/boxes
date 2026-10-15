@@ -21,6 +21,7 @@ jobs:
         with:
           cache-all-crates: true
           cache-workspace-crates: true
+          cache-on-failure: true
       - run: bun install --frozen-lockfile
       - run: sudo apt-get update && sudo apt-get install -y clang llvm
       - run: cargo install wasm-bindgen-cli --version 0.2.129 --locked
