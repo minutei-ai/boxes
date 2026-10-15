@@ -76,7 +76,7 @@ export const kernelCall = <A>(call: () => A) =>
           return new Fault({ code, status: 409, message: cause });
         if (code === "ENOSPC" || code === "EFBIG")
           return new Fault({ code, status: 413, message: cause });
-        if (["ENOTDIR", "EISDIR", "ELOOP"].includes(code))
+        if (["ENOTDIR", "EISDIR", "ELOOP", "READONLY"].includes(code))
           return new Fault({ code, status: 400, message: cause });
         return new Fault({ code: "EINVAL", status: 400, message: cause });
       }

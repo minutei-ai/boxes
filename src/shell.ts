@@ -143,7 +143,7 @@ export const shell = Effect.fn("shell.execute")(function* (
           });
           phase.prepared = true;
           const builtin = yield* Match.value(
-            argv.length === 0 || [":", "export", "unset"].includes(name),
+            argv.length === 0 || [":", "export", "unset", "readonly"].includes(name),
           ).pipe(
             Match.when(true, () =>
               kernelCall(() => interpreter.commit(commandIndex)).pipe(
@@ -455,17 +455,23 @@ export const shell = Effect.fn("shell.execute")(function* (
             fault.code === "ECANCELED"
           )
             return yield* Effect.fail(fault);
-          const exitCode = Match.value(phase.prepared).pipe(
-            Match.when(false, () => 1),
+          const exitCode = Match.value(fault.code).pipe(
+            Match.when("READONLY", () => 2),
             Match.orElse(() =>
-              Match.value(fault.code).pipe(
-                Match.when("ENOENT", () => 127),
-                Match.when("EACCES", () => 126),
-                Match.orElse(() => 1),
+              Match.value(phase.prepared).pipe(
+                Match.when(false, () => 1),
+                Match.orElse(() =>
+                  Match.value(fault.code).pipe(
+                    Match.when("ENOENT", () => 127),
+                    Match.when("EACCES", () => 126),
+                    Match.orElse(() => 1),
+                  ),
+                ),
               ),
             ),
           );
           return {
+            fatal: fault.code === "READONLY" && !command.pipe && command.gate !== "pipe",
             stdout: Match.value(hasOutput).pipe(
               Match.when(true, () => Buffer.alloc(0)),
               Match.orElse(() => observed.stdout),

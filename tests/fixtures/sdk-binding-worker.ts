@@ -492,11 +492,12 @@ export default {
           id: "binding-shell-variables",
           language: "shell",
           source:
-            'LOCAL=bound; export LOCAL; LOCAL=temporary echo "$LOCAL" "$BOXES_BINDING_MARKER"; unset LOCAL; echo "[$LOCAL]"',
+            'LOCAL=bound; export LOCAL; LOCAL=temporary echo "$LOCAL" "$BOXES_BINDING_MARKER"; unset LOCAL; echo "[$LOCAL]"; readonly FIXED=bound; echo "$FIXED"; FIXED=changed; echo unreachable',
         });
         if (
-          shellVariables.output?.stdout !== "bound configured\n[]\n" ||
-          shellVariables.output.exitCode !== 0
+          shellVariables.output?.stdout !== "bound configured\n[]\nbound\n" ||
+          shellVariables.output.exitCode !== 2 ||
+          !shellVariables.output.stderr.includes("readonly")
         )
           return yield* Effect.die("Agent binding shell variable scope differs");
         const rpcEnvironment = yield* environmentRpc.runWithTools(

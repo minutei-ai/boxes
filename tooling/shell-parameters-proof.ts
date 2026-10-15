@@ -46,6 +46,36 @@ const report = await Effect.runPromise(
       const client = yield* make({ url, token: Redacted.make(grant.token) });
       const cases = [
         {
+          name: "readonly-value",
+          source: 'readonly A="retained value"; echo "$A"',
+          stdout: "retained value\n",
+          exitCode: 0,
+        },
+        {
+          name: "readonly-assignment",
+          source: "readonly A=one; A=two; echo after",
+          stdout: "",
+          exitCode: 2,
+        },
+        {
+          name: "readonly-unset",
+          source: "readonly A=one; unset A; echo after",
+          stdout: "",
+          exitCode: 2,
+        },
+        {
+          name: "readonly-export",
+          source: "readonly A=one; export A=two; echo after",
+          stdout: "",
+          exitCode: 2,
+        },
+        {
+          name: "readonly-pipeline",
+          source: 'readonly A=one | cat; A=two; echo "$A"',
+          stdout: "two\n",
+          exitCode: 0,
+        },
+        {
           name: "local-variable",
           source: 'A="local value"; echo "$A"',
           stdout: "local value\n",

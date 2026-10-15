@@ -209,7 +209,7 @@ test(
             op: "process.run",
             id: "readonly",
             language: "shell",
-            source: 'A=local; export A; echo "$A"',
+            source: 'A=local; export A; readonly A; echo "$A"',
           });
           expect(localOnly.output?.stdout).toBe("local\n");
           const exportedQuota = yield* client.action(id, {
@@ -282,7 +282,8 @@ test(
               op: "process.run",
               id: "queued",
               language: "shell",
-              source: "probe; CIRRO_MARKER=queued; export CIRRO_MARKER; probe",
+              source:
+                "probe; CIRRO_MARKER=queued; export CIRRO_MARKER; readonly CIRRO_MARKER; probe",
             },
           });
           expect(queued.status).toBe("queued");

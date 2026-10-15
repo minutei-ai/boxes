@@ -347,6 +347,7 @@ pub struct Shell {
     commands: Vec<Command>,
     environment: Rc<BTreeMap<String, String>>,
     exported: BTreeSet<String>,
+    readonly: BTreeSet<String>,
     prepared: Option<Prepared>,
 }
 
@@ -471,6 +472,7 @@ impl Shell {
         Ok(Self {
             commands: parse(source).map_err(|error| crate::fail(&error))?,
             exported: environment.keys().cloned().collect(),
+            readonly: BTreeSet::new(),
             environment: Rc::new(environment),
             prepared: None,
         })
@@ -489,7 +491,7 @@ impl Shell {
         let declaration = command
             .argv
             .first()
-            .is_some_and(|word| word.plain() == Some("export"));
+            .is_some_and(|word| matches!(word.plain(), Some("export" | "readonly")));
         let mut argv = Vec::new();
         let mut bytes = 0usize;
         for word in &command.argv {
@@ -526,6 +528,9 @@ impl Shell {
         let mut variables = self.environment.clone();
         let mut assigned = BTreeSet::new();
         for (name, word) in &command.assignments {
+            if self.readonly.contains(name) {
+                return Err(crate::fail(&format!("READONLY: {name}: readonly variable")));
+            }
             let value =
                 assignment_value(word, &variables, status).map_err(|error| crate::fail(&error))?;
             Rc::make_mut(&mut variables).insert(name.clone(), value);
@@ -589,10 +594,11 @@ impl Shell {
         let command = &self.commands[index];
         let isolated = command.pipe || command.gate == "pipe";
         let name = prepared.argv.first().map(String::as_str).unwrap_or(":");
-        if !prepared.argv.is_empty() && !matches!(name, ":" | "export" | "unset") {
+        if !prepared.argv.is_empty() && !matches!(name, ":" | "export" | "unset" | "readonly") {
             return Ok("null".into());
         }
         let mut exported = self.exported.clone();
+        let mut readonly = self.readonly.clone();
         if !prepared.argv.is_empty() && name != "export" {
             exported.extend(prepared.assigned.iter().cloned());
         }
@@ -602,26 +608,33 @@ impl Shell {
             exit_code: 0,
             fatal: false,
         };
-        if name == "export" || name == "unset" {
+        if matches!(name, "export" | "unset" | "readonly") {
             let mut args = prepared.argv.iter().skip(1).peekable();
+            if name != "unset" {
+                while args.peek().is_some_and(|arg| arg.as_str() == "-p") {
+                    args.next();
+                }
+            }
             if args.peek().is_some_and(|arg| arg.as_str() == "--") {
                 args.next();
             }
-            if name == "export"
-                && (args.peek().is_none()
-                    || (args.len() == 1 && args.peek().is_some_and(|arg| arg.as_str() == "-p")))
-            {
-                for key in &exported {
+            if name != "unset" && args.peek().is_none() {
+                let attributes = if name == "readonly" {
+                    &readonly
+                } else {
+                    &exported
+                };
+                for key in attributes {
                     if !variable_name(key) {
                         continue;
                     }
                     if let Some(value) = prepared.variables.get(key) {
                         result.stdout.push_str(&format!(
-                            "export {key}='{}'\n",
+                            "{name} {key}='{}'\n",
                             value.replace('\'', "'\\''")
                         ));
                     } else {
-                        result.stdout.push_str(&format!("export {key}\n"));
+                        result.stdout.push_str(&format!("{name} {key}\n"));
                     }
                 }
             } else {
@@ -633,7 +646,7 @@ impl Shell {
                 }
                 for arg in args {
                     let (key, value) = match (name, arg.split_once('=')) {
-                        ("export", Some((key, value))) => (key, Some(value)),
+                        ("export" | "readonly", Some((key, value))) => (key, Some(value)),
                         _ => (arg.as_str(), None),
                     };
                     if !variable_name(key) {
@@ -642,14 +655,24 @@ impl Shell {
                         result.fatal = !isolated;
                         break;
                     }
-                    if name == "export" {
+                    if readonly.contains(key) && (name == "unset" || value.is_some()) {
+                        result.stderr = format!("{name}: {key}: readonly variable\n");
+                        result.exit_code = 2;
+                        result.fatal = !isolated;
+                        break;
+                    }
+                    if name == "unset" {
+                        Rc::make_mut(&mut prepared.variables).remove(key);
+                        exported.remove(key);
+                    } else {
                         if let Some(value) = value {
                             Rc::make_mut(&mut prepared.variables).insert(key.into(), value.into());
                         }
-                        exported.insert(key.into());
-                    } else {
-                        Rc::make_mut(&mut prepared.variables).remove(key);
-                        exported.remove(key);
+                        if name == "readonly" {
+                            readonly.insert(key.into());
+                        } else {
+                            exported.insert(key.into());
+                        }
                     }
                 }
             }
@@ -657,6 +680,9 @@ impl Shell {
         let validation = validate_variables(&prepared.variables).and_then(|()| {
             if exported.len() > 128 || exported.iter().any(|key| key.encode_utf16().count() > 128) {
                 return Err("EFBIG: exported shell variable quota exceeded".into());
+            }
+            if readonly.len() > 128 || readonly.iter().any(|key| key.encode_utf16().count() > 128) {
+                return Err("EFBIG: readonly shell variable quota exceeded".into());
             }
             Ok(())
         });
@@ -670,6 +696,7 @@ impl Shell {
         if !isolated {
             self.environment = prepared.variables.clone();
             self.exported = exported;
+            self.readonly = readonly;
         }
         serde_json::to_string(&result).map_err(|_| crate::fail("EIO: serialization failed"))
     }
@@ -938,6 +965,86 @@ mod tests {
             &shell.environment,
             &shell.prepared.as_ref().unwrap().variables
         ));
+    }
+
+    #[test]
+    fn readonly_attributes_preserve_export_and_parent_values() {
+        let mut shell = Shell::new("readonly A=one; export A; export A=two", "{}").unwrap();
+        shell.argv(0, 0).unwrap();
+        shell.commit(0).unwrap();
+        assert!(shell.readonly.contains("A"));
+        assert!(!shell.exported.contains("A"));
+        shell.argv(1, 0).unwrap();
+        shell.commit(1).unwrap();
+        assert!(shell.exported.contains("A"));
+        shell.argv(2, 0).unwrap();
+        let result: serde_json::Value = serde_json::from_str(&shell.commit(2).unwrap()).unwrap();
+        assert_eq!(result["exitCode"], 2);
+        assert_eq!(result["fatal"], true);
+        assert_eq!(shell.environment.get("A").map(String::as_str), Some("one"));
+    }
+
+    #[test]
+    fn readonly_pipeline_attributes_and_failures_are_isolated() {
+        let mut shell = Shell::new(
+            "readonly A=one | cat; readonly B=parent; unset B | cat",
+            "{}",
+        )
+        .unwrap();
+        shell.argv(0, 0).unwrap();
+        shell.commit(0).unwrap();
+        assert!(shell.readonly.is_empty());
+        assert!(!shell.environment.contains_key("A"));
+        shell.argv(2, 0).unwrap();
+        shell.commit(2).unwrap();
+        shell.argv(3, 0).unwrap();
+        let result: serde_json::Value = serde_json::from_str(&shell.commit(3).unwrap()).unwrap();
+        assert_eq!(result["exitCode"], 2);
+        assert_eq!(result["fatal"], false);
+        assert!(shell.readonly.contains("B"));
+        assert_eq!(
+            shell.environment.get("B").map(String::as_str),
+            Some("parent")
+        );
+    }
+
+    #[test]
+    fn readonly_declarations_have_a_bounded_attribute_set() {
+        for count in [128, 129] {
+            let source = format!(
+                "readonly {}",
+                (0..count)
+                    .map(|index| format!("V{index}"))
+                    .collect::<Vec<_>>()
+                    .join(" ")
+            );
+            let mut shell = Shell::new(&source, "{}").unwrap();
+            shell.argv(0, 0).unwrap();
+            let result: serde_json::Value =
+                serde_json::from_str(&shell.commit(0).unwrap()).unwrap();
+            if count == 128 {
+                assert_eq!(result["exitCode"], 0);
+                assert_eq!(shell.readonly.len(), 128);
+            } else {
+                assert_eq!(result["exitCode"], 2);
+                assert_eq!(result["fatal"], true);
+                assert!(shell.readonly.is_empty());
+            }
+            assert!(shell.environment.is_empty());
+        }
+        for length in [128, 129] {
+            let mut shell = Shell::new(&format!("readonly {}", "A".repeat(length)), "{}").unwrap();
+            shell.argv(0, 0).unwrap();
+            let result: serde_json::Value =
+                serde_json::from_str(&shell.commit(0).unwrap()).unwrap();
+            if length == 128 {
+                assert_eq!(result["exitCode"], 0);
+                assert_eq!(shell.readonly.len(), 1);
+            } else {
+                assert_eq!(result["exitCode"], 2);
+                assert!(shell.readonly.is_empty());
+            }
+        }
     }
 
     #[test]
