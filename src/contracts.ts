@@ -5,6 +5,10 @@ export const Id = Schema.String.check(Schema.isPattern(/^[a-zA-Z0-9_-]{1,64}$/))
 export const Path = Schema.String.check(Schema.isMinLength(1), Schema.isMaxLength(4096));
 export const ContentEncoding = Schema.Literals(["utf8", "base64"]);
 export const Content = Schema.String.check(Schema.isMaxLength(22_369_624));
+export const Environment = Schema.Record(
+  Schema.String.check(Schema.isPattern(/^[^=\0]{1,128}$/)),
+  Schema.String.check(Schema.isMaxLength(4096), Schema.isPattern(/^[^\0]*$/)),
+).check(Schema.isMaxProperties(128));
 export const Permission = Schema.Literals(["read", "write", "execute", "network", "manage"]);
 export const Policy = Schema.Struct({
   networkHosts: Schema.Array(Schema.String.check(Schema.isPattern(/^[a-z0-9.-]{1,253}$/))).check(
@@ -14,6 +18,22 @@ export const Policy = Schema.Struct({
   memoryBytes: Schema.Int.check(Schema.isBetween({ minimum: 4_194_304, maximum: 33_554_432 })),
   maxOutputBytes: Schema.Int.check(Schema.isBetween({ minimum: 1024, maximum: 1_048_576 })),
 });
+const utf8 = new TextEncoder();
+const ConfiguredEnvironment = Environment.check(
+  Schema.makeFilter(
+    (values) =>
+      Object.keys(values).every((key) => key.isWellFormed()) &&
+      Object.values(values).every(
+        (value) => value.isWellFormed() && utf8.encode(value).byteLength <= 4096,
+      ) &&
+      utf8.encode(Schema.encodeSync(Schema.fromJsonString(Environment))(values)).byteLength <=
+        65_536,
+  ),
+);
+export const Configuration = Policy.mapFields((fields) => ({
+  ...fields,
+  environment: ConfiguredEnvironment,
+}));
 export const PolicyPatch = Policy.mapFields((fields) => Struct.map(fields, Schema.optionalKey));
 export const Capability = Schema.Struct({
   sandboxId: Id,
@@ -25,7 +45,8 @@ export const MintCapability = Schema.Struct({
   permissions: Schema.Array(Permission).check(Schema.isMinLength(1), Schema.isMaxLength(5)),
 });
 export const Head = Schema.Struct({
-  version: Schema.Literal(2),
+  version: Schema.Literal(3),
+  environment: Configuration.fields.environment,
   manifest: Schema.String.check(Schema.isMaxLength(8_388_608)),
   policy: Policy,
   createdAt: Schema.Int,
@@ -287,6 +308,7 @@ const InlineRun = Schema.Struct({
   op: Schema.Literal("process.run"),
   id: Id,
   language: Schema.Literals(["javascript", "typescript", "python", "shell"]),
+  env: Schema.optionalKey(Environment),
   source: Schema.String.check(Schema.isMaxLength(1_048_576)),
 });
 const ScriptSource = Schema.String.check(Schema.isMaxLength(1_048_576));
@@ -295,10 +317,7 @@ export const WasmConfiguration = Schema.Struct({
   argv: Schema.Array(
     Schema.String.check(Schema.isMaxLength(4096), Schema.isPattern(/^[^\0]*$/)),
   ).check(Schema.isMaxLength(129)),
-  env: Schema.Record(
-    Schema.String.check(Schema.isPattern(/^[^=\0]{1,128}$/)),
-    Schema.String.check(Schema.isMaxLength(4096), Schema.isPattern(/^[^\0]*$/)),
-  ).check(Schema.isMaxProperties(128)),
+  env: Environment,
   stdin: Schema.String.check(
     Schema.isMaxLength(1_398_104),
     Schema.isPattern(/^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$/),
@@ -323,18 +342,26 @@ export const PythonAction = Schema.Union([
   Schema.Struct({
     op: Schema.Literal("python.execute"),
     id: Id,
+    env: Schema.optionalKey(Environment),
     source: ScriptSource,
     filePath: Schema.optionalKey(Path),
   }),
   Schema.Struct({
     op: Schema.Literal("python.evaluate"),
     id: Id,
+    env: Schema.optionalKey(Environment),
     expression: ScriptSource,
     filePath: Schema.optionalKey(Path),
   }),
-  Schema.Struct({ op: Schema.Literal("python.executeFile"), id: Id, path: Path }),
+  Schema.Struct({
+    op: Schema.Literal("python.executeFile"),
+    id: Id,
+    path: Path,
+    env: Schema.optionalKey(Environment),
+  }),
 ]);
 export const PythonProgram = Schema.Struct({
+  env: Environment,
   language: Schema.Literal("python"),
   source: ScriptSource,
   filePath: Path,
@@ -355,18 +382,21 @@ export const RunAction = Schema.Union([
   Schema.Struct({
     op: Schema.Literals(["javascript.execute", "typescript.execute"]),
     id: Id,
+    env: Schema.optionalKey(Environment),
     source: ScriptSource,
     filePath: Schema.optionalKey(Path),
   }),
   Schema.Struct({
     op: Schema.Literals(["javascript.evaluate", "typescript.evaluate"]),
     id: Id,
+    env: Schema.optionalKey(Environment),
     expression: ScriptSource,
     filePath: Schema.optionalKey(Path),
   }),
   Schema.Struct({
     op: Schema.Literals(["javascript.executeFile", "typescript.executeFile"]),
     id: Id,
+    env: Schema.optionalKey(Environment),
     path: Path,
   }),
 ]);
@@ -467,6 +497,7 @@ export const ModuleSource = Schema.Struct({
   ),
 });
 export const ScriptProgram = Schema.Struct({
+  env: Environment,
   language: Schema.Literals(["javascript", "typescript"]),
   entry: Path,
   mode: Schema.Literals(["function", "module", "evaluate"]),
@@ -476,22 +507,31 @@ export const ModuleBatch = Schema.Struct({
   entry: Path,
   modules: Schema.Array(ModuleSource).check(Schema.isMaxLength(128)),
 });
-export const Program = Schema.Union([
-  ScriptProgram,
-  WasmProgram,
-  PythonProgram,
-  Schema.Struct({ language: Schema.Literal("shell"), source: ScriptSource }),
-]);
+export const ShellProgram = Schema.Struct({
+  language: Schema.Literal("shell"),
+  source: ScriptSource,
+  env: Environment,
+});
+export const Program = Schema.Union([ScriptProgram, WasmProgram, PythonProgram, ShellProgram]);
 export const Action = Schema.Union([
   GuestAction,
   RunAction,
   Schema.Struct({ op: Schema.Literal("config.get") }),
-  Schema.Struct({ op: Schema.Literal("config.set"), policy: Policy }),
-  Schema.Struct({ op: Schema.Literal("config.patch"), policy: PolicyPatch }),
+  Schema.Struct({
+    op: Schema.Literal("config.set"),
+    policy: Policy,
+    environment: Schema.optionalKey(Configuration.fields.environment),
+  }),
+  Schema.Struct({
+    op: Schema.Literal("config.patch"),
+    policy: PolicyPatch,
+    environment: Schema.optionalKey(Configuration.fields.environment),
+  }),
   Schema.Struct({ op: Schema.Literal("vm.status") }),
   Schema.Struct({ op: Schema.Literal("vm.dispose") }),
 ]);
 export const CreateSandbox = Schema.Struct({
+  environment: Schema.optionalKey(Configuration.fields.environment),
   id: Id,
   policy: Policy,
   snapshot: Schema.optionalKey(FilesystemSnapshot),
@@ -919,6 +959,17 @@ export const FilesystemMigrationReceipt = Schema.Struct({
   migrated: Schema.Int,
   cursor: Schema.NullOr(FilesystemMigrationCursor),
 });
+const EnvironmentMigrationCursor = Schema.Struct({
+  phase: Schema.Literals(["heads", "processes"]),
+  continuation: Schema.NullOr(Schema.String.check(Schema.isMaxLength(2048))),
+});
+export const EnvironmentMigrationInput = Schema.Struct({
+  cursor: Schema.optionalKey(Schema.NullOr(EnvironmentMigrationCursor)),
+});
+export const EnvironmentMigrationReceipt = Schema.Struct({
+  migrated: Schema.Int,
+  cursor: Schema.NullOr(EnvironmentMigrationCursor),
+});
 export const MigrationReceipt = Schema.Struct({ migrated: Schema.Int });
 
 export const HeapSnapshot = Schema.Struct({
@@ -1005,9 +1056,9 @@ export const ActionResponses = {
   "javascript.executeFile": RunRecord,
   "typescript.executeFile": RunRecord,
   "process.spawn": RunRecord,
-  "config.get": Policy,
-  "config.set": Policy,
-  "config.patch": Policy,
+  "config.get": Configuration,
+  "config.set": Configuration,
+  "config.patch": Configuration,
   "vm.status": Status,
   "vm.dispose": Success,
 } satisfies Record<typeof Action.Type.op, Schema.Constraint>;

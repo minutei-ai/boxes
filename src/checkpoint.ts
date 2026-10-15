@@ -149,6 +149,11 @@ export const saveExecutionCheckpoint = Effect.fn("checkpoint.saveExecution")(fun
   });
   return hash;
 });
+export class CheckpointVersionPending extends Schema.TaggedError<CheckpointVersionPending>()(
+  "CheckpointVersionPending",
+  {},
+) {}
+const CheckpointVersion = Schema.Struct({ head: Schema.Struct({ version: Schema.Int }) });
 export const restoreExecutionCheckpoint = Effect.fn("checkpoint.restoreExecution")(function* (
   objects: Env["OBJECTS"],
   sandboxId: string,
@@ -167,7 +172,8 @@ export const restoreExecutionCheckpoint = Effect.fn("checkpoint.restoreExecution
   const digest = yield* Effect.promise(() => crypto.subtle.digest("SHA-256", bytes));
   if (Buffer.from(digest).toString("hex") !== hash)
     return yield* new StorageFailure({ cause: "Execution checkpoint digest mismatch" });
-  return yield* Schema.decodeUnknownEffect(Schema.fromJsonString(ExecutionCheckpoint))(
-    Buffer.from(bytes).toString(),
-  );
+  const text = Buffer.from(bytes).toString();
+  const header = yield* Schema.decodeUnknownEffect(Schema.fromJsonString(CheckpointVersion))(text);
+  if (header.head.version !== 3) return yield* new CheckpointVersionPending({});
+  return yield* Schema.decodeUnknownEffect(Schema.fromJsonString(ExecutionCheckpoint))(text);
 });

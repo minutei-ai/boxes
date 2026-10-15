@@ -459,6 +459,40 @@ export default {
           );
         }
         yield* boxes.action(id, {
+          op: "config.patch",
+          policy: {},
+          environment: { BOXES_BINDING_MARKER: "configured" },
+        });
+        const environment = yield* boxes.action(id, { op: "config.get" });
+        if (environment.environment.BOXES_BINDING_MARKER !== "configured")
+          return yield* Effect.die("Binding configuration environment differs");
+        const environmentRun = yield* boxes.action(id, {
+          op: "typescript.evaluate",
+          id: "binding-configured-environment",
+          expression: "[process.env.BOXES_BINDING_MARKER, typeof process.binding]",
+          env: { BOXES_BINDING_MARKER: "caller" },
+        });
+        yield* Schema.decodeUnknownEffect(
+          Schema.Tuple([Schema.Literal("caller"), Schema.Literal("undefined")]),
+        )(environmentRun.output?.result);
+        const environmentRpc = yield* makeAgentBinding(
+          env.BOXES_AGENT,
+          Redacted.make(capability.token),
+        );
+        const rpcEnvironment = yield* environmentRpc.runWithTools(
+          id,
+          {
+            id: "binding-rpc-environment",
+            tools: [],
+            maxToolCalls: 1,
+            timeoutMs: 1000,
+            source: "export default () => process.env.BOXES_BINDING_MARKER",
+          },
+          async () => ({ ok: false, message: "No callback granted" }),
+        );
+        if (rpcEnvironment.output?.result !== "configured")
+          return yield* Effect.die("Agent binding lost sandbox environment");
+        yield* boxes.action(id, {
           op: "filesystem.writeFile",
           path: "/binding",
           content: "native binding",

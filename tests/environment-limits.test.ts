@@ -152,14 +152,16 @@ test(
           expect(
             yield* client.action(id, { op: "process.get", id: "package-union" }).pipe(Effect.flip),
           ).toMatchObject({ error: "ENOENT", status: 404 });
-          const shell = yield* client.action(id, {
-            op: "process.run",
-            id: "shell-union",
-            language: "shell",
-            source: "probe",
-          });
-          expect(shell.output?.exitCode).toBe(1);
-          expect(shell.output?.stderr).toContain("environment exceeds its limits");
+          expect(
+            yield* client
+              .action(id, {
+                op: "process.run",
+                id: "shell-union",
+                language: "shell",
+                source: "probe",
+              })
+              .pipe(Effect.flip),
+          ).toMatchObject({ error: "E2BIG", status: 413 });
         }),
       ).pipe(Effect.provide(FetchHttpClient.layer)),
     ),

@@ -3,6 +3,7 @@ import { requirePermission } from "./auth";
 import {
   Capability,
   Policy,
+  Environment,
   Fault,
   RunAction,
   StoredRun,
@@ -27,10 +28,11 @@ import { load } from "./modules";
 import { archive, restore } from "./code";
 import { initializeInput, finishInput } from "./input";
 import { execute } from "./execution";
-import { head, open, StorageFailure } from "./storage";
+import { head, open, kernelCall, StorageFailure } from "./storage";
 import type { Env } from "./resources";
 import type { HostBridge } from "./host";
 import { shell } from "./shell";
+import { restoreExecutionCheckpoint } from "./checkpoint";
 import { archiveOutput, restoreOutput, readOutputRange } from "./output";
 
 const reserve = Effect.fn("process.reserve")(function* (
@@ -42,7 +44,15 @@ const reserve = Effect.fn("process.reserve")(function* (
 ) {
   yield* requirePermission(capability, "execute");
   const session = yield* open(env, capability.sandboxId);
-  const program = yield* load(env, capability, session.kernel, action);
+  const defaults = yield* kernelCall(() => session.kernel.package_environment()).pipe(
+    Effect.flatMap(
+      Schema.decodeUnknownEffect(
+        Schema.fromJsonString(Schema.Record(Environment.key, Environment.value)),
+      ),
+    ),
+  );
+  const environment = { ...defaults, ...session.head.environment, ...(action.env ?? {}) };
+  const program = yield* load(env, capability, session.kernel, action, environment);
   if (stdinMode === "pipe" && program.language !== "wasm")
     return yield* new Fault({
       code: "UNSUPPORTED_RUNTIME",
@@ -283,7 +293,9 @@ const complete = Effect.fn("process.complete")(function* (
         return {
           program,
           changed: false,
-          outcome: yield* shell(env, capability, program.source, capture).pipe(Effect.result),
+          outcome: yield* shell(env, capability, program.source, program.env, capture).pipe(
+            Effect.result,
+          ),
         };
       const session = yield* open(env, capability.sandboxId);
       return yield* execute(
@@ -719,6 +731,18 @@ export const dispatch = Effect.fn("process.dispatch")(function* (env: Env, body:
   if (stored.authority === null || stored.authority.sandboxId !== identity.sandboxId)
     return yield* new StorageFailure({ cause: "Queued execution has no matching authority" });
   const capability = stored.authority;
+  const program = yield* restore(env, capability.sandboxId, stored.sourceHash).pipe(Effect.result);
+  if (program._tag === "Failure" && program.failure._tag === "ProgramVersionPending")
+    return yield* new ExecutionPending({ retryAfterSeconds: 15 });
+  if (stored.checkpoint !== null) {
+    const checkpoint = yield* restoreExecutionCheckpoint(
+      env.OBJECTS,
+      capability.sandboxId,
+      stored.checkpoint,
+    ).pipe(Effect.result);
+    if (checkpoint._tag === "Failure" && checkpoint.failure._tag === "CheckpointVersionPending")
+      return yield* new ExecutionPending({ retryAfterSeconds: 15 });
+  }
   const running = {
     ...stored,
     status: "running" as const,
@@ -773,7 +797,7 @@ export const dispatch = Effect.fn("process.dispatch")(function* (env: Env, body:
       checkpoint: stored.checkpoint,
       checkpointCount: stored.checkpointCount,
       retainedOutput: running.output,
-      program: restore(env, capability.sandboxId, running.sourceHash),
+      program: Effect.fromResult(program),
     },
     Math.max(1, Math.min(840_000, running.deadlineAt - now - 1000)),
   );

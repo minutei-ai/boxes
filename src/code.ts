@@ -3,6 +3,11 @@ import { Program } from "./contracts";
 import { StorageFailure } from "./storage";
 import type { Env } from "./resources";
 
+export class ProgramVersionPending extends Schema.TaggedError<ProgramVersionPending>()(
+  "ProgramVersionPending",
+  {},
+) {}
+
 export const archive = Effect.fn("code.archive")(function* (
   env: Env,
   id: string,
@@ -15,7 +20,7 @@ export const archive = Effect.fn("code.archive")(function* (
     try: () =>
       env.OBJECTS.put(`sandboxes/${id}/code/${hash}`, source, {
         onlyIf: { etagDoesNotMatch: "*" },
-        customMetadata: { format: "program-json" },
+        customMetadata: { format: "program-json-v2" },
         httpMetadata: { contentType: "application/json" },
       }),
     catch: (cause) => new StorageFailure({ cause }),
@@ -41,6 +46,8 @@ export const restore = Effect.fn("code.restore")(function* (
   const digest = yield* Effect.promise(() => crypto.subtle.digest("SHA-256", bytes));
   if (Buffer.from(digest).toString("hex") !== hash)
     return yield* new StorageFailure({ cause: "Archived program digest mismatch" });
+  if (object.customMetadata?.format !== "program-json-v2")
+    return yield* new ProgramVersionPending({});
   return yield* Schema.decodeUnknownEffect(Schema.fromJsonString(Program))(
     Buffer.from(bytes).toString("utf8"),
   ).pipe(Effect.mapError((cause) => new StorageFailure({ cause })));

@@ -60,7 +60,11 @@ export const migrateWasm = Effect.fn("migration.wasmInputs")(function* (env: Env
             catch: (cause) => new StorageFailure({ cause }),
           });
           if (code === null) return yield* new WasmMigrationFailure({ key: codeKey });
-          if (code.customMetadata?.format === "program-json") return;
+          if (
+            code.customMetadata?.format === "program-json" ||
+            code.customMetadata?.format === "program-json-v2"
+          )
+            return;
           if (code.size > 786_432) return yield* new WasmMigrationFailure({ key: codeKey });
           const data = yield* Effect.tryPromise({
             try: () => code.arrayBuffer(),

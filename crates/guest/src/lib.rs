@@ -186,6 +186,14 @@ impl Guest {
             ctx.globals()
                 .set("__mode", registry.borrow().mode().name())
                 .map_err(|error| failure(&ctx, error))?;
+            let environment = serde_json::to_string(registry.borrow().environment())
+                .map_err(|error| error.to_string())?;
+            let environment = ctx
+                .json_parse(environment)
+                .map_err(|error| failure(&ctx, error))?;
+            ctx.globals()
+                .set("__environment", environment)
+                .map_err(|error| failure(&ctx, error))?;
             Module::evaluate(
                 ctx.clone(),
                 "entry",
@@ -420,7 +428,7 @@ mod tests {
     use super::*;
 
     fn fixture(source: &str) -> String {
-        serde_json::json!({"language":"javascript","entry":"/main.js","mode":"function","modules":[{"name":"/main.js","source":source,"imports":[]}]}).to_string()
+        serde_json::json!({"env":{},"language":"javascript","entry":"/main.js","mode":"function","modules":[{"name":"/main.js","source":source,"imports":[]}]}).to_string()
     }
 
     #[test]
@@ -437,7 +445,7 @@ mod tests {
 
     #[test]
     fn bridges_promises_without_host_globals() {
-        let mut guest = Guest::create(&fixture("export default async ({tools}) => { const value = await tools.call({op:'filesystem.exists',path:'/'}); return [value.exists,typeof process,typeof fetch]; }"), 8_388_608, 1000, 4096).unwrap();
+        let mut guest = Guest::create(&fixture("export default async ({tools}) => { const value = await tools.call({op:'filesystem.exists',path:'/'}); return [value.exists,Object.keys(process),Object.keys(process.env),typeof process.binding,typeof fetch]; }"), 8_388_608, 1000, 4096).unwrap();
         assert!(guest.advance().unwrap().contains("filesystem.exists"));
         guest.settle("{\"exists\":true}", false).unwrap();
         assert!(guest.advance().unwrap().contains("undefined"));

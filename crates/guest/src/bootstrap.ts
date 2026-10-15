@@ -1,3 +1,6 @@
+const environment = globalThis.__environment;
+delete globalThis.__environment;
+globalThis.process = Object.freeze({ env: environment });
 const call = globalThis.__call;
 const moduleRequest = globalThis.__moduleRequest;
 delete globalThis.__moduleRequest;

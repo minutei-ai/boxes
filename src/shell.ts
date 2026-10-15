@@ -2,6 +2,7 @@ import { Clock, Effect, Match, Option, Schema } from "effect";
 import { requirePermission } from "./auth";
 import {
   Capability,
+  Environment,
   CommandArguments,
   DirectoryEntries,
   Fault,
@@ -21,6 +22,7 @@ export const shell = Effect.fn("shell.execute")(function* (
   env: Env,
   capability: typeof Capability.Type,
   source: string,
+  environment: typeof Environment.Type,
   capture: OutputCapture,
 ) {
   const session = yield* open(env, capability.sandboxId);
@@ -28,15 +30,6 @@ export const shell = Effect.fn("shell.execute")(function* (
   const id = capability.sandboxId;
   const plan = yield* kernelCall(() => kernel.shell_plan(source)).pipe(
     Effect.flatMap(Schema.decodeUnknownEffect(Schema.fromJsonString(ShellPlan))),
-  );
-  const environment = yield* kernelCall(() => kernel.package_environment()).pipe(
-    Effect.flatMap(
-      Schema.decodeUnknownEffect(
-        Schema.fromJsonString(
-          Schema.Record(WasmConfiguration.fields.env.key, WasmConfiguration.fields.env.value),
-        ),
-      ),
-    ),
   );
   const dirty = new Set<string>();
   const state = yield* Effect.reduce(
@@ -121,13 +114,19 @@ export const shell = Effect.fn("shell.execute")(function* (
           });
           const result = yield* Effect.gen(function* () {
             if (external !== null) {
-              const program = yield* load(env, capability, kernel, {
-                op: "process.execFile",
-                id: "shell-command",
-                command: external,
-                args,
-                stdin: { content: input.toString("base64"), encoding: "base64" },
-              }).pipe(Effect.flatMap(Schema.decodeUnknownEffect(WasmProgram)));
+              const program = yield* load(
+                env,
+                capability,
+                kernel,
+                {
+                  op: "process.execFile",
+                  id: "shell-command",
+                  command: external,
+                  args,
+                  stdin: { content: input.toString("base64"), encoding: "base64" },
+                },
+                environment,
+              ).pipe(Effect.flatMap(Schema.decodeUnknownEffect(WasmProgram)));
               const before = session.etag;
               const commandCapture: OutputCapture = (stdio, observeCancellation) => {
                 if (typeof stdio.stdout === "string")

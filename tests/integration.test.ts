@@ -19,6 +19,7 @@ import {
   ProcessPage,
   Head,
   MigrationReceipt,
+  EnvironmentMigrationReceipt,
   FilesystemMigrationReceipt,
   ScriptProgram,
   WasmProgram,
@@ -696,7 +697,7 @@ test("guest cannot access network or host bindings", async () => {
     op: "process.run",
     id: "escape-1",
     language: "javascript",
-    source: `export default () => ({ process: typeof process, fetch: typeof fetch, env: typeof env, loader: typeof LOADER });`,
+    source: `export default () => ({ process: typeof process.binding, fetch: typeof fetch, env: typeof env, loader: typeof LOADER });`,
   });
   const record = Schema.decodeUnknownSync(RunRecord)(await result.json());
   expect(record.status).toBe("exited");
@@ -1123,10 +1124,22 @@ test("native R2 migration preserves files and tombstones and is idempotent", asy
     "sandboxes/migration-deleted/head.json",
     JSON.stringify({ ...prior, deleted: true }),
   );
-  expect((await post("/v1/migrations/execution-policy-v2", token, {})).status).toBe(401);
-  const first = Schema.decodeUnknownSync(MigrationReceipt)(
-    await (await post("/v1/migrations/execution-policy-v2", admin, {})).json(),
-  );
+  expect((await post("/v1/migrations/environment-v1", token, {})).status).toBe(401);
+  const migrateConfiguration = async () => {
+    const cursors: (typeof EnvironmentMigrationReceipt.Type.cursor)[] = [null];
+    const progress = { migrated: 0 };
+    while (cursors.length > 0) {
+      const page = Schema.decodeUnknownSync(EnvironmentMigrationReceipt)(
+        await (
+          await post("/v1/migrations/environment-v1", admin, { cursor: cursors.shift() })
+        ).json(),
+      );
+      progress.migrated += page.migrated;
+      if (page.cursor !== null) cursors.push(page.cursor);
+    }
+    return progress;
+  };
+  const first = await migrateConfiguration();
   expect(first.migrated).toBe(2);
   const file = Schema.decodeUnknownSync(FileContent)(
     await (await act("migration", token, { op: "filesystem.readFile", path: "/tmp/kept" })).json(),
@@ -1137,9 +1150,7 @@ test("native R2 migration preserves files and tombstones and is idempotent", asy
   expect(
     Schema.decodeUnknownSync(Schema.fromJsonString(Head))(await tombstone.text()).deleted,
   ).toBe(true);
-  const second = Schema.decodeUnknownSync(MigrationReceipt)(
-    await (await post("/v1/migrations/execution-policy-v2", admin, {})).json(),
-  );
+  const second = await migrateConfiguration();
   expect(second.migrated).toBe(0);
 });
 

@@ -12,6 +12,8 @@ import {
   ActionResponses,
   DispatchReceipt,
   MigrationReceipt,
+  EnvironmentMigrationInput,
+  EnvironmentMigrationReceipt,
   FilesystemMigrationInput,
   FilesystemMigrationReceipt,
   OutputMigrationInput,
@@ -22,6 +24,7 @@ import {
   Head,
   Id,
   Policy,
+  Configuration,
   MintCapability,
   RunRecord,
   RunSummary,
@@ -40,7 +43,7 @@ import { AgentProtocol, type HostCallback } from "./rpc-protocol";
 import { importSnapshot } from "./snapshot";
 import { tick } from "./cron";
 import { guestAction } from "./capabilities";
-import { migrate } from "./migration";
+import { migrateConfiguration } from "./configuration-migration";
 import { migrateFilesystem } from "./filesystem-migration";
 import { migrateProcesses, migrateOutput } from "./process-migration";
 import { migrateWasm } from "./wasm-migration";
@@ -92,12 +95,20 @@ const route = Effect.fn("api.route")(function* (request: Request, env: Env) {
       headers: { "content-type": "application/json", "cache-control": "no-store" },
     });
   }
-  if (url.pathname === "/v1/migrations/execution-policy-v2") {
+  if (url.pathname === "/v1/migrations/environment-v1") {
     yield* administrator(env, token);
-    const receipt = yield* migrate(env);
-    return new Response(Schema.encodeSync(Schema.fromJsonString(MigrationReceipt))(receipt), {
-      headers: { "content-type": "application/json", "cache-control": "no-store" },
-    });
+    const bytes = yield* readBounded(request.body, 4096);
+    const input = yield* Schema.decodeUnknownEffect(
+      Schema.fromJsonString(EnvironmentMigrationInput),
+      { onExcessProperty: "error" },
+    )(bytes.toString("utf8"));
+    const receipt = yield* migrateConfiguration(env, input);
+    return new Response(
+      Schema.encodeSync(Schema.fromJsonString(EnvironmentMigrationReceipt))(receipt),
+      {
+        headers: { "content-type": "application/json", "cache-control": "no-store" },
+      },
+    );
   }
   if (url.pathname === "/v1/migrations/process-receipts-v2") {
     yield* administrator(env, token);
@@ -169,7 +180,8 @@ const route = Effect.fn("api.route")(function* (request: Request, env: Env) {
     }
     const manifest = yield* kernelCall(() => kernel.manifest());
     const record: typeof Head.Type = {
-      version: 2,
+      version: 3,
+      environment: input.environment ?? {},
       manifest,
       policy: input.policy,
       createdAt,
@@ -302,15 +314,28 @@ const route = Effect.fn("api.route")(function* (request: Request, env: Env) {
       Effect.gen(function* () {
         yield* requirePermission(capability, "read");
         const session = yield* open(env, id);
-        return Schema.encodeSync(Schema.fromJsonString(Policy))(session.head.policy);
+        return Schema.encodeSync(Schema.fromJsonString(Configuration))({
+          ...session.head.policy,
+          environment: session.head.environment,
+        });
       }),
     ),
     Match.when({ op: "config.set" }, (action) =>
       Effect.gen(function* () {
         yield* requirePermission(capability, "manage");
         const session = yield* open(env, id);
-        yield* publish(env, id, { ...session, head: { ...session.head, policy: action.policy } });
-        return Schema.encodeSync(Schema.fromJsonString(Policy))(action.policy);
+        yield* publish(env, id, {
+          ...session,
+          head: {
+            ...session.head,
+            policy: action.policy,
+            environment: action.environment ?? session.head.environment,
+          },
+        });
+        return Schema.encodeSync(Schema.fromJsonString(Configuration))({
+          ...action.policy,
+          environment: action.environment ?? session.head.environment,
+        });
       }),
     ),
     Match.when({ op: "config.patch" }, (action) =>
@@ -318,8 +343,18 @@ const route = Effect.fn("api.route")(function* (request: Request, env: Env) {
         yield* requirePermission(capability, "manage");
         const session = yield* open(env, id);
         const policy = { ...session.head.policy, ...action.policy };
-        yield* publish(env, id, { ...session, head: { ...session.head, policy } });
-        return Schema.encodeSync(Schema.fromJsonString(Policy))(policy);
+        yield* publish(env, id, {
+          ...session,
+          head: {
+            ...session.head,
+            policy,
+            environment: action.environment ?? session.head.environment,
+          },
+        });
+        return Schema.encodeSync(Schema.fromJsonString(Configuration))({
+          ...policy,
+          environment: action.environment ?? session.head.environment,
+        });
       }),
     ),
     Match.when({ op: "vm.status" }, () =>

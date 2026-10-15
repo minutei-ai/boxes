@@ -4,6 +4,7 @@ import compilerWasm from "cirro:compiler";
 import { createBindings } from "../dist/compiler/bindings";
 import {
   Capability,
+  Environment,
   Fault,
   FileStat,
   ModuleCompilation,
@@ -22,57 +23,52 @@ import { kernelCall, open, read } from "./storage";
 import { Kernel } from "../dist/kernel/cirro_kernel";
 import type { Env } from "./resources";
 
-const Header = ScriptProgram.mapFields((fields) => Struct.omit(fields, ["modules"]));
+const Header = ScriptProgram.mapFields((fields) => Struct.omit(fields, ["modules", "env"]));
 
 export const load = Effect.fn("modules.load")(function* (
   env: Env,
   capability: typeof Capability.Type,
   kernel: Kernel,
   action: typeof RunAction.Type,
+  environment: typeof Environment.Type,
 ) {
+  if (
+    Object.values(environment).some(
+      (value) => !value.isWellFormed() || Buffer.byteLength(value) > 4096,
+    ) ||
+    Object.keys(environment).some((key) => !key.isWellFormed())
+  )
+    return yield* new Fault({
+      code: "EINVAL",
+      status: 400,
+      message: "Guest environment require valid UTF-8 with at most 4096 bytes per value",
+    });
+  if (!Schema.is(Environment)(environment))
+    return yield* new Fault({
+      code: "E2BIG",
+      status: 413,
+      message: "Combined package and execution environment exceeds its limits",
+    });
+  const environmentBytes = Buffer.byteLength(
+    Schema.encodeSync(Schema.fromJsonString(Environment))(environment),
+  );
+  if (environmentBytes > 65_536)
+    return yield* new Fault({
+      code: "E2BIG",
+      status: 413,
+      message: "Guest environment exceeds the 64 KiB configuration budget",
+    });
   if (
     action.op === "wasm.executeFile" ||
     action.op === "process.execFile" ||
     (action.op === "process.run" && action.language === "wasm")
   ) {
-    const defaults = yield* kernelCall(() => kernel.package_environment()).pipe(
-      Effect.flatMap(
-        Schema.decodeUnknownEffect(
-          Schema.fromJsonString(
-            Schema.Record(WasmConfiguration.fields.env.key, WasmConfiguration.fields.env.value),
-          ),
-        ),
-      ),
-    );
-    const environment = { ...defaults, ...(action.env ?? {}) };
     const args = action.args ?? [];
-    if (
-      args.some((value) => !value.isWellFormed() || Buffer.byteLength(value) > 4096) ||
-      Object.values(environment).some(
-        (value) => !value.isWellFormed() || Buffer.byteLength(value) > 4096,
-      ) ||
-      Object.keys(environment).some((key) => !key.isWellFormed())
-    )
+    if (args.some((value) => !value.isWellFormed() || Buffer.byteLength(value) > 4096))
       return yield* new Fault({
         code: "EINVAL",
         status: 400,
-        message:
-          "WASI arguments and environment require valid UTF-8 with at most 4096 bytes per value",
-      });
-    if (!Schema.is(WasmConfiguration.fields.env)(environment))
-      return yield* new Fault({
-        code: "E2BIG",
-        status: 413,
-        message: "Combined package and execution environment exceeds its limits",
-      });
-    const environmentBytes = Buffer.byteLength(
-      Schema.encodeSync(Schema.fromJsonString(WasmConfiguration.fields.env))(environment),
-    );
-    if (environmentBytes > 65_536)
-      return yield* new Fault({
-        code: "E2BIG",
-        status: 413,
-        message: "WASI environment exceeds the 64 KiB configuration budget",
+        message: "WASI arguments require valid UTF-8 within 4096 bytes",
       });
     const binary = yield* Effect.gen(function* () {
       if (action.op === "process.run") {
@@ -175,6 +171,7 @@ export const load = Effect.fn("modules.load")(function* (
   }
   if (action.op === "process.run" && action.language === "python")
     return {
+      env: environment,
       language: "python" as const,
       source: action.source,
       filePath: "/tmp/__cirro_inline__.py",
@@ -183,6 +180,7 @@ export const load = Effect.fn("modules.load")(function* (
   if (Schema.is(PythonAction)(action)) {
     if (action.op === "python.execute")
       return {
+        env: environment,
         language: "python" as const,
         source: action.source,
         filePath: yield* kernelCall(() =>
@@ -192,6 +190,7 @@ export const load = Effect.fn("modules.load")(function* (
       };
     if (action.op === "python.evaluate")
       return {
+        env: environment,
         language: "python" as const,
         source: action.expression,
         filePath: yield* kernelCall(() =>
@@ -215,10 +214,16 @@ export const load = Effect.fn("modules.load")(function* (
       catch: () =>
         new Fault({ code: "EILSEQ", status: 422, message: "Python source must be UTF-8" }),
     });
-    return { language: "python" as const, source, filePath: stat.path, mode: "execute" as const };
+    return {
+      env: environment,
+      language: "python" as const,
+      source,
+      filePath: stat.path,
+      mode: "execute" as const,
+    };
   }
   if (action.op === "process.run" && action.language === "shell")
-    return { language: "shell" as const, source: action.source };
+    return { language: "shell" as const, source: action.source, env: environment };
   const root = yield* Match.value(action).pipe(
     Match.when({ op: "process.run" }, (action) =>
       Effect.succeed({
@@ -307,6 +312,7 @@ export const load = Effect.fn("modules.load")(function* (
   });
   const modules = yield* graph(env, capability, kernel, entry, new Set(), root.mode);
   return Schema.decodeUnknownSync(ScriptProgram)({
+    env: environment,
     language: root.language,
     entry: root.name,
     mode: root.mode,

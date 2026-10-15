@@ -4,6 +4,8 @@ import { Clock, Config, Effect, Layer, Redacted, Schedule, Schema } from "effect
 import { bucket, executions, worker } from "./src/resources";
 import {
   MigrationReceipt,
+  EnvironmentMigrationInput,
+  EnvironmentMigrationReceipt,
   OutputMigrationInput,
   OutputMigrationReceipt,
   FilesystemMigrationInput,
@@ -54,12 +56,60 @@ const migrate = Alchemy.Action(
           while: (failure) => failure._tag === "MigrationRequestFailure" && failure.cause === 404,
         }),
       );
+      const environmentMigration = Effect.fn("deployment.environmentMigration")(function* (
+        initial: typeof EnvironmentMigrationReceipt.Type.cursor,
+      ) {
+        const progress = { migrated: 0, pages: 0 };
+        const cursors = [initial];
+        while (cursors.length > 0) {
+          const cursor = cursors.shift();
+          const response = yield* Effect.tryPromise({
+            try: () =>
+              fetch(new URL("/v1/migrations/environment-v1", url), {
+                method: "POST",
+                headers: {
+                  authorization: `Bearer ${Redacted.value(key)}`,
+                  "content-type": "application/json",
+                },
+                body: Schema.encodeSync(Schema.fromJsonString(EnvironmentMigrationInput))({
+                  cursor,
+                }),
+                signal: AbortSignal.timeout(120_000),
+              }),
+            catch: (cause) =>
+              new MigrationRequestFailure({ cause, path: "/v1/migrations/environment-v1" }),
+          });
+          if (!response.ok)
+            return yield* new MigrationRequestFailure({
+              cause: response.status,
+              path: "/v1/migrations/environment-v1",
+            });
+          const text = yield* Effect.tryPromise({
+            try: () => response.text(),
+            catch: (cause) =>
+              new MigrationRequestFailure({ cause, path: "/v1/migrations/environment-v1" }),
+          });
+          const page = yield* Schema.decodeUnknownEffect(
+            Schema.fromJsonString(EnvironmentMigrationReceipt),
+          )(text);
+          progress.pages += 1;
+          progress.migrated += page.migrated;
+          yield* Effect.logInfo({
+            migration: "environment-v1",
+            page: progress.pages,
+            migrated: page.migrated,
+            nextPhase: page.cursor?.phase ?? "done",
+          });
+          if (cursor === undefined || cursor === null || cursor.phase === "heads") {
+            if (page.cursor?.phase === "processes") return { ...progress, cursor: page.cursor };
+          }
+          if (page.cursor !== null) cursors.push(page.cursor);
+        }
+        return { ...progress, cursor: null };
+      });
+      const configurationHeads = yield* environmentMigration(null);
       const receipts = yield* Effect.forEach(
-        [
-          "/v1/migrations/execution-policy-v2",
-          "/v1/migrations/wasm-inputs-v1",
-          "/v1/migrations/process-receipts-v2",
-        ],
+        ["/v1/migrations/wasm-inputs-v1", "/v1/migrations/process-receipts-v2"],
         step,
         { concurrency: 1 },
       );
@@ -103,6 +153,7 @@ const migrate = Alchemy.Action(
         });
         if (page.cursor !== null) cursors.push(page.cursor);
       }
+      const configurationPrograms = yield* environmentMigration(configurationHeads.cursor);
       const filesystem = { pages: 0, migrated: 0 };
       const filesystemCursors: (typeof FilesystemMigrationReceipt.Type.cursor)[] = [null];
       while (filesystemCursors.length > 0) {
@@ -147,6 +198,7 @@ const migrate = Alchemy.Action(
       return {
         receipts,
         filesystemMigration: filesystem,
+        environmentMigration: { heads: configurationHeads, programs: configurationPrograms },
         inputMigration: progress,
         deployedAt: input.deployedAt,
       };

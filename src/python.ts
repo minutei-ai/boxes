@@ -3,6 +3,7 @@ import wasm from "cirro:python";
 import { createBindings } from "../dist/python/bindings";
 import {
   Capability,
+  Environment,
   CapturedStdio,
   ErrorResponse,
   Fault,
@@ -42,6 +43,7 @@ export const python = Effect.fn("python.execute")(function* (
           program.filePath,
           program.mode === "evaluate",
           policy.maxOutputBytes,
+          Schema.encodeSync(Schema.fromJsonString(Environment))(program.env),
         );
         state.__cirro_limits(BigInt(policy.interruptBudget) * 1000n, pages);
         return guest;

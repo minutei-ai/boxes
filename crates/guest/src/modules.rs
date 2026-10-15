@@ -10,6 +10,7 @@ use std::rc::Rc;
 #[serde(deny_unknown_fields)]
 pub(crate) struct Program {
     pub language: String,
+    pub env: BTreeMap<String, String>,
     pub entry: String,
     pub mode: Mode,
     pub modules: Vec<Source>,
@@ -84,7 +85,28 @@ fn validate(source: &Source, names: &BTreeSet<&str>) -> std::result::Result<(), 
 }
 
 impl Registry {
+    pub(crate) fn environment(&self) -> &BTreeMap<String, String> {
+        &self.program.env
+    }
     pub(crate) fn new(program: Program) -> std::result::Result<Self, String> {
+        if program.env.len() > 128
+            || program.env.iter().any(|(key, value)| {
+                key.is_empty()
+                    || key.encode_utf16().count() > 128
+                    || key.contains(['=', '\0'])
+                    || value.len() > 4096
+                    || value.contains('\0')
+            })
+        {
+            return Err("Invalid guest environment".into());
+        }
+        if serde_json::to_string(&program.env)
+            .map_err(|error| error.to_string())?
+            .len()
+            > 65_536
+        {
+            return Err("Guest environment exceeds its byte limit".into());
+        }
         if !matches!(program.language.as_str(), "javascript" | "typescript")
             || program.modules.is_empty()
             || program.modules.len() > 128
@@ -278,6 +300,7 @@ mod tests {
     #[test]
     fn installed_sources_preserve_exact_byte_budget_and_alias_identity() {
         let mut registry = Registry::new(Program {
+            env: BTreeMap::new(),
             language: "javascript".into(),
             entry: "/main.mjs".into(),
             mode: Mode::Module,
@@ -321,6 +344,7 @@ mod tests {
             .map(|index| source(&format!("/{index}.mjs")))
             .collect();
         let mut registry = Registry::new(Program {
+            env: BTreeMap::new(),
             language: "javascript".into(),
             entry: "/0.mjs".into(),
             mode: Mode::Module,

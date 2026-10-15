@@ -10,6 +10,7 @@ const Report = Schema.Struct({
     Schema.Struct({ name: Schema.String, status: Schema.Int, error: Schema.String }),
   ),
   validOverride: Schema.Boolean,
+  configuredRuntimes: Schema.Array(Schema.String),
   disposal: Schema.Boolean,
 });
 const report = await Effect.runPromise(
@@ -132,6 +133,52 @@ const report = await Effect.runPromise(
       )
         return yield* Effect.die("Valid environment override did not execute");
       yield* client.action(id, {
+        op: "config.patch",
+        policy: {},
+        environment: { CIRRO_MARKER: "configured" },
+      });
+      const configuration = yield* client.action(id, { op: "config.get" });
+      if (configuration.environment.CIRRO_MARKER !== "configured")
+        return yield* Effect.die("Persisted environment was not observable");
+      const javascript = yield* client.action(id, {
+        op: "javascript.evaluate",
+        id: "configured-javascript",
+        expression: "[process.env.CIRRO_MARKER, typeof process.binding]",
+      });
+      yield* Schema.decodeUnknownEffect(
+        Schema.Tuple([Schema.Literal("configured"), Schema.Literal("undefined")]),
+      )(javascript.output?.result);
+      const python = yield* client.action(id, {
+        op: "python.evaluate",
+        id: "configured-python",
+        expression: "__import__('os').getenv('CIRRO_MARKER')",
+      });
+      if (python.output?.result !== "configured")
+        return yield* Effect.die("Python lost configured environment");
+      const configuredShell = yield* client.action(id, {
+        op: "process.run",
+        id: "configured-shell",
+        language: "shell",
+        source: "probe",
+      });
+      const wasm = yield* client.action(id, {
+        op: "process.execFile",
+        id: "configured-wasm",
+        command: "probe",
+      });
+      for (const run of [configuredShell, wasm]) {
+        if (run.status !== "exited" || !run.output?.stdout.includes("configured"))
+          return yield* Effect.die("Configured command environment differs");
+      }
+      const overridden = yield* client.action(id, {
+        op: "typescript.evaluate",
+        id: "configured-override",
+        expression: "process.env.CIRRO_MARKER",
+        env: { CIRRO_MARKER: "caller" },
+      });
+      if (overridden.output?.result !== "caller")
+        return yield* Effect.die("Caller environment did not override configuration");
+      yield* client.action(id, {
         op: "filesystem.writeFile",
         path: "/tmp/other-package",
         content: commandPackage(binary, "other", "1.0.0", { OTHER: "v" }).toString("base64"),
@@ -148,19 +195,20 @@ const report = await Effect.runPromise(
         .pipe(Effect.flip);
       if (absent._tag !== "BoxesError" || absent.status !== 404)
         return yield* Effect.die("Package union reserved a process");
-      const shell = yield* client.action(id, {
-        op: "process.run",
-        id: "shell-union",
-        language: "shell",
-        source: "probe",
-      });
-      if (
-        shell.output?.exitCode !== 1 ||
-        !shell.output.stderr.includes("environment exceeds its limits")
-      )
-        return yield* Effect.die("Shell did not report the WASI environment failure");
+      const shell = yield* client
+        .action(id, { op: "process.run", id: "shell-union", language: "shell", source: "probe" })
+        .pipe(Effect.flip);
+      if (shell._tag !== "BoxesError" || shell.status !== 413 || shell.error !== "E2BIG")
+        return yield* Effect.die("Shell admitted an invalid environment");
       checks.push({ name: "package-union", status: union.status, error: union.error });
-      return { target: url, measuredAt, checks, validOverride: true, disposal: true };
+      return {
+        target: url,
+        measuredAt,
+        checks,
+        validOverride: true,
+        configuredRuntimes: ["javascript", "typescript", "python", "shell", "wasm"],
+        disposal: true,
+      };
     }),
   ).pipe(Effect.provide(FetchHttpClient.layer)),
 );

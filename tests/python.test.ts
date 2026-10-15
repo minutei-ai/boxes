@@ -21,6 +21,7 @@ test("compiled Python ABI meters user instructions after bounded bootstrap and r
     "/tmp/example.py",
     true,
     1_048_576,
+    "{}",
   );
   native.__cirro_limits(1_000_000n, 512);
   const step = Schema.decodeUnknownSync(Schema.fromJsonString(Completed))(guest.step());
@@ -36,6 +37,7 @@ test("compiled Python ABI meters user instructions after bounded bootstrap and r
     "/tmp/loop.py",
     false,
     1_048_576,
+    "{}",
   );
   state.__cirro_limits(1000n, 512);
   expect(() => exhausted.step()).toThrow();
@@ -47,7 +49,7 @@ test("compiled Python memory ceiling rejects growth before allocation independen
   const bindings = createBindings();
   const native = bindings.initSync({ module });
   native.__cirro_limits(100_000_000n, 512);
-  const guest = new bindings.PythonGuest("[0] * 1000000", "/tmp/memory.py", true, 1_048_576);
+  const guest = new bindings.PythonGuest("[0] * 1000000", "/tmp/memory.py", true, 1_048_576, "{}");
   const size = native.memory.buffer.byteLength;
   native.__cirro_limits(100_000_000n, size / 65_536);
   expect(() => guest.step()).toThrow();

@@ -11,6 +11,30 @@ const TOOLS: &rustpython_vm::frozen::FrozenLib = rustpython_vm::py_freeze!(
     module_name = "__cirro_tools"
 );
 
+#[rustpython_vm::pymodule(name = "os")]
+mod environment {
+    use rustpython_vm::{
+        PyObjectRef, PyResult, VirtualMachine,
+        builtins::{PyDictRef, PyStrRef},
+        function::OptionalArg,
+    };
+
+    #[pyattr]
+    fn environ(vm: &VirtualMachine) -> PyDictRef {
+        vm.ctx.new_dict()
+    }
+
+    #[pyfunction]
+    fn getenv(key: PyStrRef, default: OptionalArg<PyObjectRef>, vm: &VirtualMachine) -> PyResult {
+        let module = vm.import("os", 0)?;
+        let environ = module.get_attr("environ", vm)?;
+        let environ: PyDictRef = environ.try_into_value(vm)?;
+        Ok(environ
+            .get_item_opt(&*key, vm)?
+            .unwrap_or_else(|| default.unwrap_or_else(|| vm.ctx.none())))
+    }
+}
+
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
 struct Output {
@@ -51,11 +75,32 @@ impl PythonGuest {
         path: &str,
         evaluate: bool,
         max_output: usize,
+        environment: &str,
     ) -> Result<Self, JsValue> {
         if source.len() > 1_048_576 || max_output == 0 || max_output > 1_048_576 {
             return Err(JsValue::from_str("Invalid Python limits"));
         }
-        let interpreter = Interpreter::builder(Default::default())
+        if environment.len() > 65_536 {
+            return Err(JsValue::from_str("Python environment exceeds its limit"));
+        }
+        let environment: std::collections::BTreeMap<String, String> =
+            serde_json::from_str(environment)
+                .map_err(|error| JsValue::from_str(&error.to_string()))?;
+        if environment.len() > 128
+            || environment.iter().any(|(key, value)| {
+                key.is_empty()
+                    || key.encode_utf16().count() > 128
+                    || key.contains(['=', '\0'])
+                    || value.len() > 4096
+                    || value.contains('\0')
+            })
+        {
+            return Err(JsValue::from_str("Invalid Python environment"));
+        }
+        let builder = Interpreter::builder(Default::default());
+        let environment_module = environment::module_def(&builder.ctx);
+        let interpreter = builder
+            .add_native_module(environment_module)
             .add_frozen_modules(BOOTSTRAP)
             .add_frozen_modules(TOOLS)
             .build();
@@ -79,6 +124,20 @@ impl PythonGuest {
                 vm.sys_module
                     .set_attr("stderr", stderr.clone(), vm)
                     .map_err(|_| "Python stderr initialization failed")?;
+                let module = vm
+                    .import("os", 0)
+                    .map_err(|_| "Python environment module unavailable")?;
+                let values = module
+                    .get_attr("environ", vm)
+                    .map_err(|_| "Python environment unavailable")?;
+                let values: rustpython_vm::builtins::PyDictRef = values
+                    .try_into_value(vm)
+                    .map_err(|_| "Invalid Python environment mapping")?;
+                for (key, value) in &environment {
+                    values
+                        .set_item(key.as_str(), vm.ctx.new_str(value.as_str()).into(), vm)
+                        .map_err(|_| "Python environment initialization failed")?;
+                }
                 let tools = vm
                     .import("__cirro_tools", 0)
                     .and_then(|module| module.get_attr("tools", vm))
