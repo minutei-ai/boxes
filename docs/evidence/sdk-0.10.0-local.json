@@ -1,5 +1,5 @@
 {
-  "status": "Queued repair optimization deployed to the existing ordinary Worker. Real Queue blocking/admission, administrator repair, single confirmed append and scoped collection passed.",
+  "status": "Published experimental SDK/runtime 0.10.0; production backend and local Minutei conversation cleanup verified. Packaged installation instructions need the 0.10.1 documentation patch.",
   "version": "0.10.0",
   "runtimeSourceCommit": "dd13d82aab673dc3253a74760ac2af79d1cd1272",
   "runtimeArtifactsSha256": {
@@ -36,8 +36,8 @@
     "shellReference": "docs/evidence/shell-reference-portability.json"
   },
   "delivery": {
-    "github": "main published at dd13d82. Its CI passed 346 native tests and failed one host readonly comparison; shell-reference-portability.json records the reproduced GNU version difference and the direct native contract fix.",
-    "sdkRuntimePublication": "Exact validated assets uploaded to an unpublished experimental draft sdk-v0.10.0.",
+    "github": "Published experimental sdk-v0.10.0 at 15d9206; its full CI passed.",
+    "sdkRuntimePublication": "Both exact validated archives and SHA256SUMS are published on the prerelease.",
     "backendDeployment": {
       "provider": "Alchemy project-local CLI; profile minutei; stage prod",
       "worker": "cirro-sandbox-prod-rs7wexxow56rmsoz",
@@ -75,10 +75,11 @@
       "workerKind": "Existing ordinary Worker update and unconditional Migrations action; existing R2, Queue, consumer and bindings unchanged. No Dynamic Workers or Worker Loader.",
       "artifactIdentity": "Exact tested local assets uploaded through native Alchemy. The public health route does not attest remote commit or digests."
     },
-    "minutei": "Installed SDK 0.9.0 actual consumer fixtures passed against this exact runtime archive; application/model/history delivery remain unverified."
+    "minutei": "SDK/runtime 0.10.0 installed from the published assets and all 24 files match. Conversation cleanup is validated in local commit 6ecd528; no Minutei push/deploy."
   },
   "deliveryEvidence": "docs/evidence/process-repair-metadata-production.json",
   "localCandidateEvidence": "docs/evidence/process-repair-metadata-local.json",
   "previousDeliveryEvidence": "docs/evidence/inline-deadline-production.json",
-  "parity": "Experimental; remaining requirements in docs/parity.md stay open."
+  "parity": "Experimental; remaining requirements in docs/parity.md stay open.",
+  "releaseEvidence": "docs/evidence/sdk-0.10.0-release.json"
 }

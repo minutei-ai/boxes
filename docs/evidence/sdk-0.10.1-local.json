@@ -1,0 +1,68 @@
+{
+  "status": "Local documentation patch candidate; not yet published.",
+  "version": "0.10.1",
+  "baseCommit": "15d92068d6ebc7c9fa6e657b5cdc39f8bc1b086d",
+  "correction": "Replace the stale 0.9.0 install command and pending-publication text embedded in the 0.10.0 SDK documentation. Existing release assets are retained.",
+  "archiveComparison": [
+    {
+      "package": "boxes",
+      "file": "minutei-ai-boxes-0.10.1.tgz",
+      "bytes": 70926,
+      "sha256": "fc152d23729b7069276fc1eceab93e5d231acfc42d3a3c004f5fcfacaf80a8c6",
+      "changedFromPublished0100": ["package/package.json", "package/docs/sdk.md"],
+      "entries": 16
+    },
+    {
+      "package": "boxes-runtime",
+      "file": "minutei-ai-boxes-runtime-0.10.1.tgz",
+      "bytes": 5520923,
+      "sha256": "83d949dbbcbd9e6f0038920ebbddb8c6143986f4720e566a7a8f4d1485fae244",
+      "changedFromPublished0100": ["package/package.json"],
+      "entries": 8
+    }
+  ],
+  "archiveAudit": [
+    {
+      "file": "minutei-ai-boxes-0.10.1.tgz",
+      "bytes": 70926,
+      "sha256": "fc152d23729b7069276fc1eceab93e5d231acfc42d3a3c004f5fcfacaf80a8c6",
+      "entries": 16,
+      "configuredCredentialAbsent": true,
+      "licenseMatches": true
+    },
+    {
+      "file": "minutei-ai-boxes-runtime-0.10.1.tgz",
+      "bytes": 5520923,
+      "sha256": "83d949dbbcbd9e6f0038920ebbddb8c6143986f4720e566a7a8f4d1485fae244",
+      "entries": 8,
+      "configuredCredentialAbsent": true,
+      "licenseMatches": true
+    }
+  ],
+  "verification": {
+    "exactArchiveProof": "SDK/runtime 0.10.1 candidates passed the native archive proof: declarations, exports, snapshots/hard links, binding/RPC callbacks, persistent contexts, disposal and scoped authority.",
+    "workerIdentity": "All Worker runtime bytes match the deployed 0.10.0 archive. SDK JS and declaration bytes also match. Only SDK docs and both package manifests differ. No backend deployment is required for this documentation patch.",
+    "minuteiBeforePatchInstall": {
+      "clientVersion": "0.10.0",
+      "runtimeVersion": "0.10.1",
+      "runtimeArchiveSha256": "83d949dbbcbd9e6f0038920ebbddb8c6143986f4720e566a7a8f4d1485fae244",
+      "consumerCommit": "6ecd52879a3af76b883f5683c9379163a8239368",
+      "consumerBundleSha256": "ad59c6314c12b5a9e924b2c423a32df64c1db45d65a0e46fa2391c9bbcd02748",
+      "transport": "native workerd Agent service binding; actual Minutei Code Mode and tenant SQLite; local R2, KV and Queue",
+      "retention": true,
+      "isolatedRegistry": true,
+      "capabilities": true,
+      "consumerFixturesSha256": {
+        "boxes-retention.ts": "ab69256069295b3e155a6e47ebc916e23f4ae760eb4a7ae7afebd9bbc37b050f",
+        "boxes-code.worker.ts": "c3d6f06ea5f5afe322076052267468c4702fe79aff596fa847d68bdc3045e5f4"
+      }
+    },
+    "typecheck": "bun run typecheck passed.",
+    "format": "bun run format:check passed."
+  },
+  "previousReleaseEvidence": "docs/evidence/sdk-0.10.0-release.json",
+  "limits": [
+    "Patch CI, publication and Minutei 0.10.1 install are pending.",
+    "Runtime parity gates in docs/parity.md remain open."
+  ]
+}

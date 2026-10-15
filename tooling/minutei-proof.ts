@@ -135,10 +135,11 @@ if (registry === undefined) {
               compatibilityDate: "2026-08-01",
               compatibilityFlags: ["nodejs_compat", "enable_request_signal"],
               modules,
+              queueConsumers: [{ queueName: name, maxBatchSize: 1, maxBatchTimeout: 0 }],
               bindings: [
                 R2Bucket.local({ binding: "OBJECTS", id: name }),
                 Text.local("API_KEY", "minutei-boxes-local"),
-                Queue.local({ binding: "EVENTS", queueName: name }),
+                Queue.local({ binding: "EVENTS", queueName: name, deliveryDelay: 86400 }),
               ],
             });
             const url = yield* runtime.start({
@@ -148,6 +149,7 @@ if (registry === undefined) {
               compatibilityFlags: ["nodejs_compat", "enable_request_signal"],
               bindings: [
                 Service.local({ binding: "BOXES", scriptName: name, entrypoint: "Agent" }),
+                Queue.local({ binding: "BOXES_EVENTS", queueName: name }),
                 Text.local("BOXES_API_KEY", "minutei-boxes-local"),
                 Queue.local({ binding: "HISTORY_QUEUE", queueName: `${name}-history` }),
                 DurableObjectNamespace.local({

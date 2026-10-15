@@ -2,12 +2,12 @@
 
 The `@minutei-ai/boxes` SDK targets Effect 4 and ordinary Cloudflare Workers. Its primary transport is a native Cloudflare service binding. Effect HttpClient owns request construction, interruption and transport errors. The package contains generated ESM and TypeScript declarations; Rust, Alchemy, server bindings and credentials are excluded. All request/response Schemas come from the same owner as the server. Schema exports are available from `@minutei-ai/boxes/contracts`.
 
-Version 0.10.0 is prepared for the shared-inode and hard-link changes described below. The backend is deployed; publication of the SDK/runtime archives remains pending. The currently published installation archive is 0.9.0. Use a matching SDK/runtime pair when exercising the new snapshot entry variant.
+Version 0.10.1 is an experimental SDK/runtime release for the shared-inode and hard-link changes described below. It corrects the installation instructions included in 0.10.0; the SDK API and Worker execution code are unchanged. Use matching SDK/runtime archives when exercising the snapshot entry variant.
 
 Install the SDK archive attached to the published GitHub SDK release:
 
 ```sh
-bun add https://github.com/minutei-ai/boxes/releases/download/sdk-v0.9.0/minutei-ai-boxes-0.9.0.tgz
+bun add https://github.com/minutei-ai/boxes/releases/download/sdk-v0.10.1/minutei-ai-boxes-0.10.1.tgz
 ```
 
 Use the service binding from the Minutei Worker environment:

@@ -1,0 +1,127 @@
+{
+  "status": "Published experimental SDK/runtime 0.10.0; production backend and local Minutei conversation cleanup verified. Packaged installation instructions need the 0.10.1 documentation patch.",
+  "version": "0.10.0",
+  "tagCommit": "15d92068d6ebc7c9fa6e657b5cdc39f8bc1b086d",
+  "githubRelease": {
+    "assets": [
+      {
+        "apiUrl": "https://api.github.com/repos/minutei-ai/boxes/releases/assets/645234517",
+        "contentType": "application/x-gtar",
+        "createdAt": "2026-10-15T21:33:20Z",
+        "digest": "sha256:f93345c7d51e41ac1109e0fb534042a43d7bf98e0212098f414c125c75d32749",
+        "downloadCount": 1,
+        "id": "RA_kwDOVHG00M4mdX9V",
+        "label": "",
+        "name": "minutei-ai-boxes-0.10.0.tgz",
+        "size": 70931,
+        "state": "uploaded",
+        "updatedAt": "2026-10-15T21:33:20Z",
+        "url": "https://github.com/minutei-ai/boxes/releases/download/sdk-v0.10.0/minutei-ai-boxes-0.10.0.tgz"
+      },
+      {
+        "apiUrl": "https://api.github.com/repos/minutei-ai/boxes/releases/assets/645234518",
+        "contentType": "application/x-gtar",
+        "createdAt": "2026-10-15T21:33:20Z",
+        "digest": "sha256:b811c5d067a470dc73b608bd5d9115d5b7f0eec8a0529bd847e8d284abdf382a",
+        "downloadCount": 1,
+        "id": "RA_kwDOVHG00M4mdX9W",
+        "label": "",
+        "name": "minutei-ai-boxes-runtime-0.10.0.tgz",
+        "size": 5520923,
+        "state": "uploaded",
+        "updatedAt": "2026-10-15T21:33:22Z",
+        "url": "https://github.com/minutei-ai/boxes/releases/download/sdk-v0.10.0/minutei-ai-boxes-runtime-0.10.0.tgz"
+      },
+      {
+        "apiUrl": "https://api.github.com/repos/minutei-ai/boxes/releases/assets/645234519",
+        "contentType": "application/octet-stream",
+        "createdAt": "2026-10-15T21:33:20Z",
+        "digest": "sha256:fa05c5dfb1ae839819a3fb1a1acbabbe8abc632c69dc07313e9a42cf2aff80fc",
+        "downloadCount": 1,
+        "id": "RA_kwDOVHG00M4mdX9X",
+        "label": "",
+        "name": "SHA256SUMS",
+        "size": 196,
+        "state": "uploaded",
+        "updatedAt": "2026-10-15T21:33:21Z",
+        "url": "https://github.com/minutei-ai/boxes/releases/download/sdk-v0.10.0/SHA256SUMS"
+      }
+    ],
+    "isDraft": false,
+    "isPrerelease": true,
+    "tagName": "sdk-v0.10.0",
+    "targetCommitish": "15d92068d6ebc7c9fa6e657b5cdc39f8bc1b086d",
+    "url": "https://github.com/minutei-ai/boxes/releases/tag/sdk-v0.10.0"
+  },
+  "ci": {
+    "run": "https://github.com/minutei-ai/boxes/actions/runs/38812799060",
+    "status": "completed",
+    "conclusion": "success",
+    "nativeTests": {
+      "tests": 347,
+      "files": 63,
+      "assertions": 4774,
+      "seconds": 89.85,
+      "failures": 0
+    },
+    "packageProof": "All workflow steps passed, including native exact archive binding/RPC proof."
+  },
+  "productionEvidence": "docs/evidence/process-repair-metadata-production.json",
+  "installedArchives": [
+    {
+      "package": "boxes",
+      "version": "0.10.0",
+      "matchedFiles": 16,
+      "archiveSha256": "f93345c7d51e41ac1109e0fb534042a43d7bf98e0212098f414c125c75d32749"
+    },
+    {
+      "package": "boxes-runtime",
+      "version": "0.10.0",
+      "matchedFiles": 8,
+      "archiveSha256": "b811c5d067a470dc73b608bd5d9115d5b7f0eec8a0529bd847e8d284abdf382a"
+    }
+  ],
+  "minutei": {
+    "proof": {
+      "clientVersion": "0.10.0",
+      "runtimeVersion": "0.10.0",
+      "runtimeArchiveSha256": "b811c5d067a470dc73b608bd5d9115d5b7f0eec8a0529bd847e8d284abdf382a",
+      "consumerCommit": "6ecd52879a3af76b883f5683c9379163a8239368",
+      "consumerBundleSha256": "ad59c6314c12b5a9e924b2c423a32df64c1db45d65a0e46fa2391c9bbcd02748",
+      "transport": "native workerd Agent service binding; actual Minutei Code Mode and tenant SQLite; local R2, KV and Queue",
+      "retention": true,
+      "isolatedRegistry": true,
+      "capabilities": true,
+      "consumerFixturesSha256": {
+        "boxes-retention.ts": "ab69256069295b3e155a6e47ebc916e23f4ae760eb4a7ae7afebd9bbc37b050f",
+        "boxes-code.worker.ts": "c3d6f06ea5f5afe322076052267468c4702fe79aff596fa847d68bdc3045e5f4"
+      }
+    },
+    "delivery": "Local commit on feat/s3-native-agent-runtime; not pushed or deployed.",
+    "behavior": "Conversation deletion and authority rotation retain the SQLite cleanup ID until R2 reclamation completes. Pending/blocked progress and failed SQLite acknowledgement retain retry ownership. A real native Queue consumer cancels disposed queued work before entry; the alarm and workspace purge resume and remove files/receipts, retaining only ID tombstones.",
+    "regression": "The added physical object assertion failed against the old disposal-only application with the 0.10.0 runtime, then passed after the collector change.",
+    "tests": {
+      "files": 2,
+      "tests": 2,
+      "seconds": 7.19
+    },
+    "checks": {
+      "typecheck": "Nx web:typecheck and 29 dependencies passed; final run 4.5 s with 29 cached dependencies.",
+      "lint": "Full native lint passed.",
+      "sync": "Nx sync:check passed.",
+      "structure": "67 configuration files passed.",
+      "changedFileFormat": "Passed on seven changed authored files.",
+      "globalLimits": [
+        "Source policy: apps/ml/src/gradient-boosting.ts:3 GradientBoostingTreeSplit structural declaration.",
+        "Format: apps/ml/__tests__/outcome-label.test.ts.",
+        "Boundaries: apps/web/worker/process/outcome-input.ts and storybook/src/stories/workspace/process-outcome-card.stories.tsx import @apps/ml/outcome."
+      ],
+      "baselineProof": "Every reported file is byte-identical to Minutei HEAD before the integration; these unrelated ML files were not edited."
+    }
+  },
+  "limits": [
+    "Actual authenticated Minutei application, production Minutei deployment/model/history delivery remain unverified. The native history Queue has no consumer in this local fixture.",
+    "Explicit bounded reclamation confirms the current sweep; arbitrary-crash safety, global automatic collection and a fence against late writes remain parity gates.",
+    "The 0.10.0 SDK archive includes an old 0.9.0 installation link. Existing published bytes remain intact; 0.10.1 corrects packaged documentation."
+  ]
+}
