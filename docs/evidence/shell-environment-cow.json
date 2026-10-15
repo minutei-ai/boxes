@@ -15,7 +15,7 @@
     "exactArchives": "Passed: exact SDK/runtime consumer declarations and public exports; native Alchemy workerd service binding and Agent RPC, local R2 and Queue, including shell variable scope.",
     "wasmABI": "Exact current workspace kernel passed four direct Wasm ABI tests, 20 assertions, 181 ms. Generated JS glue is byte-identical to baseline."
   },
-  "artifactManifest": "sdk-0.10.0-local.json",
+  "artifactManifest": "sdk-0.10.0-local.json tracks the latest candidate. Archives and runtime hashes below retain the exact proof for source 5ec1d24.",
   "benchmark": {
     "initialKernelCohort": {
       "artifactHashes": {
@@ -930,5 +930,33 @@
     },
     "minutei": "Published 0.9.0 dependencies retained. Remote Minutei binding/model proof remains unverified.",
     "parity": "Remaining docs/parity.md gates stay open."
+  },
+  "archives": [
+    {
+      "file": "minutei-ai-boxes-0.10.0.tgz",
+      "bytes": 66729,
+      "sha256": "30ac0ecd6c1713f46bcc57b9e3671f73639581e5349982f0d522d423f78d5975",
+      "entries": 16,
+      "name": "@minutei-ai/boxes",
+      "version": "0.10.0",
+      "license": "Apache-2.0"
+    },
+    {
+      "file": "minutei-ai-boxes-runtime-0.10.0.tgz",
+      "bytes": 5516221,
+      "sha256": "3b007c23532ea5ee9e5eaf8c6d6f5ab1a501fddf79a35fc9a6b3831cb051cf91",
+      "entries": 8,
+      "name": "@minutei-ai/boxes-runtime",
+      "version": "0.10.0",
+      "license": "Apache-2.0"
+    }
+  ],
+  "runtimeArtifactsSha256": {
+    "cirro_compiler_bg.wasm": "27d9b0022a634ed4eef47b6561ad38cafde3522c17e834afed1264440678bf2f",
+    "cirro_guest_bg.wasm": "b773b74626b08bd1083860081ccd2a3d0fdff80dcd97b5ec13ed7c6e2148ef22",
+    "cirro_kernel_bg.wasm": "fff0ad184ea23bfa61d79915a123d0543ad3f4265f55c8999cb4445c11424fa2",
+    "cirro_python_bg.wasm": "8aa6aec5ab6fb0623637e2b6dda7318f4934e4736f4a97e45ca3312bf32e529c",
+    "cirro_wasi_bg.wasm": "a128d4d89a7403b1217b42fa1ff96771836432a0992cba07522d8846c5c6829d",
+    "index.js": "766b75ebba31ebd2215271068154cdcdb717464720daeaf8d5ae134e14173c02"
   }
 }

@@ -1,0 +1,281 @@
+{
+  "runtimeSourceCommit": "b4112e9b9f5c2b63e0aa9f6d84e7d6e1bea47a96",
+  "scope": "Bounded per-shell readonly variable attributes, declaration listing and mutation rejection",
+  "artifactManifest": "sdk-0.10.0-local.json",
+  "implementation": {
+    "owner": "Rust Shell owns the readonly set. Assignment prefixes are checked before opening redirects. Export/readonly assignments and unset check the attribute before changing a value. Attribute sets and value maps commit only after validation, with pipeline isolation.",
+    "transport": "TypeScript uses the existing scoped interpreter and concrete ShellBuiltin decoder. READONLY is preserved as a native Fault code and mapped to a fatal shell result outside pipelines. No new public operation or persisted shape.",
+    "lifetime": "One shell invocation; attributes are not written into configuration or inherited by a new shell. Queue tests archive source and captured configuration, then execute the declaration after Worker replacement. Interpreter heap recovery remains a separate open gate.",
+    "options": "readonly NAME[=value], no-argument listing, -p and --; unquoted literal readonly receives declaration-word treatment. Quoted/expanded command names keep ordinary splitting. Export without assignment remains valid for protected names; re-assignment is rejected even for the same value.",
+    "bounds": "128 readonly attributes; 128 UTF-16 units per name; existing 128-variable, 4096-byte/value and 64 KiB local-map limits. Function/array attributes remain unsupported."
+  },
+  "validation": {
+    "completeCheck": "Build, SDK declarations, typecheck, workspace Clippy -D warnings and Cargo tests passed; 334 native Bun tests, 56 files, 4069 assertions, 215.24 seconds.",
+    "kernel": "40 tests passed, including readonly/export interaction, pipeline isolation and exact 128/129 count and name-length boundaries. Final workspace Clippy passed after boundary-test updates.",
+    "nativeOracle": {
+      "runtime": "GNU bash 5.3.20(1)-release, invoked as sh",
+      "cases": 27,
+      "comparison": "stdout, success versus nonzero status, and stderr presence. Boxes explicitly uses status 2 for readonly violations; exact GNU-specific nonzero numeric statuses are not claimed.",
+      "coverage": "assigned/unset/empty names, repeated declarations, plain and temporary assignment, export/unset, conditional skipping and negation, expanded/quoted command names, declaration-word fields, HOME and pipelines."
+    },
+    "nativeRuntime": "Existing native workerd/R2/Queue suites passed. Additional tests verify absent file after rejected prefix, reusable single-quote-safe declarations, no cross-run/configuration mutation and attribute quotas. Local-only use also passes without filesystem write authority.",
+    "binding": "Final rebuilt source SDK binding suite passed four tests and 27 assertions. Exact public archives passed native workerd service binding and Agent RPC, including readonly mutation rejection after confirmed output.",
+    "scan": "All 24 extracted files exclude the exact configured control credential; no env/node_modules entries and matching Apache-2.0 licenses verified in artifactManifest. General secret scanning remains unverified for this pair.",
+    "format": "Passed; final repository-wide check rerun after recording terminal receipts.",
+    "nativeParallel": "334 native tests across 56 files passed with two isolated Bun workers, 4071 assertions, 114.68 seconds; see native-tests-parallel.json. No per-file test concurrency or timeout changes.",
+    "remoteVerifierCorrection": "Initial remote probe incorrectly required empty stderr for newly added rejection cases. Direct compiled-SDK reproduction confirmed correct status 2, unchanged empty stdout and readonly diagnostics for assignment, unset and export. The verifier now requires the expected diagnostic fragment for negative cases and still requires empty stderr for success cases. No runtime change or redeploy was needed.",
+    "remoteDebug": [
+      {
+        "source": "readonly A=one; A=two; echo after",
+        "run": {
+          "id": "case-0",
+          "status": "exited",
+          "sourceHash": "efb59397cf311b5def7862d66fce19951b723d1ac66baeac2f863180d67363d8",
+          "language": "shell",
+          "startedAt": 1792065774830,
+          "finishedAt": 1792065777390,
+          "output": {
+            "stdout": "",
+            "stderr": "true: READONLY: A: readonly variable\n",
+            "result": null,
+            "exitCode": 2
+          }
+        }
+      },
+      {
+        "source": "readonly A=one; unset A; echo after",
+        "run": {
+          "id": "case-1",
+          "status": "exited",
+          "sourceHash": "5545ba521efd4b3606e8c732e8c73dd332424c45e744b59f7e0f6596d633473b",
+          "language": "shell",
+          "startedAt": 1792065778371,
+          "finishedAt": 1792065780525,
+          "output": {
+            "stdout": "",
+            "stderr": "unset: A: readonly variable\n",
+            "result": null,
+            "exitCode": 2
+          }
+        }
+      },
+      {
+        "source": "readonly A=one; export A=two; echo after",
+        "run": {
+          "id": "case-2",
+          "status": "exited",
+          "sourceHash": "e75b6dc1596519453e57024d389777663a20a1fcbba487962f3a9e2abdf9b6cc",
+          "language": "shell",
+          "startedAt": 1792065781393,
+          "finishedAt": 1792065783477,
+          "output": {
+            "stdout": "",
+            "stderr": "export: A: readonly variable\n",
+            "result": null,
+            "exitCode": 2
+          }
+        }
+      }
+    ]
+  },
+  "delivery": {
+    "backend": {
+      "sourceCommit": "b4112e9b9f5c2b63e0aa9f6d84e7d6e1bea47a96",
+      "provider": "Native Alchemy owning stack, profile minutei, stage prod; ordinary Worker",
+      "receipt": "Done: 2 succeeded (370.3s)",
+      "migration": "Worker update and unconditional paginated migration completed. Bucket, Queue and bindings unchanged.",
+      "remoteProof": {
+        "shell": {
+          "target": "https://cirro-sandbox-prod-rs7wexxow56rmsoz.manoel-carvalhoneto.workers.dev",
+          "measuredAt": 1792065951616,
+          "checks": [
+            {
+              "name": "readonly-value",
+              "exitCode": 0
+            },
+            {
+              "name": "readonly-assignment",
+              "exitCode": 2
+            },
+            {
+              "name": "readonly-unset",
+              "exitCode": 2
+            },
+            {
+              "name": "readonly-export",
+              "exitCode": 2
+            },
+            {
+              "name": "readonly-pipeline",
+              "exitCode": 0
+            },
+            {
+              "name": "local-variable",
+              "exitCode": 0
+            },
+            {
+              "name": "temporary-prefix",
+              "exitCode": 0
+            },
+            {
+              "name": "sequential-prefix",
+              "exitCode": 0
+            },
+            {
+              "name": "special-prefix",
+              "exitCode": 0
+            },
+            {
+              "name": "export-word",
+              "exitCode": 0
+            },
+            {
+              "name": "unset-variable",
+              "exitCode": 0
+            },
+            {
+              "name": "pipeline-variable",
+              "exitCode": 0
+            },
+            {
+              "name": "effective-home",
+              "exitCode": 0
+            },
+            {
+              "name": "quoted",
+              "exitCode": 0
+            },
+            {
+              "name": "split",
+              "exitCode": 0
+            },
+            {
+              "name": "single-quoted",
+              "exitCode": 0
+            },
+            {
+              "name": "escaped",
+              "exitCode": 0
+            },
+            {
+              "name": "empty",
+              "exitCode": 0
+            },
+            {
+              "name": "pipeline-status",
+              "exitCode": 0
+            },
+            {
+              "name": "negated-status",
+              "exitCode": 0
+            },
+            {
+              "name": "quoted-redirect",
+              "exitCode": 0
+            },
+            {
+              "name": "ordered-ambiguous-redirect",
+              "exitCode": 0
+            },
+            {
+              "name": "no-reparse",
+              "exitCode": 0
+            },
+            {
+              "name": "configuration-isolation",
+              "exitCode": 0
+            }
+          ],
+          "disposal": true
+        },
+        "sdk": {
+          "checks": 6,
+          "passed": true,
+          "transport": "Effect FetchHttpClient",
+          "target": "production"
+        },
+        "binary": {
+          "target": "https://cirro-sandbox-prod-rs7wexxow56rmsoz.manoel-carvalhoneto.workers.dev",
+          "measuredAt": 1792066038177,
+          "checks": [
+            {
+              "name": "stderr",
+              "bytes": 6,
+              "exitCode": 7
+            },
+            {
+              "name": "stderr-append",
+              "bytes": 12,
+              "exitCode": 7
+            },
+            {
+              "name": "pipe",
+              "bytes": 70003,
+              "exitCode": 0
+            },
+            {
+              "name": "append",
+              "bytes": 140006,
+              "exitCode": 0
+            },
+            {
+              "name": "failure",
+              "bytes": 70003,
+              "exitCode": 7
+            },
+            {
+              "name": "trap",
+              "bytes": 70003,
+              "exitCode": 126
+            },
+            {
+              "name": "head-lines",
+              "bytes": 5,
+              "exitCode": 0
+            },
+            {
+              "name": "tail-lines",
+              "bytes": 4,
+              "exitCode": 0
+            },
+            {
+              "name": "head-bytes",
+              "bytes": 3,
+              "exitCode": 0
+            },
+            {
+              "name": "tail-bytes",
+              "bytes": 4,
+              "exitCode": 0
+            },
+            {
+              "name": "wc-bytes",
+              "bytes": 3,
+              "exitCode": 0
+            },
+            {
+              "name": "sort",
+              "bytes": 16,
+              "exitCode": 0
+            },
+            {
+              "name": "uniq",
+              "bytes": 13,
+              "exitCode": 0
+            },
+            {
+              "name": "grep",
+              "bytes": 5,
+              "exitCode": 0
+            }
+          ],
+          "disposal": true
+        }
+      },
+      "status": "Deployed and remotely verified: 24 shell, six SDK and 14 binary checks. Production performance/cost and remote Minutei integration remain unverified."
+    },
+    "github": "Deferred at user request; no GitHub operations.",
+    "minutei": "Published SDK/runtime 0.9.0 dependencies retained; remote Minutei binding/model proof unverified.",
+    "parity": "Full POSIX, remaining lifecycle/runtime features and docs/parity.md completion gates remain open."
+  }
+}
