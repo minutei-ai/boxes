@@ -12,6 +12,8 @@ import {
   ActionResponses,
   DispatchReceipt,
   MigrationReceipt,
+  FilesystemMigrationInput,
+  FilesystemMigrationReceipt,
   OutputMigrationInput,
   OutputMigrationReceipt,
   CreateSandbox,
@@ -124,10 +126,20 @@ const route = Effect.fn("api.route")(function* (request: Request, env: Env) {
   }
   if (url.pathname === "/v1/migrations/filesystem-v4") {
     yield* administrator(env, token);
-    const receipt = yield* migrateFilesystem(env);
-    return new Response(Schema.encodeSync(Schema.fromJsonString(MigrationReceipt))(receipt), {
-      headers: { "content-type": "application/json", "cache-control": "no-store" },
-    });
+    const bytes = yield* readBounded(request.body, 4096);
+    const input = yield* Schema.decodeUnknownEffect(
+      Schema.fromJsonString(FilesystemMigrationInput),
+      {
+        onExcessProperty: "error",
+      },
+    )(bytes.toString("utf8"));
+    const receipt = yield* migrateFilesystem(env, input);
+    return new Response(
+      Schema.encodeSync(Schema.fromJsonString(FilesystemMigrationReceipt))(receipt),
+      {
+        headers: { "content-type": "application/json", "cache-control": "no-store" },
+      },
+    );
   }
   if (url.pathname === "/v1/sandboxes") {
     yield* administrator(env, token);

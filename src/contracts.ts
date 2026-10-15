@@ -908,6 +908,17 @@ export const OutputMigrationReceipt = Schema.Struct({
   migrated: Schema.Int,
   cursor: Schema.NullOr(Schema.String),
 });
+const FilesystemMigrationCursor = Schema.Struct({
+  phase: Schema.Literals(["heads", "checkpoints"]),
+  continuation: Schema.NullOr(Schema.String.check(Schema.isMaxLength(2048))),
+});
+export const FilesystemMigrationInput = Schema.Struct({
+  cursor: Schema.optionalKey(Schema.NullOr(FilesystemMigrationCursor)),
+});
+export const FilesystemMigrationReceipt = Schema.Struct({
+  migrated: Schema.Int,
+  cursor: Schema.NullOr(FilesystemMigrationCursor),
+});
 export const MigrationReceipt = Schema.Struct({ migrated: Schema.Int });
 
 export const HeapSnapshot = Schema.Struct({

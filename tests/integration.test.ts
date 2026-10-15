@@ -19,6 +19,7 @@ import {
   ProcessPage,
   Head,
   MigrationReceipt,
+  FilesystemMigrationReceipt,
   ScriptProgram,
   WasmProgram,
   RunMetadata,
@@ -2157,9 +2158,21 @@ test("metadata migration assigns persistent unique identities without inventing 
   );
   expect((await act("metadata-migration", token, { op: "vm.status" })).status).toBe(500);
   expect((await post("/v1/migrations/filesystem-v4", token, {})).status).toBe(401);
-  const receipt = Schema.decodeUnknownSync(MigrationReceipt)(
-    await (await post("/v1/migrations/filesystem-v4", admin, {})).json(),
-  );
+  const migrate = async () => {
+    const cursors: (typeof FilesystemMigrationReceipt.Type.cursor)[] = [null];
+    const result = { migrated: 0 };
+    while (cursors.length > 0) {
+      const page = Schema.decodeUnknownSync(FilesystemMigrationReceipt)(
+        await (
+          await post("/v1/migrations/filesystem-v4", admin, { cursor: cursors.shift() })
+        ).json(),
+      );
+      result.migrated += page.migrated;
+      if (page.cursor !== null) cursors.push(page.cursor);
+    }
+    return result;
+  };
+  const receipt = await migrate();
   expect(receipt.migrated).toBe(1);
   const stat = Schema.decodeUnknownSync(FileStat)(
     await (
@@ -2176,9 +2189,7 @@ test("metadata migration assigns persistent unique identities without inventing 
     await (await act("metadata-migration", token, { op: "vm.status" })).json(),
   );
   expect(status.generation).toBe(7);
-  const repeat = Schema.decodeUnknownSync(MigrationReceipt)(
-    await (await post("/v1/migrations/filesystem-v4", admin, {})).json(),
-  );
+  const repeat = await migrate();
   expect(repeat.migrated).toBe(0);
 });
 

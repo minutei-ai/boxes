@@ -5,7 +5,13 @@ import { join } from "node:path";
 import { Effect, Redacted, Schema } from "effect";
 import { FetchHttpClient } from "effect/http";
 import { initSync, Kernel, migrate_filesystem } from "../dist/kernel/cirro_kernel";
-import { ExecutionCheckpoint, Head, StoredRun, MigrationReceipt } from "../src/contracts";
+import {
+  ExecutionCheckpoint,
+  Head,
+  StoredRun,
+  FilesystemMigrationInput,
+  FilesystemMigrationReceipt,
+} from "../src/contracts";
 import { make } from "../src/sdk";
 import { runtime } from "../tooling/worker-test";
 
@@ -52,13 +58,34 @@ test(
             },
           });
           const migrate = Effect.fn("test.inodeMigration.run")(function* () {
-            const response = yield* Effect.promise(() =>
-              fetch(new URL("/v1/migrations/filesystem-v4", url), {
-                method: "POST",
-                headers: { authorization: `Bearer ${token}` },
+            const cursors: (typeof FilesystemMigrationReceipt.Type.cursor)[] = [null];
+            const progress = { migrated: 0 };
+            while (cursors.length > 0) {
+              const cursor = cursors.shift();
+              const response = yield* Effect.promise(() =>
+                fetch(new URL("/v1/migrations/filesystem-v4", url), {
+                  method: "POST",
+                  headers: { authorization: `Bearer ${token}`, "content-type": "application/json" },
+                  body: Schema.encodeSync(Schema.fromJsonString(FilesystemMigrationInput))({
+                    cursor,
+                  }),
+                }),
+              );
+              const body = yield* Effect.promise(() => response.text());
+              if (response.status !== 200) return { status: response.status, body };
+              const page = yield* Schema.decodeUnknownEffect(
+                Schema.fromJsonString(FilesystemMigrationReceipt),
+              )(body);
+              progress.migrated += page.migrated;
+              if (page.cursor !== null) cursors.push(page.cursor);
+            }
+            return {
+              status: 200,
+              body: Schema.encodeSync(Schema.fromJsonString(FilesystemMigrationReceipt))({
+                migrated: progress.migrated,
+                cursor: null,
               }),
-            );
-            return { status: response.status, body: yield* Effect.promise(() => response.text()) };
+            };
           });
           for (const id of ["unchanged", "stale", "partial"]) {
             yield* admin.create({
@@ -153,7 +180,7 @@ test(
             }
             const migrated = yield* migrate();
             expect(migrated.status).toBe(200);
-            yield* Schema.decodeUnknownEffect(Schema.fromJsonString(MigrationReceipt))(
+            yield* Schema.decodeUnknownEffect(Schema.fromJsonString(FilesystemMigrationReceipt))(
               migrated.body,
             );
             const convertedRoot = yield* Effect.promise(() => bucket.get(key));

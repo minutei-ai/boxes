@@ -2,7 +2,13 @@ import * as Alchemy from "alchemy";
 import * as Cloudflare from "alchemy/Cloudflare";
 import { Clock, Config, Effect, Layer, Redacted, Schedule, Schema } from "effect";
 import { bucket, executions, worker } from "./src/resources";
-import { MigrationReceipt, OutputMigrationInput, OutputMigrationReceipt } from "./src/contracts";
+import {
+  MigrationReceipt,
+  OutputMigrationInput,
+  OutputMigrationReceipt,
+  FilesystemMigrationInput,
+  FilesystemMigrationReceipt,
+} from "./src/contracts";
 
 const Deployment = Schema.Struct({
   deployedAt: Schema.Int,
@@ -97,9 +103,50 @@ const migrate = Alchemy.Action(
         });
         if (page.cursor !== null) cursors.push(page.cursor);
       }
-      const filesystem = yield* step("/v1/migrations/filesystem-v4");
+      const filesystem = { pages: 0, migrated: 0 };
+      const filesystemCursors: (typeof FilesystemMigrationReceipt.Type.cursor)[] = [null];
+      while (filesystemCursors.length > 0) {
+        const cursor = filesystemCursors.shift();
+        const response = yield* Effect.tryPromise({
+          try: () =>
+            fetch(new URL("/v1/migrations/filesystem-v4", url), {
+              method: "POST",
+              headers: {
+                authorization: `Bearer ${Redacted.value(key)}`,
+                "content-type": "application/json",
+              },
+              body: Schema.encodeSync(Schema.fromJsonString(FilesystemMigrationInput))({ cursor }),
+              signal: AbortSignal.timeout(120_000),
+            }),
+          catch: (cause) =>
+            new MigrationRequestFailure({ cause, path: "/v1/migrations/filesystem-v4" }),
+        });
+        if (!response.ok)
+          return yield* new MigrationRequestFailure({
+            cause: response.status,
+            path: "/v1/migrations/filesystem-v4",
+          });
+        const text = yield* Effect.tryPromise({
+          try: () => response.text(),
+          catch: (cause) =>
+            new MigrationRequestFailure({ cause, path: "/v1/migrations/filesystem-v4" }),
+        });
+        const page = yield* Schema.decodeUnknownEffect(
+          Schema.fromJsonString(FilesystemMigrationReceipt),
+        )(text);
+        filesystem.pages += 1;
+        filesystem.migrated += page.migrated;
+        yield* Effect.logInfo({
+          migration: "filesystem-v4",
+          page: filesystem.pages,
+          migrated: page.migrated,
+          hasMore: page.cursor !== null,
+        });
+        if (page.cursor !== null) filesystemCursors.push(page.cursor);
+      }
       return {
-        receipts: [...receipts, filesystem],
+        receipts,
+        filesystemMigration: filesystem,
         inputMigration: progress,
         deployedAt: input.deployedAt,
       };
