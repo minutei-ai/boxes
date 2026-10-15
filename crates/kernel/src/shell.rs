@@ -1,5 +1,5 @@
 use serde::Serialize;
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 use wasm_bindgen::prelude::*;
 
 #[derive(Debug, Serialize)]
@@ -7,6 +7,8 @@ use wasm_bindgen::prelude::*;
 pub struct Command {
     #[serde(skip_serializing)]
     argv: Vec<Word>,
+    #[serde(skip_serializing)]
+    assignments: Vec<(String, Word)>,
     gate: String,
     pipe: bool,
     negate: bool,
@@ -343,6 +345,105 @@ pub fn expand(
 pub struct Shell {
     commands: Vec<Command>,
     environment: BTreeMap<String, String>,
+    exported: BTreeSet<String>,
+    prepared: Option<Prepared>,
+}
+
+struct Prepared {
+    index: usize,
+    argv: Vec<String>,
+    variables: BTreeMap<String, String>,
+    assigned: BTreeSet<String>,
+}
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+struct Builtin {
+    stdout: String,
+    stderr: String,
+    exit_code: i32,
+    fatal: bool,
+}
+
+fn variable_name(name: &str) -> bool {
+    name.chars()
+        .next()
+        .is_some_and(|c| c.is_ascii_alphabetic() || c == '_')
+        && name.chars().all(|c| c.is_ascii_alphanumeric() || c == '_')
+}
+
+fn assignment(word: &Word) -> Result<Option<(String, Word)>, String> {
+    let Some(Part::Literal {
+        value,
+        quoted: false,
+    }) = word.0.first()
+    else {
+        return Ok(None);
+    };
+    let Some((name, value)) = value.split_once('=') else {
+        return Ok(None);
+    };
+    if !variable_name(name) {
+        return Ok(None);
+    }
+    if value.starts_with('~') || value.contains(":~") {
+        return Err("ENOTSUP: assignment tilde expansion is not implemented".into());
+    }
+    let mut parts = vec![Part::Literal {
+        value: value.into(),
+        quoted: true,
+    }];
+    for part in &word.0[1..] {
+        match part {
+            Part::Literal { value, quoted } => {
+                if !quoted && value.contains(":~") {
+                    return Err("ENOTSUP: assignment tilde expansion is not implemented".into());
+                }
+                parts.push(Part::Literal {
+                    value: value.clone(),
+                    quoted: true,
+                });
+            }
+            Part::Parameter { name, .. } => parts.push(Part::Parameter {
+                name: name.clone(),
+                quoted: true,
+            }),
+        }
+    }
+    Ok(Some((name.into(), Word(parts))))
+}
+
+fn assignment_value(
+    word: &Word,
+    environment: &BTreeMap<String, String>,
+    status: i32,
+) -> Result<String, String> {
+    let fields = expand(std::slice::from_ref(word), environment, status)?;
+    let value = fields.into_iter().next().unwrap_or_default();
+    if value.len() > 4096 || value.contains('\0') {
+        return Err("EFBIG: shell variable exceeds value quota".into());
+    }
+    Ok(value)
+}
+
+fn validate_variables(variables: &BTreeMap<String, String>) -> Result<(), String> {
+    if variables.iter().any(|(key, value)| {
+        key.encode_utf16().count() > 128 || value.len() > 4096 || value.contains('\0')
+    }) {
+        return Err("EFBIG: shell variable exceeds quota".into());
+    }
+    if variables.get("IFS").is_some_and(|value| value != " \t\n") {
+        return Err("ENOTSUP: custom shell field separators are not implemented".into());
+    }
+    if variables.len() > 128
+        || serde_json::to_vec(variables)
+            .map_err(|_| "EIO: serialization failed")?
+            .len()
+            > 65_536
+    {
+        return Err("EFBIG: shell environment exceeds quota".into());
+    }
+    Ok(())
 }
 
 #[wasm_bindgen]
@@ -365,9 +466,12 @@ impl Shell {
         {
             return Err(crate::fail("EINVAL: invalid shell environment"));
         }
+        validate_variables(&environment).map_err(|error| crate::fail(&error))?;
         Ok(Self {
             commands: parse(source).map_err(|error| crate::fail(&error))?,
+            exported: environment.keys().cloned().collect(),
             environment,
+            prepared: None,
         })
     }
 
@@ -375,14 +479,198 @@ impl Shell {
         serde_json::to_string(&self.commands).map_err(|_| crate::fail("EIO: serialization failed"))
     }
 
-    pub fn argv(&self, command: usize, status: i32) -> Result<String, JsValue> {
+    pub fn argv(&mut self, index: usize, status: i32) -> Result<String, JsValue> {
+        self.prepared = None;
         let command = self
             .commands
-            .get(command)
+            .get(index)
             .ok_or_else(|| crate::fail("EINVAL: invalid shell command index"))?;
-        let fields = expand(&command.argv, &self.environment, status)
-            .map_err(|error| crate::fail(&error))?;
-        serde_json::to_string(&fields).map_err(|_| crate::fail("EIO: serialization failed"))
+        let declaration = command
+            .argv
+            .first()
+            .is_some_and(|word| word.plain() == Some("export"));
+        let mut argv = Vec::new();
+        let mut bytes = 0usize;
+        for word in &command.argv {
+            let fields = if declaration && !argv.is_empty() {
+                if let Some((name, value)) =
+                    assignment(word).map_err(|error| crate::fail(&error))?
+                {
+                    vec![format!(
+                        "{name}={}",
+                        assignment_value(&value, &self.environment, status)
+                            .map_err(|error| crate::fail(&error))?
+                    )]
+                } else {
+                    expand(std::slice::from_ref(word), &self.environment, status)
+                        .map_err(|error| crate::fail(&error))?
+                }
+            } else {
+                expand(std::slice::from_ref(word), &self.environment, status)
+                    .map_err(|error| crate::fail(&error))?
+            };
+            for field in fields {
+                bytes = bytes
+                    .checked_add(field.len())
+                    .ok_or_else(|| crate::fail("EFBIG: expanded shell byte quota exceeded"))?;
+                if bytes > 1_048_576 {
+                    return Err(crate::fail("EFBIG: expanded shell byte quota exceeded"));
+                }
+                argv.push(field);
+                if argv.len() > 4096 {
+                    return Err(crate::fail("EFBIG: expanded shell word quota exceeded"));
+                }
+            }
+        }
+        let mut variables = self.environment.clone();
+        let mut assigned = BTreeSet::new();
+        for (name, word) in &command.assignments {
+            let value =
+                assignment_value(word, &variables, status).map_err(|error| crate::fail(&error))?;
+            variables.insert(name.clone(), value);
+            assigned.insert(name.clone());
+            validate_variables(&variables).map_err(|error| crate::fail(&error))?;
+        }
+        let serialized =
+            serde_json::to_string(&argv).map_err(|_| crate::fail("EIO: serialization failed"))?;
+        self.prepared = Some(Prepared {
+            index,
+            argv,
+            variables,
+            assigned,
+        });
+        Ok(serialized)
+    }
+
+    pub fn path(&self) -> Result<String, JsValue> {
+        let prepared = self
+            .prepared
+            .as_ref()
+            .ok_or_else(|| crate::fail("EINVAL: shell command not prepared"))?;
+        Ok(prepared
+            .variables
+            .get("PATH")
+            .cloned()
+            .unwrap_or_else(|| "/opt/cirro/bin:/usr/local/bin:/usr/bin:/bin".into()))
+    }
+
+    pub fn home(&self) -> Result<String, JsValue> {
+        let prepared = self
+            .prepared
+            .as_ref()
+            .ok_or_else(|| crate::fail("EINVAL: shell command not prepared"))?;
+        Ok(prepared
+            .variables
+            .get("HOME")
+            .cloned()
+            .unwrap_or_else(|| "/home/cirro".into()))
+    }
+
+    pub fn environment(&self) -> Result<String, JsValue> {
+        let prepared = self
+            .prepared
+            .as_ref()
+            .ok_or_else(|| crate::fail("EINVAL: shell command not prepared"))?;
+        let environment: BTreeMap<_, _> = prepared
+            .variables
+            .iter()
+            .filter(|(key, _)| self.exported.contains(*key) || prepared.assigned.contains(*key))
+            .collect();
+        serde_json::to_string(&environment).map_err(|_| crate::fail("EIO: serialization failed"))
+    }
+
+    pub fn commit(&mut self, index: usize) -> Result<String, JsValue> {
+        let prepared = self
+            .prepared
+            .as_mut()
+            .filter(|prepared| prepared.index == index)
+            .ok_or_else(|| crate::fail("EINVAL: shell command not prepared"))?;
+        let command = &self.commands[index];
+        let isolated = command.pipe || command.gate == "pipe";
+        let name = prepared.argv.first().map(String::as_str).unwrap_or(":");
+        if !prepared.argv.is_empty() && !matches!(name, ":" | "export" | "unset") {
+            return Ok("null".into());
+        }
+        let mut exported = self.exported.clone();
+        if !prepared.argv.is_empty() && name != "export" {
+            exported.extend(prepared.assigned.iter().cloned());
+        }
+        let mut result = Builtin {
+            stdout: String::new(),
+            stderr: String::new(),
+            exit_code: 0,
+            fatal: false,
+        };
+        if name == "export" || name == "unset" {
+            let mut args = prepared.argv.iter().skip(1).peekable();
+            if args.peek().is_some_and(|arg| arg.as_str() == "--") {
+                args.next();
+            }
+            if name == "export"
+                && (args.peek().is_none()
+                    || (args.len() == 1 && args.peek().is_some_and(|arg| arg.as_str() == "-p")))
+            {
+                for key in &exported {
+                    if !variable_name(key) {
+                        continue;
+                    }
+                    if let Some(value) = prepared.variables.get(key) {
+                        result.stdout.push_str(&format!(
+                            "export {key}='{}'\n",
+                            value.replace('\'', "'\\''")
+                        ));
+                    } else {
+                        result.stdout.push_str(&format!("export {key}\n"));
+                    }
+                }
+            } else {
+                if name == "unset" && args.peek().is_some_and(|arg| arg.as_str() == "-v") {
+                    args.next();
+                    if args.peek().is_some_and(|arg| arg.as_str() == "--") {
+                        args.next();
+                    }
+                }
+                for arg in args {
+                    let (key, value) = match (name, arg.split_once('=')) {
+                        ("export", Some((key, value))) => (key, Some(value)),
+                        _ => (arg.as_str(), None),
+                    };
+                    if !variable_name(key) {
+                        result.stderr = format!("{name}: invalid variable name\n");
+                        result.exit_code = 2;
+                        result.fatal = !isolated;
+                        break;
+                    }
+                    if name == "export" {
+                        if let Some(value) = value {
+                            prepared.variables.insert(key.into(), value.into());
+                        }
+                        exported.insert(key.into());
+                    } else {
+                        prepared.variables.remove(key);
+                        exported.remove(key);
+                    }
+                }
+            }
+        }
+        let validation = validate_variables(&prepared.variables).and_then(|()| {
+            if exported.len() > 128 || exported.iter().any(|key| key.encode_utf16().count() > 128) {
+                return Err("EFBIG: exported shell variable quota exceeded".into());
+            }
+            Ok(())
+        });
+        if let Err(error) = validation {
+            result.stderr = format!("{error}\n");
+            result.exit_code = 2;
+            result.fatal = !isolated;
+            return serde_json::to_string(&result)
+                .map_err(|_| crate::fail("EIO: serialization failed"));
+        }
+        if !isolated {
+            self.environment = prepared.variables.clone();
+            self.exported = exported;
+        }
+        serde_json::to_string(&result).map_err(|_| crate::fail("EIO: serialization failed"))
     }
 
     pub fn redirect(
@@ -412,6 +700,7 @@ pub fn parse(source: &str) -> Result<Vec<Command>, String> {
     let mut commands = Vec::new();
     let mut current = Command {
         argv: Vec::new(),
+        assignments: Vec::new(),
         gate: "always".into(),
         pipe: false,
         negate: false,
@@ -423,22 +712,18 @@ pub fn parse(source: &str) -> Result<Vec<Command>, String> {
         match token {
             Token::Word(word) => {
                 if current.argv.is_empty()
-                    && let Some(Part::Literal {
-                        value,
-                        quoted: false,
-                    }) = word.0.first()
-                    && let Some((name, _)) = value.split_once('=')
-                    && name
-                        .chars()
-                        .next()
-                        .is_some_and(|c| c.is_ascii_alphabetic() || c == '_')
-                    && name.chars().all(|c| c.is_ascii_alphanumeric() || c == '_')
+                    && let Some(value) = assignment(&word)?
                 {
-                    return Err("ENOTSUP: shell assignments are not implemented".into());
+                    current.assignments.push(value);
+                    continue;
                 }
                 current.argv.push(word);
             }
-            Token::Bang if current.argv.is_empty() && current.redirects.is_empty() => {
+            Token::Bang
+                if current.argv.is_empty()
+                    && current.assignments.is_empty()
+                    && current.redirects.is_empty() =>
+            {
                 if current.gate == "pipe" {
                     return Err("EINVAL: negation must begin the pipeline".into());
                 }
@@ -470,10 +755,10 @@ pub fn parse(source: &str) -> Result<Vec<Command>, String> {
                 }
             }
             Token::Operator(op) => {
-                if current.argv.is_empty() && !current.redirects.is_empty() {
-                    current.argv.push(Word::literal("true", false));
-                }
-                if current.argv.is_empty() {
+                if current.argv.is_empty()
+                    && current.assignments.is_empty()
+                    && current.redirects.is_empty()
+                {
                     if prefix {
                         return Err("ENOTSUP: negation requires a nonempty pipeline".into());
                     }
@@ -494,6 +779,7 @@ pub fn parse(source: &str) -> Result<Vec<Command>, String> {
                 };
                 current = Command {
                     argv: Vec::new(),
+                    assignments: Vec::new(),
                     gate: gate.into(),
                     pipe: false,
                     negate,
@@ -503,10 +789,8 @@ pub fn parse(source: &str) -> Result<Vec<Command>, String> {
             }
         }
     }
-    if current.argv.is_empty() && !current.redirects.is_empty() {
-        current.argv.push(Word::literal("true", false));
-    }
-    if !current.argv.is_empty() {
+    if !current.argv.is_empty() || !current.assignments.is_empty() || !current.redirects.is_empty()
+    {
         commands.push(current);
     } else if prefix {
         return Err("ENOTSUP: negation requires a nonempty pipeline".into());
@@ -529,6 +813,81 @@ mod tests {
 
     fn path_value(word: &Word) -> String {
         values(std::slice::from_ref(word)).pop().unwrap()
+    }
+
+    #[test]
+    fn assignment_values_match_native_shell_without_field_splitting() -> Result<(), String> {
+        for value in [
+            "",
+            " a b ",
+            "\tfirst\nsecond",
+            "*",
+            "a?b[0]",
+            "~",
+            "é 字",
+            "$OTHER; echo injected",
+        ] {
+            let environment = BTreeMap::from([("VALUE".into(), value.into())]);
+            for word in [
+                "A=$VALUE",
+                "A=pre${VALUE}post",
+                "A=''",
+                "A='~'",
+                "A='*'",
+                r#"A="$VALUE""#,
+                r"A=escaped\ space",
+                "A='$VALUE'",
+            ] {
+                let command = parse(word)?.remove(0);
+                assert!(command.argv.is_empty(), "{word}");
+                let (name, rhs) = &command.assignments[0];
+                assert_eq!(name, "A");
+                let actual = assignment_value(rhs, &environment, 0)?;
+                let oracle = std::process::Command::new("sh")
+                    .args(["-c", &format!("{word}; printf '%s' \"$A\"")])
+                    .env("VALUE", value)
+                    .output()
+                    .map_err(|error| error.to_string())?;
+                assert!(oracle.status.success(), "{word}");
+                assert_eq!(
+                    actual.as_bytes(),
+                    oracle.stdout,
+                    "word={word:?}, value={value:?}"
+                );
+            }
+        }
+        assert!(parse("A=~").is_err());
+        assert!(parse("A=prefix:~").is_err());
+        for word in [r"A\=value", r#"A"B"=value"#, "1A=value"] {
+            let command = parse(word)?.remove(0);
+            assert!(command.assignments.is_empty());
+            assert_eq!(command.argv.len(), 1);
+        }
+        Ok(())
+    }
+
+    #[test]
+    fn shell_variable_limits_cover_count_names_values_and_field_separators() {
+        assert!(
+            validate_variables(
+                &(0..129)
+                    .map(|index| (format!("V{index}"), "x".into()))
+                    .collect()
+            )
+            .is_err()
+        );
+        assert!(validate_variables(&BTreeMap::from([("A".into(), "x".repeat(4097))])).is_err());
+        assert!(validate_variables(&BTreeMap::from([("A".repeat(129), "x".into())])).is_err());
+        assert!(validate_variables(&BTreeMap::from([("IFS".into(), ":".into())])).is_err());
+        assert!(validate_variables(&BTreeMap::from([("IFS".into(), " \t\n".into())])).is_ok());
+        assert!(
+            validate_variables(
+                &(0..16)
+                    .map(|index| (format!("V{index}"), "x".repeat(4096)))
+                    .collect()
+            )
+            .is_err()
+        );
     }
 
     #[test]
@@ -602,7 +961,6 @@ mod tests {
             r#"echo "`true`""#,
             "echo ${VALUE:-x}",
             "echo $1",
-            "VALUE=x echo yes",
         ] {
             assert!(parse(source).is_err(), "{source}");
         }
@@ -698,7 +1056,7 @@ mod tests {
         assert!(
             matches!(&commands[0].redirects[3], Redirection::Input { path } if path_value(path) == "fourth")
         );
-        assert_eq!(values(&commands[1].argv), vec!["true"]);
+        assert!(values(&commands[1].argv).is_empty());
         let errors = parse("echo 2> first 2>> second")?;
         assert!(
             matches!(&errors[0].redirects[0], Redirection::Error { path, append: false } if path_value(path) == "first")

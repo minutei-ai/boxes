@@ -487,6 +487,18 @@ export default {
           env.BOXES_AGENT,
           Redacted.make(capability.token),
         );
+        const shellVariables = yield* environmentRpc.action(id, {
+          op: "process.run",
+          id: "binding-shell-variables",
+          language: "shell",
+          source:
+            'LOCAL=bound; export LOCAL; LOCAL=temporary echo "$LOCAL" "$BOXES_BINDING_MARKER"; unset LOCAL; echo "[$LOCAL]"',
+        });
+        if (
+          shellVariables.output?.stdout !== "bound configured\n[]\n" ||
+          shellVariables.output.exitCode !== 0
+        )
+          return yield* Effect.die("Agent binding shell variable scope differs");
         const rpcEnvironment = yield* environmentRpc.runWithTools(
           id,
           {

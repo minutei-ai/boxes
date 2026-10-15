@@ -9,6 +9,7 @@ import {
   FileStat,
   RunResult,
   ShellPlan,
+  ShellBuiltin,
   WasmProgram,
   WasmConfiguration,
 } from "./contracts";
@@ -49,9 +50,11 @@ export const shell = Effect.fn("shell.execute")(function* (
       stderr: Buffer.alloc(0),
       pipe: Buffer.alloc(0),
       pipelineSkipped: false,
+      fatal: false,
     }),
     (state, [commandIndex, command]) =>
       Effect.gen(function* () {
+        if (state.fatal) return state;
         if (command.gate === "pipe" && state.pipelineSkipped) return state;
         if (command.gate === "success" && state.exitCode !== 0)
           return { ...state, pipelineSkipped: true };
@@ -137,15 +140,14 @@ export const shell = Effect.fn("shell.execute")(function* (
             onSome: (inode) => read(env, id, kernel, inode),
           });
           phase.prepared = true;
+          const builtin = yield* kernelCall(() => interpreter.commit(commandIndex)).pipe(
+            Effect.flatMap(Schema.decodeUnknownEffect(Schema.fromJsonString(ShellBuiltin))),
+          );
           const external = yield* Effect.gen(function* () {
-            if (["", "cd", "pwd", "echo", "true", "false"].includes(name)) return null;
-            return yield* kernelCall(() =>
-              kernel.command_path(
-                name,
-                cwd,
-                environment.PATH ?? "/opt/cirro/bin:/usr/local/bin:/usr/bin:/bin",
-              ),
-            ).pipe(
+            if (builtin !== null || ["", "cd", "pwd", "echo", "true", "false"].includes(name))
+              return null;
+            const path = yield* kernelCall(() => interpreter.path());
+            return yield* kernelCall(() => kernel.command_path(name, cwd, path)).pipe(
               Effect.catchTag("Fault", (fault) => {
                 if (fault.code === "ENOENT") return Effect.succeed(null);
                 return Effect.fail(fault);
@@ -153,8 +155,12 @@ export const shell = Effect.fn("shell.execute")(function* (
             );
           });
           const result = yield* Effect.gen(function* () {
+            if (builtin !== null) return builtin;
             if (name === "") return { stdout: "", stderr: ": command not found\n", exitCode: 127 };
             if (external !== null) {
+              const commandEnvironment = yield* kernelCall(() => interpreter.environment()).pipe(
+                Effect.flatMap(Schema.decodeUnknownEffect(Schema.fromJsonString(Environment))),
+              );
               const program = yield* load(
                 env,
                 capability,
@@ -166,7 +172,7 @@ export const shell = Effect.fn("shell.execute")(function* (
                   args,
                   stdin: { content: input.toString("base64"), encoding: "base64" },
                 },
-                environment,
+                commandEnvironment,
               ).pipe(Effect.flatMap(Schema.decodeUnknownEffect(WasmProgram)));
               const before = session.etag;
               const commandCapture: OutputCapture = (stdio, observeCancellation) => {
@@ -267,7 +273,8 @@ export const shell = Effect.fn("shell.execute")(function* (
               ),
               Match.when("cd", () =>
                 Effect.gen(function* () {
-                  const target = yield* path(args[0] ?? "/home/cirro");
+                  const home = yield* kernelCall(() => interpreter.home());
+                  const target = yield* path(args[0] ?? home);
                   const stat = yield* kernelCall(() => kernel.stat(target, true)).pipe(
                     Effect.flatMap(Schema.decodeUnknownEffect(Schema.fromJsonString(FileStat))),
                   );
@@ -501,7 +508,9 @@ export const shell = Effect.fn("shell.execute")(function* (
             ),
           };
         }).pipe(Effect.catchTag("Fault", failed));
-        const nextCwd = Match.value("cwd" in outcome).pipe(
+        const nextCwd = Match.value(
+          !command.pipe && command.gate !== "pipe" && "cwd" in outcome,
+        ).pipe(
           Match.when(true, () => {
             if ("cwd" in outcome && Schema.is(Schema.String)(outcome.cwd)) return outcome.cwd;
             return cwd;
@@ -524,12 +533,14 @@ export const shell = Effect.fn("shell.execute")(function* (
           Match.orElse(() => Buffer.alloc(0)),
         );
         yield* capture({ stdout, stderr });
+        const fatal = "fatal" in outcome && outcome.fatal === true;
         return {
           cwd: nextCwd,
+          fatal,
           pipelineStatus: expansionStatus,
           stdout,
           stderr,
-          exitCode: Match.value(command.negate && !command.pipe).pipe(
+          exitCode: Match.value(command.negate && !command.pipe && !fatal).pipe(
             Match.when(true, () => {
               if (outcome.exitCode === 0) return 1;
               return 0;

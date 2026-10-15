@@ -45,6 +45,44 @@ const report = await Effect.runPromise(
       });
       const client = yield* make({ url, token: Redacted.make(grant.token) });
       const cases = [
+        {
+          name: "local-variable",
+          source: 'A="local value"; echo "$A"',
+          stdout: "local value\n",
+          exitCode: 0,
+        },
+        {
+          name: "temporary-prefix",
+          source: 'A=old; A=new echo "$A"; echo "$A"',
+          stdout: "old\nold\n",
+          exitCode: 0,
+        },
+        {
+          name: "sequential-prefix",
+          source: 'A=one B=$A; echo "$A:$B"',
+          stdout: "one:one\n",
+          exitCode: 0,
+        },
+        { name: "special-prefix", source: 'A=new :; echo "$A"', stdout: "new\n", exitCode: 0 },
+        {
+          name: "export-word",
+          source: 'export A=$VALUE; echo "$A"',
+          stdout: "a  b\n",
+          exitCode: 0,
+        },
+        {
+          name: "unset-variable",
+          source: 'export A=local; unset -v -- A; echo "[$A]"',
+          stdout: "[]\n",
+          exitCode: 0,
+        },
+        {
+          name: "pipeline-variable",
+          source: 'A=old; A=new | cat; echo "$A"',
+          stdout: "old\n",
+          exitCode: 0,
+        },
+        { name: "effective-home", source: "HOME=/tmp; cd; pwd", stdout: "/tmp\n", exitCode: 0 },
         { name: "quoted", source: 'echo "$VALUE"', stdout: "a  b\n", exitCode: 0 },
         { name: "split", source: "echo pre${VALUE}post", stdout: "prea bpost\n", exitCode: 0 },
         { name: "single-quoted", source: "echo '$VALUE'", stdout: "$VALUE\n", exitCode: 0 },
@@ -116,6 +154,15 @@ const report = await Effect.runPromise(
       )
         return yield* Effect.die("Expanded text was interpreted as shell syntax");
       checks.push({ name: "no-reparse", exitCode: injection.output.exitCode });
+      const retained = yield* client.action(id, { op: "config.get" });
+      if (
+        retained.environment.VALUE !== "a  b" ||
+        retained.environment.EMPTY !== "" ||
+        retained.environment.TARGET !== "/tmp/with space" ||
+        Object.keys(retained.environment).length !== 3
+      )
+        return yield* Effect.die("Shell variables changed sandbox configuration");
+      checks.push({ name: "configuration-isolation", exitCode: 0 });
       return { target: url, measuredAt, checks, disposal: true };
     }),
   ).pipe(Effect.provide([FetchHttpClient.layer, BunCrypto.layer])),

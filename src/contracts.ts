@@ -921,6 +921,12 @@ export class Fault extends Schema.TaggedError<Fault>()("Fault", {
   message: Schema.String,
 }) {}
 
+export const ShellBuiltin = Schema.NullOr(
+  Schema.Struct({
+    ...Struct.pick(RunResult.fields, ["stdout", "stderr", "exitCode"]),
+    fatal: Schema.Boolean,
+  }),
+);
 export const ShellPlan = Schema.Array(
   Schema.Struct({
     gate: Schema.Literals(["always", "pipe", "success", "failure"]),
