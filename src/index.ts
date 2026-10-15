@@ -29,6 +29,7 @@ import {
   RunRecord,
   RunSummary,
   RecoveryStatus,
+  ReclamationProgress,
   ProcessPage,
   ProcessOutputPage,
   LiveOutputPage,
@@ -38,6 +39,7 @@ import {
   TokenResponse,
 } from "./contracts";
 import { input } from "./input";
+import { reclaim } from "./reclamation";
 import { HostFailure } from "./host";
 import { AgentProtocol, type HostCallback } from "./rpc-protocol";
 import { importSnapshot } from "./snapshot";
@@ -61,7 +63,7 @@ import {
   liveOutput,
   recoveryStatus,
 } from "./process";
-import { head, kernelCall, open, publish, dispose, StorageFailure } from "./storage";
+import { head, readHead, kernelCall, open, publish, dispose, StorageFailure } from "./storage";
 import type { Env } from "./resources";
 
 initSync({ module: wasm });
@@ -218,11 +220,17 @@ const route = Effect.fn("api.route")(function* (request: Request, env: Env) {
   const id = yield* Schema.decodeUnknownEffect(Id)(parts[3]);
   if (parts[4] === "capabilities") {
     yield* administrator(env, token);
-    yield* open(env, id);
+    const snapshot = yield* readHead(env, id);
     const data = yield* readBounded(request.body, 4096);
     const input = yield* Schema.decodeUnknownEffect(Schema.fromJsonString(MintCapability), {
       onExcessProperty: "error",
     })(data.toString("utf8"));
+    if (snapshot.head.deleted && input.permissions.some((permission) => permission !== "manage"))
+      return yield* new Fault({
+        code: "FORBIDDEN",
+        status: 403,
+        message: "Disposed sandboxes only accept management capabilities",
+      });
     const now = yield* Clock.currentTimeMillis;
     const expiresAt = now + input.expiresInSeconds * 1000;
     const scopedToken = yield* mint(env, {
@@ -375,6 +383,13 @@ const route = Effect.fn("api.route")(function* (request: Request, env: Env) {
         yield* dispose(env, id);
         return Schema.encodeSync(Schema.fromJsonString(Success))({ ok: true });
       }),
+    ),
+    Match.when({ op: "vm.reclaim" }, (action) =>
+      reclaim(env, capability, action.limit).pipe(
+        Effect.map((progress) =>
+          Schema.encodeSync(Schema.fromJsonString(ReclamationProgress))(progress),
+        ),
+      ),
     ),
     Match.orElse((action) =>
       guestAction(env, capability, action).pipe(

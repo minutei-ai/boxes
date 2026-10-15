@@ -3,7 +3,15 @@ import { makeBinding } from "../../src/sdk";
 import { makeAgentBinding } from "../../src/sdk-rpc";
 import { createBoxesIsolateDriver } from "../../src/sdk-tanstack";
 import type { AgentProtocol } from "../../src/rpc-protocol";
-import { CronRecord, FileContent, FileStat, Id, Policy, RunRecord } from "../../src/contracts";
+import {
+  CronRecord,
+  FileContent,
+  FileStat,
+  Id,
+  Policy,
+  RunRecord,
+  ReclamationProgress,
+} from "../../src/contracts";
 
 export const BindingProof = Schema.Struct({
   file: FileContent,
@@ -14,6 +22,7 @@ export const BindingProof = Schema.Struct({
   rpc: RunRecord,
   hostCalls: Schema.Array(Schema.String),
   denied: Schema.Int,
+  reclaimed: ReclamationProgress,
 });
 export const RpcProbe = Schema.Struct({
   record: Schema.NullOr(RunRecord),
@@ -621,6 +630,15 @@ export default {
           },
         );
         yield* boxes.action(id, { op: "vm.dispose" });
+        const reclamation: (typeof ReclamationProgress.Type)[] = [];
+        for (const _ of Array.from({ length: 32 })) {
+          const step = yield* boxes.action(id, { op: "vm.reclaim", limit: 1000 });
+          reclamation.push(step);
+          if (step.status === "complete") break;
+        }
+        const reclaimed = reclamation.at(-1);
+        if (reclaimed === undefined || reclaimed.status !== "complete")
+          return yield* Effect.die("Binding reclamation did not complete");
         return new Response(
           Schema.encodeSync(Schema.fromJsonString(BindingProof))({
             file,
@@ -631,6 +649,7 @@ export default {
             rpc,
             hostCalls,
             denied: denied.status,
+            reclaimed,
           }),
           {
             headers: { "content-type": "application/json" },

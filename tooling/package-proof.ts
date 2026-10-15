@@ -199,6 +199,7 @@ await Effect.runPromise(
         binding.denied !== 401 ||
         binding.rpc.status !== "exited" ||
         binding.hostCalls.length !== 2 ||
+        binding.reclaimed.status !== "complete" ||
         binding.restoredStat.inode <= binding.stat.inode
       )
         return yield* Effect.die("Packaged binding proof mismatch");

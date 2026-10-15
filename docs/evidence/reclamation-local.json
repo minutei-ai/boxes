@@ -1,0 +1,116 @@
+{
+  "status": "Local bounded disposed-sandbox reclamation candidate passed the complete native gate, exact archive binding proof and actual installed Minutei SDK 0.9.0 interoperability. Not deployed or published.",
+  "baseCommit": "b7622b9",
+  "version": "0.10.0",
+  "candidateIdentity": "A new unpublished candidate with distinct archive hashes; the previously deployed 0.10.0 archive is not overwritten.",
+  "contracts": {
+    "action": "vm.reclaim with limit 1..1000; only manage; root must already be disposed",
+    "progress": "pending, blocked with nonterminal process IDs, or complete for the observed sweep; removed counts acknowledged deletion targets in that call",
+    "persistence": "reclamations/<id>.json stores the phase and a fresh random publication revision under conditional R2 writes",
+    "phases": ["processes", "process-input", "schedules", "sandbox objects"],
+    "retained": "A disposed head with a native Rust empty manifest, cleared environment and its original control policy/creation metadata; a small progress object. ID reuse remains forbidden.",
+    "renewal": "Only the administrator can issue fresh manage-only tokens for a disposed root. New non-management grants are forbidden.",
+    "continuation": "Each call reads current state and deletes a leading bounded page. A later call after complete starts another sweep. A native cursor is used only within a call when a retained head is the sole item in a truncated object page."
+  },
+  "verified": [
+    "Live-root rejection, invalid limit rejection and denial without management permission before progress creation.",
+    "Native bulk removal of 1000 objects with 1005 seeded content objects plus actual file/code/output and other scoped data.",
+    "Limit-one batches, a retained head inside the object prefix, and no neighboring sandbox deletion.",
+    "Worker replacement between batches resumes persisted progress and completes.",
+    "The Rust empty manifest replaces the disposed filesystem graph and its environment is cleared. The same ID still cannot be recreated.",
+    "Queued receipts block collection without deletion or receipt mutation until actual native Queue disposal settlement.",
+    "A queued receipt reappearing during a later data phase blocks deletion; native settlement allows collection to resume.",
+    "Delivery replay after receipt deletion is acknowledged without recreating execution state.",
+    "Fresh management-only authority can collect a late orphan after a completed sweep. Read authority is not restored.",
+    "Three concurrent collection requests produce accepted progress or declared 409 conflicts; a subsequent sweep reaches persisted completion.",
+    "The exact archived SDK compiles its consumer and reaches reclamation completion through a native Worker service binding."
+  ],
+  "validation": {
+    "completeGate": "bun run check passed: build, SDK declarations, TypeScript, workspace Clippy, workspace Cargo tests and native Bun tests.",
+    "nativeTests": {
+      "tests": 341,
+      "files": 59,
+      "assertions": 4443,
+      "seconds": 131.27,
+      "failures": 0
+    },
+    "changedTests": [
+      "(pass) reclamation resumes bounded R2 deletion after replacement and preserves the disposal fence [4253.22ms]",
+      "(pass) reclamation waits for native queued disposal settlement before removing receipts or output [884.81ms]"
+    ],
+    "exactArchiveProof": {
+      "version": "0.10.0",
+      "transport": "native Alchemy workerd service binding and Agent RPC; local R2 and Queue",
+      "proof": "SDK archive exports and consumer declarations; runtime archive; filesystem snapshot restore; hard-link metadata; RPC callbacks and cooperative disposal; persistent driver contexts and cancellation; scoped authority"
+    },
+    "archiveProofExtension": "The archived native binding fixture now requires vm.reclaim to reach complete. Both the native SDK test and package proof verify that returned progress.",
+    "minuteiConsumer": {
+      "clientVersion": "0.9.0",
+      "runtimeVersion": "0.10.0",
+      "runtimeArchiveSha256": "29a1ba6a0d5cb34cc3e8e580ce8d83eb50db06e125a79f9a1fbb6dd58e4bff02",
+      "consumerCommit": "a0a2a05c40ed5fb3bd5d76b14c3baf3bfe4695c2",
+      "consumerBundleSha256": "e29165da4f63ac8a3cedd29f5b13b037e9b4becb1f73b7e06047ad308db1d060",
+      "transport": "native workerd Agent service binding; actual Minutei Code Mode and tenant SQLite; local R2, KV and Queue",
+      "retention": true,
+      "isolatedRegistry": true,
+      "capabilities": true,
+      "consumerFixturesSha256": {
+        "boxes-retention.ts": "225c5d42ff36ffa2ee49ce213816546f73bacb691e646857e8588bd8149360c0",
+        "boxes-code.worker.ts": "f876f01e98358a955a9214c2f6b375f60598a461450b88a052d505531920f87a"
+      }
+    },
+    "archiveAudit": "Expected package entry paths, exact Apache-2.0 root license, no env/node_modules entries and no exact configured control credential in either archive. A general secret/dependency-license audit was not performed."
+  },
+  "archives": [
+    {
+      "file": "minutei-ai-boxes-0.10.0.tgz",
+      "bytes": 70123,
+      "sha256": "62a54c785805e903a548d70005b3200861fafdd92128b1de8e2ab6d048e33d59",
+      "entries": 16,
+      "configuredCredentialAbsent": true,
+      "licenseMatches": true
+    },
+    {
+      "file": "minutei-ai-boxes-runtime-0.10.0.tgz",
+      "bytes": 5519430,
+      "sha256": "29a1ba6a0d5cb34cc3e8e580ce8d83eb50db06e125a79f9a1fbb6dd58e4bff02",
+      "entries": 8,
+      "configuredCredentialAbsent": true,
+      "licenseMatches": true
+    }
+  ],
+  "runtimeArtifactsSha256": {
+    "cirro_compiler_bg.wasm": "27d9b0022a634ed4eef47b6561ad38cafde3522c17e834afed1264440678bf2f",
+    "cirro_guest_bg.wasm": "b773b74626b08bd1083860081ccd2a3d0fdff80dcd97b5ec13ed7c6e2148ef22",
+    "cirro_kernel_bg.wasm": "3c80cd3b32fd8a5d2b63ea6292f19813552bda74a9f4249971355513c0658d29",
+    "cirro_python_bg.wasm": "8aa6aec5ab6fb0623637e2b6dda7318f4934e4736f4a97e45ca3312bf32e529c",
+    "cirro_wasi_bg.wasm": "c8a585cdffb370dcf67571547d3c2df1df2f279a9ff22d7050a5d13a5bf10784",
+    "index.js": "2c7814368e9cb8fd4e69ddd3f3d0fb2bc1c185d9e21a75f7fb219d1a6b387bd1"
+  },
+  "sourceSha256": {
+    "src/contracts.ts": "b325e27afbe735febf2c288e6fe11ccaebaa2956a0f93d84f9181c4f3ab866a6",
+    "src/storage.ts": "3ae349b01abf8b047ce00c8b23ef32dded458c2df46c72ea955157d60c90fcd0",
+    "src/reclamation.ts": "b17269046e62c06eff47db846c5bc2f03996a46854bb68dfda3aeaa2b84ab01d",
+    "src/index.ts": "fbb06d8d3feee072d85f955d0798271e96947e999e30d7e11e04623c22da3dd7",
+    "tests/reclamation.test.ts": "facb0fc15838560b5d82db8ea292e14ecd808ecc26ce4fecca58aa582496acce",
+    "tests/fixtures/sdk-binding-worker.ts": "9568a687051a3651e76f3d8b731e864fe91684651a6abab58176b675421fcbf8",
+    "tests/sdk.test.ts": "10aac0f60b001685b3c97e44e8264b17c7f8bf11e36ada8b5fc97cc920355179",
+    "tooling/package-proof.ts": "54d332304608f5845dd9c1fd4e00facb468dd08edfcbc84b5afa5431c7f1b5de"
+  },
+  "nativeReference": "https://developers.cloudflare.com/r2/api/workers/workers-api-reference/",
+  "nativeReferenceScope": "The installed binding contracts and native tests govern implementation. The provider reference confirms a 1000-key deletion maximum, partial list pages, conditional writes and strongly consistent deletes.",
+  "delivery": {
+    "backend": "Not deployed; the existing production Worker still runs the previously recorded published-software candidate.",
+    "publication": "No GitHub authentication or package/repository publication.",
+    "minutei": "The installed client and actual application fixtures remain unchanged at the recorded commit. The new collection action is not exercised by the 0.9.0 consumer; its existing Code Mode/tenant flows are compatibility checks."
+  },
+  "limits": [
+    "Collection is explicit and removes retained private receipts/output; disposal alone still retains them. No automatic retention timer or background collector is installed.",
+    "This is not a cross-object write fence. An earlier request can leave a late orphan; another sweep is required.",
+    "Nonterminal orphaned inline receipts without a recovery deadline remain blocked pending process-lifecycle repair. The collector never invents terminal settlement.",
+    "Automatic crash recovery, live-sandbox block collection and production performance/cost remain open.",
+    "The actual remote Minutei application/authentication/model path and history Queue consumption are not verified. The native consumer fixture intentionally has no history consumer.",
+    "The earlier remote preview 1101 remains an unresolved observation in persistent-binding-production.json.",
+    "Full AgentOS parity remains open in docs/parity.md."
+  ]
+}

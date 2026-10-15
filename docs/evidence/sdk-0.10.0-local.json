@@ -1,5 +1,5 @@
 {
-  "status": "Current published-sh/jq and WASI quantum candidate passed native/archive and named deployed Worker gates; repository and package publication remain deferred.",
+  "status": "The published-software candidate remains deployed. A newer local reclamation candidate has separate evidence and archive identities; publication remains deferred.",
   "version": "0.10.0",
   "runtimeSourceCommit": "7aee168c876f48512ac5f849433dc00ec3b4675a",
   "runtimeArtifactsSha256": {
@@ -129,5 +129,6 @@
   "parity": "Experimental; remaining requirements in docs/parity.md stay open.",
   "localCandidateEvidence": "docs/evidence/wasi-quantum-local.json",
   "deploymentCheckoutCommit": "ed888957c722d150558deef2dfa875335b824d0f",
-  "deliveryEvidence": "docs/evidence/published-software-delivery.json"
+  "deliveryEvidence": "docs/evidence/published-software-delivery.json",
+  "nextCandidateEvidence": "docs/evidence/reclamation-local.json"
 }

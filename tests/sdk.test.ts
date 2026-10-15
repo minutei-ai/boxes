@@ -131,6 +131,7 @@ test("SDK calls another Worker through its native service binding", async () => 
   expect(proof.run.output?.result).toBe(42);
   expect(proof.denied).toBe(401);
   expect(proof.hostCalls).toEqual(["lookup", "lookup"]);
+  expect(proof.reclaimed.status).toBe("complete");
   expect(proof.rpc.status).toBe("exited");
   expect(proof.rpc.output?.result).toEqual({
     a: { echoed: { id: 1 }, actor: "binding-sdk" },

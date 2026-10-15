@@ -6,7 +6,7 @@ import type { Env } from "./resources";
 export class StorageFailure extends Schema.TaggedError<StorageFailure>()("StorageFailure", {
   cause: Schema.Unknown,
 }) {}
-const readHead = Effect.fn("sandbox.readHead")(function* (env: Env, id: string) {
+export const readHead = Effect.fn("sandbox.readHead")(function* (env: Env, id: string) {
   const object = yield* Effect.tryPromise({
     try: () => env.OBJECTS.get(`sandboxes/${id}/head.json`),
     catch: (cause) => new StorageFailure({ cause }),

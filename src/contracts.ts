@@ -529,6 +529,10 @@ export const Action = Schema.Union([
   }),
   Schema.Struct({ op: Schema.Literal("vm.status") }),
   Schema.Struct({ op: Schema.Literal("vm.dispose") }),
+  Schema.Struct({
+    op: Schema.Literal("vm.reclaim"),
+    limit: Schema.Int.check(Schema.isBetween({ minimum: 1, maximum: 1000 })),
+  }),
 ]);
 export const CreateSandbox = Schema.Struct({
   environment: Schema.optionalKey(Configuration.fields.environment),
@@ -759,6 +763,20 @@ export const RunRecord = Schema.Struct({
   output: Schema.NullOr(ObservedOutput),
 });
 export const RunSummary = RunRecord.mapFields((fields) => Struct.omit(fields, ["output"]));
+export const ReclamationPhase = Schema.Literals([
+  "processes",
+  "inputs",
+  "schedules",
+  "objects",
+  "complete",
+]);
+export const ReclamationState = Schema.Struct({ phase: ReclamationPhase, revision: Id });
+export const ReclamationProgress = Schema.Struct({
+  phase: ReclamationPhase,
+  status: Schema.Literals(["pending", "blocked", "complete"]),
+  removed: Schema.Int.check(Schema.isGreaterThanOrEqualTo(0)),
+  blocking: Schema.Array(Id),
+});
 export const RunMetadata = Schema.Struct({ summary: Schema.fromJsonString(RunSummary) });
 export const StdioRef = Schema.Struct({
   size: Schema.Int.check(Schema.isBetween({ minimum: 0, maximum: 2_097_152 })),
@@ -1070,4 +1088,5 @@ export const ActionResponses = {
   "config.patch": Configuration,
   "vm.status": Status,
   "vm.dispose": Success,
+  "vm.reclaim": ReclamationProgress,
 } satisfies Record<typeof Action.Type.op, Schema.Constraint>;
