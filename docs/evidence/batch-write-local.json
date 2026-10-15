@@ -1,5 +1,5 @@
 {
-  "status": "Native local validation of staged batch uploads; production delivery is recorded separately.",
+  "status": "Native local validation of staged batch uploads; this exact runtime was subsequently deployed and exercised through native Cloudflare bindings.",
   "baseCommit": "e85c1b4",
   "change": "Rust applies each ordered write to a request-private kernel; Effect deduplicates required immutable blocks across the batch and uploads with concurrency four before one conditional head publication. Single writes retain prepare/upload/apply ordering.",
   "referenceRuntime": {
@@ -30,7 +30,7 @@
       "failures": 0
     },
     "changedBoundary": "Native R2/workerd preserves hard-link write ordering, per-entry errors, shared content, a single generation increment, exactly 16 MiB aggregate content and unchanged state after rejecting 16 MiB plus one byte. Existing native integration tests cover guest batch tools, grants, same-path updates and concurrent publication conflicts.",
-    "exactArchiveProof": "bun run package:proof passed against both exact candidate archives: public exports/declarations, native service binding, snapshots/hard links, Agent RPC callbacks, reclamation and persistent-driver authority/cancellation.",
+    "exactArchiveProof": "bun run package:proof passed against the final exact candidate archives after SDK documentation was refreshed: public exports/declarations, native service binding, snapshots/hard links, Agent RPC callbacks, reclamation and persistent-driver authority/cancellation.",
     "minuteiCompatibility": {
       "clientVersion": "0.9.0",
       "runtimeVersion": "0.10.0",
@@ -172,8 +172,8 @@
   "archives": [
     {
       "file": "minutei-ai-boxes-0.10.0.tgz",
-      "bytes": 70653,
-      "sha256": "1f9a411587662c2a070c918e96679022790c7a0ad98611abb0c8b3b820265a9b",
+      "bytes": 70701,
+      "sha256": "a00cc4d2b443dff9e5df8186734e901eb74814ea2c99a7d283f58563baad17de",
       "entries": 16,
       "configuredCredentialAbsent": true,
       "licenseMatches": true
@@ -193,5 +193,7 @@
     "directory": "/tmp/boxes-write-staging-delivery-ymkJBM",
     "github": "Deferred at user direction; no authentication or publication attempted.",
     "productionPlan": "Native Alchemy profile minutei, stage prod: existing Sandbox update and unconditional Migrations task. R2, Queue, consumer and bindings unchanged. No Dynamic Workers or Worker Loader."
-  }
+  },
+  "runtimeSourceCommit": "84ce49c07625d461b2d7b5cba447cc5d865d544b",
+  "productionEvidence": "docs/evidence/batch-write-production.json"
 }

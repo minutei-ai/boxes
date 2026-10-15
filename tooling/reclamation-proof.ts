@@ -33,6 +33,8 @@ const Report = Schema.Union([
     ...Collection.fields,
     kind: Schema.Literal("fixture"),
     files: Schema.Int,
+    writes: Schema.Array(Schema.Struct({ files: Schema.Int, milliseconds: Schema.Number })),
+    verifiedContents: Schema.Literal(3),
     liveDenied: Schema.Literal(409),
     readonlyDenied: Schema.Literal(403),
     readDenied: Schema.Literal(404),
@@ -96,7 +98,7 @@ const report = await Effect.runPromise(
           Match.when(Schema.is(Smoke), () => 8),
           Match.orElse(() => 1005),
         );
-        yield* Effect.forEach(
+        const writes = yield* Effect.forEach(
           Array.from({ length: Math.ceil(files / 128) }, (_, i) => i),
           (batch) =>
             Effect.gen(function* () {
@@ -111,8 +113,13 @@ const report = await Effect.runPromise(
                   };
                 },
               );
+              const started = yield* Clock.monotonicTimeNanos;
               const result = yield* manager.action(id, { op: "filesystem.writeFiles", entries });
-              if (result.length !== entries.length || result.some((item) => !item.success))
+              const milliseconds = Number((yield* Clock.monotonicTimeNanos) - started) / 1000000;
+              if (
+                result.length !== entries.length ||
+                result.some((item, index) => !item.success || item.path !== entries[index].path)
+              )
                 return yield* Effect.die("Reclamation fixture batch failed");
               yield* Effect.logInfo({
                 phase: "files-staged",
@@ -120,8 +127,22 @@ const report = await Effect.runPromise(
                 batch: batch + 1,
                 files: result.length,
               });
+              return { files: result.length, milliseconds };
             }),
         );
+        const samples = [0, Math.floor(files / 2), files - 1];
+        const read = yield* manager.action(id, {
+          op: "filesystem.readFiles",
+          paths: samples.map((index) => `/proof-${String(index).padStart(4, "0")}`),
+        });
+        if (
+          read.length !== samples.length ||
+          read.some(
+            (entry, index) =>
+              entry.content !== Buffer.from(`cleanup-object-${samples[index]}`).toString("base64"),
+          )
+        )
+          return yield* Effect.die("Remote staged content verification failed");
         const run = yield* manager.action(id, {
           op: "process.run",
           id: "completed",
@@ -141,7 +162,7 @@ const report = await Effect.runPromise(
           execution: { op: "typescript.evaluate", id: "seed", expression: "42" },
         });
         yield* manager.action(id, { op: "cron.cancel", id: "scheduled" });
-        return { manager, files };
+        return { manager, files, writes };
       });
       const session = yield* createEdgeSession({
         scriptName: `boxes-reclaim-${nonce}`,
@@ -280,6 +301,8 @@ const report = await Effect.runPromise(
         ...result,
         kind: "fixture" as const,
         files: fixture.files,
+        writes: fixture.writes,
+        verifiedContents: 3 as const,
         ...denials,
         readDenied: 404 as const,
       };
