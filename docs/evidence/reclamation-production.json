@@ -1,0 +1,526 @@
+{
+  "status": "The bounded R2 reclamation runtime is deployed on the existing ordinary Worker. Native Cloudflare binding collection and SDK 0.9.0/0.10.0 callback/persistent-context proofs passed.",
+  "runtimeSourceCommit": "f3c9c001bbc832bc3125546e28e19e99e5fa8c2f",
+  "deployment": {
+    "provider": "Alchemy project-local CLI; profile minutei; stage prod",
+    "target": "https://cirro-sandbox-prod-rs7wexxow56rmsoz.manoel-carvalhoneto.workers.dev",
+    "worker": "cirro-sandbox-prod-rs7wexxow56rmsoz",
+    "bucket": "cirro-objects-prod-vbk2p6ruhs2m645y",
+    "result": "2 succeeded",
+    "seconds": 480.4,
+    "plan": "Existing Sandbox update and unconditional Migrations action; bucket, Queue, consumer and bindings were noops. No Dynamic Workers or Worker Loader.",
+    "migrationProgress": {
+      "environment-v1": {
+        "reportedReceipts": 66,
+        "maxReportedPage": 59,
+        "converted": 0
+      },
+      "filesystem-v4": {
+        "reportedReceipts": 66,
+        "maxReportedPage": 66,
+        "converted": 0
+      },
+      "process-input-v4": {
+        "reportedReceipts": 30,
+        "maxReportedPage": 30,
+        "converted": 0
+      }
+    },
+    "migrationScope": "Receipt counts reflect timestamped native progress. Environment page numbers restart between heads and process phases; all reported conversions were zero."
+  },
+  "runtimeArtifactsSha256": {
+    "cirro_compiler_bg.wasm": "27d9b0022a634ed4eef47b6561ad38cafde3522c17e834afed1264440678bf2f",
+    "cirro_guest_bg.wasm": "b773b74626b08bd1083860081ccd2a3d0fdff80dcd97b5ec13ed7c6e2148ef22",
+    "cirro_kernel_bg.wasm": "3c80cd3b32fd8a5d2b63ea6292f19813552bda74a9f4249971355513c0658d29",
+    "cirro_python_bg.wasm": "8aa6aec5ab6fb0623637e2b6dda7318f4934e4736f4a97e45ca3312bf32e529c",
+    "cirro_wasi_bg.wasm": "c8a585cdffb370dcf67571547d3c2df1df2f279a9ff22d7050a5d13a5bf10784",
+    "index.js": "2c7814368e9cb8fd4e69ddd3f3d0fb2bc1c185d9e21a75f7fb219d1a6b387bd1"
+  },
+  "runtimeArchiveSha256": "29a1ba6a0d5cb34cc3e8e580ce8d83eb50db06e125a79f9a1fbb6dd58e4bff02",
+  "localValidation": {
+    "completeGate": "bun run check passed before the final host transport option change; final TypeScript and actual remote proofs validate that option change. Worker runtime files stayed byte-identical throughout.",
+    "nativeTests": {
+      "tests": 342,
+      "files": 60,
+      "assertions": 4447,
+      "seconds": 135.43,
+      "failures": 0
+    },
+    "nativeBinding": "One additional public SDK consumer case uses two native workerd consumers and local R2/Queue.",
+    "minuteiConsumer": {
+      "clientVersion": "0.9.0",
+      "runtimeVersion": "0.10.0",
+      "runtimeArchiveSha256": "29a1ba6a0d5cb34cc3e8e580ce8d83eb50db06e125a79f9a1fbb6dd58e4bff02",
+      "consumerCommit": "a0a2a05c40ed5fb3bd5d76b14c3baf3bfe4695c2",
+      "consumerBundleSha256": "e29165da4f63ac8a3cedd29f5b13b037e9b4becb1f73b7e06047ad308db1d060",
+      "transport": "native workerd Agent service binding; actual Minutei Code Mode and tenant SQLite; local R2, KV and Queue",
+      "retention": true,
+      "isolatedRegistry": true,
+      "capabilities": true,
+      "consumerFixturesSha256": {
+        "boxes-retention.ts": "225c5d42ff36ffa2ee49ce213816546f73bacb691e646857e8588bd8149360c0",
+        "boxes-code.worker.ts": "f876f01e98358a955a9214c2f6b375f60598a461450b88a052d505531920f87a"
+      }
+    },
+    "minuteiScope": "The prior successful actual Minutei fixture run targets this exact unchanged runtime archive; consumer commit and fixture hashes are retained. Remote application/authentication/model and history delivery remain unverified.",
+    "format": "bun run format:check passed after formatting the maintained evidence records."
+  },
+  "remoteCollection": {
+    "corpus": {
+      "measuredAt": 1792092500536,
+      "profile": "minutei",
+      "targetWorker": "cirro-sandbox-prod-rs7wexxow56rmsoz",
+      "sandboxId": "reclaim-08cc9064-f163-43ef-9693-a45eaff508e2",
+      "previewOrigins": [
+        "https://boxes-reclaim-12b11bad-25f8-4d7f-9b1d-399959c2db28.manoel-carvalhoneto.workers.dev",
+        "https://boxes-reclaim-replacement-12b11bad-25f8-4d7f-9b1d-399959c2db28.manoel-carvalhoneto.workers.dev"
+      ],
+      "consumerBundleSha256": "584b8c19fe2ceb9dd5b0837f64436f6fcfe640d77e01e09a23f3bf0cb3c99c46",
+      "first": {
+        "phase": "processes",
+        "status": "pending",
+        "removed": 1,
+        "blocking": []
+      },
+      "resumed": [
+        {
+          "phase": "inputs",
+          "status": "pending",
+          "removed": 0,
+          "blocking": []
+        },
+        {
+          "phase": "schedules",
+          "status": "pending",
+          "removed": 0,
+          "blocking": []
+        },
+        {
+          "phase": "objects",
+          "status": "pending",
+          "removed": 0,
+          "blocking": []
+        },
+        {
+          "phase": "objects",
+          "status": "pending",
+          "removed": 432,
+          "blocking": []
+        },
+        {
+          "phase": "objects",
+          "status": "pending",
+          "removed": 432,
+          "blocking": []
+        },
+        {
+          "phase": "objects",
+          "status": "pending",
+          "removed": 143,
+          "blocking": []
+        },
+        {
+          "phase": "complete",
+          "status": "complete",
+          "removed": 0,
+          "blocking": []
+        }
+      ],
+      "recreateDenied": 409,
+      "nonManagementGrantDenied": 403,
+      "status": "complete",
+      "kind": "existing"
+    },
+    "freshSmoke": {
+      "measuredAt": 1792093909925,
+      "profile": "minutei",
+      "targetWorker": "cirro-sandbox-prod-rs7wexxow56rmsoz",
+      "sandboxId": "reclaim-ebfb5005-ee7e-48e7-9b54-7cdd6c593a64",
+      "previewOrigins": [
+        "https://boxes-reclaim-ebfb5005-ee7e-48e7-9b54-7cdd6c593a64.manoel-carvalhoneto.workers.dev",
+        "https://boxes-reclaim-replacement-ebfb5005-ee7e-48e7-9b54-7cdd6c593a64.manoel-carvalhoneto.workers.dev"
+      ],
+      "consumerBundleSha256": "584b8c19fe2ceb9dd5b0837f64436f6fcfe640d77e01e09a23f3bf0cb3c99c46",
+      "first": {
+        "phase": "processes",
+        "status": "pending",
+        "removed": 1,
+        "blocking": []
+      },
+      "resumed": [
+        {
+          "phase": "inputs",
+          "status": "pending",
+          "removed": 0,
+          "blocking": []
+        },
+        {
+          "phase": "schedules",
+          "status": "pending",
+          "removed": 0,
+          "blocking": []
+        },
+        {
+          "phase": "schedules",
+          "status": "pending",
+          "removed": 1,
+          "blocking": []
+        },
+        {
+          "phase": "objects",
+          "status": "pending",
+          "removed": 0,
+          "blocking": []
+        },
+        {
+          "phase": "objects",
+          "status": "pending",
+          "removed": 10,
+          "blocking": []
+        },
+        {
+          "phase": "complete",
+          "status": "complete",
+          "removed": 0,
+          "blocking": []
+        }
+      ],
+      "recreateDenied": 409,
+      "nonManagementGrantDenied": 403,
+      "status": "complete",
+      "kind": "fixture",
+      "files": 8,
+      "liveDenied": 409,
+      "readonlyDenied": 403,
+      "readDenied": 404
+    },
+    "acknowledgedCorpusDeletionTargets": 1008,
+    "largestObservedCorpusBatch": 432,
+    "requestedBulkLimit": 1000,
+    "pagination": "Actual R2 pages were smaller than the requested maximum. The collection resumed from the first remaining page and completed; no proof requires an exact-size native page.",
+    "transport": "The local public SDK calls an authenticated Alchemy edge preview whose compiled public SDK calls the real BOXES service binding. The replacement preview uses newly minted management-only authority. No bucket binding or administrator credential enters either consumer."
+  },
+  "remoteCompatibility": [
+    {
+      "measuredAt": 1792093640487,
+      "profile": "minutei",
+      "targetWorker": "cirro-sandbox-prod-rs7wexxow56rmsoz",
+      "previewOrigin": "https://boxes-binding-b19174fb-2ed3-434e-b426-134df6be0b57.manoel-carvalhoneto.workers.dev",
+      "replacementPreviewOrigin": "https://boxes-replacement-b19174fb-2ed3-434e-b426-134df6be0b57.manoel-carvalhoneto.workers.dev",
+      "consumerBundleSha256": "8524b26824f57957aeff6b2d1deca9a130cca7d3e574cff03ef55ae6a4981cb6",
+      "sdkVersion": "0.9.0",
+      "sdkModulesSha256": {
+        "../../src/sdk": "18cd31b540c4ffe40ce9a231ac9e64e47530e7ee7d0fc8950d681beaa38f7fd3",
+        "../../src/sdk-rpc": "8fa8e7a4f3a4ae26a6984aed1d2b7a93b265eb54cc5317f0065ff5455f11c354",
+        "../../src/sdk-tanstack": "9379a2fab94319daba07c314e63e6b6824f3d9ab1a914d1366e05019bd474a2c",
+        "../../src/contracts": "297a6a573941e66c488b573117e7cd9d646a1ed58cb8c66151fabd0c29641bf7"
+      },
+      "proof": {
+        "measuredAt": 1792093619626,
+        "callback": {
+          "id": "rpc-callback",
+          "status": "exited",
+          "sourceHash": "75090090f42e508d6542184bce91b43c775c128d2ccfc04977bc226f5980cf7d",
+          "language": "typescript",
+          "startedAt": 1792093614463,
+          "finishedAt": 1792093616015,
+          "output": {
+            "stdout": "",
+            "stderr": "",
+            "result": {
+              "answer": 42,
+              "transport": "native RPC"
+            },
+            "exitCode": 0
+          }
+        },
+        "voidCallback": {
+          "id": "rpc-void",
+          "status": "exited",
+          "sourceHash": "0216a3fc5e53bcf477f59bda2cb4dc00f2f8f938fc8658ed498f019dcfbca5fa",
+          "language": "typescript",
+          "startedAt": 1792093616875,
+          "finishedAt": 1792093618499,
+          "output": {
+            "stdout": "",
+            "stderr": "",
+            "result": {
+              "wasUndefined": true,
+              "freshGlobals": true
+            },
+            "exitCode": 0
+          }
+        },
+        "file": {
+          "content": "bmF0aXZlIENsb3VkZmxhcmUgYmluZGluZw==",
+          "encoding": "base64",
+          "size": 25
+        },
+        "calls": [
+          {
+            "op": "host.call",
+            "name": "answer",
+            "input": {
+              "value": 21
+            }
+          },
+          {
+            "op": "host.call",
+            "name": "void"
+          }
+        ],
+        "managementDenied": 403,
+        "wrongSandboxDenied": 401
+      },
+      "persistent": {
+        "created": {
+          "phase": "create",
+          "value": {
+            "content": "cGVyc2lzdGVudCBuYXRpdmUgYmluZGluZw==",
+            "encoding": "base64",
+            "freshGlobals": true,
+            "label": "create"
+          },
+          "callbacks": ["create"],
+          "closedContextDenied": true,
+          "writeDenied": null,
+          "lowMemoryDenied": true,
+          "policyMemoryDenied": true,
+          "allowedAllocation": 6000000
+        },
+        "resumed": {
+          "phase": "resume",
+          "value": {
+            "content": "cGVyc2lzdGVudCBuYXRpdmUgYmluZGluZw==",
+            "encoding": "base64",
+            "freshGlobals": true,
+            "label": "resume"
+          },
+          "callbacks": ["resume"],
+          "closedContextDenied": true,
+          "writeDenied": true,
+          "lowMemoryDenied": true,
+          "policyMemoryDenied": true,
+          "allowedAllocation": 6000000
+        },
+        "previousReceiptRetained": true
+      }
+    },
+    {
+      "measuredAt": 1792093944956,
+      "profile": "minutei",
+      "targetWorker": "cirro-sandbox-prod-rs7wexxow56rmsoz",
+      "previewOrigin": "https://boxes-binding-0d87d8b0-fcd9-4e99-a75d-f9e50dd64b12.manoel-carvalhoneto.workers.dev",
+      "replacementPreviewOrigin": "https://boxes-replacement-0d87d8b0-fcd9-4e99-a75d-f9e50dd64b12.manoel-carvalhoneto.workers.dev",
+      "consumerBundleSha256": "1cbe81dbb9c90666c17bd5ed471f0cc52cbd7bab8548491979548a748f1b0b80",
+      "sdkVersion": "0.10.0",
+      "sdkModulesSha256": {
+        "../../src/sdk": "3c7f9e50cb0577db9e25b83304590818a62f128ac9508c0c8a86510bdd6e3661",
+        "../../src/sdk-rpc": "222a5c1b55d9b371094431f18ba36d42387d5ed4a366f8b9e170137b6abdc472",
+        "../../src/sdk-tanstack": "b33bd37590d1a41b94937ae9b56ad6040b546ee6d0b8ad850d5ded15b00e95ab",
+        "../../src/contracts": "9c71ab41cb9fe5e2252cde422a942cbfffdcf3848549883c31cb8b3c8de6adf1"
+      },
+      "proof": {
+        "measuredAt": 1792093887003,
+        "callback": {
+          "id": "rpc-callback",
+          "status": "exited",
+          "sourceHash": "75090090f42e508d6542184bce91b43c775c128d2ccfc04977bc226f5980cf7d",
+          "language": "typescript",
+          "startedAt": 1792093879578,
+          "finishedAt": 1792093881810,
+          "output": {
+            "stdout": "",
+            "stderr": "",
+            "result": {
+              "answer": 42,
+              "transport": "native RPC"
+            },
+            "exitCode": 0
+          }
+        },
+        "voidCallback": {
+          "id": "rpc-void",
+          "status": "exited",
+          "sourceHash": "0216a3fc5e53bcf477f59bda2cb4dc00f2f8f938fc8658ed498f019dcfbca5fa",
+          "language": "typescript",
+          "startedAt": 1792093883758,
+          "finishedAt": 1792093885319,
+          "output": {
+            "stdout": "",
+            "stderr": "",
+            "result": {
+              "wasUndefined": true,
+              "freshGlobals": true
+            },
+            "exitCode": 0
+          }
+        },
+        "file": {
+          "content": "bmF0aXZlIENsb3VkZmxhcmUgYmluZGluZw==",
+          "encoding": "base64",
+          "size": 25
+        },
+        "calls": [
+          {
+            "op": "host.call",
+            "name": "answer",
+            "input": {
+              "value": 21
+            }
+          },
+          {
+            "op": "host.call",
+            "name": "void"
+          }
+        ],
+        "managementDenied": 403,
+        "wrongSandboxDenied": 401
+      },
+      "persistent": {
+        "created": {
+          "phase": "create",
+          "value": {
+            "content": "cGVyc2lzdGVudCBuYXRpdmUgYmluZGluZw==",
+            "encoding": "base64",
+            "freshGlobals": true,
+            "label": "create"
+          },
+          "callbacks": ["create"],
+          "closedContextDenied": true,
+          "writeDenied": null,
+          "lowMemoryDenied": true,
+          "policyMemoryDenied": true,
+          "allowedAllocation": 6000000
+        },
+        "resumed": {
+          "phase": "resume",
+          "value": {
+            "content": "cGVyc2lzdGVudCBuYXRpdmUgYmluZGluZw==",
+            "encoding": "base64",
+            "freshGlobals": true,
+            "label": "resume"
+          },
+          "callbacks": ["resume"],
+          "closedContextDenied": true,
+          "writeDenied": true,
+          "lowMemoryDenied": true,
+          "policyMemoryDenied": true,
+          "allowedAllocation": 6000000
+        },
+        "previousReceiptRetained": true
+      }
+    }
+  ],
+  "attempts": {
+    "fixtureSetupFailure": {
+      "sandboxId": "reclaim-08cc9064-f163-43ef-9693-a45eaff508e2",
+      "status": 400,
+      "code": "EINVAL",
+      "stage": "cron.schedule after all 1005 file writes and the completed process",
+      "cause": "The fixture scheduled one hour ahead using a capability valid for 30 minutes. The API correctly refused the schedule.",
+      "correction": "The fixture now derives scheduledAt from the issued grant expiry and logs created/batch IDs. The original process ended; a native administrator read-grant request confirmed disposal before collection was resumed.",
+      "persistedStateReceipt": {
+        "state": "disposed"
+      },
+      "recovery": "The same disposed root was collected without restaging its 1005 files. The fresh eight-file case separately verifies the corrected schedule and all authority guards."
+    },
+    "rpcTransportFailure": {
+      "sdkVersion": "0.9.0",
+      "cause": "Bun TypeError ECONNRESET at the first edge-preview hostname. The exact underlying network cause is not established.",
+      "failedPreviewOrigin": "https://boxes-binding-72cc28ba-4cfb-41c8-8377-48cab30e217f.manoel-carvalhoneto.workers.dev/",
+      "mitigation": "Bun raw preview fetches and the native Effect FetchHttpClient.RequestInit now use keepalive:false, matching the pre-existing live probe. Requests are not replayed automatically.",
+      "cleanup": {
+        "measuredAt": 1792093621390,
+        "profile": "minutei",
+        "targetWorker": "cirro-sandbox-prod-rs7wexxow56rmsoz",
+        "sandboxId": "remote-binding-72cc28ba-4cfb-41c8-8377-48cab30e217f",
+        "previewOrigins": [
+          "https://boxes-reclaim-2e0f9d88-1e96-45db-8d58-d60903a0ebb1.manoel-carvalhoneto.workers.dev",
+          "https://boxes-reclaim-replacement-2e0f9d88-1e96-45db-8d58-d60903a0ebb1.manoel-carvalhoneto.workers.dev"
+        ],
+        "consumerBundleSha256": "584b8c19fe2ceb9dd5b0837f64436f6fcfe640d77e01e09a23f3bf0cb3c99c46",
+        "first": {
+          "phase": "inputs",
+          "status": "pending",
+          "removed": 0,
+          "blocking": []
+        },
+        "resumed": [
+          {
+            "phase": "schedules",
+            "status": "pending",
+            "removed": 0,
+            "blocking": []
+          },
+          {
+            "phase": "objects",
+            "status": "pending",
+            "removed": 0,
+            "blocking": []
+          },
+          {
+            "phase": "complete",
+            "status": "complete",
+            "removed": 0,
+            "blocking": []
+          }
+        ],
+        "recreateDenied": 409,
+        "nonManagementGrantDenied": 403,
+        "status": "complete",
+        "kind": "existing"
+      },
+      "repeat": "Fresh SDK 0.9.0 and 0.10.0 sandbox proofs passed with the final transport settings. These repetitions do not establish general transport reliability."
+    }
+  },
+  "references": {
+    "localCandidate": "docs/evidence/reclamation-local.json",
+    "bunTransport": "https://bun.sh/docs/runtime/networking/fetch",
+    "r2Contract": "https://developers.cloudflare.com/r2/api/workers/workers-api-reference/",
+    "earlierUnresolvedPreviewException": "docs/evidence/persistent-binding-production.json"
+  },
+  "sourceSha256": {
+    "tooling/reclamation-proof.ts": "5b4a45e33761f5b3b958e3ffb5ef9204ba04679c212dbde2921c1740b3fad436",
+    "tooling/preview-access.ts": "5a435d30e4d945edea4075cce839d423e9949bf7ac38a1c2286b4332b86a05ac",
+    "tooling/remote-binding-proof.ts": "462e3bb9b9149696870ae4f105a065abae7ee3e411cb225c740d564b4ad6cdcd",
+    "tests/fixtures/reclamation-binding-worker.ts": "7c12e9f30efda0996fbf502f1365aba92ff7b4cf090574e45823e3f9f4263951",
+    "tests/reclamation-binding.test.ts": "fd72f19515b1cbb8ac5a703268956b4298f3a3d5e5e40f55cb31a6e0a06988d5"
+  },
+  "delivery": {
+    "github": "No GitHub authentication or repository/package publication.",
+    "minutei": "Application source and installed dependencies remain unchanged. Native remote consumers use its installed SDK exports; the remote application itself was not deployed."
+  },
+  "limits": [
+    "The corrected fresh default 1005-file command was not rerun as one uninterrupted invocation; the initial staged corpus/recovery and corrected fresh eight-file proof are recorded separately.",
+    "Collection is explicit; automatic cleanup, live-block reclamation and a fence against late writes remain open.",
+    "Nonterminal orphaned inline receipts without recovery deadlines remain blocked pending lifecycle repair.",
+    "The current bulk writer uploads small files sequentially; preparing the real 1005-file corpus was slow. Production performance/cost has not been benchmarked.",
+    "The prior preview 1101 observation remains unresolved. Browser authentication, model quality, history Queue delivery, CI and publication remain separate gates.",
+    "Full AgentOS parity remains open."
+  ],
+  "archives": [
+    {
+      "file": "minutei-ai-boxes-0.10.0.tgz",
+      "bytes": 70476,
+      "sha256": "9254f111174aa6ffe44d88b0a0cb0c1d4147d6a65b8104f7c28da9b04630b8f8",
+      "entries": 16,
+      "configuredCredentialAbsent": true,
+      "licenseMatches": true
+    },
+    {
+      "file": "minutei-ai-boxes-runtime-0.10.0.tgz",
+      "bytes": 5519430,
+      "sha256": "29a1ba6a0d5cb34cc3e8e580ce8d83eb50db06e125a79f9a1fbb6dd58e4bff02",
+      "entries": 8,
+      "configuredCredentialAbsent": true,
+      "licenseMatches": true
+    }
+  ],
+  "packageProof": {
+    "version": "0.10.0",
+    "transport": "native Alchemy workerd service binding and Agent RPC; local R2 and Queue",
+    "proof": "SDK archive exports and consumer declarations; runtime archive; filesystem snapshot restore; hard-link metadata; RPC callbacks and cooperative disposal; persistent driver contexts and cancellation; scoped authority"
+  },
+  "archiveAudit": "Both delivery archives have expected paths, exact Apache-2.0 licenses, no env/node_modules entries and no exact configured control credential. This is not a general secret or dependency-license audit."
+}

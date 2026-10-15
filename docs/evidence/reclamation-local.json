@@ -1,5 +1,5 @@
 {
-  "status": "Local bounded disposed-sandbox reclamation candidate passed the complete native gate, exact archive binding proof and actual installed Minutei SDK 0.9.0 interoperability. Not deployed or published.",
+  "status": "Local validation of the reclamation runtime; this exact runtime was subsequently deployed and exercised through native Cloudflare bindings.",
   "baseCommit": "b7622b9",
   "version": "0.10.0",
   "candidateIdentity": "A new unpublished candidate with distinct archive hashes; the previously deployed 0.10.0 archive is not overwritten.",
@@ -100,7 +100,7 @@
   "nativeReference": "https://developers.cloudflare.com/r2/api/workers/workers-api-reference/",
   "nativeReferenceScope": "The installed binding contracts and native tests govern implementation. The provider reference confirms a 1000-key deletion maximum, partial list pages, conditional writes and strongly consistent deletes.",
   "delivery": {
-    "backend": "Not deployed; the existing production Worker still runs the previously recorded published-software candidate.",
+    "backend": "Deployed through native Alchemy with profile minutei; see reclamation-production.json for receipts and remote scope.",
     "publication": "No GitHub authentication or package/repository publication.",
     "minutei": "The installed client and actual application fixtures remain unchanged at the recorded commit. The new collection action is not exercised by the 0.9.0 consumer; its existing Code Mode/tenant flows are compatibility checks."
   },
@@ -112,5 +112,6 @@
     "The actual remote Minutei application/authentication/model path and history Queue consumption are not verified. The native consumer fixture intentionally has no history consumer.",
     "The earlier remote preview 1101 remains an unresolved observation in persistent-binding-production.json.",
     "Full AgentOS parity remains open in docs/parity.md."
-  ]
+  ],
+  "deliveryEvidence": "docs/evidence/reclamation-production.json"
 }

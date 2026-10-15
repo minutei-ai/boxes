@@ -16,6 +16,7 @@ Licensed under [Apache 2.0](LICENSE). Maintained by [Minutei AI](https://github.
 - Guest RPC for authorized filesystem operations, process inspection and HTTPS GET to explicitly authorized hosts.
 - Persistent execution IDs, code digests, completed or failed results, and paginated process summaries.
 - Conditional R2 publication: concurrent filesystem changes either commit together or report a conflict.
+- Explicit reclamation of disposed sandboxes in bounded R2 batches, with persisted progress and management-only authority.
 
 Boxes does not currently provide Linux compatibility, a complete POSIX shell, npm/pip installation, interactive terminals or reliable background processes. Python runs in a fresh RustPython Wasm instance with native instruction and memory limits. JavaScript uses QuickJS without Node modules; use `tools.call` for durable files. Python uses `await tools.call(...)`; synchronous filesystem imports and pip remain pending.
 

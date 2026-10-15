@@ -1,12 +1,13 @@
-import { Clock, Config, Crypto, Effect, Layer, Redacted, Schema } from "effect";
+import { Clock, Config, Crypto, Effect, Redacted, Schema } from "effect";
 import { join } from "node:path";
 import * as BunServices from "@effect/platform-bun/BunServices";
 import { FetchHttpClient } from "effect/http";
-import { Access, CloudflareApiLive, createEdgeSession } from "alchemy/Cloudflare";
+import { CloudflareApiLive, createEdgeSession } from "alchemy/Cloudflare";
 import { currentProfileName } from "alchemy/Auth/Profile";
 import { AuthProviders } from "alchemy/Auth/AuthProvider";
 import { layerNonInteractive } from "alchemy/Interaction";
 import { make } from "../dist/sdk/sdk.js";
+import { PublicPreviewAccess } from "./preview-access";
 import {
   RemoteBindingInput,
   VerifiedRemoteBindingProof,
@@ -16,33 +17,6 @@ import {
   VerifiedPersistentBindingProof,
 } from "../tests/fixtures/remote-persistent-binding";
 
-const PublicPreviewAccess = Layer.succeed(
-  Access.Access,
-  Access.Access.of({
-    getAccessHeaders: Effect.fn("remoteBindingProof.publicPreviewAccess")(function* (
-      domain: string,
-    ) {
-      const response = yield* Effect.promise((signal) =>
-        fetch(`https://${domain}`, { redirect: "manual", signal }),
-      ).pipe(
-        Effect.timeoutOrElse({
-          duration: 5000,
-          orElse: () =>
-            Effect.fail(
-              new Access.AccessError({ message: "Preview access verification timed out" }),
-            ),
-        }),
-      );
-      const body = response.body;
-      if (body !== null) yield* Effect.promise(() => body.cancel());
-      if ((response.status >= 300 && response.status < 400) || response.status >= 500)
-        return yield* new Access.AccessError({
-          message: "Preview access could not be verified without interactive authentication",
-        });
-      return {};
-    }),
-  }),
-);
 const Report = Schema.Struct({
   measuredAt: Schema.Int,
   profile: Schema.String,
@@ -172,6 +146,7 @@ const report = await Effect.runPromise(
       const response = yield* Effect.promise(() =>
         fetch(session.url, {
           method: "POST",
+          keepalive: false,
           headers: { ...session.headers, "content-type": "application/json" },
           body: Schema.encodeSync(Schema.fromJsonString(RemoteBindingInput))({
             sandboxId: id,
@@ -193,6 +168,7 @@ const report = await Effect.runPromise(
       const createdResponse = yield* Effect.promise(() =>
         fetch(new URL("/persistent", session.url), {
           method: "POST",
+          keepalive: false,
           headers: { ...session.headers, "content-type": "application/json" },
           body: Schema.encodeSync(Schema.fromJsonString(PersistentBindingInput))({
             phase: "create",
@@ -230,6 +206,7 @@ const report = await Effect.runPromise(
       const resumedResponse = yield* Effect.promise(() =>
         fetch(new URL("/persistent", replacement.url), {
           method: "POST",
+          keepalive: false,
           headers: { ...replacement.headers, "content-type": "application/json" },
           body: Schema.encodeSync(Schema.fromJsonString(PersistentBindingInput))({
             phase: "resume",
@@ -289,6 +266,7 @@ const report = await Effect.runPromise(
     Effect.provide(CloudflareApiLive()),
     Effect.provideService(AuthProviders, {}),
     Effect.provide([FetchHttpClient.layer, BunServices.layer, layerNonInteractive()]),
+    Effect.provideService(FetchHttpClient.RequestInit, { keepalive: false }),
   ),
 );
 console.log(Schema.encodeSync(Schema.fromJsonString(Report))(report));
