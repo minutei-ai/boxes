@@ -886,6 +886,7 @@ export const ShellPlan = Schema.Array(
     argv: Schema.Array(Schema.String).check(Schema.isMinLength(1)),
     gate: Schema.Literals(["always", "pipe", "success", "failure"]),
     pipe: Schema.Boolean,
+    negate: Schema.Boolean,
     input: Schema.NullOr(Schema.String),
     output: Schema.NullOr(Schema.String),
     append: Schema.Boolean,

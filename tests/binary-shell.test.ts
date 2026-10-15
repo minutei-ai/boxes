@@ -74,6 +74,18 @@ test("binary shell preserves cat, WASI pipes, redirections, failure output and d
             expected: Buffer.concat([input, input]),
           },
           { name: "exit", source: "probe failure > /tmp/exit", path: "/tmp/exit", expected: input },
+          {
+            name: "negated-exit",
+            source: "! probe failure > /tmp/negated-exit",
+            path: "/tmp/negated-exit",
+            expected: input,
+          },
+          {
+            name: "negated-pipe",
+            source: "! true | probe failure > /tmp/negated-pipe",
+            path: "/tmp/negated-pipe",
+            expected: input,
+          },
           { name: "trap", source: "probe trap > /tmp/trap", path: "/tmp/trap", expected: input },
         ];
         yield* Effect.forEach(cases, (item) =>
@@ -103,7 +115,7 @@ test("binary shell preserves cat, WASI pipes, redirections, failure output and d
                 .filter((event) => event.stream === "stderr")
                 .map((event) => Buffer.from(event.data, "base64")),
             );
-            if (item.name === "generated" || item.name === "exit")
+            if (["generated", "exit", "negated-exit", "negated-pipe"].includes(item.name))
               expect(stderr).toEqual(Buffer.from([255, 0, 128, 195, 40, 254]));
             if (item.name === "trap") {
               expect(stderr.subarray(0, 6)).toEqual(Buffer.from([255, 0, 128, 195, 40, 254]));

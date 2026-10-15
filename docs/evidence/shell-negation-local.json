@@ -1,0 +1,154 @@
+{
+  "scope": "Local Rust shell pipeline negation and quote/escape semantics; not full POSIX shell parity or remote proof",
+  "baselineSourceCommit": "669ac1d8b221845c13ac643fba5c21e4b6c01ea1",
+  "regression": {
+    "source": "! true",
+    "before": "exit 127 because exclamation mark was treated as a command name",
+    "after": "exit 1 with empty stdout/stderr, matching host sh"
+  },
+  "validation": {
+    "kernel": "29 tests passed; 0.26 seconds",
+    "focusedNative": "2 tests passed across 2 files; 104 assertions; 3.80 seconds, before additional WASI binary cases",
+    "check": "317 tests passed across 44 files; 3112 assertions; 194.08 seconds; build, SDK declarations, types, Clippy and Rust workspace tests passed",
+    "oracle": "26 valid conditional/negated/quoted workloads compared with host sh; additional native tests cover literal command names, literal redirection names, readonly denial and retained binary WASI output on exit 7",
+    "format": "passed"
+  },
+  "artifactsSha256": {
+    "dist/worker/index.js": "aeedcbf7e4a05ca0bf8643ca326e58b081e07a0f82b5e37c8c0a7d4282bdafb7",
+    "dist/worker/cirro_kernel_bg.wasm": "48d3ec2fb12606ddd2a548517ed6561a290e3bc018d94fffcf9abc89b1e576d8"
+  },
+  "benchmark": {
+    "measuredAt": "2026-10-15T04:12:04.714Z",
+    "environment": {
+      "runtime": "local workerd via native Alchemy",
+      "alchemy": "2.0.0-beta.83",
+      "production": false,
+      "platform": "linux",
+      "arch": "x64"
+    },
+    "artifactBytes": {
+      "javascript": 333213,
+      "kernelWasm": 1083384,
+      "wasiWasm": 1648542,
+      "pythonWasm": 10705553,
+      "guestWasm": 1120072,
+      "compilerWasm": 1943596
+    },
+    "measurements": {
+      "fullEightMiB": {
+        "count": 25,
+        "p50Ms": 155.86897500000123,
+        "p95Ms": 213.22978800000055,
+        "minMs": 106.5483349999995,
+        "maxMs": 258.6020179999996
+      },
+      "rangeFourKiB": {
+        "count": 25,
+        "p50Ms": 17.61618399999861,
+        "p95Ms": 22.109801999999036,
+        "minMs": 7.4641499999997905,
+        "maxMs": 23.13865000000078
+      },
+      "patchFourKiB": {
+        "count": 25,
+        "p50Ms": 25.19901200000095,
+        "p95Ms": 30.98868399999992,
+        "minMs": 16.41434499999741,
+        "maxMs": 31.109130000000732
+      },
+      "python": {
+        "count": 25,
+        "p50Ms": 101.95608600000014,
+        "p95Ms": 184.61492200000066,
+        "minMs": 53.11949800000002,
+        "maxMs": 185.75327600000128
+      },
+      "sequentialEightFiles": {
+        "count": 25,
+        "p50Ms": 84.44170799999984,
+        "p95Ms": 117.01343999999972,
+        "minMs": 70.78721300000007,
+        "maxMs": 120.44976300000008
+      },
+      "batchEightFiles": {
+        "count": 25,
+        "p50Ms": 46.60357000000022,
+        "p95Ms": 77.88323500000024,
+        "minMs": 39.386311000000205,
+        "maxMs": 90.16337699999985
+      },
+      "status": {
+        "count": 100,
+        "p50Ms": 3.2284060000001773,
+        "p95Ms": 4.486192000000074,
+        "minMs": 2.354819000000134,
+        "maxMs": 7.2808390000000145
+      },
+      "write256KiB": {
+        "count": 25,
+        "p50Ms": 11.415913000000046,
+        "p95Ms": 15.953014999999823,
+        "minMs": 9.087851999999884,
+        "maxMs": 26.89777200000003
+      },
+      "read256KiB": {
+        "count": 25,
+        "p50Ms": 6.535233999999946,
+        "p95Ms": 7.861527000000024,
+        "minMs": 6.027665999999954,
+        "maxMs": 8.025128999999879
+      },
+      "isolatedJavascript": {
+        "count": 25,
+        "p50Ms": 13.1352109999998,
+        "p95Ms": 18.669581999999536,
+        "minMs": 12.33346900000015,
+        "maxMs": 78.06921499999953
+      },
+      "detachedJavascript": {
+        "count": 25,
+        "p50Ms": 126.42547699999886,
+        "p95Ms": 144.02593400000023,
+        "minMs": 118.79731300000003,
+        "maxMs": 188.04549899999984
+      },
+      "wasiFileAndSync": {
+        "count": 25,
+        "p50Ms": 44.62199099999998,
+        "p95Ms": 68.49104499999885,
+        "minMs": 31.995198000000528,
+        "maxMs": 118.30152699999962
+      },
+      "shellPipeline": {
+        "count": 25,
+        "p50Ms": 14.147955000000366,
+        "p95Ms": 76.76832600000125,
+        "minMs": 13.626915000000736,
+        "maxMs": 92.3972730000005
+      }
+    },
+    "wasiPublication": {
+      "samples": 25,
+      "rootPublications": 25
+    },
+    "batchPublication": {
+      "filesPerSample": 8,
+      "samples": 25,
+      "sequentialPublications": 200,
+      "batchPublications": 25
+    },
+    "contentDeduplication": {
+      "singleFileWrites": 25,
+      "uniqueBlocks": 1,
+      "singleFileLogicalBytesWritten": 6553600,
+      "storedBlockBytes": 262144
+    }
+  },
+  "limitations": [
+    "Negation requires a nonempty pipeline. Bare exclamation marks and newline-separated prefix forms are explicitly rejected.",
+    "Parameter expansion, command substitution, compound syntax and job control remain open.",
+    "Pipelines use bounded sequential byte buffers rather than concurrent POSIX processes.",
+    "Benchmark is one local shared-host sample; no isolated performance improvement or production cost advantage established.",
+    "Remote CI, publication and deployment are not verified for this change."
+  ]
+}

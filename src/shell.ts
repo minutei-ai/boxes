@@ -416,7 +416,13 @@ export const shell = Effect.fn("shell.execute")(function* (
           cwd: nextCwd,
           stdout,
           stderr,
-          exitCode: outcome.exitCode,
+          exitCode: Match.value(command.negate && !command.pipe).pipe(
+            Match.when(true, () => {
+              if (outcome.exitCode === 0) return 1;
+              return 0;
+            }),
+            Match.orElse(() => outcome.exitCode),
+          ),
           pipe,
           pipelineSkipped: false,
         };

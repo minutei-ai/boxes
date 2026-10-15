@@ -6,6 +6,7 @@ pub struct Command {
     argv: Vec<String>,
     gate: String,
     pipe: bool,
+    negate: bool,
     input: Option<String>,
     output: Option<String>,
     append: bool,
@@ -14,7 +15,15 @@ pub struct Command {
 #[derive(Debug, PartialEq, Eq)]
 enum Token {
     Word(String),
+    Bang,
     Operator(String),
+}
+
+fn word_token(word: String, quoted: bool) -> Token {
+    if word == "!" && !quoted {
+        return Token::Bang;
+    }
+    Token::Word(word)
 }
 
 fn tokenize(source: &str) -> Result<Vec<Token>, String> {
@@ -24,21 +33,25 @@ fn tokenize(source: &str) -> Result<Vec<Token>, String> {
     let mut tokens = Vec::new();
     let mut word = String::new();
     let mut active = false;
+    let mut quoted = false;
     let mut quote = None;
     let mut escaped = false;
     let mut chars = source.chars().peekable();
     while let Some(c) = chars.next() {
         if escaped {
             if c != '\n' {
+                if quote == Some('"') && !matches!(c, '$' | '`' | '"' | '\\') {
+                    word.push('\\');
+                }
                 word.push(c);
+                active = true;
+                quoted = true;
             }
-            active = true;
             escaped = false;
             continue;
         }
         if c == '\\' && quote != Some('\'') {
             escaped = true;
-            active = true;
             continue;
         }
         if let Some(q) = quote {
@@ -52,10 +65,12 @@ fn tokenize(source: &str) -> Result<Vec<Token>, String> {
         if c == '\'' || c == '"' {
             quote = Some(c);
             active = true;
+            quoted = true;
         } else if c == '\n' || matches!(c, ';' | '|' | '&' | '<' | '>') {
             if active {
-                tokens.push(Token::Word(std::mem::take(&mut word)));
+                tokens.push(word_token(std::mem::take(&mut word), quoted));
                 active = false;
+                quoted = false;
             }
             let mut op = c.to_string();
             if matches!(c, '|' | '&' | '>') && chars.peek() == Some(&c) {
@@ -68,8 +83,9 @@ fn tokenize(source: &str) -> Result<Vec<Token>, String> {
             tokens.push(Token::Operator(op));
         } else if c.is_whitespace() {
             if active {
-                tokens.push(Token::Word(std::mem::take(&mut word)));
+                tokens.push(word_token(std::mem::take(&mut word), quoted));
                 active = false;
+                quoted = false;
             }
         } else if c == '#' && !active {
             for next in chars.by_ref() {
@@ -89,7 +105,7 @@ fn tokenize(source: &str) -> Result<Vec<Token>, String> {
         return Err("EINVAL: unterminated shell quote or escape".into());
     }
     if active {
-        tokens.push(Token::Word(word));
+        tokens.push(word_token(word, quoted));
     }
     Ok(tokens)
 }
@@ -101,17 +117,33 @@ pub fn parse(source: &str) -> Result<Vec<Command>, String> {
         argv: Vec::new(),
         gate: "always".into(),
         pipe: false,
+        negate: false,
         input: None,
         output: None,
         append: false,
     };
+    let mut prefix = false;
     let mut iter = tokens.into_iter();
     while let Some(token) = iter.next() {
         match token {
             Token::Word(word) => current.argv.push(word),
+            Token::Bang
+                if current.argv.is_empty()
+                    && current.input.is_none()
+                    && current.output.is_none() =>
+            {
+                if current.gate == "pipe" {
+                    return Err("EINVAL: negation must begin the pipeline".into());
+                }
+                current.negate = !current.negate;
+                prefix = true;
+            }
+            Token::Bang => current.argv.push("!".into()),
             Token::Operator(op) if matches!(op.as_str(), "<" | ">" | ">>") => {
-                let Some(Token::Word(path)) = iter.next() else {
-                    return Err("EINVAL: redirect requires a path".into());
+                let path = match iter.next() {
+                    Some(Token::Word(path)) => path,
+                    Some(Token::Bang) => "!".into(),
+                    _ => return Err("EINVAL: redirect requires a path".into()),
                 };
                 if op == "<" {
                     if current.input.is_some() {
@@ -128,12 +160,16 @@ pub fn parse(source: &str) -> Result<Vec<Command>, String> {
             }
             Token::Operator(op) => {
                 if current.argv.is_empty() {
+                    if prefix {
+                        return Err("ENOTSUP: negation requires a nonempty pipeline".into());
+                    }
                     if op == "\n" {
                         continue;
                     }
                     return Err("EINVAL: operator requires a command".into());
                 }
                 current.pipe = op == "|";
+                let negate = current.negate && current.pipe;
                 commands.push(current);
                 let gate = match op.as_str() {
                     "&&" => "success",
@@ -146,15 +182,19 @@ pub fn parse(source: &str) -> Result<Vec<Command>, String> {
                     argv: Vec::new(),
                     gate: gate.into(),
                     pipe: false,
+                    negate,
                     input: None,
                     output: None,
                     append: false,
                 };
+                prefix = false;
             }
         }
     }
     if !current.argv.is_empty() {
         commands.push(current);
+    } else if prefix {
+        return Err("ENOTSUP: negation requires a nonempty pipeline".into());
     } else if current.gate != "always" {
         return Err("EINVAL: trailing shell operator".into());
     }
@@ -176,6 +216,44 @@ mod tests {
         assert!(result[0].pipe);
         assert_eq!(result[1].output.as_deref(), Some("/tmp/x"));
         assert_eq!(result[2].gate, "success");
+        Ok(())
+    }
+
+    #[test]
+    fn negation_applies_to_the_whole_pipeline_and_resets_at_list_boundaries() -> Result<(), String>
+    {
+        let commands = parse("! false | true && ! ! echo yes; ! true || echo recovered")?;
+        assert_eq!(commands.len(), 5);
+        assert!(commands[0].negate);
+        assert!(commands[1].negate);
+        assert!(commands[0].pipe);
+        assert!(!commands[1].pipe);
+        assert_eq!(commands[2].gate, "success");
+        assert!(!commands[2].negate);
+        assert!(commands[3].negate);
+        assert!(!commands[4].negate);
+        assert_eq!(commands[4].gate, "failure");
+        for source in ["!", "! !", "!\ntrue", "true | ! false", "! | true"] {
+            assert!(parse(source).is_err(), "{source}");
+        }
+        Ok(())
+    }
+
+    #[test]
+    fn literal_bang_and_escaped_line_breaks_retain_shell_word_boundaries() -> Result<(), String> {
+        for source in ["'!' true", "\"!\" true", "\\! true", "!'' true"] {
+            let commands = parse(source)?;
+            assert_eq!(commands[0].argv, vec!["!", "true"]);
+            assert!(!commands[0].negate);
+        }
+        assert_eq!(parse("echo ! > !")?[0].output.as_deref(), Some("!"));
+        assert_eq!(parse("cat < !")?[0].input.as_deref(), Some("!"));
+        assert_eq!(parse("echo \"a\\qb\"")?[0].argv, vec!["echo", "a\\qb"]);
+        assert_eq!(
+            parse("echo before \\\n after")?[0].argv,
+            vec!["echo", "before", "after"]
+        );
+        assert!(parse("!\\\n false")?[0].negate);
         Ok(())
     }
 

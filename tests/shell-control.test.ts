@@ -37,6 +37,22 @@ test("conditional lists skip whole pipelines without executing redirected writes
         });
         const client = yield* make({ url, token: Redacted.make(grant.token) });
         const cases = [
+          "! true",
+          "! false",
+          "! ! true",
+          "! false | true",
+          "! true | false",
+          "! true | echo visible",
+          "! false && echo recovered",
+          "! true || echo failed",
+          "true || ! echo blocked | echo leaked; echo safe",
+          "false && ! echo blocked | echo leaked || echo safe",
+          "! false | true || echo last-status",
+          "! true | false && echo last-status",
+          "echo ! \\! '!' \"!\" !''",
+          'echo "a\\qb"',
+          "echo before \\\n after",
+          "!\\\n false",
           "false && echo blocked | echo leaked",
           "true || echo blocked | echo leaked",
           "false && echo blocked | echo leaked | echo third; echo safe",
@@ -68,6 +84,37 @@ test("conditional lists skip whole pipelines without executing redirected writes
             }),
           { concurrency: 1 },
         );
+        for (const [index, source] of ["'!' true", '\"!\" true', "\\! true"].entries()) {
+          const result = yield* client.action(id, {
+            op: "process.run",
+            id: `literal-${index}`,
+            language: "shell",
+            source,
+          });
+          expect(result.output?.exitCode).toBe(127);
+        }
+        const literalRedirect = yield* client.action(id, {
+          op: "process.run",
+          id: "literal-redirect",
+          language: "shell",
+          source: "cd /tmp; echo retained > !; cat < !",
+        });
+        expect(literalRedirect.output).toMatchObject({ exitCode: 0, stdout: "retained\n" });
+        const readonly = yield* admin.mintCapability(id, {
+          permissions: ["read", "execute"],
+          expiresInSeconds: 600,
+        });
+        const reader = yield* make({ url, token: Redacted.make(readonly.token) });
+        const denied = yield* reader.action(id, {
+          op: "process.run",
+          id: "negated-denial",
+          language: "shell",
+          source: "! echo denied > /tmp/negated-denied && echo permitted",
+        });
+        expect(denied.output).toMatchObject({ exitCode: 0, stdout: "permitted\n" });
+        expect(
+          yield* client.action(id, { op: "filesystem.exists", path: "/tmp/negated-denied" }),
+        ).toEqual({ exists: false });
         const redirected = yield* client.action(id, {
           op: "process.run",
           id: "redirected",
