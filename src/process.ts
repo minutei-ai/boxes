@@ -894,11 +894,9 @@ export const reconcile = Effect.fn("process.reconcile")(function* (env: Env) {
           const metadata = yield* Schema.decodeUnknownEffect(StoredRunMetadata)(
             object.customMetadata,
           );
-          if (
-            metadata.summary.status !== "queued" &&
-            metadata.summary.status !== "running" &&
-            metadata.summary.status !== "cancelling"
-          )
+          if (metadata.summary.status === "queued")
+            return Schema.encodeSync(ProcessDelivery)({ key: object.key, eTag: object.etag });
+          if (metadata.summary.status !== "running" && metadata.summary.status !== "cancelling")
             return null;
           const stored = yield* Effect.tryPromise({
             try: () => env.OBJECTS.get(object.key),

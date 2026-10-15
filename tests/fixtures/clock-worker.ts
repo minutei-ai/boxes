@@ -6,10 +6,34 @@ import { consume, handleRequest } from "../../src/index";
 export { Agent } from "../../src/index";
 import { ProcessDelivery, StoredRun } from "../../src/contracts";
 import { tick } from "../../src/cron";
+import { reconcile } from "../../src/process";
 import type { Env } from "../../src/resources";
 
 type TestEnv = Env & { SELF: Fetcher };
 export class Control extends WorkerEntrypoint<TestEnv> {
+  repair() {
+    const counts = { receiptReads: 0 };
+    const bindings = {
+      ...this.env,
+      OBJECTS: new Proxy(this.env.OBJECTS, {
+        get(target, property) {
+          if (property === "get")
+            return (...args: Parameters<Env["OBJECTS"]["get"]>) => {
+              counts.receiptReads += 1;
+              return target.get(...args);
+            };
+          const value = Reflect.get(target, property, target);
+          if (typeof value === "function") return value.bind(target);
+          return value;
+        },
+      }),
+    };
+    return Effect.runPromise(
+      reconcile(bindings).pipe(
+        Effect.map((result) => ({ ...result, receiptReads: counts.receiptReads })),
+      ),
+    );
+  }
   schedules(now: number) {
     const bindings = this.env;
     return Effect.runPromise(

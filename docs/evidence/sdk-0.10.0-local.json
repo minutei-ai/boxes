@@ -79,5 +79,35 @@
   "deliveryEvidence": "docs/evidence/inline-deadline-production.json",
   "localCandidateEvidence": "docs/evidence/inline-deadline-local.json",
   "previousDeliveryEvidence": "docs/evidence/batch-write-production.json",
-  "parity": "Experimental; remaining requirements in docs/parity.md stay open."
+  "parity": "Experimental; remaining requirements in docs/parity.md stay open.",
+  "nextCandidate": {
+    "evidence": "docs/evidence/process-repair-metadata-local.json",
+    "runtimeArtifactsSha256": {
+      "cirro_compiler_bg.wasm": "27d9b0022a634ed4eef47b6561ad38cafde3522c17e834afed1264440678bf2f",
+      "cirro_guest_bg.wasm": "b773b74626b08bd1083860081ccd2a3d0fdff80dcd97b5ec13ed7c6e2148ef22",
+      "cirro_kernel_bg.wasm": "3c80cd3b32fd8a5d2b63ea6292f19813552bda74a9f4249971355513c0658d29",
+      "cirro_python_bg.wasm": "8aa6aec5ab6fb0623637e2b6dda7318f4934e4736f4a97e45ca3312bf32e529c",
+      "cirro_wasi_bg.wasm": "c8a585cdffb370dcf67571547d3c2df1df2f279a9ff22d7050a5d13a5bf10784",
+      "index.js": "824204e2608f4fcf0fa9c8bef0f94642b1dedf79bf92c33b0f4df3e5a13449b5"
+    },
+    "archives": [
+      {
+        "file": "minutei-ai-boxes-0.10.0.tgz",
+        "bytes": 70931,
+        "sha256": "f93345c7d51e41ac1109e0fb534042a43d7bf98e0212098f414c125c75d32749",
+        "entries": 16,
+        "configuredCredentialAbsent": true,
+        "licenseMatches": true
+      },
+      {
+        "file": "minutei-ai-boxes-runtime-0.10.0.tgz",
+        "bytes": 5520923,
+        "sha256": "b811c5d067a470dc73b608bd5d9115d5b7f0eec8a0529bd847e8d284abdf382a",
+        "entries": 8,
+        "configuredCredentialAbsent": true,
+        "licenseMatches": true
+      }
+    ],
+    "status": "Local-only queued repair optimization; the deployment described above remains the inline-deadline release."
+  }
 }
