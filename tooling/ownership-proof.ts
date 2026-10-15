@@ -113,8 +113,12 @@ const checks = {
   symlinkOwnership: link.uid === 1000 && link.gid === 1001,
   readonlyDenied: denied.status === 403,
   exportedOwnership:
-    snapshot.source.filesystem.entries.find((entry) => entry.path === "/tmp/data")?.uid === 2000 &&
-    snapshot.source.filesystem.entries.find((entry) => entry.path === "/tmp/alias")?.uid === 1000,
+    snapshot.source.filesystem.entries
+      .filter((entry) => entry.type !== "hardlink")
+      .find((entry) => entry.path === "/tmp/data")?.uid === 2000 &&
+    snapshot.source.filesystem.entries
+      .filter((entry) => entry.type !== "hardlink")
+      .find((entry) => entry.path === "/tmp/alias")?.uid === 1000,
   disposal: disposed.status === 200,
 };
 console.log(

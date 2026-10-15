@@ -430,6 +430,49 @@ impl Node {
 }
 
 impl Kernel {
+    fn stat_resolved(&self, path: &str) -> Result<String, JsValue> {
+        let node = self
+            .state
+            .node(path)
+            .ok_or_else(|| fail("ENOENT: file does not exist"))?;
+        let metadata = self
+            .state
+            .metadata(path)
+            .ok_or_else(|| fail("EIO: missing metadata"))?;
+        serde_json::to_string(&Stat {
+            path,
+            kind: node.kind(),
+            size: node.size(),
+            mode: node.mode(),
+            inode: metadata.inode,
+            uid: metadata.uid,
+            gid: metadata.gid,
+            nlink: match node {
+                Node::Directory { .. } => {
+                    2 + self
+                        .state
+                        .entries()
+                        .filter(|(key, node)| {
+                            key.as_str() != "/"
+                                && parent(key) == path
+                                && matches!(node, Node::Directory { .. })
+                        })
+                        .count() as u64
+                }
+                _ => self
+                    .state
+                    .nodes
+                    .values()
+                    .filter(|id| **id == metadata.inode)
+                    .count() as u64,
+            },
+            atime_ns: metadata.atime_ns.to_string(),
+            mtime_ns: metadata.mtime_ns.to_string(),
+            ctime_ns: metadata.ctime_ns.to_string(),
+        })
+        .map_err(|_| fail("EIO: serialization failed"))
+    }
+
     fn walk(&self, path: &str, max_depth: usize, exclude: &str) -> Result<Vec<TreeEntry>, String> {
         if max_depth > MAX_DEPTH {
             return Err("EINVAL: recursive depth exceeds its limit".into());
@@ -721,9 +764,9 @@ impl Kernel {
             Some(_) => {}
             None => return Err("ENOENT: source does not exist".into()),
         }
-        self.package_writable(&source, false)?;
+        self.package_path_writable(&source, false)?;
         let destination = self.resolve(destination, false)?;
-        self.package_writable(&destination, false)?;
+        self.package_path_writable(&destination, false)?;
         self.writable_parent(&destination)?;
         if self.state.nodes.contains_key(&destination) {
             return Err("EEXIST: destination exists".into());
@@ -925,46 +968,14 @@ impl Kernel {
 
     pub fn stat(&self, path: &str, follow: bool) -> Result<String, JsValue> {
         let path = self.resolve(path, follow).map_err(|e| fail(&e))?;
-        let node = self
-            .state
-            .node(&path)
-            .ok_or_else(|| fail("ENOENT: file does not exist"))?;
-        let metadata = self
-            .state
-            .metadata(&path)
-            .ok_or_else(|| fail("EIO: missing metadata"))?;
-        serde_json::to_string(&Stat {
-            path: &path,
-            kind: node.kind(),
-            size: node.size(),
-            mode: node.mode(),
-            inode: metadata.inode,
-            uid: metadata.uid,
-            gid: metadata.gid,
-            nlink: match node {
-                Node::Directory { .. } => {
-                    2 + self
-                        .state
-                        .entries()
-                        .filter(|(key, node)| {
-                            key.as_str() != "/"
-                                && parent(key) == path
-                                && matches!(node, Node::Directory { .. })
-                        })
-                        .count() as u64
-                }
-                _ => self
-                    .state
-                    .nodes
-                    .values()
-                    .filter(|id| **id == metadata.inode)
-                    .count() as u64,
-            },
-            atime_ns: metadata.atime_ns.to_string(),
-            mtime_ns: metadata.mtime_ns.to_string(),
-            ctime_ns: metadata.ctime_ns.to_string(),
-        })
-        .map_err(|_| fail("EIO: serialization failed"))
+        self.stat_resolved(&path)
+    }
+
+    pub fn stat_inode(&self, inode: u64) -> Result<String, JsValue> {
+        let path = self
+            .inode_path(inode)
+            .ok_or_else(|| fail("ENOENT: inode does not exist"))?;
+        self.stat_resolved(&path)
     }
 
     pub fn chunks(&self, path: &str, for_write: bool) -> Result<String, JsValue> {
@@ -1096,6 +1107,14 @@ impl Kernel {
         )
         .map_err(|error| fail(&error))?;
         serde_json::to_string(&plan.uploads).map_err(|_| fail("EIO: serialization failed"))
+    }
+
+    pub fn inode_path(&self, inode: u64) -> Option<String> {
+        self.state
+            .nodes
+            .iter()
+            .find(|(_, id)| **id == inode)
+            .map(|(path, _)| path.clone())
     }
 
     pub fn node_count(&self) -> usize {

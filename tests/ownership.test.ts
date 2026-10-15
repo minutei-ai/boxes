@@ -152,12 +152,16 @@ test("ownership follows only selected symlinks, preserves file identity and surv
   const snapshot = Schema.decodeUnknownSync(FilesystemSnapshot)(
     await (await post(second, path, token, { op: "filesystem.export", maxBytes: 1048576 })).json(),
   );
-  expect(snapshot.source.filesystem.entries.find((entry) => entry.path === "/tmp/data")?.uid).toBe(
-    4294967295,
-  );
-  expect(snapshot.source.filesystem.entries.find((entry) => entry.path === "/tmp/alias")?.uid).toBe(
-    1000,
-  );
+  expect(
+    snapshot.source.filesystem.entries
+      .filter((entry) => entry.type !== "hardlink")
+      .find((entry) => entry.path === "/tmp/data")?.uid,
+  ).toBe(4294967295);
+  expect(
+    snapshot.source.filesystem.entries
+      .filter((entry) => entry.type !== "hardlink")
+      .find((entry) => entry.path === "/tmp/alias")?.uid,
+  ).toBe(1000);
   await second.dispose();
   await rm(directory, { recursive: true, force: true });
 });

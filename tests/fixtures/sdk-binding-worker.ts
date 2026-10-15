@@ -45,6 +45,7 @@ export const DriverAbortProof = Schema.Struct({
   writes: Schema.Array(Schema.String),
 });
 const RpcCase = Schema.Literals([
+  "hardlinks",
   "undefined",
   "disposal",
   "error",
@@ -387,6 +388,11 @@ export default {
             source:
               'export default async ({tools}) => tools.call({op:"host.call",name:"lookup",input:{}}).catch(error => error.code)',
           };
+          if (mode === "hardlinks") {
+            input.maxToolCalls = 8;
+            input.source =
+              'export default async ({tools}) => { await tools.call({op:"filesystem.writeFile",path:"/tmp/source",content:"old",encoding:"utf8"}); await tools.call({op:"filesystem.link",from:"/tmp/source",to:"/tmp/alias",follow:false}); await tools.call({op:"filesystem.writeFile",path:"/tmp/alias",content:"binding",encoding:"utf8"}); const a = await tools.call({op:"filesystem.stat",path:"/tmp/source",follow:true}); const b = await tools.call({op:"filesystem.stat",path:"/tmp/alias",follow:true}); const file = await tools.call({op:"filesystem.readFile",path:"/tmp/source"}); return {same:a.inode===b.inode,links:a.nlink,content:file.content,callback:await tools.call({op:"host.call",name:"lookup",input:{}})}; }';
+          }
           if (mode === "timeout") input.timeoutMs = 25;
           if (mode === "undefined")
             input.source =

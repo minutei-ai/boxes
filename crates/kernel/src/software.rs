@@ -344,6 +344,10 @@ impl Kernel {
         if self.snapshot_import {
             return Ok(());
         }
+        self.package_path_writable(path, subtree)
+    }
+
+    pub(crate) fn package_path_writable(&self, path: &str, subtree: bool) -> Result<(), String> {
         let projections = self.state.packages.iter().flat_map(|package| {
             package.manifest.provides.iter().flat_map(|provides| {
                 provides

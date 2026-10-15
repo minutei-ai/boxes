@@ -74,6 +74,7 @@ const resolvePath = Effect.fn("wasi.resolvePath")(function* (
   kernel: Kernel,
   path: string,
   base: string,
+  follow = false,
 ) {
   const parent = path.slice(0, path.lastIndexOf("/"));
   const directory = yield* kernelCall(() => kernel.realpath(parent || "/"));
@@ -82,13 +83,17 @@ const resolvePath = Effect.fn("wasi.resolvePath")(function* (
     Match.when("/", () => leaf),
     Match.orElse(() => directory + leaf),
   );
-  if (base !== "/" && resolved !== base && !resolved.startsWith(base + "/"))
+  const canonical = yield* Effect.gen(function* () {
+    if (follow) return yield* kernelCall(() => kernel.realpath(resolved));
+    return resolved;
+  });
+  if (base !== "/" && canonical !== base && !canonical.startsWith(base + "/"))
     return yield* new Fault({
       code: "ENOTCAPABLE",
       status: 403,
       message: "WASI path escapes its directory descriptor",
     });
-  return resolved;
+  return canonical;
 });
 
 export const wasi = Effect.fn("wasi.execute")(function* (
@@ -271,7 +276,7 @@ export const wasi = Effect.fn("wasi.execute")(function* (
         state.dirty = true;
         return Buffer.alloc(0);
       }
-      if (guest.has_file(path)) return Buffer.alloc(0);
+      if (guest.has_file(BigInt(found.inode))) return Buffer.alloc(0);
       if (found.size + guest.buffered_bytes() > 16_777_216)
         return yield* new Fault({
           code: "ENOMEM",
@@ -916,15 +921,19 @@ export const wasi = Effect.fn("wasi.execute")(function* (
                 Effect.gen(function* () {
                   if (input.write) yield* requirePermission(capability, "write");
                   else yield* requirePermission(capability, "read");
+                  const metadata = Buffer.from(guest.file_metadata(input.fd));
                   if (input.path === null)
                     return {
-                      data: Buffer.from(guest.file_metadata(input.fd)),
+                      data: metadata,
                       path: "/",
                       directory: false,
                       value: 0n,
                     };
                   const path = input.path;
-                  const stat = yield* kernelCall(() => kernel.stat(path, true)).pipe(
+                  const stat = yield* kernelCall(() => {
+                    if (metadata[16] === 4) return kernel.stat_inode(metadata.readBigUInt64LE(8));
+                    return kernel.stat(path, true);
+                  }).pipe(
                     Effect.flatMap(Schema.decodeUnknownEffect(Schema.fromJsonString(FileStat))),
                   );
                   return {
@@ -1017,8 +1026,38 @@ export const wasi = Effect.fn("wasi.execute")(function* (
                       message: "WASI unlink_file cannot remove a directory",
                     });
                   yield* kernelCall(() => kernel.remove(path, false));
+                  const remaining = yield* kernelCall(() => kernel.inode_path(BigInt(stat.inode)));
+                  const retained = yield* Effect.gen(function* () {
+                    if (remaining !== undefined)
+                      return yield* kernelCall(() => kernel.stat_inode(BigInt(stat.inode))).pipe(
+                        Effect.flatMap(Schema.decodeUnknownEffect(Schema.fromJsonString(FileStat))),
+                      );
+                    return { ...stat, nlink: 0, ctimeNs: timestamp.toString() };
+                  });
+                  yield* Effect.try({
+                    try: () => guest.refresh_file(statBytes(retained), remaining),
+                    catch: (cause) => new WasmFailure({ cause }),
+                  });
                   state.dirty = true;
                   return { data: Buffer.alloc(0), path, directory: input.directory, value: 0n };
+                }),
+              ),
+              Match.when({ kind: "link" }, (input) =>
+                Effect.gen(function* () {
+                  yield* requirePermission(capability, "write");
+                  const from = yield* resolvePath(kernel, input.from, input.fromBase, input.follow);
+                  const to = yield* resolvePath(kernel, input.to, input.toBase);
+                  yield* kernelCall(() => kernel.link(from, to, input.follow));
+                  const stat = yield* kernelCall(() => kernel.stat(to, false)).pipe(
+                    Effect.flatMap(Schema.decodeUnknownEffect(Schema.fromJsonString(FileStat))),
+                  );
+                  const remaining = yield* kernelCall(() => kernel.inode_path(BigInt(stat.inode)));
+                  yield* Effect.try({
+                    try: () => guest.refresh_file(statBytes(stat), remaining),
+                    catch: (cause) => new WasmFailure({ cause }),
+                  });
+                  state.dirty = true;
+                  return { data: Buffer.alloc(0), path: to, directory: false, value: 0n };
                 }),
               ),
               Match.when({ kind: "rename" }, (input) =>
@@ -1026,7 +1065,39 @@ export const wasi = Effect.fn("wasi.execute")(function* (
                   yield* requirePermission(capability, "write");
                   const from = yield* resolvePath(kernel, input.from, input.fromBase);
                   const to = yield* resolvePath(kernel, input.to, input.toBase);
+                  const source = yield* kernelCall(() => kernel.stat(from, false)).pipe(
+                    Effect.flatMap(Schema.decodeUnknownEffect(Schema.fromJsonString(FileStat))),
+                  );
+                  const target = yield* kernelCall(() => kernel.stat(to, false)).pipe(
+                    Effect.flatMap(Schema.decodeUnknownEffect(Schema.fromJsonString(FileStat))),
+                    Effect.catchTag("Fault", (fault) => {
+                      if (fault.code === "ENOENT") return Effect.succeed(null);
+                      return Effect.fail(fault);
+                    }),
+                  );
                   yield* kernelCall(() => kernel.rename(from, to));
+                  if (target?.inode === source.inode)
+                    return { data: Buffer.from(to), path: from, directory: false, value: 1n };
+                  if (target !== null) {
+                    const remaining = yield* kernelCall(() =>
+                      kernel.inode_path(BigInt(target.inode)),
+                    );
+                    const retained = yield* Effect.gen(function* () {
+                      if (remaining !== undefined)
+                        return yield* kernelCall(() =>
+                          kernel.stat_inode(BigInt(target.inode)),
+                        ).pipe(
+                          Effect.flatMap(
+                            Schema.decodeUnknownEffect(Schema.fromJsonString(FileStat)),
+                          ),
+                        );
+                      return { ...target, nlink: 0, ctimeNs: timestamp.toString() };
+                    });
+                    yield* Effect.try({
+                      try: () => guest.refresh_file(statBytes(retained), remaining),
+                      catch: (cause) => new WasmFailure({ cause }),
+                    });
+                  }
                   state.dirty = true;
                   return { data: Buffer.from(to), path: from, directory: false, value: 0n };
                 }),
@@ -1226,6 +1297,18 @@ export const wasi = Effect.fn("wasi.execute")(function* (
                 guest.respond(0, value.data, value.path, value.directory, value.value, metadata),
               catch: (cause) => new WasmFailure({ cause }),
             });
+            if (step.kind === "rename" && value.value === 0n) {
+              const renamed = yield* kernelCall(() =>
+                kernel.stat(Buffer.from(value.data).toString("utf8"), false),
+              ).pipe(Effect.flatMap(Schema.decodeUnknownEffect(Schema.fromJsonString(FileStat))));
+              if (renamed.kind !== "directory") {
+                const remaining = yield* kernelCall(() => kernel.inode_path(BigInt(renamed.inode)));
+                yield* Effect.try({
+                  try: () => guest.refresh_file(statBytes(renamed), remaining),
+                  catch: (cause) => new WasmFailure({ cause }),
+                });
+              }
+            }
           } else {
             if (response.failure._tag !== "Fault") return yield* response.failure;
             if (response.failure.code === "CONFLICT") return yield* response.failure;

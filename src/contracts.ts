@@ -63,6 +63,7 @@ export const FilesystemSnapshot = Schema.Struct({
     filesystem: Schema.Struct({
       entries: Schema.Array(
         Schema.Union([
+          Schema.Struct({ path: Path, type: Schema.Literal("hardlink"), target: Path }),
           Schema.Struct({ ...SnapshotMetadata, type: Schema.Literal("directory") }),
           Schema.Struct({ ...SnapshotMetadata, type: Schema.Literal("symlink"), target: Path }),
           Schema.Struct({
@@ -138,6 +139,12 @@ export const FilesystemAction = Schema.Union([
   Schema.Struct({ op: Schema.Literal("filesystem.exists"), path: Path }),
   Schema.Struct({ op: Schema.Literal("filesystem.mkdir"), path: Path, recursive: Schema.Boolean }),
   Schema.Struct({ op: Schema.Literal("filesystem.readdir"), path: Path }),
+  Schema.Struct({
+    op: Schema.Literal("filesystem.link"),
+    from: Path,
+    to: Path,
+    follow: Schema.Boolean,
+  }),
   Schema.Struct({ op: Schema.Literal("filesystem.move"), from: Path, to: Path }),
   Schema.Struct({ op: Schema.Literal("filesystem.remove"), path: Path, recursive: Schema.Boolean }),
   Schema.Struct({ op: Schema.Literal("filesystem.symlink"), path: Path, target: Path }),
@@ -660,6 +667,14 @@ export const WasmStep = Schema.Union([
     directory: Schema.Boolean,
   }),
   Schema.Struct({
+    kind: Schema.Literal("link"),
+    from: Path,
+    fromBase: Path,
+    to: Path,
+    toBase: Path,
+    follow: Schema.Boolean,
+  }),
+  Schema.Struct({
     kind: Schema.Literal("rename"),
     from: Path,
     fromBase: Path,
@@ -855,27 +870,6 @@ export const PackageInstallation = PackagePreparation.mapFields((fields) =>
   Struct.pick(fields, ["installed", "blocks"]),
 );
 
-export const GuestResponse = Schema.Union([
-  FilesystemSnapshot,
-  LiveOutputPage,
-  ProcessOutputPage,
-  PackagePreparation.fields.installed,
-  SoftwareCatalog,
-  BatchReadResults,
-  BatchWriteResults,
-  DirectoryTree,
-  CanonicalPath,
-  FileContent,
-  FileStat,
-  DirectoryEntries,
-  Success,
-  NetworkResult,
-  Exists,
-  Link,
-  RunRecord,
-  RunSummary,
-  ProcessPage,
-]);
 export const ErrorResponse = Schema.Struct({ error: Schema.String, message: Schema.String });
 export const AgentReply = Schema.Union([
   Schema.Struct({ ok: Schema.Literal(true), record: RunRecord }),
@@ -955,6 +949,7 @@ export const ActionResponses = {
   "filesystem.exists": Exists,
   "filesystem.mkdir": Success,
   "filesystem.readdir": DirectoryEntries,
+  "filesystem.link": Success,
   "filesystem.move": Success,
   "filesystem.remove": Success,
   "filesystem.symlink": Success,

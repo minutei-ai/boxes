@@ -177,6 +177,13 @@ enum Request {
         base: String,
         directory: bool,
     },
+    Link {
+        from: String,
+        from_base: String,
+        to: String,
+        to_base: String,
+        follow: bool,
+    },
     Rename {
         from: String,
         from_base: String,
@@ -2594,6 +2601,24 @@ fn dispatch(caller: &mut Caller<'_, State>, name: &str, args: &[u64]) -> Result<
                 }
             }
         }
+        "path_link" => {
+            if a[1] & !1 != 0 {
+                return Err(Failure::Errno(28));
+            }
+            let (from, from_base) = directory_path(caller, a[0] as u32, a[2], a[3], 1 << 11)?;
+            let (to, to_base) = directory_path(caller, a[4] as u32, a[5], a[6], 1 << 12)?;
+            suspend(
+                caller,
+                Request::Link {
+                    from,
+                    from_base,
+                    to,
+                    to_base,
+                    follow: a[1] & 1 != 0,
+                },
+                Completion::Unit,
+            )?;
+        }
         "path_rename" => {
             let (from, from_base) = directory_path(caller, a[0] as u32, a[1], a[2], 1 << 16)?;
             let (to, to_base) = directory_path(caller, a[3] as u32, a[4], a[5], 1 << 17)?;
@@ -2997,6 +3022,7 @@ fn linker(engine: &Engine) -> Result<Linker<State>, String> {
     bind!("wasi_snapshot_preview1","path_remove_directory",a:i32,b:i32,c:i32);
     bind!("wasi_snapshot_preview1","path_unlink_file",a:i32,b:i32,c:i32);
     bind!("wasi_snapshot_preview1","path_readlink",a:i32,b:i32,c:i32,d:i32,e:i32,f:i32);
+    bind!("wasi_snapshot_preview1","path_link",a:i32,b:i32,c:i32,d:i32,e:i32,f:i32,g:i32);
     bind!("wasi_snapshot_preview1","path_rename",a:i32,b:i32,c:i32,d:i32,e:i32,f:i32);
     bind!("wasi_snapshot_preview1","path_symlink",a:i32,b:i32,c:i32,d:i32,e:i32);
     bind!("wasi_snapshot_preview1","fd_readdir",a:i32,b:i32,c:i32,d:i64,e:i32);
@@ -4006,7 +4032,7 @@ impl WasmGuest {
                     .buffers
                     .iter()
                     .filter_map(Weak::upgrade)
-                    .find(|file| file.borrow().path.as_deref() == Some(path));
+                    .find(|file| file.borrow().metadata[8..16] == metadata[8..16]);
                 let used: usize = table
                     .borrow()
                     .buffers
@@ -4019,9 +4045,11 @@ impl WasmGuest {
                         .map_err(|error| JsValue::from_str(&error.to_string()));
                 }
                 let buffer = if let Some(buffer) = shared {
-                    if action.flags & 0x200 != 0 {
+                    {
                         let mut file = buffer.borrow_mut();
-                        file.bytes = data.to_vec();
+                        if action.flags & 0x200 != 0 {
+                            file.bytes = data.to_vec();
+                        }
                         file.metadata = metadata;
                     }
                     buffer
@@ -4322,7 +4350,33 @@ impl WasmGuest {
         self.store.data().stderr.borrow().clone()
     }
 
-    pub fn has_file(&self, path: &str) -> bool {
+    pub fn refresh_file(&mut self, metadata: &[u8], path: Option<String>) -> Result<(), JsValue> {
+        let metadata: [u8; 76] = metadata
+            .try_into()
+            .map_err(|_| JsValue::from_str("Invalid inode metadata"))?;
+        let linked = metadata[24..32] != [0; 8];
+        if path.is_some() != linked {
+            return Err(JsValue::from_str("Invalid inode path lifetime"));
+        }
+        for file in self
+            .store
+            .data()
+            .processes
+            .borrow()
+            .buffers
+            .iter()
+            .filter_map(Weak::upgrade)
+        {
+            let mut file = file.borrow_mut();
+            if file.metadata[8..16] == metadata[8..16] {
+                file.path = path.clone();
+                file.metadata = metadata;
+            }
+        }
+        Ok(())
+    }
+
+    pub fn has_file(&self, inode: u64) -> bool {
         self.store
             .data()
             .processes
@@ -4330,7 +4384,7 @@ impl WasmGuest {
             .buffers
             .iter()
             .filter_map(Weak::upgrade)
-            .any(|file| file.borrow().path.as_deref() == Some(path))
+            .any(|file| file.borrow().metadata[8..16] == inode.to_le_bytes())
     }
     pub fn buffered_bytes(&self) -> usize {
         buffered_bytes(self.store.data())
@@ -4689,7 +4743,7 @@ impl WasmGuest {
                         .buffers
                         .iter()
                         .filter_map(Weak::upgrade)
-                        .filter(|file| file.borrow().path.as_deref() != Some(path))
+                        .filter(|file| file.borrow().metadata[8..16] != metadata[8..16])
                         .map(|file| file.borrow().bytes.len())
                         .sum();
                     if state.descriptors.len() >= MAX_FILES
@@ -4706,7 +4760,7 @@ impl WasmGuest {
                             let cache = state
                                 .files
                                 .iter()
-                                .find(|(_, file)| file.borrow().path.as_deref() == Some(path))
+                                .find(|(_, file)| file.borrow().metadata[8..16] == metadata[8..16])
                                 .map(|(cache, _)| *cache)
                                 .or_else(|| {
                                     (0..MAX_FILES as u32)
@@ -4719,11 +4773,13 @@ impl WasmGuest {
                                 .buffers
                                 .iter()
                                 .filter_map(Weak::upgrade)
-                                .find(|file| file.borrow().path.as_deref() == Some(path));
+                                .find(|file| file.borrow().metadata[8..16] == metadata[8..16]);
                             let buffer = if let Some(buffer) = shared {
-                                if truncate {
+                                {
                                     let mut file = buffer.borrow_mut();
-                                    file.bytes = data.to_vec();
+                                    if truncate {
+                                        file.bytes = data.to_vec();
+                                    }
                                     file.metadata = descriptor.metadata;
                                 }
                                 buffer
@@ -4944,7 +5000,7 @@ impl WasmGuest {
                 Completion::Rename => {
                     let to = std::str::from_utf8(data)
                         .map_err(|error| JsValue::from_str(&error.to_string()))?;
-                    if path != to {
+                    if path != to && value == 0 {
                         let state = self.store.data_mut();
                         detach(state, to);
                         for file in state

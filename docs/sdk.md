@@ -48,6 +48,10 @@ There are no automatic retries, polling loops or local copies of process state. 
 
 `filesystem.utimes` sets both timestamps exactly. SDK inputs use `bigint` values for `atimeNs` and `mtimeNs`; JSON clients send canonical unsigned decimal strings within uint64. `follow: false` updates a symlink itself and `follow: true` updates its target. The operation requires `write`, keeps inode identity and bytes unchanged, and sets ctime from the server clock.
 
+`filesystem.link` creates a hard link with `{ from, to, follow }` and requires `write`. Both names share file bytes, ownership, mode, timestamps and inode identity. `follow` selects whether to link a symlink itself or its target; directories and immutable package paths cannot be hard-linked. Removing a name leaves the other aliases intact.
+
+Snapshots export one concrete file or symlink per inode and represent additional names as `{ type: "hardlink", path, target }`. Targets must name concrete file or symlink entries in the same snapshot. Import allocates new inode identities while preserving alias relationships. Readers must support this additional snapshot entry variant.
+
 `filesystem.restore` accepts the snapshot returned by `filesystem.export` and requires both `write` and `manage`. It replaces the entire root in one conditional publication, preserving sandbox identity, policy and credentials. Files, symlinks, modes and ownership are restored; inode identities are newly allocated and timestamps come from the server clock. Software catalog registrations are cleared because they are outside the filesystem snapshot. Existing process receipts remain readable; an old execution checkpoint fails before resuming against a changed filesystem generation.
 
 ```ts

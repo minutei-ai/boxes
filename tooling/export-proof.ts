@@ -73,7 +73,7 @@ const checks = {
   setup: written.status === 200 && mode.status === 200 && linked.status === 200,
   exported: response.status === 200,
   binary: file?.type === "file" && file.content === binary && file.encoding === "base64",
-  metadata: file?.mode === "0640" && file.uid === 0 && file.gid === 0,
+  metadata: file?.type === "file" && file.mode === "0640" && file.uid === 0 && file.gid === 0,
   symlink: link?.type === "symlink" && link.target === "missing",
   root: snapshot.source.filesystem.entries[0]?.path === "/",
   exactLimit: exact.status === 200,

@@ -5,7 +5,7 @@ import {
   Capability,
   Policy,
   CapturedStdio,
-  GuestResponse,
+  ActionResponses,
   Program,
   ScriptProgram,
   ErrorResponse,
@@ -188,9 +188,9 @@ export const execute = Effect.fn("execution.run")(function* (
         }
         const response = yield* guestAction(env, capability, step.action).pipe(Effect.result);
         if (response._tag === "Success") {
-          const value = Schema.encodeUnknownSync(Schema.fromJsonString(GuestResponse))(
-            response.success,
-          );
+          const value = Schema.encodeUnknownSync(
+            Schema.fromJsonString(ActionResponses[step.action.op]),
+          )(response.success);
           yield* Effect.try({
             try: () => guest.respond(value, false),
             catch: (cause) => new InterpreterFailure({ cause }),

@@ -36,6 +36,22 @@ export const importSnapshot = Effect.fn("filesystem.importSnapshot")(function* (
           status: 400,
           message: "Snapshot parent must be a directory entry",
         });
+      if (entry.type === "hardlink") {
+        const target = yield* kernelCall(() => kernel.canonical(entry.target, "/"));
+        const original = byPath.get(entry.target);
+        if (
+          target !== entry.target ||
+          !entry.target.startsWith("/") ||
+          original === undefined ||
+          (original.type !== "file" && original.type !== "symlink")
+        )
+          return yield* new Fault({
+            code: "EINVAL",
+            status: 400,
+            message: "Hard links require a canonical concrete file or symlink target",
+          });
+        return { entry, mode: undefined, data: undefined };
+      }
       const mode = Number.parseInt(entry.mode, 8);
       if (mode > 0o777 || (entry.type === "symlink" && mode !== 0o777))
         return yield* new Fault({
@@ -79,10 +95,17 @@ export const importSnapshot = Effect.fn("filesystem.importSnapshot")(function* (
     if (entry.type === "symlink") return kernelCall(() => kernel.symlink(entry.target, entry.path));
     return Effect.void;
   });
+  yield* Effect.forEach(ordered, ({ entry }) => {
+    if (entry.type === "hardlink")
+      return kernelCall(() => kernel.link(entry.target, entry.path, false));
+    return Effect.void;
+  });
   yield* Effect.forEach(ordered.toReversed(), ({ entry, mode }) =>
     Effect.gen(function* () {
+      if (entry.type === "hardlink") return;
       yield* kernelCall(() => kernel.chown(entry.path, entry.uid, entry.gid, false));
-      if (entry.type !== "symlink") yield* kernelCall(() => kernel.chmod(entry.path, mode));
+      if (entry.type !== "symlink" && mode !== undefined)
+        yield* kernelCall(() => kernel.chmod(entry.path, mode));
     }),
   );
   yield* kernelCall(() => kernel.finish_snapshot_root());

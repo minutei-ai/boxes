@@ -26,6 +26,17 @@ const probe = async (mode: string) => {
   return Schema.decodeUnknownSync(RpcProbe)(await response.json());
 };
 
+test("native RPC binding and guest filesystem tools preserve shared inode identity", async () => {
+  const result = await probe("hardlinks");
+  expect(result.calls).toBe(1);
+  expect(result.record?.output?.result).toEqual({
+    same: true,
+    links: 2,
+    content: "YmluZGluZw==",
+    callback: "callback",
+  });
+});
+
 test("RPC callbacks preserve declared tool errors and enforce response byte bounds", async () => {
   const failure = await probe("error");
   expect(failure.calls).toBe(1);

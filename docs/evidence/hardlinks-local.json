@@ -1,0 +1,141 @@
+{
+  "scope": "Local hard-link API, snapshot and WASI descriptor implementation; not a release or production proof",
+  "validation": {
+    "check": "315 tests passed across 43 files; 3058 assertions; 183.46 seconds",
+    "nativeFocused": "10 tests passed across 3 files; 67 assertions; 6.47 seconds",
+    "format": "passed"
+  },
+  "artifactsSha256": {
+    "dist/worker/index.js": "7194a5af1c61aef0c97b85afeb9412d934e23150c0680950232bc3ccfd24aadf",
+    "dist/worker/cirro_kernel_bg.wasm": "53ce136491fe9cc990d4802b54c1ffc7cb7e0c66829a897d8185bb507155a786",
+    "dist/worker/cirro_wasi_bg.wasm": "a128d4d89a7403b1217b42fa1ff96771836432a0992cba07522d8846c5c6829d"
+  },
+  "performanceAssessment": "Single local sample on a shared host. No controlled baseline for this change, production latency, maximum-scale bound or cost advantage is established. Prior inode-graph performance gates remain open.",
+  "benchmark": {
+    "measuredAt": "2026-10-15T03:31:10.165Z",
+    "environment": {
+      "runtime": "local workerd via native Alchemy",
+      "alchemy": "2.0.0-beta.83",
+      "production": false,
+      "platform": "linux",
+      "arch": "x64"
+    },
+    "artifactBytes": {
+      "javascript": 331486,
+      "kernelWasm": 1069234,
+      "wasiWasm": 1648542,
+      "pythonWasm": 10705553,
+      "guestWasm": 1120072,
+      "compilerWasm": 1943596
+    },
+    "measurements": {
+      "fullEightMiB": {
+        "count": 25,
+        "p50Ms": 100.17417399999977,
+        "p95Ms": 124.50634100000025,
+        "minMs": 93.53101600000082,
+        "maxMs": 152.58624599999894
+      },
+      "rangeFourKiB": {
+        "count": 25,
+        "p50Ms": 4.886442000000898,
+        "p95Ms": 5.8820120000000315,
+        "minMs": 4.637846999999965,
+        "maxMs": 8.184331999998903
+      },
+      "patchFourKiB": {
+        "count": 25,
+        "p50Ms": 16.34222199999931,
+        "p95Ms": 17.986912000000302,
+        "minMs": 15.16098299999976,
+        "maxMs": 20.754555999999866
+      },
+      "python": {
+        "count": 25,
+        "p50Ms": 54.50161300000036,
+        "p95Ms": 72.14050900000075,
+        "minMs": 48.026096999999936,
+        "maxMs": 182.58412099999987
+      },
+      "sequentialEightFiles": {
+        "count": 25,
+        "p50Ms": 71.14464099999987,
+        "p95Ms": 84.60143299999982,
+        "minMs": 65.17783400000008,
+        "maxMs": 86.08471100000042
+      },
+      "batchEightFiles": {
+        "count": 25,
+        "p50Ms": 40.84623399999964,
+        "p95Ms": 56.26931400000012,
+        "minMs": 37.83554000000004,
+        "maxMs": 60.158206000000064
+      },
+      "status": {
+        "count": 100,
+        "p50Ms": 2.760161000000153,
+        "p95Ms": 4.331922000000077,
+        "minMs": 2.381934000000001,
+        "maxMs": 6.074172999999973
+      },
+      "write256KiB": {
+        "count": 25,
+        "p50Ms": 10.442292999999836,
+        "p95Ms": 12.646681999999828,
+        "minMs": 8.858810000000176,
+        "maxMs": 27.071277999999893
+      },
+      "read256KiB": {
+        "count": 25,
+        "p50Ms": 6.001726999999846,
+        "p95Ms": 7.586746999999832,
+        "minMs": 5.661243999999897,
+        "maxMs": 7.839093999999932
+      },
+      "isolatedJavascript": {
+        "count": 25,
+        "p50Ms": 12.826953000000685,
+        "p95Ms": 18.570889999999963,
+        "minMs": 11.943363000000318,
+        "maxMs": 62.370946
+      },
+      "detachedJavascript": {
+        "count": 25,
+        "p50Ms": 130.38958700000057,
+        "p95Ms": 137.17151300000023,
+        "minMs": 45.74678700000004,
+        "maxMs": 140.32944600000064
+      },
+      "wasiFileAndSync": {
+        "count": 25,
+        "p50Ms": 40.38767700000062,
+        "p95Ms": 66.93781499999932,
+        "minMs": 33.38659000000007,
+        "maxMs": 164.90552600000046
+      },
+      "shellPipeline": {
+        "count": 25,
+        "p50Ms": 14.050752000001012,
+        "p95Ms": 14.747107999999571,
+        "minMs": 13.669131000000561,
+        "maxMs": 18.56482700000015
+      }
+    },
+    "wasiPublication": {
+      "samples": 25,
+      "rootPublications": 25
+    },
+    "batchPublication": {
+      "filesPerSample": 8,
+      "samples": 25,
+      "sequentialPublications": 200,
+      "batchPublications": 25
+    },
+    "contentDeduplication": {
+      "singleFileWrites": 25,
+      "uniqueBlocks": 1,
+      "singleFileLogicalBytesWritten": 6553600,
+      "storedBlockBytes": 262144
+    }
+  }
+}

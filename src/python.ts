@@ -6,7 +6,7 @@ import {
   CapturedStdio,
   ErrorResponse,
   Fault,
-  GuestResponse,
+  ActionResponses,
   PythonProgram,
   RunResult,
   ToolStep,
@@ -88,9 +88,9 @@ export const python = Effect.fn("python.execute")(function* (
     budget.requests += 1;
     const response = yield* guestAction(env, capability, step.action).pipe(Effect.result);
     if (response._tag === "Success") {
-      const value = Schema.encodeUnknownSync(Schema.fromJsonString(GuestResponse))(
-        response.success,
-      );
+      const value = Schema.encodeUnknownSync(
+        Schema.fromJsonString(ActionResponses[step.action.op]),
+      )(response.success);
       yield* Effect.try({
         try: () => resource.respond(value, false),
         catch: (cause) => new PythonFailure({ cause }),
