@@ -1,5 +1,5 @@
 {
-  "status": "Last deployed HOME/disposal candidate passed native and remote gates. A newer native WASI allocation-fallback and child-scheduling candidate passed local native and archive consumer checks and remains undeployed; publication is deferred.",
+  "status": "Last deployed HOME/disposal candidate passed native and remote gates. A newer WASI fuel-quantum candidate passed local native tests, paired performance measurements and archive consumer checks and remains undeployed; publication is deferred.",
   "version": "0.10.0",
   "runtimeSourceCommit": "b34dd09e6fb5bfe905d6d56fdbcddf79bd0b7d32",
   "runtimeArtifactsSha256": {
@@ -101,5 +101,5 @@
     "productionAndModelProof": "The ordinary Worker passed the named authenticated HTTP probes. Remote native binding/Minutei/model validation, performance and cost remain separate gates."
   },
   "parity": "Experimental; remaining requirements in docs/parity.md stay open.",
-  "localCandidateEvidence": "docs/evidence/wasi-family-fairness-local.json"
+  "localCandidateEvidence": "docs/evidence/wasi-quantum-local.json"
 }
