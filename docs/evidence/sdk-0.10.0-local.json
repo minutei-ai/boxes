@@ -1,5 +1,5 @@
 {
-  "status": "Published experimental SDK/runtime 0.10.0; production backend and local Minutei conversation cleanup verified. Packaged installation instructions need the 0.10.1 documentation patch.",
+  "status": "Published experimental SDK/runtime 0.10.0 retained as released; its old packaged installation link is corrected in 0.10.1.",
   "version": "0.10.0",
   "runtimeSourceCommit": "dd13d82aab673dc3253a74760ac2af79d1cd1272",
   "runtimeArtifactsSha256": {
@@ -81,5 +81,6 @@
   "localCandidateEvidence": "docs/evidence/process-repair-metadata-local.json",
   "previousDeliveryEvidence": "docs/evidence/inline-deadline-production.json",
   "parity": "Experimental; remaining requirements in docs/parity.md stay open.",
-  "releaseEvidence": "docs/evidence/sdk-0.10.0-release.json"
+  "releaseEvidence": "docs/evidence/sdk-0.10.0-release.json",
+  "supersededBy": "docs/evidence/sdk-0.10.1-local.json"
 }

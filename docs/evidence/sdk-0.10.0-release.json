@@ -1,5 +1,5 @@
 {
-  "status": "Published experimental SDK/runtime 0.10.0; production backend and local Minutei conversation cleanup verified. Packaged installation instructions need the 0.10.1 documentation patch.",
+  "status": "Published experimental SDK/runtime 0.10.0 retained as released; its old packaged installation link is corrected in 0.10.1.",
   "version": "0.10.0",
   "tagCommit": "15d92068d6ebc7c9fa6e657b5cdc39f8bc1b086d",
   "githubRelease": {
@@ -123,5 +123,6 @@
     "Actual authenticated Minutei application, production Minutei deployment/model/history delivery remain unverified. The native history Queue has no consumer in this local fixture.",
     "Explicit bounded reclamation confirms the current sweep; arbitrary-crash safety, global automatic collection and a fence against late writes remain parity gates.",
     "The 0.10.0 SDK archive includes an old 0.9.0 installation link. Existing published bytes remain intact; 0.10.1 corrects packaged documentation."
-  ]
+  ],
+  "supersededBy": "docs/evidence/sdk-0.10.1-local.json"
 }

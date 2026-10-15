@@ -1,5 +1,5 @@
 {
-  "status": "Local documentation patch candidate; not yet published.",
+  "status": "Published experimental SDK/runtime 0.10.1; actual Minutei consumer installed the exact public archives and passed native retention, Queue cancellation and physical collection proofs.",
   "version": "0.10.1",
   "baseCommit": "15d92068d6ebc7c9fa6e657b5cdc39f8bc1b086d",
   "correction": "Replace the stale 0.9.0 install command and pending-publication text embedded in the 0.10.0 SDK documentation. Existing release assets are retained.",
@@ -72,11 +72,119 @@
         "seconds": 22.84
       },
       "limit": "The exact socket close was not traced; pooled connection lifetime was a suspected cause. Local repetitions do not prove every host transport failure is eliminated."
-    }
+    },
+    "ci": {
+      "run": "https://github.com/minutei-ai/boxes/actions/runs/38818136838",
+      "conclusion": "success",
+      "nativeTests": {
+        "tests": 347,
+        "files": 63,
+        "assertions": 4766,
+        "seconds": 112.39,
+        "failures": 0
+      },
+      "packageProof": "All workflow steps passed, including exact SDK/runtime package proof."
+    },
+    "mainCI": {
+      "run": "https://github.com/minutei-ai/boxes/actions/runs/38818855006",
+      "conclusion": "success",
+      "sourceCommit": "a39ef9a263465fc01aeff86bd70283b0bff72a37"
+    },
+    "downloadedDraftArchives": "Both uploaded candidates were downloaded through the native GitHub CLI and passed their attached SHA256SUMS before publication.",
+    "minutei": {
+      "clientVersion": "0.10.1",
+      "runtimeVersion": "0.10.1",
+      "runtimeArchiveSha256": "83d949dbbcbd9e6f0038920ebbddb8c6143986f4720e566a7a8f4d1485fae244",
+      "consumerCommit": "cccd63326b4288023939acd04f05b5c2321f1b18",
+      "consumerBundleSha256": "15f383865ec42db9bbcabab8869aa653b0597efa712fdb9b6ad056ad33c1d2bc",
+      "transport": "native workerd Agent service binding; actual Minutei Code Mode and tenant SQLite; local R2, KV and Queue",
+      "retention": true,
+      "isolatedRegistry": true,
+      "capabilities": true,
+      "consumerFixturesSha256": {
+        "boxes-retention.ts": "ab69256069295b3e155a6e47ebc916e23f4ae760eb4a7ae7afebd9bbc37b050f",
+        "boxes-code.worker.ts": "c3d6f06ea5f5afe322076052267468c4702fe79aff596fa847d68bdc3045e5f4"
+      }
+    },
+    "installedArchives": [
+      {
+        "package": "boxes",
+        "version": "0.10.1",
+        "matchedFiles": 16,
+        "archiveSha256": "fc152d23729b7069276fc1eceab93e5d231acfc42d3a3c004f5fcfacaf80a8c6"
+      },
+      {
+        "package": "boxes-runtime",
+        "version": "0.10.1",
+        "matchedFiles": 8,
+        "archiveSha256": "83d949dbbcbd9e6f0038920ebbddb8c6143986f4720e566a7a8f4d1485fae244"
+      }
+    ],
+    "consumerTests": {
+      "files": 2,
+      "tests": 2,
+      "seconds": 6.78,
+      "result": "Passed with the installed matching 0.10.1 SDK/runtime through native local Workers; actor/tenant isolation, confirmed writes on failure, retained conversations, native Queue cancellation before entry, cleanup retry and physical collection."
+    },
+    "consumerTypecheck": "Nx web:typecheck and all 29 dependencies passed with 0.10.1; 39.7 seconds. Changed manifest/docs formatting passed."
   },
   "previousReleaseEvidence": "docs/evidence/sdk-0.10.0-release.json",
   "limits": [
-    "Patch CI, publication and Minutei 0.10.1 install are pending.",
-    "Runtime parity gates in docs/parity.md remain open."
-  ]
+    "Full parity gates in docs/parity.md remain open, including global automatic collection and late-write fencing.",
+    "Minutei production, authenticated browser, model quality and history Queue delivery are unverified. Its local native history Queue has no consumer.",
+    "The 0.10.1 correction retains existing 0.10.0 archives; no runtime code or deployment changed."
+  ],
+  "release": {
+    "assets": [
+      {
+        "apiUrl": "https://api.github.com/repos/minutei-ai/boxes/releases/assets/645359433",
+        "contentType": "application/x-gtar",
+        "createdAt": "2026-10-15T22:27:00Z",
+        "digest": "sha256:fc152d23729b7069276fc1eceab93e5d231acfc42d3a3c004f5fcfacaf80a8c6",
+        "downloadCount": 0,
+        "id": "RA_kwDOVHG00M4md2dJ",
+        "label": "",
+        "name": "minutei-ai-boxes-0.10.1.tgz",
+        "size": 70926,
+        "state": "uploaded",
+        "updatedAt": "2026-10-15T22:27:00Z",
+        "url": "https://github.com/minutei-ai/boxes/releases/download/sdk-v0.10.1/minutei-ai-boxes-0.10.1.tgz"
+      },
+      {
+        "apiUrl": "https://api.github.com/repos/minutei-ai/boxes/releases/assets/645359453",
+        "contentType": "application/x-gtar",
+        "createdAt": "2026-10-15T22:27:00Z",
+        "digest": "sha256:83d949dbbcbd9e6f0038920ebbddb8c6143986f4720e566a7a8f4d1485fae244",
+        "downloadCount": 0,
+        "id": "RA_kwDOVHG00M4md2dd",
+        "label": "",
+        "name": "minutei-ai-boxes-runtime-0.10.1.tgz",
+        "size": 5520923,
+        "state": "uploaded",
+        "updatedAt": "2026-10-15T22:27:00Z",
+        "url": "https://github.com/minutei-ai/boxes/releases/download/sdk-v0.10.1/minutei-ai-boxes-runtime-0.10.1.tgz"
+      },
+      {
+        "apiUrl": "https://api.github.com/repos/minutei-ai/boxes/releases/assets/645359455",
+        "contentType": "application/octet-stream",
+        "createdAt": "2026-10-15T22:27:00Z",
+        "digest": "sha256:7fe605ab9c818df3f22b7bc03b076da40a78157c71ed5d13f2e02d1a90893039",
+        "downloadCount": 0,
+        "id": "RA_kwDOVHG00M4md2df",
+        "label": "",
+        "name": "SHA256SUMS",
+        "size": 196,
+        "state": "uploaded",
+        "updatedAt": "2026-10-15T22:27:00Z",
+        "url": "https://github.com/minutei-ai/boxes/releases/download/sdk-v0.10.1/SHA256SUMS"
+      }
+    ],
+    "isDraft": false,
+    "isPrerelease": true,
+    "tagName": "sdk-v0.10.1",
+    "targetCommitish": "a39ef9a263465fc01aeff86bd70283b0bff72a37",
+    "url": "https://github.com/minutei-ai/boxes/releases/tag/sdk-v0.10.1"
+  },
+  "releaseCommit": "a39ef9a263465fc01aeff86bd70283b0bff72a37",
+  "minuteiDelivery": "Local commits 6ecd528 and cccd633 on feat/s3-native-agent-runtime; not pushed or deployed. Unrelated preexisting ML source-policy, format and boundary failures are recorded in sdk-0.10.0-release.json."
 }
