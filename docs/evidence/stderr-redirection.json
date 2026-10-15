@@ -1,0 +1,134 @@
+{
+  "runtimeSourceCommit": "1d182b2b3e1f5db314a304a5341c467ffb039702",
+  "scope": "Ordered stderr file redirections in the Rust shell and Effect publication path; full POSIX shell parity remains incomplete",
+  "runtimeArtifactsSha256": {
+    "index.js": "5033f88071bcdad305a607afaffec76d0a0cdac16621c331555c5571fcbed5d0",
+    "cirro_kernel_bg.wasm": "30654731e659d5a8df5e5c712bf52ff1da57f040e01b4ca5c1e27a1f02204aa9",
+    "cirro_wasi_bg.wasm": "a128d4d89a7403b1217b42fa1ff96771836432a0992cba07522d8846c5c6829d"
+  },
+  "baseline": "Native true 2> /tmp/empty failed before the change; Rust explicitly rejected descriptor 2 output redirection",
+  "validation": {
+    "check": "325 tests across 49 files; 3728 assertions; 193.10 seconds; build, SDK declarations, typecheck, Clippy and Rust workspace tests passed",
+    "format": "passed",
+    "nativeCases": [
+      "Binary overwrite and append preserve invalid UTF-8 and null bytes, separate stdout file bytes and last-pipeline exit status",
+      "Redirected streams are absent from retained replay, including both pages of stdout after a WASI trap",
+      "A later failed open or command lookup routes its diagnostic to the most recently opened stderr inode; failed earlier input never creates a later stderr target",
+      "Write-only execute/write grant appends to a mode-0200 file; readonly target prevents command execution",
+      "Unlinking the opened pathname retains stderr writes through a surviving hard link without recreating the old name",
+      "Oversized command diagnostics remain bounded even when stderr is redirected"
+    ],
+    "hostOracle": "31 shell redirection workloads compare stdout, exit status and resulting file bytes with host sh; Rust tests also verify quoting, descriptor spelling, order and invalid descriptors",
+    "binding": "Exact SDK/runtime archives passed public-export TypeScript consumer proof through native Alchemy workerd service binding and Agent RPC; the consumer explicitly verifies stderr overwrite/append file content and hidden stderr",
+    "publicArtifacts": "Both Apache-2.0 LICENSE files match source; no .env or node_modules entries; gitleaks found no secrets in the exact extracted archives"
+  },
+  "deployment": {
+    "provider": "native Alchemy",
+    "profile": "minutei",
+    "stage": "prod",
+    "result": "success",
+    "seconds": 251.6,
+    "workerKind": "ordinary Cloudflare Worker; no Worker Loader or Dynamic Workers",
+    "physicalResources": "Existing Worker, private R2 bucket and Queue retained",
+    "filesystemMigrationPages": 49,
+    "filesystemMigrationChanged": 0
+  },
+  "remoteBinaryShell": {
+    "target": "https://cirro-sandbox-prod-rs7wexxow56rmsoz.manoel-carvalhoneto.workers.dev",
+    "measuredAt": 1792045070722,
+    "checks": [
+      {
+        "name": "stderr",
+        "bytes": 6,
+        "exitCode": 7
+      },
+      {
+        "name": "stderr-append",
+        "bytes": 12,
+        "exitCode": 7
+      },
+      {
+        "name": "pipe",
+        "bytes": 70003,
+        "exitCode": 0
+      },
+      {
+        "name": "append",
+        "bytes": 140006,
+        "exitCode": 0
+      },
+      {
+        "name": "failure",
+        "bytes": 70003,
+        "exitCode": 7
+      },
+      {
+        "name": "trap",
+        "bytes": 70003,
+        "exitCode": 126
+      },
+      {
+        "name": "head-lines",
+        "bytes": 5,
+        "exitCode": 0
+      },
+      {
+        "name": "tail-lines",
+        "bytes": 4,
+        "exitCode": 0
+      },
+      {
+        "name": "head-bytes",
+        "bytes": 3,
+        "exitCode": 0
+      },
+      {
+        "name": "tail-bytes",
+        "bytes": 4,
+        "exitCode": 0
+      },
+      {
+        "name": "wc-bytes",
+        "bytes": 3,
+        "exitCode": 0
+      },
+      {
+        "name": "sort",
+        "bytes": 16,
+        "exitCode": 0
+      },
+      {
+        "name": "uniq",
+        "bytes": 13,
+        "exitCode": 0
+      },
+      {
+        "name": "grep",
+        "bytes": 5,
+        "exitCode": 0
+      }
+    ],
+    "disposal": true
+  },
+  "remoteCompiledSdk": {
+    "checks": 6,
+    "passed": true,
+    "transport": "Effect FetchHttpClient",
+    "target": "production"
+  },
+  "proofScriptSha256": "a1f75917f83b7adfc8fd85b01dbdf19d59b58437edde9e97e09190dcf6f74ee0",
+  "reproduction": [
+    "bun run check",
+    "bun run package:proof <sdk.tgz> <runtime.tgz>",
+    "CIRRO_URL=<authorized-worker-url> bun run shell:binary:proof",
+    "CIRRO_URL=<authorized-worker-url> bun run sdk:proof"
+  ],
+  "limitations": [
+    "The remote probes use authenticated HTTP. Service-binding/Agent RPC consumer proof remains local; Minutei remote binding/model behavior is unverified.",
+    "Descriptor duplication, heredocs, descriptors beyond stdin/stdout/stderr and original cross-stream interleaving remain unsupported.",
+    "Output streams are buffered and applied at command completion, stdout before stderr; exact guest file-write/stream-write ordering is not established.",
+    "No production performance or AgentOS cost advantage is claimed.",
+    "SDK/runtime 0.10.0 archive publication and current-source remote CI remain pending; the GitHub login keyring is locked.",
+    "The 62-check general backend proof belongs to prior runtime source 823882f; it was not rerun for this source."
+  ]
+}
