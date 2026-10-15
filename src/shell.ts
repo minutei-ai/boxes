@@ -20,6 +20,8 @@ import { wasi } from "./wasi";
 import type { OutputCapture } from "./output";
 import type { Env } from "./resources";
 
+const decodeBuiltin = Schema.decodeUnknownEffect(Schema.fromJsonString(ShellBuiltin));
+
 export const shell = Effect.fn("shell.execute")(function* (
   env: Env,
   capability: typeof Capability.Type,
@@ -140,8 +142,15 @@ export const shell = Effect.fn("shell.execute")(function* (
             onSome: (inode) => read(env, id, kernel, inode),
           });
           phase.prepared = true;
-          const builtin = yield* kernelCall(() => interpreter.commit(commandIndex)).pipe(
-            Effect.flatMap(Schema.decodeUnknownEffect(Schema.fromJsonString(ShellBuiltin))),
+          const builtin = yield* Match.value(
+            argv.length === 0 || [":", "export", "unset"].includes(name),
+          ).pipe(
+            Match.when(true, () =>
+              kernelCall(() => interpreter.commit(commandIndex)).pipe(
+                Effect.flatMap(decodeBuiltin),
+              ),
+            ),
+            Match.orElse(() => Effect.succeed(null)),
           );
           const external = yield* Effect.gen(function* () {
             if (builtin !== null || ["", "cd", "pwd", "echo", "true", "false"].includes(name))
