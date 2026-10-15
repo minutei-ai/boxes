@@ -1,0 +1,40 @@
+{
+  "scope": "Local native HOME tilde expansion in shell argument words and redirect targets; assignment and login-name expansion remain open.",
+  "specification": "https://pubs.opengroup.org/onlinepubs/9799919799/utilities/V3_chap02.html#tag_19_06_01",
+  "implementation": "Rust expands an initial unquoted bare tilde prefix from the current captured HOME without splitting, globbing, source reparse or host user lookup. Existing expanded byte limits apply before redirection opens. No persistence schema change.",
+  "artifactsSha256": {
+    "crates/kernel/src/shell.rs": "1a9875521c31d1d330cc65d042cb790838455bb2a4fd2c5451a4cc26591f4a34",
+    "tests/shell-parameters.test.ts": "b7b68df694cece205770995acbfdcc3eb41d8fe28c544e8cf59ed5b580a10562",
+    "dist/kernel/cirro_kernel_bg.wasm": "a9045d96a55c5e0ebd6bb33260ca040f8e3786844499413cd43e84d7621de621"
+  },
+  "validation": {
+    "build": "bun run build passed before native tests.",
+    "kernel": "cargo test -p cirro-kernel: 41 tests passed; new oracle covers ten words across five HOME values, including empty, whitespace, glob metacharacters, trailing slash and quoting.",
+    "oracle": "GNU bash 5.3.20 invoked as sh; exact stdout bytes and successful status compared. Unset HOME and login lookup rejected explicitly instead of consulting host records.",
+    "clippy": "cargo clippy --workspace --all-targets -- -D warnings passed.",
+    "nativeRegression": "Five native Alchemy workerd/R2/Queue shell suites passed: 730 assertions, 12.77 seconds.",
+    "finalNative": "Final shell-parameters suite passed after adding temporary-prefix, skipped login-lookup and unsupported-expansion cases: 50 assertions, 2.91 seconds.",
+    "coverage": [
+      "HOME captured across queued Worker replacement despite later config change",
+      "redirect write and read under a HOME containing spaces",
+      "read/execute grant cannot write through a tilde target",
+      "expanded byte quota and unsupported expansion reject before opening redirect files",
+      "quoted/escaped tilde stays literal",
+      "temporary command environment does not change argument expansion HOME",
+      "skipped conditional does not expand unsupported login name"
+    ],
+    "typecheck": "bun run typecheck passed."
+  },
+  "delivery": {
+    "local": true,
+    "remote": "Not deployed or remotely verified in this change. Previously deployed readonly runtime remains separate evidence.",
+    "github": "No GitHub action or publication.",
+    "minutei": "New tilde behavior not yet proved through actual Minutei binding."
+  },
+  "remaining": [
+    "Assignment tilde expansion",
+    "Login-name lookup",
+    "Other POSIX shell stages and full AgentOS parity",
+    "Production performance and cost comparison"
+  ]
+}

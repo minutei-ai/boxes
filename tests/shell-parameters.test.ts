@@ -25,7 +25,12 @@ test(
           const url = (yield* Effect.promise(() => first.ready)).toString();
           const admin = yield* make({ url, token: Redacted.make("cirro-local-test-credential") });
           const id = "parameters";
-          const variables = { VALUE: " a  b ", EMPTY: "", TARGET: "/tmp/with space" };
+          const variables = {
+            HOME: "/tmp/home with space",
+            VALUE: " a  b ",
+            EMPTY: "",
+            TARGET: "/tmp/with space",
+          };
           yield* admin.create({
             id,
             policy: {
@@ -43,6 +48,12 @@ test(
           const client = yield* make({ url, token: Redacted.make(grant.token) });
           const cases = [
             'echo "$VALUE"',
+            "echo ~ ~/file '~/file' ",
+            String.raw`echo \~ ~'' ~\/file ~/''file`,
+            "HOME='/tmp/*?[$VALUE]'; echo ~ ~/file",
+            "HOME=''; echo before ~ after",
+            "HOME=/temporary echo ~; echo ~",
+            "false && echo ~root; echo skipped",
             "echo '$VALUE'",
             String.raw`echo \$VALUE`,
             "echo pre${VALUE}post",
@@ -87,6 +98,46 @@ test(
                 stderr: run.output?.stderr,
                 exitCode: run.output?.exitCode,
               }).toEqual({ stdout, stderr, exitCode });
+            }),
+          );
+          const homeFile = yield* client.action(id, {
+            op: "process.run",
+            id: "home-file",
+            language: "shell",
+            source: 'mkdir -p "$HOME"; echo retained > ~/file; cat ~/file',
+          });
+          expect(homeFile.output?.stdout).toBe("retained\n");
+          expect(homeFile.output?.exitCode).toBe(0);
+          const deniedHome = yield* client.action(id, {
+            op: "process.run",
+            id: "home-quota",
+            language: "shell",
+            source: `echo ${"~ ".repeat(257)} > /tmp/home-never-opened`,
+            env: { HOME: "x".repeat(4096) },
+          });
+          expect(deniedHome.output?.exitCode).toBe(1);
+          expect(
+            (yield* client.action(id, {
+              op: "filesystem.exists",
+              path: "/tmp/home-never-opened",
+            })).exists,
+          ).toBe(false);
+          yield* Effect.forEach(["unset HOME; echo ~", "echo ~root/file"], (source, index) =>
+            Effect.gen(function* () {
+              const result = yield* client.action(id, {
+                op: "process.run",
+                id: `unsupported-home-${index}`,
+                language: "shell",
+                source: `${source} > /tmp/home-unsupported-${index}`,
+              });
+              expect(result.output?.exitCode).toBe(1);
+              expect(result.output?.stderr).toContain("ENOTSUP");
+              expect(
+                (yield* client.action(id, {
+                  op: "filesystem.exists",
+                  path: `/tmp/home-unsupported-${index}`,
+                })).exists,
+              ).toBe(false);
             }),
           );
           const emptyCommand = yield* client.action(id, {
@@ -169,8 +220,8 @@ test(
             op: "process.run",
             id: "denied",
             language: "shell",
-            source: 'echo denied > "$TARGET"',
-            env: { TARGET: "/tmp/denied" },
+            source: "echo denied > ~/denied",
+            env: { HOME: "/tmp" },
           });
           expect(denied.output?.exitCode).toBe(1);
           expect(
@@ -182,13 +233,13 @@ test(
               op: "process.run",
               id: "queued",
               language: "shell",
-              source: 'echo "$VALUE"',
+              source: 'echo "$VALUE" ~',
             },
           });
           yield* client.action(id, {
             op: "config.patch",
             policy: {},
-            environment: { VALUE: "next" },
+            environment: { VALUE: "next", HOME: "/changed" },
           });
           yield* Effect.promise(() => first.dispose());
           const next = yield* Effect.acquireRelease(
@@ -216,7 +267,7 @@ test(
           );
           expect(
             (yield* nextClient.action(id, { op: "process.get", id: "queued" })).output?.stdout,
-          ).toBe(" a  b \n");
+          ).toBe(" a  b  /tmp/home with space\n");
           const latest = yield* nextClient.action(id, {
             op: "process.run",
             id: "latest",

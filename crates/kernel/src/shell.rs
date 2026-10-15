@@ -288,14 +288,38 @@ pub fn expand(
     for word in words {
         let mut field = String::new();
         let mut active = false;
-        for part in &word.0 {
-            let value = match part {
+        for (index, part) in word.0.iter().enumerate() {
+            let mut value = match part {
                 Part::Literal { value, .. } => value.as_str(),
                 Part::Parameter { name, .. } if name == "?" => status_text.as_str(),
                 Part::Parameter { name, .. } => {
                     environment.get(name).map(String::as_str).unwrap_or("")
                 }
             };
+            if index == 0
+                && matches!(part, Part::Literal { quoted: false, .. })
+                && value.starts_with('~')
+                && (value.contains('/') || word.0.len() == 1)
+            {
+                let prefix_end = value.find('/').unwrap_or(value.len());
+                if prefix_end != 1 {
+                    return Err(
+                        "ENOTSUP: shell login-name tilde expansion is not implemented".into(),
+                    );
+                }
+                let home = environment
+                    .get("HOME")
+                    .ok_or("ENOTSUP: shell tilde expansion requires HOME")?;
+                bytes = bytes
+                    .checked_add(home.len())
+                    .ok_or("EFBIG: expanded shell byte quota exceeded")?;
+                if bytes > 1_048_576 {
+                    return Err("EFBIG: expanded shell byte quota exceeded".into());
+                }
+                field.push_str(home);
+                active = true;
+                value = &value[1..];
+            }
             if matches!(
                 part,
                 Part::Literal { quoted: false, .. } | Part::Parameter { quoted: false, .. }
@@ -1045,6 +1069,50 @@ mod tests {
                 assert!(shell.readonly.is_empty());
             }
         }
+    }
+
+    #[test]
+    fn home_tilde_expansion_matches_native_shell() -> Result<(), String> {
+        for home in [
+            "/tmp/home",
+            "/tmp/home with space",
+            "/tmp/*?$OTHER",
+            "",
+            "/",
+        ] {
+            let environment = BTreeMap::from([("HOME".into(), home.into())]);
+            for word in [
+                "~",
+                "~/file",
+                "~/",
+                "'~'",
+                r"\~",
+                "pre~",
+                "~''",
+                r"~\/file",
+                "~/''file",
+                r#"~/"$HOME""#,
+            ] {
+                let command = parse(&format!("echo {word}"))?.remove(0);
+                let actual = expand(&command.argv[1..], &environment, 0)?;
+                let oracle = std::process::Command::new("sh")
+                    .args(["-c", &format!("printf '%s\n' {word}")])
+                    .env("HOME", home)
+                    .output()
+                    .map_err(|error| error.to_string())?;
+                assert!(oracle.status.success(), "{word}");
+                assert_eq!(
+                    format!("{}\n", actual.join("\n")).as_bytes(),
+                    oracle.stdout,
+                    "word={word:?}, HOME={home:?}"
+                );
+            }
+        }
+        for word in ["~", "~/file", "~root/file"] {
+            let command = parse(&format!("echo {word}"))?.remove(0);
+            assert!(expand(&command.argv[1..], &BTreeMap::new(), 0).is_err());
+        }
+        Ok(())
     }
 
     #[test]
