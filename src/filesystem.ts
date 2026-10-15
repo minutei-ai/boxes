@@ -16,7 +16,16 @@ import {
   DirectoryTree,
   DirectoryExclusions,
 } from "./contracts";
-import { kernelCall, open, publish, read, write, applyWritePlan } from "./storage";
+import {
+  kernelCall,
+  open,
+  publish,
+  read,
+  write,
+  applyWritePlan,
+  stageWrite,
+  uploadBlocks,
+} from "./storage";
 import { importSnapshot } from "./snapshot";
 import type { Env } from "./resources";
 
@@ -215,6 +224,7 @@ export const filesystem = Effect.fn("filesystem.action")(function* (
               message: "Batch writes are limited to 16 MiB total content",
             });
           const beforeNodes = kernel.node_count();
+          const uploads = new Map<string, Uint8Array>();
           const results = yield* Effect.forEach(input.entries, (entry) =>
             Effect.gen(function* () {
               const result = yield* Effect.gen(function* () {
@@ -222,7 +232,8 @@ export const filesystem = Effect.fn("filesystem.action")(function* (
                 const target = yield* kernelCall(() => kernel.canonical(entry.path, "/"));
                 const parent = target.slice(0, target.lastIndexOf("/"));
                 if (parent.length > 0) yield* kernelCall(() => kernel.mkdir(parent, true));
-                yield* write(env, id, kernel, target, data);
+                const blocks = yield* stageWrite(kernel, target, data);
+                for (const [hash, bytes] of blocks) uploads.set(hash, bytes);
               }).pipe(Effect.result);
               if (result._tag === "Success") return { path: entry.path, success: true as const };
               if (result.failure._tag === "Fault")
@@ -235,6 +246,7 @@ export const filesystem = Effect.fn("filesystem.action")(function* (
               return yield* result.failure;
             }),
           );
+          yield* uploadBlocks(env, id, uploads);
           if (results.some((result) => result.success) || kernel.node_count() !== beforeNodes)
             yield* publish(env, id, session);
           return results satisfies typeof BatchWriteResults.Type;

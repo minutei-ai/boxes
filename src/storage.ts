@@ -264,13 +264,13 @@ export const applyWritePlan = Effect.fn("filesystem.applyWritePlan")(function* (
   return true;
 });
 
-export const write = Effect.fn("filesystem.write")(function* (
-  env: Env,
-  id: string,
+const WriteContent = Schema.Array(
+  Schema.Struct({ hash: ContentBlock.fields.hash, bytes: Schema.Uint8Array }),
+);
+const prepareContent = Effect.fn("filesystem.prepareContent")(function* (
   kernel: Kernel,
-  target: string | bigint,
   data: Uint8Array,
-) {
+): Effect.fn.Return<typeof WriteContent.Type, Fault | StorageFailure> {
   if (data.byteLength > 16_777_216)
     return yield* new Fault({ code: "EFBIG", status: 413, message: "Maximum file size is 16 MiB" });
   const now = yield* Clock.currentTimeNanos;
@@ -278,33 +278,79 @@ export const write = Effect.fn("filesystem.write")(function* (
   const blocks = Array.from({ length: Math.ceil(data.byteLength / 262_144) }, (_, index) =>
     data.subarray(index * 262_144, (index + 1) * 262_144),
   );
-  const hashes = yield* Effect.forEach(
+  return yield* Effect.forEach(
     blocks,
     (block) =>
       Effect.promise(async () => {
         const digest = await crypto.subtle.digest("SHA-256", Uint8Array.from(block));
-        return Buffer.from(digest).toString("hex");
+        return { hash: Buffer.from(digest).toString("hex"), bytes: block };
       }),
     { concurrency: 4 },
   );
-  const encoded = Schema.encodeSync(Schema.fromJsonString(Chunks))(hashes);
-  const needed = yield* kernelCall(() => {
-    if (typeof target === "bigint")
-      return kernel.prepare_inode_write(target, BigInt(data.byteLength), encoded);
-    return kernel.prepare_write(target, BigInt(data.byteLength), encoded);
-  }).pipe(Effect.flatMap(Schema.decodeUnknownEffect(Schema.fromJsonString(Chunks))));
+});
+const requiredBlocks = Effect.fn("filesystem.requiredBlocks")(function* (
+  content: typeof WriteContent.Type,
+  needed: typeof Chunks.Type,
+) {
+  const blocks = yield* Effect.forEach(needed, (hash) =>
+    Effect.gen(function* () {
+      const block = content.find((block) => block.hash === hash);
+      if (block === undefined)
+        return yield* new StorageFailure({ cause: "Kernel requested content outside the write" });
+      return [hash, block.bytes] as const;
+    }),
+  );
+  return new Map(blocks);
+});
+export const uploadBlocks = Effect.fn("filesystem.uploadBlocks")(function* (
+  env: Env,
+  id: string,
+  blocks: ReadonlyMap<typeof ContentBlock.Type.hash, Uint8Array>,
+) {
   yield* Effect.forEach(
-    needed,
-    (hash) =>
+    blocks,
+    ([hash, bytes]) =>
       Effect.tryPromise({
         try: () =>
-          env.OBJECTS.put(`sandboxes/${id}/blobs/${hash}`, blocks[hashes.indexOf(hash)], {
+          env.OBJECTS.put(`sandboxes/${id}/blobs/${hash}`, bytes, {
             onlyIf: { etagDoesNotMatch: "*" },
           }),
         catch: (cause) => new StorageFailure({ cause }),
       }),
     { concurrency: 4 },
   );
+});
+export const stageWrite = Effect.fn("filesystem.stageWrite")(function* (
+  kernel: Kernel,
+  target: string,
+  data: Uint8Array,
+) {
+  const content = yield* prepareContent(kernel, data);
+  const encoded = Schema.encodeSync(Schema.fromJsonString(Chunks))(
+    content.map((block) => block.hash),
+  );
+  const needed = yield* kernelCall(() =>
+    kernel.write(target, BigInt(data.byteLength), encoded),
+  ).pipe(Effect.flatMap(Schema.decodeUnknownEffect(Schema.fromJsonString(Chunks))));
+  return yield* requiredBlocks(content, needed);
+});
+export const write = Effect.fn("filesystem.write")(function* (
+  env: Env,
+  id: string,
+  kernel: Kernel,
+  target: string | bigint,
+  data: Uint8Array,
+) {
+  const content = yield* prepareContent(kernel, data);
+  const encoded = Schema.encodeSync(Schema.fromJsonString(Chunks))(
+    content.map((block) => block.hash),
+  );
+  const needed = yield* kernelCall(() => {
+    if (typeof target === "bigint")
+      return kernel.prepare_inode_write(target, BigInt(data.byteLength), encoded);
+    return kernel.prepare_write(target, BigInt(data.byteLength), encoded);
+  }).pipe(Effect.flatMap(Schema.decodeUnknownEffect(Schema.fromJsonString(Chunks))));
+  yield* uploadBlocks(env, id, yield* requiredBlocks(content, needed));
   yield* kernelCall(() => {
     if (typeof target === "bigint")
       return kernel.write_inode(target, BigInt(data.byteLength), encoded);

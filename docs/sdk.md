@@ -27,6 +27,8 @@ const readFile = Effect.gen(function* () {
 
 `makeBinding` acquires a native binding transport and captures the scoped redacted credential. It calls `binding.fetch` directly; the internal request URL supplies the API path and does not resolve a public host. Cloudflare Worker globals must be enabled in TypeScript through `@cloudflare/workers-types`. It exposes `create(input)`, `mintCapability(sandboxId, input)` and `action(sandboxId, action)`. Action results are inferred from their operation discriminator. The complete existing API, including process pagination, wait deadlines, stdin offsets, output cursors, snapshots and policy changes, uses its original contract. Explicitly unsupported server behavior remains unsupported.
 
+For related file updates, call `client.action(id, { op: "filesystem.writeFiles", entries })` once through the same binding. Supply at most 128 entries and 16 MiB of total decoded content. Entries execute in order, including repeated paths and hard links, with a result per file; inspect every `success` value. Successful entries publish together. A conflict rejects publication of the batch, so read the current state before deciding whether to retry. Immutable content blocks are deduplicated within the batch and uploaded with bounded concurrency before publication.
+
 At the existing Minutei Alchemy Stack, resolve the deployed Worker through its native resource reference:
 
 ```ts
