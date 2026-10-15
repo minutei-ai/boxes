@@ -1,5 +1,5 @@
 {
-  "measuredAt": "2026-10-14T01:37:00.039Z",
+  "measuredAt": "2026-10-15T06:02:27.033Z",
   "url": "https://cirro-sandbox-prod-rs7wexxow56rmsoz.manoel-carvalhoneto.workers.dev",
   "profile": "minutei",
   "client": {
@@ -10,7 +10,7 @@
   "runtime": "standard-worker-rust-quickjs-wasmi-rustpython",
   "parityComplete": false,
   "scope": "Implemented operations, native Python, isolation and resource limits",
-  "sandboxId": "proof-3db256bb-8501-4f05-95e3-f23d7571a801",
+  "sandboxId": "proof-19427ae1-9f0b-4a17-af42-7926739207fc",
   "checks": {
     "outputBlockBoundary": true,
     "outputBlockReconstruction": true,

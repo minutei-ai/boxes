@@ -1,0 +1,597 @@
+{
+  "measuredAt": "2026-10-15T06:02:27.033Z",
+  "runtimeSourceCommit": "823882fd7dd8b870154da2ddfbea1ada500cea1d",
+  "runtimeArtifactsSha256": {
+    "index.js": "88c60d18fe7dddc939acb8d441c8ca119b15e5d849d77d3469430459fb44000d",
+    "cirro_kernel_bg.wasm": "8626edf9d3b291ee1504b39f7df9ea9503f2db16c5f0fb2ba71aedc4c3d52803",
+    "cirro_wasi_bg.wasm": "a128d4d89a7403b1217b42fa1ff96771836432a0992cba07522d8846c5c6829d"
+  },
+  "deployment": {
+    "provider": "native Alchemy",
+    "profile": "minutei",
+    "stage": "prod",
+    "workerKind": "ordinary Cloudflare Worker; no Worker Loader or Dynamic Workers",
+    "target": "https://cirro-sandbox-prod-rs7wexxow56rmsoz.manoel-carvalhoneto.workers.dev",
+    "physicalResources": "Existing Worker, private R2 bucket and Queue identities retained",
+    "initialAttempt": {
+      "result": "Worker upload succeeded; filesystem migration HTTP observation timed out after 120 seconds; deployment action failed",
+      "effects": "Earlier conditional writes were not rolled back; later pages reread persisted roots and checkpoint references"
+    },
+    "pagedCutover": {
+      "sourceCommit": "0ccc857f2d241e8384e3991fbe921d0d6420e832",
+      "result": "success",
+      "deploymentSeconds": 360.2,
+      "filesystemPages": [
+        {
+          "page": 1,
+          "migrated": 0,
+          "hasMore": true
+        },
+        {
+          "page": 2,
+          "migrated": 9,
+          "hasMore": true
+        },
+        {
+          "page": 3,
+          "migrated": 25,
+          "hasMore": true
+        },
+        {
+          "page": 4,
+          "migrated": 24,
+          "hasMore": true
+        },
+        {
+          "page": 5,
+          "migrated": 0,
+          "hasMore": true
+        },
+        {
+          "page": 6,
+          "migrated": 0,
+          "hasMore": true
+        },
+        {
+          "page": 7,
+          "migrated": 0,
+          "hasMore": true
+        },
+        {
+          "page": 8,
+          "migrated": 0,
+          "hasMore": true
+        },
+        {
+          "page": 9,
+          "migrated": 0,
+          "hasMore": true
+        },
+        {
+          "page": 10,
+          "migrated": 0,
+          "hasMore": true
+        },
+        {
+          "page": 11,
+          "migrated": 0,
+          "hasMore": true
+        },
+        {
+          "page": 12,
+          "migrated": 0,
+          "hasMore": true
+        },
+        {
+          "page": 13,
+          "migrated": 0,
+          "hasMore": true
+        },
+        {
+          "page": 14,
+          "migrated": 0,
+          "hasMore": true
+        },
+        {
+          "page": 15,
+          "migrated": 0,
+          "hasMore": true
+        },
+        {
+          "page": 16,
+          "migrated": 0,
+          "hasMore": true
+        },
+        {
+          "page": 17,
+          "migrated": 0,
+          "hasMore": true
+        },
+        {
+          "page": 18,
+          "migrated": 0,
+          "hasMore": true
+        },
+        {
+          "page": 19,
+          "migrated": 0,
+          "hasMore": true
+        },
+        {
+          "page": 20,
+          "migrated": 0,
+          "hasMore": true
+        },
+        {
+          "page": 21,
+          "migrated": 0,
+          "hasMore": true
+        },
+        {
+          "page": 22,
+          "migrated": 0,
+          "hasMore": true
+        },
+        {
+          "page": 23,
+          "migrated": 0,
+          "hasMore": true
+        },
+        {
+          "page": 24,
+          "migrated": 0,
+          "hasMore": true
+        },
+        {
+          "page": 25,
+          "migrated": 0,
+          "hasMore": true
+        },
+        {
+          "page": 26,
+          "migrated": 0,
+          "hasMore": true
+        },
+        {
+          "page": 27,
+          "migrated": 0,
+          "hasMore": true
+        },
+        {
+          "page": 28,
+          "migrated": 0,
+          "hasMore": true
+        },
+        {
+          "page": 29,
+          "migrated": 0,
+          "hasMore": true
+        },
+        {
+          "page": 30,
+          "migrated": 0,
+          "hasMore": true
+        },
+        {
+          "page": 31,
+          "migrated": 0,
+          "hasMore": true
+        },
+        {
+          "page": 32,
+          "migrated": 0,
+          "hasMore": true
+        },
+        {
+          "page": 33,
+          "migrated": 0,
+          "hasMore": true
+        },
+        {
+          "page": 34,
+          "migrated": 0,
+          "hasMore": true
+        },
+        {
+          "page": 35,
+          "migrated": 0,
+          "hasMore": true
+        },
+        {
+          "page": 36,
+          "migrated": 0,
+          "hasMore": true
+        },
+        {
+          "page": 37,
+          "migrated": 0,
+          "hasMore": true
+        },
+        {
+          "page": 38,
+          "migrated": 0,
+          "hasMore": true
+        },
+        {
+          "page": 39,
+          "migrated": 0,
+          "hasMore": true
+        },
+        {
+          "page": 40,
+          "migrated": 0,
+          "hasMore": true
+        },
+        {
+          "page": 41,
+          "migrated": 0,
+          "hasMore": true
+        },
+        {
+          "page": 42,
+          "migrated": 0,
+          "hasMore": true
+        },
+        {
+          "page": 43,
+          "migrated": 0,
+          "hasMore": true
+        },
+        {
+          "page": 44,
+          "migrated": 0,
+          "hasMore": true
+        },
+        {
+          "page": 45,
+          "migrated": 0,
+          "hasMore": false
+        }
+      ],
+      "changedRootsAndCheckpointReferences": 58
+    },
+    "pollCorrection": {
+      "result": "success",
+      "deploymentSeconds": 251.2,
+      "filesystemPages": [
+        {
+          "page": 1,
+          "migrated": 0,
+          "hasMore": true
+        },
+        {
+          "page": 2,
+          "migrated": 0,
+          "hasMore": true
+        },
+        {
+          "page": 3,
+          "migrated": 0,
+          "hasMore": true
+        },
+        {
+          "page": 4,
+          "migrated": 0,
+          "hasMore": true
+        },
+        {
+          "page": 5,
+          "migrated": 0,
+          "hasMore": true
+        },
+        {
+          "page": 6,
+          "migrated": 0,
+          "hasMore": true
+        },
+        {
+          "page": 7,
+          "migrated": 0,
+          "hasMore": true
+        },
+        {
+          "page": 8,
+          "migrated": 0,
+          "hasMore": true
+        },
+        {
+          "page": 9,
+          "migrated": 0,
+          "hasMore": true
+        },
+        {
+          "page": 10,
+          "migrated": 0,
+          "hasMore": true
+        },
+        {
+          "page": 11,
+          "migrated": 0,
+          "hasMore": true
+        },
+        {
+          "page": 12,
+          "migrated": 0,
+          "hasMore": true
+        },
+        {
+          "page": 13,
+          "migrated": 0,
+          "hasMore": true
+        },
+        {
+          "page": 14,
+          "migrated": 0,
+          "hasMore": true
+        },
+        {
+          "page": 15,
+          "migrated": 0,
+          "hasMore": true
+        },
+        {
+          "page": 16,
+          "migrated": 0,
+          "hasMore": true
+        },
+        {
+          "page": 17,
+          "migrated": 0,
+          "hasMore": true
+        },
+        {
+          "page": 18,
+          "migrated": 0,
+          "hasMore": true
+        },
+        {
+          "page": 19,
+          "migrated": 0,
+          "hasMore": true
+        },
+        {
+          "page": 20,
+          "migrated": 0,
+          "hasMore": true
+        },
+        {
+          "page": 21,
+          "migrated": 0,
+          "hasMore": true
+        },
+        {
+          "page": 22,
+          "migrated": 0,
+          "hasMore": true
+        },
+        {
+          "page": 23,
+          "migrated": 0,
+          "hasMore": true
+        },
+        {
+          "page": 24,
+          "migrated": 0,
+          "hasMore": true
+        },
+        {
+          "page": 25,
+          "migrated": 0,
+          "hasMore": true
+        },
+        {
+          "page": 26,
+          "migrated": 0,
+          "hasMore": true
+        },
+        {
+          "page": 27,
+          "migrated": 0,
+          "hasMore": true
+        },
+        {
+          "page": 28,
+          "migrated": 0,
+          "hasMore": true
+        },
+        {
+          "page": 29,
+          "migrated": 0,
+          "hasMore": true
+        },
+        {
+          "page": 30,
+          "migrated": 0,
+          "hasMore": true
+        },
+        {
+          "page": 31,
+          "migrated": 0,
+          "hasMore": true
+        },
+        {
+          "page": 32,
+          "migrated": 0,
+          "hasMore": true
+        },
+        {
+          "page": 33,
+          "migrated": 0,
+          "hasMore": true
+        },
+        {
+          "page": 34,
+          "migrated": 0,
+          "hasMore": true
+        },
+        {
+          "page": 35,
+          "migrated": 0,
+          "hasMore": true
+        },
+        {
+          "page": 36,
+          "migrated": 0,
+          "hasMore": true
+        },
+        {
+          "page": 37,
+          "migrated": 0,
+          "hasMore": true
+        },
+        {
+          "page": 38,
+          "migrated": 0,
+          "hasMore": true
+        },
+        {
+          "page": 39,
+          "migrated": 0,
+          "hasMore": true
+        },
+        {
+          "page": 40,
+          "migrated": 0,
+          "hasMore": true
+        },
+        {
+          "page": 41,
+          "migrated": 0,
+          "hasMore": true
+        },
+        {
+          "page": 42,
+          "migrated": 0,
+          "hasMore": true
+        },
+        {
+          "page": 43,
+          "migrated": 0,
+          "hasMore": true
+        },
+        {
+          "page": 44,
+          "migrated": 0,
+          "hasMore": true
+        },
+        {
+          "page": 45,
+          "migrated": 0,
+          "hasMore": true
+        },
+        {
+          "page": 46,
+          "migrated": 0,
+          "hasMore": true
+        },
+        {
+          "page": 47,
+          "migrated": 0,
+          "hasMore": true
+        },
+        {
+          "page": 48,
+          "migrated": 0,
+          "hasMore": false
+        }
+      ],
+      "changedRootsAndCheckpointReferences": 0
+    }
+  },
+  "nativeValidation": {
+    "check": "324 Bun tests across 48 files; 3581 assertions; 190.22 seconds; build, SDK declarations, types, Clippy and Rust workspace tests passed",
+    "format": "passed",
+    "migrationPageRegression": "26 legacy roots, 27 process receipts, orphan prefix, repeated cursor and replacement Worker; 40 assertions; 2.29-second focused run",
+    "partialCheckpointRegression": "Corrupt checkpoint after root conversion, resumed conversion, retained immutable input and stale CAS authority verified",
+    "connectionRegression": "An intermediate full run had 323 pass and one ECONNRESET during native server replacement. The page test now disables HTTP connection reuse across replacement, with no mutation retries. The subsequent full run passed."
+  },
+  "pollRegression": {
+    "before": {
+      "millisecond": {
+        "status": 200,
+        "passed": true
+      },
+      "nanosecond": {
+        "status": 503,
+        "contentType": "text/html; charset=UTF-8",
+        "providerCode": 1102,
+        "providerMessage": "Worker exceeded resource limits",
+        "ray": "a4ac8714ea2fae9f-GRU",
+        "receiptStatus": "running",
+        "output": null
+      }
+    },
+    "change": "Keep the original guest deadline and native Clock readings; use at least one millisecond for each host timer wait, matching the existing WASI clock resolution",
+    "after": [
+      {
+        "precision": "millisecond",
+        "passed": true,
+        "status": 200,
+        "processStatus": "exited",
+        "output": {
+          "stdout": "allocation preserved cursor and zeros; poll preserved userdata, EOF and clocks\n",
+          "stderr": "",
+          "result": null,
+          "exitCode": 0
+        }
+      },
+      {
+        "precision": "nanosecond",
+        "passed": true,
+        "status": 200,
+        "processStatus": "exited",
+        "output": {
+          "stdout": "allocation preserved cursor and zeros; poll preserved userdata, EOF and clocks\n",
+          "stderr": "",
+          "result": null,
+          "exitCode": 0
+        }
+      }
+    ],
+    "scope": "Same compiled Rust fixture selects only the sleep duration; fresh sandbox per case, scoped disposal; exact allocation bytes and output checked",
+    "clockReference": "https://developers.cloudflare.com/workers/runtime-apis/performance/",
+    "limitation": "Native local clocks did not reproduce Cloudflare production timer granularity; the authenticated remote comparison is the regression signal"
+  },
+  "remoteProof": {
+    "general": {
+      "file": "production.json",
+      "checks": 62,
+      "allPassed": true
+    },
+    "inodeAndShell": {
+      "passed": true,
+      "target": "https://cirro-sandbox-prod-rs7wexxow56rmsoz.manoel-carvalhoneto.workers.dev",
+      "transport": "Effect FetchHttpClient; authenticated remote Worker",
+      "features": [
+        "write-only append",
+        "write-only truncate",
+        "binary block boundary",
+        "zero-filled growth",
+        "hard links and ownership",
+        "alias-preserving snapshot restore",
+        "shell pipeline negation",
+        "ordered stdout redirections"
+      ],
+      "limitations": "Does not establish remote service-binding transport, performance/cost, arbitrary-crash recovery or historical interpreter heap compatibility"
+    },
+    "compiledSdk": {
+      "checks": 6,
+      "passed": true,
+      "transport": "Effect FetchHttpClient",
+      "target": "production"
+    },
+    "cleanup": "The failed general-proof sandbox was disposed after its running receipt was inspected. Focused probes dispose their synthetic sandboxes through scoped finalizers; the successful general proof confirms disposal. Immutable data reclamation remains a separate gate."
+  },
+  "delivery": {
+    "sdkRuntimeArchives": "0.10.0 exact archives passed native binding/Agent RPC consumer proof; publication pending",
+    "github": "Configured GitHub credential remains in the locked login keyring; token validity remains unverified",
+    "remoteCI": "not verified for this source",
+    "minutei": "Published SDK/runtime 0.9.0 still consumed; no Minutei deployment, remote binding or real-agent/model proof performed"
+  },
+  "limitations": [
+    "62 remote checks cover implemented operations, not full AgentOS parity.",
+    "Remote probes use authenticated HTTP. Native service-binding and Agent RPC are verified locally against the exact archives, not remotely in Minutei.",
+    "No production performance, cold-start, peak-memory or AgentOS cost advantage is established.",
+    "Historical interpreter heap compatibility and arbitrary-crash/external-effect recovery remain unproven."
+  ]
+}
