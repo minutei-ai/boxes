@@ -5,7 +5,7 @@ import { join } from "node:path";
 import { Effect, Redacted, Schema } from "effect";
 import { FetchHttpClient } from "effect/http";
 import { make } from "../src/sdk";
-import { Action, ErrorResponse, Head } from "../src/contracts";
+import { Action, ErrorResponse, Head, StoredRun, ProcessDelivery } from "../src/contracts";
 import { runtime } from "../tooling/worker-test";
 
 test("disposal is durable and idempotent without weakening authority or reusing its ID", () =>
@@ -138,6 +138,121 @@ test("disposal is durable and idempotent without weakening authority or reusing 
           { concurrency: 3 },
         );
         expect(results).toEqual([{ ok: true }, { ok: true }, { ok: true }]);
+      }),
+    ).pipe(Effect.provide(FetchHttpClient.layer)),
+  ));
+
+test("disposal settles queued work even when its archived program awaits a newer runtime", () =>
+  Effect.runPromise(
+    Effect.scoped(
+      Effect.gen(function* () {
+        const directory = yield* Effect.acquireRelease(
+          Effect.promise(() => mkdtemp(join(tmpdir(), "boxes-disposed-queue-"))),
+          (path) => Effect.promise(() => rm(path, { recursive: true, force: true })),
+        );
+        const id = "disposed-archive";
+        const retained = yield* Effect.scoped(
+          Effect.gen(function* () {
+            const worker = yield* Effect.acquireRelease(
+              Effect.sync(() => runtime(directory)),
+              (value) => Effect.promise(() => value.dispose()),
+            );
+            const url = (yield* Effect.promise(() => worker.ready)).toString();
+            const admin = yield* make({ url, token: Redacted.make("cirro-local-test-credential") });
+            yield* admin.create({
+              id,
+              policy: {
+                networkHosts: [],
+                interruptBudget: 1000,
+                memoryBytes: 8388608,
+                maxOutputBytes: 1048576,
+              },
+            });
+            const grant = yield* admin.mintCapability(id, {
+              permissions: ["read", "execute", "manage"],
+              expiresInSeconds: 600,
+            });
+            const client = yield* make({ url, token: Redacted.make(grant.token) });
+            const accepted = yield* client.action(id, {
+              op: "process.spawn",
+              execution: {
+                op: "process.run",
+                id: "waiting",
+                language: "javascript",
+                source: "export default () => 42;",
+              },
+            });
+            const objects = yield* Effect.promise(() => worker.objects);
+            const codeKey = `sandboxes/${id}/code/${accepted.sourceHash}`;
+            const code = yield* Effect.promise(() => objects.get(codeKey));
+            if (code === null) return yield* Effect.die("Missing archived program");
+            const bytes = yield* Effect.promise(() => code.arrayBuffer());
+            const updated = yield* Effect.promise(() =>
+              objects.put(codeKey, bytes, {
+                onlyIf: { etagMatches: code.etag },
+                customMetadata: { format: "program-json-future" },
+              }),
+            );
+            expect(updated).not.toBeNull();
+            const key = `processes/${id}/waiting.json`;
+            const receipt = yield* Effect.promise(() => objects.head(key));
+            if (receipt === null) return yield* Effect.die("Missing queued receipt");
+            const event = Schema.encodeSync(ProcessDelivery)({ key, eTag: receipt.etag });
+            const control = yield* Effect.promise(() => worker.control);
+            const held = yield* Effect.promise(() =>
+              control.deliver("executions", [
+                { id: "before-disposal", timestamp: new Date(), attempts: 1, body: event },
+              ]),
+            );
+            expect(held.outcome).toBe("ok");
+            expect(held.retryMessages).toEqual([{ msgId: "before-disposal", delaySeconds: 15 }]);
+            expect(held.explicitAcks).toEqual([]);
+            const before = yield* Effect.promise(() => objects.get(key));
+            if (before === null) return yield* Effect.die("Missing pending receipt");
+            const pending = yield* Schema.decodeUnknownEffect(Schema.fromJsonString(StoredRun))(
+              yield* Effect.promise(() => before.text()),
+            );
+            expect(pending.status).toBe("queued");
+            expect(pending.authority).not.toBeNull();
+            expect(before.etag).toBe(receipt.etag);
+            yield* client.action(id, { op: "vm.dispose" });
+            return { event, key };
+          }),
+        );
+        const next = yield* Effect.acquireRelease(
+          Effect.sync(() => runtime(directory)),
+          (value) => Effect.promise(() => value.dispose()),
+        );
+        yield* Effect.promise(() => next.ready);
+        const control = yield* Effect.promise(() => next.control);
+        const delivered = yield* Effect.promise(() =>
+          control.deliver("executions", [
+            { id: "after-disposal", timestamp: new Date(), attempts: 2, body: retained.event },
+          ]),
+        );
+        expect(delivered.outcome).toBe("ok");
+        expect(delivered.explicitAcks).toEqual(["after-disposal"]);
+        expect(delivered.retryMessages).toEqual([]);
+        const objects = yield* Effect.promise(() => next.objects);
+        const receipt = yield* Effect.promise(() => objects.get(retained.key));
+        if (receipt === null) return yield* Effect.die("Missing settled receipt");
+        const settled = yield* Schema.decodeUnknownEffect(Schema.fromJsonString(StoredRun))(
+          yield* Effect.promise(() => receipt.text()),
+        );
+        expect(settled.status).toBe("cancelled");
+        expect(settled.authority).toBeNull();
+        expect(settled.deadlineAt).toBeNull();
+        expect(settled.checkpoint).toBeNull();
+        expect(settled.output).toBeNull();
+        expect(settled.finishedAt).not.toBeNull();
+        yield* Effect.promise(() =>
+          control.deliver("executions", [
+            { id: "duplicate", timestamp: new Date(), attempts: 3, body: retained.event },
+          ]),
+        );
+        expect((yield* Effect.promise(() => objects.head(retained.key)))?.version).toBe(
+          receipt.version,
+        );
       }),
     ).pipe(Effect.provide(FetchHttpClient.layer)),
   ));

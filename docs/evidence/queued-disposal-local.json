@@ -1,0 +1,40 @@
+{
+  "scope": "Local queued-process disposal before archived artifact restoration.",
+  "baseline": "Native R2/Queue regression failed: after confirmed vm.dispose and replacement Worker delivery, the process remained queued rather than cancelled because ProgramVersionPending requested another delivery before the disposal observer ran.",
+  "faultInjection": "The test preserves the exact archived program bytes and digest, conditionally changes only its R2 format metadata to program-json-future, and verifies the write succeeded. This is controlled native format-mismatch injection, not evidence of an actual future runtime deployment.",
+  "implementation": "A matching queued delivery checks the existing root lifetime before program/checkpoint restoration. A disposed or missing root uses the existing conditional terminal receipt publication to record cancelled, clearing authority/deadline/checkpoint and retaining output. Terminal lease settlement clears checkpoint references too. A losing conditional terminal write requests native Queue redelivery instead of claiming settlement.",
+  "artifactsSha256": {
+    "src/process.ts": "2696b041bdbe0773ec156261cebd0331a49e90bf662bfa3884b1f885fd5a1bf6",
+    "tests/dispose.test.ts": "951bbf3975e0e6e1f1fe4f6cb8e2b69f03d6de5c58a387710c0b61af0bebc30b"
+  },
+  "validation": {
+    "build": "bun run build passed before native runtime tests.",
+    "typecheck": "Final bun run typecheck passed.",
+    "nativeRegression": {
+      "command": "bun test tests/dispose.test.ts tests/process.test.ts tests/checkpoint.test.ts tests/stdin.test.ts",
+      "tests": 26,
+      "files": 4,
+      "assertions": 280,
+      "failures": 0,
+      "seconds": 36.12
+    },
+    "finalDisposal": {
+      "command": "bun test tests/dispose.test.ts",
+      "tests": 2,
+      "assertions": 32,
+      "failures": 0,
+      "seconds": 3.67
+    },
+    "nativeQueueReceipts": "Live format-mismatched job returns outcome ok with explicit per-message 15-second retry, no acknowledgement and unchanged queued receipt ETag. After disposal and original Worker shutdown, the replacement returns outcome ok, explicit acknowledgement and no retry messages.",
+    "terminalReceipt": "StoredRun verifies cancelled status, no authority/deadline/checkpoint/output and a completed timestamp. Redelivery of the original event leaves the terminal object version unchanged.",
+    "preservedBehavior": "Existing process admission, duplicate claims, replacement recovery, lost observation/deadline handling, heap checkpoint integrity and interactive stdin suites passed."
+  },
+  "limits": [
+    "Selected native suites, not a new complete-suite or remote-CI run",
+    "No actual future-runtime rollout or obsolete heap execution was performed",
+    "No injected conditional-write conflict for this terminal branch; it uses native R2 ETag preconditions and existing native Queue retry handling",
+    "No atomic cross-object disposal transaction, immediate preemption, restart or object reclamation",
+    "No production latency/cost comparison or AgentOS cost advantage",
+    "No deploy, new Minutei delivery, GitHub action, push or publication"
+  ]
+}

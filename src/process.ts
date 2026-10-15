@@ -690,18 +690,26 @@ export const dispatch = Effect.fn("process.dispatch")(function* (env: Env, body:
   if (stored.id !== identity.id)
     return yield* new StorageFailure({ cause: "Process identity mismatch" });
   const now = yield* Clock.currentTimeMillis;
+  const disposed = yield* Effect.gen(function* () {
+    if (stored.status !== "queued" || event.eTag !== object.etag) return false;
+    const lifetime = yield* observeDisposal(env, identity.sandboxId, null).pipe(Effect.result);
+    if (lifetime._tag === "Success") return false;
+    if (lifetime.failure._tag === "Fault" && lifetime.failure.code === "ECANCELED") return true;
+    return yield* lifetime.failure;
+  });
   if (
-    stored.deadlineAt !== null &&
-    (stored.status === "running" ||
-      stored.status === "cancelling" ||
-      (stored.status === "queued" && now >= stored.deadlineAt))
+    disposed ||
+    (stored.deadlineAt !== null &&
+      (stored.status === "running" ||
+        stored.status === "cancelling" ||
+        (stored.status === "queued" && now >= stored.deadlineAt)))
   ) {
-    if (now < stored.deadlineAt)
+    if (!disposed && stored.deadlineAt !== null && now < stored.deadlineAt)
       return yield* new ExecutionPending({
         retryAfterSeconds: Math.min(300, Math.max(1, Math.ceil((stored.deadlineAt - now) / 1000))),
       });
     const terminal = yield* Effect.sync(() => {
-      if (stored.status === "cancelling") return "cancelled" as const;
+      if (disposed || stored.status === "cancelling") return "cancelled" as const;
       return "failed" as const;
     });
     const failed = {
@@ -711,8 +719,9 @@ export const dispatch = Effect.fn("process.dispatch")(function* (env: Env, body:
       deadlineAt: null,
       finishedAt: now,
       output: stored.output,
+      checkpoint: null,
     };
-    yield* Effect.tryPromise({
+    const written = yield* Effect.tryPromise({
       try: () =>
         env.OBJECTS.put(event.key, Schema.encodeSync(Schema.fromJsonString(StoredRun))(failed), {
           onlyIf: { etagMatches: object.etag },
@@ -730,6 +739,7 @@ export const dispatch = Effect.fn("process.dispatch")(function* (env: Env, body:
         }),
       catch: (cause) => new StorageFailure({ cause }),
     });
+    if (written === null) return yield* new ExecutionPending({ retryAfterSeconds: 1 });
     return;
   }
   if (stored.status !== "queued" || event.eTag !== object.etag) return;
