@@ -50,8 +50,13 @@ fn main() -> std::io::Result<()> {
     let started = Instant::now();
     std::thread::sleep(Duration::from_millis(10));
     assert!(started.elapsed() >= Duration::from_millis(10));
+    let delay = match std::env::args().nth(1).as_deref() {
+        None | Some("nanosecond") => Duration::from_nanos(1),
+        Some("millisecond") => Duration::from_millis(1),
+        _ => return Err(std::io::Error::from(std::io::ErrorKind::InvalidInput)),
+    };
     for _ in 0..3 {
-        std::thread::sleep(Duration::from_nanos(1));
+        std::thread::sleep(delay);
     }
     file.seek(SeekFrom::Start(0))?;
     let mut contents = Vec::new();

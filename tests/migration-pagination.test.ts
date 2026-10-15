@@ -88,6 +88,7 @@ test(
             const response = yield* Effect.promise(() =>
               fetch(new URL("/v1/migrations/filesystem-v4", origin), {
                 method: "POST",
+                keepalive: false,
                 headers: { authorization: `Bearer ${token}`, "content-type": "application/json" },
                 body: Schema.encodeSync(Schema.fromJsonString(FilesystemMigrationInput))({
                   cursor,
@@ -152,6 +153,7 @@ test(
           const denied = yield* Effect.promise(() =>
             fetch(new URL("/v1/migrations/filesystem-v4", origin), {
               method: "POST",
+              keepalive: false,
               headers: { authorization: `Bearer ${grant.token}` },
               body: "{}",
             }),
@@ -160,6 +162,7 @@ test(
           const invalid = yield* Effect.promise(() =>
             fetch(new URL("/v1/migrations/filesystem-v4", origin), {
               method: "POST",
+              keepalive: false,
               headers: { authorization: `Bearer ${token}` },
               body: JSON.stringify({ cursor: { phase: "ignored", continuation: null } }),
             }),

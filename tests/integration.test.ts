@@ -3147,19 +3147,22 @@ test("shell reports missing and non-executable commands and denied capabilities 
 
 test("Rust WASI allocation and polling preserve byte contents, cursor, userdata, EOF and monotonic sleeps", async () => {
   const token = await setup("wasi-poll");
-  const response = await act("wasi-poll", token, {
-    op: "process.run",
-    id: "poll",
-    language: "wasm",
-    source: await wasmFixture("poll"),
-  });
-  expect(response.status).toBe(200);
-  const run = Schema.decodeUnknownSync(RunRecord)(await response.json());
-  expect(run.status).toBe("exited");
-  expect(run.output?.exitCode).toBe(0);
-  expect(run.output?.stdout).toBe(
-    "allocation preserved cursor and zeros; poll preserved userdata, EOF and clocks\n",
-  );
+  for (const precision of ["nanosecond", "millisecond"]) {
+    const response = await act("wasi-poll", token, {
+      op: "process.run",
+      id: `poll-${precision}`,
+      language: "wasm",
+      source: await wasmFixture("poll"),
+      args: [precision],
+    });
+    expect(response.status).toBe(200);
+    const run = Schema.decodeUnknownSync(RunRecord)(await response.json());
+    expect(run.status).toBe("exited");
+    expect(run.output?.exitCode).toBe(0);
+    expect(run.output?.stdout).toBe(
+      "allocation preserved cursor and zeros; poll preserved userdata, EOF and clocks\n",
+    );
+  }
   const file = Schema.decodeUnknownSync(FileContent)(
     await (
       await act("wasi-poll", token, { op: "filesystem.readFile", path: "/tmp/allocated" })

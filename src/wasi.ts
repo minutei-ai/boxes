@@ -1205,7 +1205,7 @@ export const wasi = Effect.fn("wasi.execute")(function* (
                       Match.orElse(() => first),
                     );
                     yield* Effect.raceFirst(
-                      Effect.sleep(Duration.nanos(pause)),
+                      Effect.sleep(Duration.max(Duration.nanos(pause), Duration.millis(1))),
                       Deferred.await(wake),
                     );
                     readings.realtime = yield* Clock.currentTimeNanos;
