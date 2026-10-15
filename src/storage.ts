@@ -1,6 +1,6 @@
 import { Clock, Effect, Schema } from "effect";
 import { Kernel } from "../dist/kernel/cirro_kernel";
-import { Chunks, Fault, Head, ContentBlock, ReadPlan, RangeWritePlan } from "./contracts";
+import { Chunks, Fault, Head, ContentBlock, ReadPlan, type RangeWritePlan } from "./contracts";
 import type { Env } from "./resources";
 
 export class StorageFailure extends Schema.TaggedError<StorageFailure>()("StorageFailure", {
@@ -162,19 +162,13 @@ export const read = Effect.fn("filesystem.read")(function* (
   return Buffer.concat(blocks).subarray(plan.skip, plan.skip + plan.length);
 });
 
-export const writeRange = Effect.fn("filesystem.writeRange")(function* (
+export const applyWritePlan = Effect.fn("filesystem.applyWritePlan")(function* (
   env: Env,
   id: string,
   kernel: Kernel,
-  path: string,
+  plan: typeof RangeWritePlan.Type,
   data: Uint8Array,
-  offset?: number,
 ) {
-  const plan = yield* kernelCall(() => {
-    if (offset === undefined)
-      return kernel.write_range_plan(path, undefined, BigInt(data.byteLength));
-    return kernel.write_range_plan(path, BigInt(offset), BigInt(data.byteLength));
-  }).pipe(Effect.flatMap(Schema.decodeUnknownEffect(Schema.fromJsonString(RangeWritePlan))));
   if (!plan.changed) return false;
   const now = yield* Clock.currentTimeNanos;
   yield* kernelCall(() => kernel.set_time(now));
@@ -189,7 +183,7 @@ export const writeRange = Effect.fn("filesystem.writeRange")(function* (
           (plan.offset > start || plan.offset + data.byteLength < start + patch.previous.size)
         ) {
           const previous = yield* block(env, id, patch.previous);
-          bytes.set(previous);
+          bytes.set(previous.subarray(0, patch.size));
         }
         const from = Math.max(start, plan.offset);
         const to = Math.min(start + patch.size, plan.offset + data.byteLength);

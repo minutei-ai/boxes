@@ -174,6 +174,11 @@ struct RangeWritePlan<'a> {
     blocks: Vec<PatchBlock<'a>>,
 }
 
+enum FileMutation {
+    Write { offset: Option<u64>, length: u64 },
+    Resize { size: u64 },
+}
+
 struct WritePlan {
     path: String,
     mode: u32,
@@ -432,6 +437,76 @@ impl Node {
 }
 
 impl Kernel {
+    fn file_plan(&self, path: &str, mutation: FileMutation) -> Result<String, JsValue> {
+        let path = self.resolve(path, true).map_err(|error| fail(&error))?;
+        self.package_writable(&path, false)
+            .map_err(|error| fail(&error))?;
+        let old_size = self.state.node(&path).map_or(0, Node::size);
+        let exists = self.state.nodes.contains_key(&path);
+        let (offset, length, size, changed) = match mutation {
+            FileMutation::Write { offset, length } => {
+                let offset = offset.unwrap_or(old_size);
+                let size = if length == 0 {
+                    old_size
+                } else {
+                    offset
+                        .checked_add(length)
+                        .ok_or_else(|| fail("EFBIG: write position overflow"))?
+                        .max(old_size)
+                };
+                (offset, length, size, length != 0 || !exists)
+            }
+            FileMutation::Resize { size } => {
+                if !exists {
+                    return Err(fail("ENOENT: file does not exist"));
+                }
+                (0, 0, size, true)
+            }
+        };
+        if size > MAX_FILE {
+            return Err(fail("EFBIG: file limit exceeded"));
+        }
+        self.writable_file(&path, size, false)
+            .map_err(|error| fail(&error))?;
+        let old = match self.state.node(&path) {
+            Some(Node::File { chunks, .. }) => chunks.as_slice(),
+            _ => &[],
+        };
+        let mut chunks = Vec::new();
+        let mut blocks = Vec::new();
+        for index in 0..size.div_ceil(262_144) {
+            let start = index * 262_144;
+            let block_size = (size - start).min(262_144);
+            let previous = old.get(index as usize).map(|hash| ContentBlock {
+                hash,
+                size: (old_size - start).min(262_144),
+            });
+            let overlaps = length != 0 && start < offset + length && start + block_size > offset;
+            let resize = previous
+                .as_ref()
+                .is_none_or(|block| block.size != block_size);
+            if overlaps || resize {
+                chunks.push(None);
+                blocks.push(PatchBlock {
+                    index: index as usize,
+                    size: block_size,
+                    previous,
+                });
+            } else {
+                chunks.push(previous.map(|block| block.hash));
+            }
+        }
+        serde_json::to_string(&RangeWritePlan {
+            path: &path,
+            offset,
+            size,
+            changed,
+            chunks,
+            blocks,
+        })
+        .map_err(|error| fail(&error.to_string()))
+    }
+
     fn read_plan_resolved(
         &self,
         path: &str,
@@ -1146,62 +1221,11 @@ impl Kernel {
         offset: Option<u64>,
         length: u64,
     ) -> Result<String, JsValue> {
-        let path = self.resolve(path, true).map_err(|error| fail(&error))?;
-        self.package_writable(&path, false)
-            .map_err(|error| fail(&error))?;
-        let old_size = self.state.node(&path).map_or(0, Node::size);
-        let offset = offset.unwrap_or(old_size);
-        let size = if length == 0 {
-            old_size
-        } else {
-            offset
-                .checked_add(length)
-                .ok_or_else(|| fail("EFBIG: write position overflow"))?
-                .max(old_size)
-        };
-        if size > MAX_FILE {
-            return Err(fail("EFBIG: file limit exceeded"));
-        }
-        self.writable_file(&path, size, false)
-            .map_err(|error| fail(&error))?;
-        let old = match self.state.node(&path) {
-            Some(Node::File { chunks, .. }) => chunks.as_slice(),
-            _ => &[],
-        };
-        let changed = length != 0 || !self.state.nodes.contains_key(&path);
-        let mut chunks = Vec::new();
-        let mut blocks = Vec::new();
-        for index in 0..size.div_ceil(262_144) {
-            let start = index * 262_144;
-            let block_size = (size - start).min(262_144);
-            let previous = old.get(index as usize).map(|hash| ContentBlock {
-                hash,
-                size: (old_size - start).min(262_144),
-            });
-            let overlaps = length != 0 && start < offset + length && start + block_size > offset;
-            let resize = previous
-                .as_ref()
-                .is_none_or(|block| block.size != block_size);
-            if overlaps || resize {
-                chunks.push(None);
-                blocks.push(PatchBlock {
-                    index: index as usize,
-                    size: block_size,
-                    previous,
-                });
-            } else {
-                chunks.push(previous.map(|block| block.hash));
-            }
-        }
-        serde_json::to_string(&RangeWritePlan {
-            path: &path,
-            offset,
-            size,
-            changed,
-            chunks,
-            blocks,
-        })
-        .map_err(|error| fail(&error.to_string()))
+        self.file_plan(path, FileMutation::Write { offset, length })
+    }
+
+    pub fn resize_plan(&self, path: &str, size: u64) -> Result<String, JsValue> {
+        self.file_plan(path, FileMutation::Resize { size })
     }
 
     pub fn prepare_write(&self, path: &str, size: u64, chunks: &str) -> Result<String, JsValue> {

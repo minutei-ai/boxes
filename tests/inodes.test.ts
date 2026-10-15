@@ -182,3 +182,53 @@ test("append planning distinguishes EOF from positional zero and excludes unchan
   ).toMatchObject({ offset: 0, size: 0, changed: true });
   kernel.free();
 });
+
+test("resize plans preserve prefix references, bound tail I/O and reject invalid targets before mutation", () => {
+  const kernel = new Kernel();
+  const first = "a".repeat(64);
+  const tail = "b".repeat(64);
+  kernel.write("/tmp/file", 786463n, JSON.stringify([first, first, first, tail]));
+  const before = kernel.manifest();
+  const aligned = Schema.decodeUnknownSync(Schema.fromJsonString(RangeWritePlan))(
+    kernel.resize_plan("/tmp/file", 262144n),
+  );
+  expect(aligned).toMatchObject({
+    offset: 0,
+    size: 262144,
+    changed: true,
+    chunks: [first],
+    blocks: [],
+  });
+  const partial = Schema.decodeUnknownSync(Schema.fromJsonString(RangeWritePlan))(
+    kernel.resize_plan("/tmp/file", 262153n),
+  );
+  expect(partial.blocks).toEqual([{ index: 1, size: 9, previous: { hash: first, size: 262144 } }]);
+  const grown = Schema.decodeUnknownSync(Schema.fromJsonString(RangeWritePlan))(
+    kernel.resize_plan("/tmp/file", 1048581n),
+  );
+  expect(grown.blocks).toEqual([
+    { index: 3, size: 262144, previous: { hash: tail, size: 31 } },
+    { index: 4, size: 5, previous: null },
+  ]);
+  expect(
+    Schema.decodeUnknownSync(Schema.fromJsonString(RangeWritePlan))(
+      kernel.resize_plan("/tmp/file", 786463n),
+    ),
+  ).toMatchObject({ changed: true, blocks: [] });
+  expect(kernel.manifest()).toBe(before);
+  expect(() => kernel.resize_plan("/tmp/missing", 0n)).toThrow("ENOENT");
+  expect(() => kernel.resize_plan("/tmp", 0n)).toThrow("EISDIR");
+  expect(() => kernel.resize_plan("/tmp/file", 16777217n)).toThrow("EFBIG");
+  kernel.chmod("/tmp/file", 0o400);
+  expect(() => kernel.resize_plan("/tmp/file", 1n)).toThrow("EACCES");
+  kernel.free();
+  const full = new Kernel();
+  for (const name of ["a", "b", "c"])
+    full.write(`/tmp/${name}`, 16777216n, JSON.stringify(Array.from({ length: 64 }, () => first)));
+  for (const name of ["d", "e"])
+    full.write(`/tmp/${name}`, 8388608n, JSON.stringify(Array.from({ length: 32 }, () => first)));
+  const manifest = full.manifest();
+  expect(() => full.resize_plan("/tmp/d", 8388609n)).toThrow("ENOSPC");
+  expect(full.manifest()).toBe(manifest);
+  full.free();
+});

@@ -7,6 +7,7 @@ import {
   Fault,
   FileContent,
   FileStat,
+  RangeWritePlan,
   FilesystemSnapshot,
   FilesystemAction,
   Success,
@@ -15,7 +16,7 @@ import {
   DirectoryTree,
   DirectoryExclusions,
 } from "./contracts";
-import { kernelCall, open, publish, read, write, writeRange } from "./storage";
+import { kernelCall, open, publish, read, write, applyWritePlan } from "./storage";
 import { importSnapshot } from "./snapshot";
 import type { Env } from "./resources";
 
@@ -297,7 +298,13 @@ export const filesystem = Effect.fn("filesystem.action")(function* (
         Effect.gen(function* () {
           const data = yield* content(input.content, input.encoding);
           if (input.offset !== undefined) {
-            const changed = yield* writeRange(env, id, kernel, input.path, data, input.offset);
+            const offset = input.offset;
+            const plan = yield* kernelCall(() =>
+              kernel.write_range_plan(input.path, BigInt(offset), BigInt(data.byteLength)),
+            ).pipe(
+              Effect.flatMap(Schema.decodeUnknownEffect(Schema.fromJsonString(RangeWritePlan))),
+            );
+            const changed = yield* applyWritePlan(env, id, kernel, plan, data);
             if (changed) yield* publish(env, id, session);
             return { ok: true } satisfies typeof Success.Type;
           }
@@ -308,25 +315,22 @@ export const filesystem = Effect.fn("filesystem.action")(function* (
       ),
       Match.when({ op: "filesystem.appendFile" }, (input) =>
         Effect.gen(function* () {
-          const changed = yield* writeRange(
-            env,
-            id,
-            kernel,
-            input.path,
-            Buffer.from(input.content),
-          );
+          const data = Buffer.from(input.content);
+          const plan = yield* kernelCall(() =>
+            kernel.write_range_plan(input.path, undefined, BigInt(data.byteLength)),
+          ).pipe(Effect.flatMap(Schema.decodeUnknownEffect(Schema.fromJsonString(RangeWritePlan))));
+          const changed = yield* applyWritePlan(env, id, kernel, plan, data);
           if (changed) yield* publish(env, id, session);
           return { ok: true } satisfies typeof Success.Type;
         }),
       ),
       Match.when({ op: "filesystem.truncate" }, (input) =>
         Effect.gen(function* () {
-          yield* requirePermission(capability, "read");
-          const before = yield* read(env, id, kernel, input.path);
-          const data = Buffer.alloc(input.size);
-          before.copy(data, 0, 0, input.size);
-          yield* write(env, id, kernel, input.path, data);
-          yield* publish(env, id, session);
+          const plan = yield* kernelCall(() =>
+            kernel.resize_plan(input.path, BigInt(input.size)),
+          ).pipe(Effect.flatMap(Schema.decodeUnknownEffect(Schema.fromJsonString(RangeWritePlan))));
+          const changed = yield* applyWritePlan(env, id, kernel, plan, Buffer.alloc(0));
+          if (changed) yield* publish(env, id, session);
           return { ok: true } satisfies typeof Success.Type;
         }),
       ),
