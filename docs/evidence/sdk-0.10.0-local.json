@@ -1,10 +1,10 @@
 {
   "status": "local release candidate; not published or deployed",
   "version": "0.10.0",
-  "runtimeSourceCommit": "f7f22490f0333444b31af3e91e9cc5faae5aa918",
+  "runtimeSourceCommit": "1665d4a6fcd6aedfc46885a27ae52fde9ca5149e",
   "runtimeArtifactsSha256": {
-    "index.js": "cb58535c7c5818ed2a12a0490e5bf1e5862a67303c9c700c34c9307fbd48d4d9",
-    "cirro_kernel_bg.wasm": "bf8588079839e98f9a461387b3ab41b24f578f92fc1c77665b334f6539b6ae66",
+    "index.js": "0b20259d98a742c8fc29a816e2a6882f6a04e6c8d998556588308658e1f38f4e",
+    "cirro_kernel_bg.wasm": "8626edf9d3b291ee1504b39f7df9ea9503f2db16c5f0fb2ba71aedc4c3d52803",
     "cirro_wasi_bg.wasm": "a128d4d89a7403b1217b42fa1ff96771836432a0992cba07522d8846c5c6829d"
   },
   "archives": [
@@ -12,8 +12,8 @@
       "file": "minutei-ai-boxes-0.10.0.tgz",
       "name": "@minutei-ai/boxes",
       "version": "0.10.0",
-      "bytes": 63394,
-      "sha256": "d30677ce606b21d5ab418fb6e004b14d4f294f9a03a832c8a88d337605d385cf",
+      "bytes": 63572,
+      "sha256": "5df38c556a30ba39acfd37d4ac72afea45692ccbbc05fb449cce04277d97f6c4",
       "entries": 16,
       "license": "Apache-2.0"
     },
@@ -21,8 +21,8 @@
       "file": "minutei-ai-boxes-runtime-0.10.0.tgz",
       "name": "@minutei-ai/boxes-runtime",
       "version": "0.10.0",
-      "bytes": 5487961,
-      "sha256": "d976939259953337a1f2a3f2bc029e184375b2b198bb5a88fdf4a6a06081e666",
+      "bytes": 5488114,
+      "sha256": "5a3c51a34e53b04b7a786c0f2bccf4be1e0f7e160a59fa682bdf4f7dc3dbe730",
       "entries": 8,
       "license": "Apache-2.0"
     }
@@ -33,10 +33,11 @@
     "exactArchiveProof": "passed: extracted public package exports and TypeScript consumer; native Alchemy workerd HTTP service binding and Agent RPC; R2; filesystem restore; hard-link metadata and shared bytes; host callbacks; persistent contexts, cancellation, denied writes and memory limits",
     "queueScope": "Native consumer registered with producer delivery delayed for 86400 seconds. Proof verifies foreign process remains queued; it does not demonstrate queue execution or replacement Worker recovery.",
     "publicArtifactScan": "gitleaks found no secrets in extracted archives; no .env or node_modules entries; both LICENSE files exactly match the source Apache-2.0 license",
-    "runtimeRegressionBase": "321 tests across 46 files; 3514 assertions; 186.41 seconds; build, SDK declarations, types, Clippy and Rust workspace tests passed on runtime source f7f2249.",
+    "runtimeRegressionBase": "323 tests across 47 files; 3540 assertions; 187.75 seconds; build, SDK declarations, types, Clippy and Rust workspace tests passed on runtime source 1665d4a.",
     "shellNegation": "Native host-sh comparison and binary WASI tests passed; see shell-negation-local.json. The regenerated SDK/runtime archive consumer proof also passed.",
     "shellRedirection": "24 host-sh workloads and native authority/inode checks passed; see shell-redirection-local.json. SDK/runtime archives regenerated and native archive consumer proof passed.",
-    "append": "Write-only append, byte boundaries, aliases, quota rejection, no-op publication and concurrent CAS passed; append-local.json retains all local benchmark samples. Regenerated SDK/runtime archive proof passed."
+    "append": "Write-only append, byte boundaries, aliases, quota rejection, no-op publication and concurrent CAS passed; append-local.json retains all local benchmark samples. Regenerated SDK/runtime archive proof passed.",
+    "truncate": "Write-only truncate, retained bytes, aliases, zero-filled growth, boundary-only reads, quota rejection and concurrent CAS passed; resize-local.json retains all six local reports including final rebuilt artifacts. Regenerated exact SDK/runtime archives passed native consumer binding proof."
   },
   "reproduction": [
     "bun run check",
