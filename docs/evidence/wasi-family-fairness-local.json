@@ -1,0 +1,113 @@
+{
+  "scope": "Local native WASI allocation fallback and cooperative child scheduling. Not deployed or published.",
+  "sourceCommit": "85f1e11595c408e7310e144fc3c0c4d0cb26cec0",
+  "supersedesLocalCandidateEvidence": "docs/evidence/published-composition-local.json",
+  "runtimeArtifactsSha256": {
+    "cirro_compiler_bg.wasm": "27d9b0022a634ed4eef47b6561ad38cafde3522c17e834afed1264440678bf2f",
+    "cirro_guest_bg.wasm": "b773b74626b08bd1083860081ccd2a3d0fdff80dcd97b5ec13ed7c6e2148ef22",
+    "cirro_kernel_bg.wasm": "3c80cd3b32fd8a5d2b63ea6292f19813552bda74a9f4249971355513c0658d29",
+    "cirro_python_bg.wasm": "8aa6aec5ab6fb0623637e2b6dda7318f4934e4736f4a97e45ca3312bf32e529c",
+    "cirro_wasi_bg.wasm": "d90c35f0a7ca96a5a24c010886580b9b6d57ddcb442631f8e5b66a11b898e2f1",
+    "index.js": "f97c54829d7d820744a0a25d040e0e54a379a95b465cdbfb6b21f9e1120d93f6"
+  },
+  "archives": [
+    {
+      "file": "minutei-ai-boxes-0.10.0.tgz",
+      "bytes": 68295,
+      "sha256": "44fead4655aa7efd2924435b82c9e354665250b07e7648beae6229dc99ff50e8"
+    },
+    {
+      "file": "minutei-ai-boxes-runtime-0.10.0.tgz",
+      "bytes": 5518270,
+      "sha256": "270a4c8d543cf76debbeb9aa1db7d3d3b82fcb76b67dfdd6227adcac12c896f9"
+    }
+  ],
+  "baselines": {
+    "familyScheduling": {
+      "script": "sh -c 'printf out; printf err >&2' > /tmp/redirect 2>&1; jq -Rs . /tmp/redirect",
+      "before": "WASI host request budget exceeded before the second child entered.",
+      "diagnosticParentMonotonicClockReadsBefore": 233,
+      "diagnosticParentMonotonicClockReadsAfter": 162,
+      "after": {
+        "stdout": "\"outerr\"\n",
+        "stderr": "",
+        "exitCode": 0
+      },
+      "measurementScope": "One synthetic native workerd trace pair with temporary request logging. Logging was removed. These counts are not a latency, production or cost benchmark."
+    },
+    "allocationFallback": {
+      "script": "jq -n 1",
+      "before": "growth operation limited, including guest budgets of 8, 16 and 32 MiB.",
+      "nativeCause": "Resolved wasmi 2.0.0 StoreLimitsBuilder::trap_on_grow_failure(true) forces memory.grow/table.grow to trap instead of allowing the Wasm failure return.",
+      "after": {
+        "stdout": "1\n",
+        "stderr": "",
+        "exitCode": 0
+      },
+      "reference": "https://webassembly.github.io/spec/core/exec/instructions.html#exec-memory-grow"
+    }
+  },
+  "implementation": {
+    "scheduling": "After the scoped guest turn releases the family semaphore, yield through native Effect scheduling while child fibers remain active. No sleep, priority override, clock cache or custom scheduler.",
+    "allocation": "Remove the Wasmi debug trap option and use its native default failure semantics. Memory, table, instance, instruction-fuel, output and host-request quotas remain unchanged.",
+    "nativeRegression": "The Rust guest rejects growth by 4096 pages with usize::MAX, verifies unchanged size, then grows by one permitted page and verifies zeroed, writable memory before returning 42."
+  },
+  "validation": {
+    "focused": "2 native tests across 2 files, 97 assertions, 17.45 seconds.",
+    "fullCheck": "bun run check passed: build, SDK declarations, typecheck, workspace Clippy and Cargo, 338 native tests across 57 files, 4369 assertions, 140.71 seconds.",
+    "format": "bun run format:check and git diff --check passed.",
+    "publishedPackages": {
+      "sh": "sha256:f606cc4caa9ba50f7022d681269ca0ea98ccffc0d29f3106a0f18ab593c59412",
+      "jq": "sha256:edb1cf0bbcf663d177916592d2f1b4361a02966dbf2eb44e3e61ea2a399bb43a"
+    },
+    "guestBudgetBytes": 8388608,
+    "cases": [
+      "Child file write followed by jq file read in one execution.",
+      "Three sequential published sh children in one execution.",
+      "Published jq numeric literal after denied allocation probe.",
+      "Existing pipelines, command substitution, heredoc, umask inheritance and same-build queued Worker replacement.",
+      "Native oversized memory growth leaves memory intact and permits a smaller valid allocation.",
+      "Fuel exhaustion and the 257th host request remain terminal failures.",
+      "Full native tests include family recovery, cancellation, descriptor/pipe behavior and output quotas."
+    ],
+    "archiveBinding": {
+      "version": "0.10.0",
+      "transport": "native Alchemy workerd service binding and Agent RPC; local R2 and Queue",
+      "proof": "SDK archive exports and consumer declarations; runtime archive; filesystem snapshot restore; hard-link metadata; RPC callbacks and cooperative disposal; persistent driver contexts and cancellation; scoped authority"
+    },
+    "minuteiConsumer": {
+      "clientVersion": "0.9.0",
+      "runtimeVersion": "0.10.0",
+      "runtimeArchiveSha256": "270a4c8d543cf76debbeb9aa1db7d3d3b82fcb76b67dfdd6227adcac12c896f9",
+      "consumerCommit": "a0a2a05c40ed5fb3bd5d76b14c3baf3bfe4695c2",
+      "consumerBundleSha256": "e29165da4f63ac8a3cedd29f5b13b037e9b4becb1f73b7e06047ad308db1d060",
+      "transport": "native workerd Agent service binding; actual Minutei Code Mode and tenant SQLite; local R2, KV and Queue",
+      "retention": true,
+      "isolatedRegistry": true,
+      "capabilities": true,
+      "consumerFixturesSha256": {
+        "boxes-retention.ts": "225c5d42ff36ffa2ee49ce213816546f73bacb691e646857e8588bd8149360c0",
+        "boxes-code.worker.ts": "f876f01e98358a955a9214c2f6b375f60598a461450b88a052d505531920f87a"
+      }
+    }
+  },
+  "openFindings": [
+    {
+      "script": "jq -n 1; jq -n 2; jq -n 3",
+      "observed": "The family still reaches its 256 host-request ceiling after acknowledged stdout 1\\n. No blanket budget increase was introduced.",
+      "status": "open"
+    },
+    {
+      "script": "sh -c 'printf err >&2' 2>&1",
+      "observed": "Pinned published Brush omits the spawn action and leaves stderr separate. No host inference was introduced.",
+      "status": "open"
+    }
+  ],
+  "limits": [
+    "No deployment, publication or GitHub operation in this revision.",
+    "8 MiB is guest linear-memory admission, not measured total Worker or peak memory.",
+    "No production latency, cold-start, scale or AgentOS cost advantage established.",
+    "General configurable resource policy, full shell conformance, default software provisioning, PTY and the remaining parity gates stay open.",
+    "Minutei proof covers selected SDK 0.9.0 fixtures only; its history Queue has no consumer and authenticated/model/browser paths were not exercised."
+  ]
+}
