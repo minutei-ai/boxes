@@ -1,20 +1,20 @@
 {
-  "status": "Exact archives validated; persistent-environment backend deployed and authenticated proofs passed; publication pending",
+  "status": "Exact archives validated; shell parameters and metadata-only backend cutover deployed with authenticated proofs passed; publication pending",
   "version": "0.10.0",
-  "runtimeSourceCommit": "3bc315777895311521b44bebfbaa2affa96188fc",
+  "runtimeSourceCommit": "7deb1ca33d213cc4369d547a5c641c00fbafe93e",
   "runtimeArtifactsSha256": {
-    "index.js": "03357a5bae9838f95a3aee9b0a716f5b4d5ed7a46cc7435931ef091b12f7957f",
+    "index.js": "70488c4e998a6e94ed30a6d19f9662b0b748fb8350688b33bb4dc2c5e4af7196",
     "cirro_compiler_bg.wasm": "27d9b0022a634ed4eef47b6561ad38cafde3522c17e834afed1264440678bf2f",
     "cirro_guest_bg.wasm": "b773b74626b08bd1083860081ccd2a3d0fdff80dcd97b5ec13ed7c6e2148ef22",
-    "cirro_kernel_bg.wasm": "30654731e659d5a8df5e5c712bf52ff1da57f040e01b4ca5c1e27a1f02204aa9",
+    "cirro_kernel_bg.wasm": "1e5886dc4f7366bf7198da063ba4a924e22ef184d1a119495b36b5f9aca393a9",
     "cirro_python_bg.wasm": "8aa6aec5ab6fb0623637e2b6dda7318f4934e4736f4a97e45ca3312bf32e529c",
     "cirro_wasi_bg.wasm": "a128d4d89a7403b1217b42fa1ff96771836432a0992cba07522d8846c5c6829d"
   },
   "archives": [
     {
       "file": "minutei-ai-boxes-0.10.0.tgz",
-      "bytes": 65811,
-      "sha256": "bb233061b3b2896011573728caf6c6830482b1a3e02fe337a3eb4be66ada90b9",
+      "bytes": 66045,
+      "sha256": "64ffda14bc3f7d2fa757f4cdb319ae23a0111ac59e8ae993baf9e98b2e9d9c5b",
       "entries": 16,
       "name": "@minutei-ai/boxes",
       "version": "0.10.0",
@@ -22,8 +22,8 @@
     },
     {
       "file": "minutei-ai-boxes-runtime-0.10.0.tgz",
-      "bytes": 5504071,
-      "sha256": "0dddb8cf84ed9d3239570c98392e34582bc2604e74cdf5d5f0e5f1c426200d6f",
+      "bytes": 5509134,
+      "sha256": "46a94ed459f0501fc7d48de34a233935be80897992dfeb45e0644f1a400d0e67",
       "entries": 8,
       "name": "@minutei-ai/boxes-runtime",
       "version": "0.10.0",
@@ -36,7 +36,7 @@
     "exactArchiveProof": "passed: extracted public package exports and TypeScript consumer; native Alchemy workerd HTTP service binding and Agent RPC; R2; filesystem restore; hard-link metadata and shared bytes; host callbacks; persistent contexts, cancellation, denied writes and memory limits; current consumer also verifies ordered stderr overwrite/append through the native service binding; current consumer rejects oversized WASI UTF-8 environment through the native service binding",
     "queueScope": "Native consumer registered with producer delivery delayed for 86400 seconds. Proof verifies foreign process remains queued; it does not demonstrate queue execution or replacement Worker recovery.",
     "publicArtifactScan": "gitleaks found no secrets in extracted archives; no .env or node_modules entries; both LICENSE files exactly match the source Apache-2.0 license",
-    "runtimeRegressionBase": "330 native tests, 3834 assertions, 199.60 seconds at 71f8520; final migration-only Python and parallel IO correction passed build/types/format and 5 native tests, 139 assertions, 9.09 seconds; exact final archived runtime consumer proof passed.",
+    "runtimeRegressionBase": "332 native tests across 54 files, 3890 assertions, 207.36 seconds. Build, SDK declarations, typecheck, workspace Clippy and Rust tests passed; metadata correction passed six focused native tests, 141 assertions, 10.60 seconds; exact final archive consumer proof passed.",
     "shellNegation": "Native host-sh comparison and binary WASI tests passed; see shell-negation-local.json. The regenerated SDK/runtime archive consumer proof also passed.",
     "shellRedirection": "24 host-sh workloads and native authority/inode checks passed; see shell-redirection-local.json. SDK/runtime archives regenerated and native archive consumer proof passed.",
     "append": "Write-only append, byte boundaries, aliases, quota rejection, no-op publication and concurrent CAS passed; append-local.json retains all local benchmark samples. Regenerated SDK/runtime archive proof passed.",
@@ -45,7 +45,8 @@
     "poll": "Production 1 ns sleep reproduced HTTP 503 / provider 1102 with a running receipt while the 1 ms control passed. Minimum 1 ms host wait fixed the real provider case; both remote controls and 62 general checks passed. Native full suite and exact archive consumer proof passed.",
     "stderr": "Ordered stderr overwrite/append, binary replay isolation, open failures, write-only authority, retained inode identity and output bounds passed. Native binding archive consumer and 14 remote binary-shell cases plus six SDK checks passed; see stderr-redirection.json.",
     "environment": "Merged caller/package and package-union count/byte limits, UTF-8 PATH/key/value, pre-content-I/O fence and reservation absence passed. Six remote environment cases, valid override, shell handling and six SDK checks passed; see environment-preflight.json.",
-    "persistentEnvironment": "Native replacement/queue snapshots, all four historical text runtimes, scoped binding and Agent RPC, shared immutable archive keys and partial migration recovery passed; see configuration-environment.json."
+    "persistentEnvironment": "Native replacement/queue snapshots, all four historical text runtimes, scoped binding and Agent RPC, shared immutable archive keys and partial migration recovery passed; see configuration-environment.json.",
+    "shellParameters": "Rust-owned quote-aware environment/status expansion, deferred lexical redirects, original pipeline status, scoped handle release and queued replacement snapshots passed. Exact binding/Agent RPC consumer, final ten remote parameter cases and six SDK checks passed. Fourteen remote binary-shell cases passed before the migration-only correction; see shell-parameters.json."
   },
   "reproduction": [
     "bun run check",
@@ -57,9 +58,9 @@
   "delivery": {
     "githubPublication": "pending; authenticated CLI request returned HTTP 401. The configured credential is in a locked local keyring; publication awaits restored credential access. Token validity is not yet verified.",
     "remoteCI": "not verified for this candidate",
-    "backendDeployment": "Completed through native Alchemy, profile minutei, stage prod; runtime source 3bc3157; 5 root pages, 47 program/checkpoint pages, 52 filesystem pages; existing resources retained; see configuration-environment.json.",
+    "backendDeployment": "Completed through native Alchemy, profile minutei, stage prod; runtime source 7deb1ca33d213cc4369d547a5c641c00fbafe93e; 48 program/checkpoint pages and 53 filesystem pages, zero changes; see shell-parameters.json.",
     "minutei": "still consumes published SDK/runtime 0.9.0; no dependency switched to an unpublished URL or local artifact",
-    "productionAndModelProof": "Final source: five environment runtimes, six rejection cases, caller overrides/disposal and six compiled SDK checks passed. The 62 general backend checks passed at 71f8520, before final migration-only correction. Minutei remote binding/model behavior remains unverified."
+    "productionAndModelProof": "Final source: ten shell parameter cases and six compiled SDK checks passed. Fourteen binary-shell checks passed at 18dcbaa before metadata-only migration correction. Earlier 62 general checks retain source 71f8520. Minutei remote binding/model behavior remains unverified."
   },
   "parity": "Experimental; the remaining requirements in docs/parity.md remain open."
 }

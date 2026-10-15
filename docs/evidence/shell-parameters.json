@@ -1,0 +1,274 @@
+{
+  "runtimeSourceCommit": "7deb1ca33d213cc4369d547a5c641c00fbafe93e",
+  "scope": "Named captured shell environment parameters, quote-aware field splitting and previous pipeline status; deferred argument and lexical redirect expansion in a scoped native Rust Shell handle",
+  "runtimeArtifactsSha256": {
+    "index.js": "70488c4e998a6e94ed30a6d19f9662b0b748fb8350688b33bb4dc2c5e4af7196",
+    "cirro_compiler_bg.wasm": "27d9b0022a634ed4eef47b6561ad38cafde3522c17e834afed1264440678bf2f",
+    "cirro_guest_bg.wasm": "b773b74626b08bd1083860081ccd2a3d0fdff80dcd97b5ec13ed7c6e2148ef22",
+    "cirro_kernel_bg.wasm": "1e5886dc4f7366bf7198da063ba4a924e22ef184d1a119495b36b5f9aca393a9",
+    "cirro_python_bg.wasm": "8aa6aec5ab6fb0623637e2b6dda7318f4934e4736f4a97e45ca3312bf32e529c",
+    "cirro_wasi_bg.wasm": "a128d4d89a7403b1217b42fa1ff96771836432a0992cba07522d8846c5c6829d"
+  },
+  "archives": [
+    {
+      "file": "minutei-ai-boxes-0.10.0.tgz",
+      "bytes": 66045,
+      "sha256": "64ffda14bc3f7d2fa757f4cdb319ae23a0111ac59e8ae993baf9e98b2e9d9c5b",
+      "entries": 16
+    },
+    {
+      "file": "minutei-ai-boxes-runtime-0.10.0.tgz",
+      "bytes": 5509134,
+      "sha256": "46a94ed459f0501fc7d48de34a233935be80897992dfeb45e0644f1a400d0e67",
+      "entries": 8
+    }
+  ],
+  "implementation": {
+    "owner": "Rust Shell owns source tokenization, word fragments, environment and expansion. Effect owns gates, authorization, native file opens, process observation and handle release on every scope exit.",
+    "bridge": "Only control flow and redirection kinds cross the plan bridge. Word fragments stay in Rust; environment is decoded once per execution. The obsolete Kernel.shell_plan export and all callers were removed.",
+    "order": "Arguments expand after gate selection; each redirect expands immediately before its own lexical open. Expanded values never re-enter the parser.",
+    "status": "Every command in one pipeline expands the status from before that pipeline; following commands observe the final, possibly negated pipeline status.",
+    "persistence": "Archived shell source and captured environment are unchanged. Native Queue tests retain the old map after config.patch and replacement Workers.",
+    "limits": "1 MiB source; 8192 parser tokens/fragments; at most 4096 resulting fields and 1 MiB of expanded bytes per argument vector or redirect word; environment uses existing 128-entry/64 KiB contract."
+  },
+  "validation": {
+    "completeCheck": "Build, SDK declarations, typecheck, workspace Clippy -D warnings and Rust workspace tests passed. Final native regression: 332 tests across 54 files, 3890 assertions, 207.36 seconds.",
+    "rustOracle": "117 native sh comparisons from 13 word forms and nine values; NUL-delimited oracle output verifies empty fields, spaces, tabs/newlines and Unicode. Additional Rust tests cover status, explicit unsupported syntax and quotas.",
+    "native": "Quotes, empty/missing values, immutable environment, skipped expansion quotas, pre-pipeline status, ordered/ambiguous redirects, stderr selection, empty command 127, denied writes, no source reparse and delayed Queue delivery across Worker replacement.",
+    "consumerDelta": "Final proof/fixture changes passed typecheck and five native SDK/parameter tests, 61 assertions, 4.22 seconds. Exact archives passed public export/declaration checks and native service binding/Agent RPC, including shell parameters.",
+    "probeLocal": "The ten-case production probe was first executed against native local Alchemy workerd/R2 through the compiled SDK and passed.",
+    "format": "passed",
+    "scan": "Source and both extracted archives passed gitleaks. Both Apache-2.0 licenses exactly match source; no env or node_modules archive entries.",
+    "metadataCorrection": "Metadata-only archive lookup and typed continuation logging passed build/typecheck and six native tests across four files, 141 assertions, 10.60 seconds; then the final 332-test regression and exact archived runtime consumer proof passed."
+  },
+  "benchmark": {
+    "report": "performance-local.json",
+    "currentShellPipeline": {
+      "count": 25,
+      "p50Ms": 14.13630799999919,
+      "p95Ms": 14.854789000000892,
+      "minMs": 13.729795999999624,
+      "maxMs": 20.421603999999206
+    },
+    "priorShellPipeline": {
+      "count": 25,
+      "p50Ms": 14.49869900000158,
+      "p95Ms": 17.88962199999878,
+      "minMs": 13.793263999999908,
+      "maxMs": 19.057036999998672
+    },
+    "priorReportSha256": "fc80bae14ae186920a27fcf3bd1e6a302a16de03908deeb00283f5072bc47df4",
+    "limits": "Current native workerd benchmark on a shared host. Prior report was retained before replacement, not an ABBA or controlled same-source comparison. No production latency or AgentOS cost advantage is established.",
+    "runtimeSourceCommit": "18dcbaaf5e3dec2f8145ecbda7667c13d063cf14"
+  },
+  "deployment": {
+    "provider": "native Alchemy",
+    "profile": "minutei",
+    "stage": "prod",
+    "status": "success",
+    "seconds": 364.1,
+    "workerKind": "ordinary Cloudflare Worker; no Dynamic Workers or Worker Loader",
+    "physicalResources": "Existing Worker, private R2 bucket and execution Queue retained",
+    "rootPages": 5,
+    "rootChanges": 0,
+    "programAndCheckpointPages": 48,
+    "programAndCheckpointChanges": 0,
+    "filesystemPages": 53,
+    "filesystemChanges": 0,
+    "initialAttempt": {
+      "source": "18dcbaaf5e3dec2f8145ecbda7667c13d063cf14",
+      "result": "Worker uploaded; 45 process pages confirmed with zero changes; next page hit the client 120-second timeout",
+      "seconds": 287.8,
+      "persistedState": "No rollback inferred; read-only native Alchemy/R2 inspection confirmed current archive markers and retained receipt state. Subsequent deployment repeated the bounded scan and converged with zero changes."
+    },
+    "metadataPath": {
+      "finding": "The already-converted code path used R2 get for metadata and returned without consuming the body. Current code uses native head; only legacy conversion opens a conditional body read and consumes it. Progress logs now preserve the native page continuation.",
+      "confidence": "The original timeout did not reproduce locally. A real native page with 25 references to a multi-MiB archive passed before and after the change; unchanged source and receipt ETags were verified. The metadata-only replay completed remotely. This does not isolate a provider/network cause or assert the old six-body connection-limit behavior."
+    }
+  },
+  "remoteParameters": {
+    "target": "https://cirro-sandbox-prod-rs7wexxow56rmsoz.manoel-carvalhoneto.workers.dev",
+    "measuredAt": 1792056691192,
+    "checks": [
+      {
+        "name": "quoted",
+        "exitCode": 0
+      },
+      {
+        "name": "split",
+        "exitCode": 0
+      },
+      {
+        "name": "single-quoted",
+        "exitCode": 0
+      },
+      {
+        "name": "escaped",
+        "exitCode": 0
+      },
+      {
+        "name": "empty",
+        "exitCode": 0
+      },
+      {
+        "name": "pipeline-status",
+        "exitCode": 0
+      },
+      {
+        "name": "negated-status",
+        "exitCode": 0
+      },
+      {
+        "name": "quoted-redirect",
+        "exitCode": 0
+      },
+      {
+        "name": "ordered-ambiguous-redirect",
+        "exitCode": 0
+      },
+      {
+        "name": "no-reparse",
+        "exitCode": 0
+      }
+    ],
+    "disposal": true
+  },
+  "remoteSdk": {
+    "checks": 6,
+    "passed": true,
+    "transport": "Effect FetchHttpClient",
+    "target": "production"
+  },
+  "remoteBinaryShell": {
+    "target": "https://cirro-sandbox-prod-rs7wexxow56rmsoz.manoel-carvalhoneto.workers.dev",
+    "measuredAt": 1792055379550,
+    "checks": [
+      {
+        "name": "stderr",
+        "bytes": 6,
+        "exitCode": 7
+      },
+      {
+        "name": "stderr-append",
+        "bytes": 12,
+        "exitCode": 7
+      },
+      {
+        "name": "pipe",
+        "bytes": 70003,
+        "exitCode": 0
+      },
+      {
+        "name": "append",
+        "bytes": 140006,
+        "exitCode": 0
+      },
+      {
+        "name": "failure",
+        "bytes": 70003,
+        "exitCode": 7
+      },
+      {
+        "name": "trap",
+        "bytes": 70003,
+        "exitCode": 126
+      },
+      {
+        "name": "head-lines",
+        "bytes": 5,
+        "exitCode": 0
+      },
+      {
+        "name": "tail-lines",
+        "bytes": 4,
+        "exitCode": 0
+      },
+      {
+        "name": "head-bytes",
+        "bytes": 3,
+        "exitCode": 0
+      },
+      {
+        "name": "tail-bytes",
+        "bytes": 4,
+        "exitCode": 0
+      },
+      {
+        "name": "wc-bytes",
+        "bytes": 3,
+        "exitCode": 0
+      },
+      {
+        "name": "sort",
+        "bytes": 16,
+        "exitCode": 0
+      },
+      {
+        "name": "uniq",
+        "bytes": 13,
+        "exitCode": 0
+      },
+      {
+        "name": "grep",
+        "bytes": 5,
+        "exitCode": 0
+      }
+    ],
+    "disposal": true
+  },
+  "limitations": [
+    "Not a complete POSIX shell: pathname patterns, assignments, parameter operators, positional/special parameters and command substitution remain unsupported.",
+    "Shell-owned variable initialization, configurable field separators, compound statements, jobs, PTY and original stream ordering remain open.",
+    "No interpreter-state recovery or new arbitrary-crash/effect-intent boundary is added.",
+    "SDK/runtime publication and Minutei binding/model delivery remain pending; the GitHub credential collection remains locked and the public latest release is sdk-v0.9.0."
+  ],
+  "remoteParametersBeforeMetadataCorrection": {
+    "target": "https://cirro-sandbox-prod-rs7wexxow56rmsoz.manoel-carvalhoneto.workers.dev",
+    "measuredAt": 1792055379531,
+    "checks": [
+      {
+        "name": "quoted",
+        "exitCode": 0
+      },
+      {
+        "name": "split",
+        "exitCode": 0
+      },
+      {
+        "name": "single-quoted",
+        "exitCode": 0
+      },
+      {
+        "name": "escaped",
+        "exitCode": 0
+      },
+      {
+        "name": "empty",
+        "exitCode": 0
+      },
+      {
+        "name": "pipeline-status",
+        "exitCode": 0
+      },
+      {
+        "name": "negated-status",
+        "exitCode": 0
+      },
+      {
+        "name": "quoted-redirect",
+        "exitCode": 0
+      },
+      {
+        "name": "ordered-ambiguous-redirect",
+        "exitCode": 0
+      },
+      {
+        "name": "no-reparse",
+        "exitCode": 0
+      }
+    ],
+    "disposal": true
+  },
+  "remoteBinaryShellSource": "18dcbaaf5e3dec2f8145ecbda7667c13d063cf14; before the migration-only metadata correction; shell kernel and execution code unchanged",
+  "diagnosticCleanup": "Read-only native Alchemy Locate Action state dropped; no infrastructure resources deleted."
+}
