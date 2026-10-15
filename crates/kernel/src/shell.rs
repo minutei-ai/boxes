@@ -1,5 +1,6 @@
 use serde::Serialize;
 use std::collections::{BTreeMap, BTreeSet};
+use std::rc::Rc;
 use wasm_bindgen::prelude::*;
 
 #[derive(Debug, Serialize)]
@@ -344,7 +345,7 @@ pub fn expand(
 #[wasm_bindgen]
 pub struct Shell {
     commands: Vec<Command>,
-    environment: BTreeMap<String, String>,
+    environment: Rc<BTreeMap<String, String>>,
     exported: BTreeSet<String>,
     prepared: Option<Prepared>,
 }
@@ -352,7 +353,7 @@ pub struct Shell {
 struct Prepared {
     index: usize,
     argv: Vec<String>,
-    variables: BTreeMap<String, String>,
+    variables: Rc<BTreeMap<String, String>>,
     assigned: BTreeSet<String>,
 }
 
@@ -470,7 +471,7 @@ impl Shell {
         Ok(Self {
             commands: parse(source).map_err(|error| crate::fail(&error))?,
             exported: environment.keys().cloned().collect(),
-            environment,
+            environment: Rc::new(environment),
             prepared: None,
         })
     }
@@ -527,7 +528,7 @@ impl Shell {
         for (name, word) in &command.assignments {
             let value =
                 assignment_value(word, &variables, status).map_err(|error| crate::fail(&error))?;
-            variables.insert(name.clone(), value);
+            Rc::make_mut(&mut variables).insert(name.clone(), value);
             assigned.insert(name.clone());
             validate_variables(&variables).map_err(|error| crate::fail(&error))?;
         }
@@ -643,11 +644,11 @@ impl Shell {
                     }
                     if name == "export" {
                         if let Some(value) = value {
-                            prepared.variables.insert(key.into(), value.into());
+                            Rc::make_mut(&mut prepared.variables).insert(key.into(), value.into());
                         }
                         exported.insert(key.into());
                     } else {
-                        prepared.variables.remove(key);
+                        Rc::make_mut(&mut prepared.variables).remove(key);
                         exported.remove(key);
                     }
                 }
@@ -813,6 +814,130 @@ mod tests {
 
     fn path_value(word: &Word) -> String {
         values(std::slice::from_ref(word)).pop().unwrap()
+    }
+
+    #[test]
+    fn prepared_environment_shares_reads_and_detaches_command_assignments() {
+        let mut shell = Shell::new(
+            "echo \"$BASE\"; LOCAL=one; echo \"$LOCAL\"; LOCAL=temporary echo \"$LOCAL\"; export LOCAL; unset LOCAL",
+            r#"{"BASE":"retained"}"#,
+        ).unwrap();
+        assert_eq!(shell.argv(0, 0).unwrap(), r#"["echo","retained"]"#);
+        assert!(Rc::ptr_eq(
+            &shell.environment,
+            &shell.prepared.as_ref().unwrap().variables
+        ));
+        assert_eq!(shell.commit(0).unwrap(), "null");
+        shell.argv(1, 0).unwrap();
+        assert!(!Rc::ptr_eq(
+            &shell.environment,
+            &shell.prepared.as_ref().unwrap().variables
+        ));
+        assert!(!shell.environment.contains_key("LOCAL"));
+        shell.commit(1).unwrap();
+        assert_eq!(
+            shell.environment.get("LOCAL").map(String::as_str),
+            Some("one")
+        );
+        assert!(Rc::ptr_eq(
+            &shell.environment,
+            &shell.prepared.as_ref().unwrap().variables
+        ));
+        assert_eq!(shell.argv(2, 0).unwrap(), r#"["echo","one"]"#);
+        assert!(Rc::ptr_eq(
+            &shell.environment,
+            &shell.prepared.as_ref().unwrap().variables
+        ));
+        assert_eq!(shell.argv(3, 0).unwrap(), r#"["echo","one"]"#);
+        assert_eq!(
+            shell.environment.get("LOCAL").map(String::as_str),
+            Some("one")
+        );
+        assert!(!Rc::ptr_eq(
+            &shell.environment,
+            &shell.prepared.as_ref().unwrap().variables
+        ));
+        assert_eq!(
+            shell.environment().unwrap(),
+            r#"{"BASE":"retained","LOCAL":"temporary"}"#
+        );
+        shell.argv(4, 0).unwrap();
+        shell.commit(4).unwrap();
+        assert!(shell.exported.contains("LOCAL"));
+        shell.argv(5, 0).unwrap();
+        let previous = shell.environment.clone();
+        shell.commit(5).unwrap();
+        assert_eq!(previous.get("LOCAL").map(String::as_str), Some("one"));
+        assert!(!shell.environment.contains_key("LOCAL"));
+        assert!(!shell.exported.contains("LOCAL"));
+        assert_eq!(
+            shell.environment.get("BASE").map(String::as_str),
+            Some("retained")
+        );
+    }
+
+    #[test]
+    fn shared_environment_isolates_pipeline_special_builtins() {
+        let mut shell = Shell::new(
+            "export A=child | echo \"$A\"; unset A | echo \"$A\"; echo \"$A\"",
+            r#"{"A":"parent"}"#,
+        )
+        .unwrap();
+        shell.argv(0, 0).unwrap();
+        shell.commit(0).unwrap();
+        assert_eq!(
+            shell.environment.get("A").map(String::as_str),
+            Some("parent")
+        );
+        assert_eq!(
+            shell
+                .prepared
+                .as_ref()
+                .unwrap()
+                .variables
+                .get("A")
+                .map(String::as_str),
+            Some("child")
+        );
+        assert_eq!(shell.argv(1, 0).unwrap(), r#"["echo","parent"]"#);
+        shell.argv(2, 0).unwrap();
+        shell.commit(2).unwrap();
+        assert_eq!(
+            shell.environment.get("A").map(String::as_str),
+            Some("parent")
+        );
+        assert!(!shell.prepared.as_ref().unwrap().variables.contains_key("A"));
+        assert_eq!(shell.argv(3, 0).unwrap(), r#"["echo","parent"]"#);
+        assert_eq!(shell.argv(4, 0).unwrap(), r#"["echo","parent"]"#);
+    }
+
+    #[test]
+    fn rejected_export_preserves_shared_parent_environment() {
+        let mut environment: BTreeMap<String, String> = (0..127)
+            .map(|index| (format!("K{index}"), "retained".into()))
+            .collect();
+        environment.insert("A".into(), "parent".into());
+        let mut shell = Shell::new(
+            "export A=child EXTRA=overflow",
+            &serde_json::to_string(&environment).unwrap(),
+        )
+        .unwrap();
+        shell.argv(0, 0).unwrap();
+        assert!(Rc::ptr_eq(
+            &shell.environment,
+            &shell.prepared.as_ref().unwrap().variables
+        ));
+        let result: serde_json::Value = serde_json::from_str(&shell.commit(0).unwrap()).unwrap();
+        assert_eq!(result["exitCode"], 2);
+        assert_eq!(result["fatal"], true);
+        assert_eq!(
+            shell.environment.get("A").map(String::as_str),
+            Some("parent")
+        );
+        assert!(!Rc::ptr_eq(
+            &shell.environment,
+            &shell.prepared.as_ref().unwrap().variables
+        ));
     }
 
     #[test]

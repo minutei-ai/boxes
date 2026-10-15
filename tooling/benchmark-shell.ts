@@ -97,6 +97,10 @@ const phases = await Effect.runPromise(
               });
               yield* admin.create({
                 id: "bench",
+                environment: Object.fromEntries([
+                  ["A", "retained"],
+                  ...Array.from({ length: 127 }, (_, index) => [`K${index}`, "x".repeat(440)]),
+                ]),
                 policy: {
                   networkHosts: [],
                   interruptBudget: 1000,
@@ -119,10 +123,13 @@ const phases = await Effect.runPromise(
                       op: "process.run",
                       id: `phase-${phase}-${index}`,
                       language: "shell",
-                      source: "echo hello | wc -c",
+                      source: 'echo "$A"; '.repeat(64) + "true",
                     });
                     const elapsed = performance.now() - start;
-                    if (result.output?.stdout !== "6\n" || result.output.exitCode !== 0)
+                    if (
+                      result.output?.stdout !== "retained\n".repeat(64) ||
+                      result.output.exitCode !== 0
+                    )
                       return yield* Effect.die("Invalid benchmark result");
                     if (index >= 10) times.push(elapsed);
                   }),
@@ -148,8 +155,8 @@ await Bun.write(
   Schema.encodeSync(Schema.fromJsonString(Report))({
     measuredAt: new Date().toISOString(),
     environment:
-      "local native Alchemy workerd; extracted runtime archives; fresh R2 per phase; sequential ABBA then BAAB",
-    workload: "echo hello | wc -c",
+      "local native Alchemy workerd; runtime module directories; fresh R2 per phase; sequential ABBA then BAAB",
+    workload: 'echo "$A"; '.repeat(64) + "true",
     phases,
   }) + "\n",
 );
