@@ -171,6 +171,7 @@ enum Request {
     Mkdir {
         path: String,
         base: String,
+        mode: u32,
     },
     Remove {
         path: String,
@@ -439,6 +440,7 @@ struct State {
     stdin: Rc<Vec<u8>>,
     stdin_offset: Rc<Cell<usize>>,
     directories: BTreeMap<u32, Vec<DirectoryEntry>>,
+    umask: u32,
     open_mode: Option<u32>,
     open_direct: bool,
 }
@@ -2573,7 +2575,12 @@ fn dispatch(caller: &mut Caller<'_, State>, name: &str, args: &[u64]) -> Result<
             let (path, base) = directory_path(caller, a[0] as u32, a[1], a[2], right)?;
             match name {
                 "path_create_directory" => {
-                    suspend(caller, Request::Mkdir { path, base }, Completion::Unit)?;
+                    let mode = 0o777 & !caller.data().umask;
+                    suspend(
+                        caller,
+                        Request::Mkdir { path, base, mode },
+                        Completion::Unit,
+                    )?;
                 }
                 "path_remove_directory" | "path_unlink_file" => {
                     suspend(
@@ -2692,6 +2699,23 @@ fn dispatch(caller: &mut Caller<'_, State>, name: &str, args: &[u64]) -> Result<
             put(caller, a[1], &data)?;
             put(caller, a[4], &(data.len() as u32).to_le_bytes())?;
         }
+        "umask" | "proc_umask" => {
+            let (set_mask, pointer) = if name == "umask" {
+                if !matches!(a[1], 0 | 1) {
+                    return Err(Failure::Errno(28));
+                }
+                (a[1] != 0, a[2])
+            } else {
+                (true, a[1])
+            };
+            bytes(caller, pointer, 4)?;
+            let previous = caller.data().umask;
+            put(caller, pointer, &previous.to_le_bytes())?;
+            if set_mask {
+                caller.data_mut().umask = a[0] as u32 & 0o777;
+            }
+        }
+        "set_raw_mode" => return Err(Failure::Errno(59)),
         "set_open_mode" => caller.data_mut().open_mode = Some(a[0] as u32 & 0o7777),
         "set_open_direct" => caller.data_mut().open_direct = a[0] != 0,
         "net_recv" | "net_send" => {
@@ -2768,7 +2792,7 @@ fn dispatch(caller: &mut Caller<'_, State>, name: &str, args: &[u64]) -> Result<
                     path,
                     base,
                     read,
-                    mode: a[4] as u32 & 0o7777,
+                    mode: a[4] as u32 & 0o7777 & !caller.data().umask,
                 },
                 Completion::Tmpfile {
                     descriptor,
@@ -2777,14 +2801,15 @@ fn dispatch(caller: &mut Caller<'_, State>, name: &str, args: &[u64]) -> Result<
             )?;
         }
         "path_open" => {
-            let mode = caller.data_mut().open_mode.take().unwrap_or(0o644);
+            let requested_mode = caller.data_mut().open_mode.take().unwrap_or(0o666);
             let direct = std::mem::take(&mut caller.data_mut().open_direct);
             if direct {
                 return Err(Failure::Errno(58));
             }
-            if mode > 0o777 {
+            if requested_mode > 0o777 {
                 return Err(Failure::Errno(28));
             }
+            let mode = requested_mode & !caller.data().umask;
             bytes(caller, a[8], 4)?;
             if a[1] & !1 != 0 || a[4] & !15 != 0 || a[7] & !5 != 0 {
                 return Err(Failure::Errno(58));
@@ -3044,6 +3069,22 @@ fn linker(engine: &Engine) -> Result<Linker<State>, String> {
     bind!("wasi_snapshot_preview1","clock_time_get",a:i32,b:i64,c:i32);
     bind!("wasi_snapshot_preview1","clock_res_get",a:i32,b:i32);
     bind!("wasi_snapshot_preview1", "sched_yield");
+    bind!("host_process","umask",a:i32,b:i32,c:i32);
+    bind!("host_process","proc_umask",a:i32,b:i32);
+    bind!("host_tty","set_raw_mode",a:i32);
+    linker
+        .func_wrap(
+            "host_tty",
+            "read",
+            |_caller: Caller<'_, State>,
+             _pointer: i32,
+             _length: i32,
+             _timeout: i32|
+             -> Result<i32, Error> {
+                Err(Error::new("TTY input requires an attached terminal"))
+            },
+        )
+        .map_err(|error| error.to_string())?;
     bind!("host_process","proc_getpid",a:i32);
     bind!("host_process","proc_kill",a:i32,b:i32);
     bind!("host_process","proc_sigaction",a:i32,b:i32,c:i32,d:i32,e:i32);
@@ -3358,6 +3399,7 @@ impl WasmGuest {
                 stdin: Rc::new(stdin.to_vec()),
                 stdin_offset: Rc::new(Cell::new(0)),
                 directories: BTreeMap::new(),
+                umask: 0o022,
                 open_mode: None,
                 open_direct: false,
             },
@@ -3383,6 +3425,7 @@ impl WasmGuest {
             state.pid = previous.pid;
             state.parent_pid = previous.parent_pid;
             state.cwd = previous.cwd.clone();
+            state.umask = previous.umask;
             state.signal_mask = previous.signal_mask;
             state.pending_signals = previous.pending_signals.clone();
             state.stopped = previous.stopped.clone();
@@ -4266,6 +4309,7 @@ impl WasmGuest {
         state.pid = pid;
         state.parent_pid = parent.pid;
         state.cwd = cwd.into();
+        state.umask = parent.umask;
         state.processes = table.clone();
         table.borrow_mut().next_pid += 1;
         table.borrow_mut().memory_bytes += self.memory_limit;

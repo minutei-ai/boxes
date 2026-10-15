@@ -58,6 +58,29 @@ Shell source supports `NAME=value` assignments, temporary command prefixes, `:` 
 
 Variables are scoped to one shell execution. They do not patch sandbox configuration, another process or a future shell invocation. Command lookup uses the effective shell PATH and `cd` uses the effective HOME. Tool package defaults still apply at the existing executable-loading boundary when no exported override is provided. Local state is limited to 128 set variables, 128 export declarations, 128 readonly declarations, 4096 UTF-8 bytes per value, 128 UTF-16 units per name and 64 KiB of serialized variable data. Full shell initialization, automatic PWD/OLDPWD maintenance, functions and the remaining POSIX stages remain open. Local and deployed proof are tracked separately in the parity evidence.
 
+For compound scripts, install the digest-pinned upstream `sh` package with `software.install` and invoke it through `process.execFile`. The tested artifact identifies itself as Brush 0.3.0; it runs as guest Wasm in the existing Rust interpreter. Installing a sandbox file requires read/write/manage authority, and execution requires read/execute. The native tests cover functions, conditionals, loops, arithmetic, parameter defaults and creation masks. The built-in `language: "shell"` interpreter keeps its existing bounded grammar.
+
+```ts
+yield *
+  client.action(id, {
+    op: "software.install",
+    source: {
+      path: "/tmp/sh.aospkg",
+      digest: "sha256:f606cc4caa9ba50f7022d681269ca0ea98ccffc0d29f3106a0f18ab593c59412",
+    },
+  });
+yield *
+  client.action(id, {
+    op: "process.execFile",
+    id: "compound-script",
+    command: "sh",
+    args: ["-c", "for value in one two; do echo $value; done"],
+    env: { PATH: "/opt/cirro/bin" },
+  });
+```
+
+Obtain the package from the [digest-addressed published artifact](https://releases.rivet.dev/agent-os/latest/software/packages/sh/f606cc4caa9ba50f7022d681269ca0ea98ccffc0d29f3106a0f18ab593c59412.aospkg) and stage it at the sandbox path before installation. `umask` starts at 0022 per WASI process, applies to file/directory/anonymous-file creation, is copied into a child, survives exec and is retained by a confirmed same-build heap checkpoint. It does not change the sandbox configuration or another process. A mask never grants filesystem write authority. Unattached terminal raw mode returns ENOTTY; terminal reads fail explicitly. PTY support and complete shell conformance remain open.
+
 Sandbox creation accepts `environment`. `config.get` returns it alongside the policy; `config.set` and `config.patch` require `manage` and accept an optional replacement `environment` map. Omitting the map preserves it, `{}` clears configured overrides, and an empty string remains a value. These values are persisted in the same conditional root publication as policy and filesystem state. Readers with `read` can inspect configuration, so it is not a secret store.
 
 Execution merges installed package defaults, sandbox configuration, then the action’s optional `env`, in that order. Every admitted program captures the merged map before reserving its receipt; later configuration edits and Worker replacement do not alter queued inputs. JavaScript/TypeScript expose a guest-local `process.env` without Node host capabilities. Python exposes `os.environ` and `os.getenv` through a restricted native module; this does not provide the full Python `os` module. Mutations of either guest map do not change persisted configuration or later executions. Shell and WASI receive the same captured map, and Worker bindings are never inherited.

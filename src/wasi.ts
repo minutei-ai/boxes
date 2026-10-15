@@ -1007,6 +1007,7 @@ export const wasi = Effect.fn("wasi.execute")(function* (
                   if (existing.failure._tag !== "Fault" || existing.failure.code !== "ENOENT")
                     return yield* existing.failure;
                   yield* kernelCall(() => kernel.mkdir(path, false));
+                  yield* kernelCall(() => kernel.chmod(path, input.mode));
                   state.dirty = true;
                   return { data: Buffer.alloc(0), path, directory: true, value: 0n };
                 }),

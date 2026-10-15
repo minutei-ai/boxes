@@ -699,7 +699,12 @@ export const WasmStep = Schema.Union([
     follow: Schema.Boolean,
   }),
   Schema.Struct({ kind: Schema.Literal("directory"), path: Path, fd: Schema.Int }),
-  Schema.Struct({ kind: Schema.Literal("mkdir"), path: Path, base: Path }),
+  Schema.Struct({
+    kind: Schema.Literal("mkdir"),
+    path: Path,
+    base: Path,
+    mode: Schema.Int.check(Schema.isBetween({ minimum: 0, maximum: 511 })),
+  }),
   Schema.Struct({
     kind: Schema.Literal("remove"),
     path: Path,
