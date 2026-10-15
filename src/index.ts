@@ -122,7 +122,7 @@ const route = Effect.fn("api.route")(function* (request: Request, env: Env) {
       headers: { "content-type": "application/json", "cache-control": "no-store" },
     });
   }
-  if (url.pathname === "/v1/migrations/filesystem-v3") {
+  if (url.pathname === "/v1/migrations/filesystem-v4") {
     yield* administrator(env, token);
     const receipt = yield* migrateFilesystem(env);
     return new Response(Schema.encodeSync(Schema.fromJsonString(MigrationReceipt))(receipt), {

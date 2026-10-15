@@ -18,44 +18,44 @@ const migrate = Alchemy.Action(
     const key = yield* Config.Redacted("CIRRO_API_KEY");
     return Effect.fn("deployment.migrate")(function* (input: typeof Deployment.Type) {
       const url = yield* Schema.decodeUnknownEffect(Schema.String)(input.url);
+      const step = Effect.fn("deployment.migrateStep")(
+        function* (path: string) {
+          yield* Effect.logInfo({ migration: path, phase: "start" });
+          const response = yield* Effect.tryPromise({
+            try: () =>
+              fetch(new URL(path, url), {
+                method: "POST",
+                headers: { authorization: `Bearer ${Redacted.value(key)}` },
+                signal: AbortSignal.timeout(120_000),
+              }),
+            catch: (cause) => new MigrationRequestFailure({ cause, path }),
+          });
+          if (!response.ok)
+            return yield* new MigrationRequestFailure({ cause: response.status, path });
+          const text = yield* Effect.tryPromise({
+            try: () => response.text(),
+            catch: (cause) => new MigrationRequestFailure({ cause, path }),
+          });
+          const receipt = yield* Schema.decodeUnknownEffect(
+            Schema.fromJsonString(MigrationReceipt),
+          )(text);
+          yield* Effect.logInfo({ migration: path, phase: "done", migrated: receipt.migrated });
+          return receipt;
+        },
+        Effect.retry({
+          times: 10,
+          schedule: Schedule.spaced("2 seconds"),
+          while: (failure) => failure._tag === "MigrationRequestFailure" && failure.cause === 404,
+        }),
+      );
       const receipts = yield* Effect.forEach(
         [
           "/v1/migrations/execution-policy-v2",
-          "/v1/migrations/filesystem-v3",
           "/v1/migrations/wasm-inputs-v1",
           "/v1/migrations/process-receipts-v2",
         ],
-        (path) =>
-          Effect.gen(function* () {
-            yield* Effect.logInfo({ migration: path, phase: "start" });
-            const response = yield* Effect.tryPromise({
-              try: () =>
-                fetch(new URL(path, url), {
-                  method: "POST",
-                  headers: { authorization: `Bearer ${Redacted.value(key)}` },
-                  signal: AbortSignal.timeout(120_000),
-                }),
-              catch: (cause) => new MigrationRequestFailure({ cause, path }),
-            });
-            if (!response.ok)
-              return yield* new MigrationRequestFailure({ cause: response.status, path });
-            const text = yield* Effect.tryPromise({
-              try: () => response.text(),
-              catch: (cause) => new MigrationRequestFailure({ cause, path }),
-            });
-            const receipt = yield* Schema.decodeUnknownEffect(
-              Schema.fromJsonString(MigrationReceipt),
-            )(text);
-            yield* Effect.logInfo({ migration: path, phase: "done", migrated: receipt.migrated });
-            return receipt;
-          }).pipe(
-            Effect.retry({
-              times: 10,
-              schedule: Schedule.spaced("2 seconds"),
-              while: (failure) =>
-                failure._tag === "MigrationRequestFailure" && failure.cause === 404,
-            }),
-          ),
+        step,
+        { concurrency: 1 },
       );
       const progress = { pages: 0, migrated: 0 };
       const cursors: (string | null)[] = [null];
@@ -97,7 +97,12 @@ const migrate = Alchemy.Action(
         });
         if (page.cursor !== null) cursors.push(page.cursor);
       }
-      return { receipts, inputMigration: progress, deployedAt: input.deployedAt };
+      const filesystem = yield* step("/v1/migrations/filesystem-v4");
+      return {
+        receipts: [...receipts, filesystem],
+        inputMigration: progress,
+        deployedAt: input.deployedAt,
+      };
     });
   }),
 );

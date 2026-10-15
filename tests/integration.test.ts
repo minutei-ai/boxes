@@ -2156,9 +2156,9 @@ test("metadata migration assigns persistent unique identities without inventing 
     Schema.encodeSync(Schema.fromJsonString(Head))({ ...head, manifest: prior }),
   );
   expect((await act("metadata-migration", token, { op: "vm.status" })).status).toBe(500);
-  expect((await post("/v1/migrations/filesystem-v3", token, {})).status).toBe(401);
+  expect((await post("/v1/migrations/filesystem-v4", token, {})).status).toBe(401);
   const receipt = Schema.decodeUnknownSync(MigrationReceipt)(
-    await (await post("/v1/migrations/filesystem-v3", admin, {})).json(),
+    await (await post("/v1/migrations/filesystem-v4", admin, {})).json(),
   );
   expect(receipt.migrated).toBe(1);
   const stat = Schema.decodeUnknownSync(FileStat)(
@@ -2177,7 +2177,7 @@ test("metadata migration assigns persistent unique identities without inventing 
   );
   expect(status.generation).toBe(7);
   const repeat = Schema.decodeUnknownSync(MigrationReceipt)(
-    await (await post("/v1/migrations/filesystem-v3", admin, {})).json(),
+    await (await post("/v1/migrations/filesystem-v4", admin, {})).json(),
   );
   expect(repeat.migrated).toBe(0);
 });

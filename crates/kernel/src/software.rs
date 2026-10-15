@@ -391,19 +391,16 @@ impl Kernel {
             let root = root(package)?;
             if !ids.insert(&package.package_id)
                 || !roots.insert(root.clone())
-                || !matches!(
-                    self.state.nodes.get(&root),
-                    Some(super::Node::Directory { .. })
-                )
+                || !matches!(self.state.node(&root), Some(super::Node::Directory { .. }))
             {
                 return Err("EINVAL: duplicate package identity or missing package root".into());
             }
-            if matches!(self.state.nodes.get(&root),Some(super::Node::Directory{mode}) if mode & 0o222 != 0)
+            if matches!(self.state.node(&root),Some(super::Node::Directory{mode}) if mode & 0o222 != 0)
             {
                 return Err("EINVAL: package root is writable".into());
             }
             let prefix = format!("{root}/");
-            for (path, node) in self.state.nodes.range(prefix.clone()..) {
+            for (path, node) in self.state.entries_from(prefix.clone()) {
                 if !path.starts_with(&prefix) {
                     break;
                 }
@@ -426,7 +423,7 @@ impl Kernel {
             if let Some(provides) = &package.manifest.provides {
                 for projection in &provides.files {
                     let target = format!("{root}/{}", projection.source);
-                    if !matches!(self.state.nodes.get(&projection.target),Some(super::Node::Symlink{target:actual}) if actual == &target)
+                    if !matches!(self.state.node(&projection.target),Some(super::Node::Symlink{target:actual}) if actual == &target)
                     {
                         return Err("EINVAL: package directory projection is missing".into());
                     }
@@ -436,7 +433,7 @@ impl Kernel {
         for (alias, link) in &self.state.links {
             let target = self.package_target(link)?;
             if !segment(alias)
-                || !matches!(self.state.nodes.get(&format!("/opt/cirro/bin/{alias}")),Some(super::Node::Symlink{target:actual}) if actual == &target)
+                || !matches!(self.state.node(&format!("/opt/cirro/bin/{alias}")),Some(super::Node::Symlink{target:actual}) if actual == &target)
             {
                 return Err("EINVAL: invalid package command projection".into());
             }
@@ -450,7 +447,7 @@ impl Kernel {
         for part in path.split('/').filter(|part| !part.is_empty()) {
             current.push('/');
             current.push_str(part);
-            match self.state.nodes.get(&current) {
+            match self.state.node(&current) {
                 Some(super::Node::Directory { .. }) => {}
                 Some(_) => {
                     return Err("ENOTDIR: package projection parent is not a directory".into());
@@ -466,10 +463,8 @@ impl Kernel {
         self.state
             .nodes
             .retain(|path, _| path != root && !path.starts_with(&prefix));
-        self.state
-            .metadata
-            .retain(|path, _| path != root && !path.starts_with(&prefix));
-        if let Some(metadata) = self.state.metadata.get_mut(super::parent(root)) {
+        self.state.retain_linked();
+        if let Some(metadata) = self.state.metadata_mut(super::parent(root)) {
             metadata.mtime_ns = self.now;
             metadata.ctime_ns = self.now;
         }
@@ -510,8 +505,7 @@ impl Kernel {
         }
         let stale: Vec<String> = self
             .state
-            .nodes
-            .iter()
+            .entries()
             .filter(|(path, node)| {
                 (path.starts_with("/opt/cirro/bin/") || path.starts_with("/opt/cirro/share/man/"))
                     && matches!(node, super::Node::Symlink { .. })
@@ -523,7 +517,7 @@ impl Kernel {
             self.remove_package_tree(&path);
         }
         for (path, target) in aliases {
-            if matches!(self.state.nodes.get(&path),Some(super::Node::Symlink{target:actual}) if actual == &target)
+            if matches!(self.state.node(&path),Some(super::Node::Symlink{target:actual}) if actual == &target)
             {
                 continue;
             }
@@ -565,7 +559,7 @@ impl Kernel {
             snapshot_import: false,
         };
         staged.package_directory(&prepared.root)?;
-        if let Some(super::Node::Directory { mode }) = staged.state.nodes.get_mut(&prepared.root) {
+        if let Some(super::Node::Directory { mode }) = staged.state.node_mut(&prepared.root) {
             *mode = 0o555;
         }
         for entry in &prepared.entries {
@@ -575,8 +569,7 @@ impl Kernel {
         for entry in &prepared.entries {
             let metadata = staged
                 .state
-                .metadata
-                .get_mut(&entry.path)
+                .metadata_mut(&entry.path)
                 .ok_or("EIO: missing installed file metadata")?;
             metadata.uid = entry.uid;
             metadata.gid = entry.gid;
@@ -725,7 +718,7 @@ impl Kernel {
                 }
                 Err(error) => return Err(super::fail(&error)),
             };
-            match self.state.nodes.get(&path) {
+            match self.state.node(&path) {
                 Some(super::Node::File { mode, .. }) if mode & 0o111 != 0 => return Ok(path),
                 Some(_) => denied = true,
                 None => {}
@@ -965,8 +958,7 @@ mod tests {
         assert_eq!(
             kernel
                 .state
-                .metadata
-                .get("/opt/cirro/pkgs/echo/1.0.0/bin/echo")
+                .metadata("/opt/cirro/pkgs/echo/1.0.0/bin/echo")
                 .ok_or("missing metadata")?
                 .uid,
             1000

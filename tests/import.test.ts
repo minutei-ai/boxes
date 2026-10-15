@@ -220,7 +220,7 @@ test("UTF-8 manifest byte quota rejects a snapshot before publishing an unreadab
   const root = { path: "/", type: "directory", mode: "0755", uid: 0, gid: 0 };
   const entries = [
     root,
-    ...Array.from({ length: 1200 }, (_, index) => ({
+    ...Array.from({ length: 2200 }, (_, index) => ({
       ...root,
       path: `/${index}-${"🦀".repeat(970)}`,
     })),
@@ -238,9 +238,23 @@ test("UTF-8 manifest byte quota rejects a snapshot before publishing an unreadab
     ).status,
   ).toBe(413);
   expect((await (await instance.objects).list({ prefix: "sandboxes/quota/" })).objects).toEqual([]);
+  const compact = await post(instance, "/v1/sandboxes", {
+    id: "compact",
+    policy,
+    snapshot: {
+      kind: "snapshot-export",
+      source: {
+        format: "boxes-filesystem-snapshot-v1",
+        filesystem: { entries: entries.slice(0, 1201) },
+      },
+    },
+  });
+  expect(compact.status).toBe(201);
+  expect(Schema.decodeUnknownSync(Status)(await compact.json()).filesystemBytes).toBe(0);
   await instance.dispose();
   await rm(persisted, { recursive: true, force: true });
-});
+}, 10000);
+
 test("snapshot content above the old request limit restores multiple chunks and deduplicates repeated blocks", async () => {
   const persisted = await mkdtemp(join(tmpdir(), "boxes-import-blocks-"));
   const instance = runtime(persisted, { controlled: false });

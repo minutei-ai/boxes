@@ -44,11 +44,102 @@ struct Metadata {
 struct Manifest {
     version: u32,
     generation: u64,
+    nodes: BTreeMap<String, u64>,
+    inodes: BTreeMap<u64, Inode>,
+    next_inode: u64,
+    packages: Vec<software::Installed>,
+    links: BTreeMap<String, software::Link>,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+struct Inode {
+    node: Node,
+    metadata: Metadata,
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+struct PriorFilesystem {
+    version: u32,
+    generation: u64,
     nodes: BTreeMap<String, Node>,
     metadata: BTreeMap<String, Metadata>,
     next_inode: u64,
     packages: Vec<software::Installed>,
     links: BTreeMap<String, software::Link>,
+}
+
+impl Manifest {
+    fn node(&self, path: &str) -> Option<&Node> {
+        self.nodes
+            .get(path)
+            .and_then(|id| self.inodes.get(id))
+            .map(|inode| &inode.node)
+    }
+
+    fn node_mut(&mut self, path: &str) -> Option<&mut Node> {
+        let id = *self.nodes.get(path)?;
+        self.inodes.get_mut(&id).map(|inode| &mut inode.node)
+    }
+
+    fn metadata(&self, path: &str) -> Option<&Metadata> {
+        self.nodes
+            .get(path)
+            .and_then(|id| self.inodes.get(id))
+            .map(|inode| &inode.metadata)
+    }
+
+    fn metadata_mut(&mut self, path: &str) -> Option<&mut Metadata> {
+        let id = *self.nodes.get(path)?;
+        self.inodes.get_mut(&id).map(|inode| &mut inode.metadata)
+    }
+
+    fn entries(&self) -> impl Iterator<Item = (&String, &Node)> {
+        self.nodes
+            .iter()
+            .filter_map(|(path, id)| self.inodes.get(id).map(|inode| (path, &inode.node)))
+    }
+
+    fn entries_from(&self, prefix: String) -> impl Iterator<Item = (&String, &Node)> {
+        self.nodes
+            .range(prefix..)
+            .filter_map(|(path, id)| self.inodes.get(id).map(|inode| (path, &inode.node)))
+    }
+
+    fn retain_linked(&mut self) {
+        let linked: BTreeSet<_> = self.nodes.values().copied().collect();
+        self.inodes.retain(|id, _| linked.contains(id));
+    }
+
+    fn from_prior(prior: PriorFilesystem) -> Result<Self, String> {
+        if prior.version != 3 || prior.nodes.keys().ne(prior.metadata.keys()) {
+            return Err("EINVAL: prior inode paths do not match".into());
+        }
+        let mut nodes = BTreeMap::new();
+        let mut inodes = BTreeMap::new();
+        for (path, node) in prior.nodes {
+            let metadata = prior
+                .metadata
+                .get(&path)
+                .ok_or("EINVAL: missing prior metadata")?
+                .clone();
+            let id = metadata.inode;
+            if inodes.insert(id, Inode { node, metadata }).is_some() {
+                return Err("EINVAL: duplicate prior inode identity".into());
+            }
+            nodes.insert(path, id);
+        }
+        Ok(Self {
+            version: 4,
+            generation: prior.generation,
+            nodes,
+            inodes,
+            next_inode: prior.next_inode,
+            packages: prior.packages,
+            links: prior.links,
+        })
+    }
 }
 
 #[derive(Serialize)]
@@ -195,7 +286,10 @@ pub fn migrate_filesystem(json: &str) -> Result<String, JsValue> {
     let value: serde_json::Value =
         serde_json::from_str(json).map_err(|_| fail("EINVAL: invalid manifest"))?;
     let version = value.get("version").and_then(serde_json::Value::as_u64);
-    let state = match version {
+    if version == Some(4) {
+        return Kernel::new(Some(json.into()))?.manifest();
+    }
+    let prior = match version {
         Some(3) => serde_json::from_value(value).map_err(|_| fail("EINVAL: invalid manifest"))?,
         Some(2) => {
             let prior: PriorMetadataManifest = serde_json::from_value(value)
@@ -203,7 +297,7 @@ pub fn migrate_filesystem(json: &str) -> Result<String, JsValue> {
             if prior.version != 2 {
                 return Err(fail("EINVAL: invalid prior metadata version"));
             }
-            Manifest {
+            PriorFilesystem {
                 version: 3,
                 generation: prior.generation,
                 nodes: prior.nodes,
@@ -253,7 +347,7 @@ pub fn migrate_filesystem(json: &str) -> Result<String, JsValue> {
                     )
                 })
                 .collect();
-            Manifest {
+            PriorFilesystem {
                 version: 3,
                 generation: prior.generation,
                 next_inode: prior.nodes.len() as u64 + 1,
@@ -266,7 +360,7 @@ pub fn migrate_filesystem(json: &str) -> Result<String, JsValue> {
         _ => return Err(fail("EINVAL: unsupported manifest version")),
     };
     let kernel = Kernel {
-        state,
+        state: Manifest::from_prior(prior).map_err(|error| fail(&error))?,
         now: 0,
         snapshot_import: false,
     };
@@ -351,7 +445,7 @@ impl Kernel {
         }
         let logical = normalize(path, "/")?;
         let root = self.resolve(&logical, true)?;
-        match self.state.nodes.get(&root) {
+        match self.state.node(&root) {
             Some(Node::Directory { mode }) if mode & 0o500 == 0o500 => {}
             Some(Node::Directory { .. }) => return Err("EACCES: directory is not readable".into()),
             Some(_) => return Err("ENOTDIR: not a directory".into()),
@@ -363,7 +457,7 @@ impl Kernel {
             format!("{root}/")
         };
         let mut result = Vec::new();
-        for (key, node) in self.state.nodes.range(prefix.clone()..) {
+        for (key, node) in self.state.entries_from(prefix.clone()) {
             let Some(relative) = key.strip_prefix(&prefix) else {
                 break;
             };
@@ -397,36 +491,43 @@ impl Kernel {
     }
 
     fn fresh() -> Self {
+        let mut nodes = BTreeMap::new();
+        let mut inodes = BTreeMap::new();
+        for (index, (path, node)) in [
+            ("/", Node::Directory { mode: 0o755 }),
+            ("/home", Node::Directory { mode: 0o755 }),
+            ("/home/cirro", Node::Directory { mode: 0o755 }),
+            ("/tmp", Node::Directory { mode: 0o777 }),
+        ]
+        .into_iter()
+        .enumerate()
+        {
+            let id = index as u64 + 1;
+            nodes.insert(path.into(), id);
+            inodes.insert(
+                id,
+                Inode {
+                    node,
+                    metadata: Metadata {
+                        inode: id,
+                        uid: 0,
+                        gid: 0,
+                        atime_ns: 0,
+                        mtime_ns: 0,
+                        ctime_ns: 0,
+                    },
+                },
+            );
+        }
         Self {
             state: Manifest {
-                version: 3,
+                version: 4,
                 generation: 0,
+                nodes,
+                inodes,
+                next_inode: 5,
                 packages: Vec::new(),
                 links: BTreeMap::new(),
-                next_inode: 5,
-                metadata: ["/", "/home", "/home/cirro", "/tmp"]
-                    .into_iter()
-                    .enumerate()
-                    .map(|(index, path)| {
-                        (
-                            path.into(),
-                            Metadata {
-                                inode: index as u64 + 1,
-                                uid: 0,
-                                gid: 0,
-                                atime_ns: 0,
-                                mtime_ns: 0,
-                                ctime_ns: 0,
-                            },
-                        )
-                    })
-                    .collect(),
-                nodes: BTreeMap::from([
-                    ("/".into(), Node::Directory { mode: 0o755 }),
-                    ("/home".into(), Node::Directory { mode: 0o755 }),
-                    ("/home/cirro".into(), Node::Directory { mode: 0o755 }),
-                    ("/tmp".into(), Node::Directory { mode: 0o777 }),
-                ]),
             },
             now: 0,
             snapshot_import: false,
@@ -436,7 +537,7 @@ impl Kernel {
     fn resolve(&self, path: &str, follow_last: bool) -> Result<String, String> {
         let mut pending = normalize(path, "/")?;
         if pending != "/"
-            && matches!(self.state.nodes.get("/"), Some(Node::Directory { mode }) if mode & 0o100 == 0)
+            && matches!(self.state.node("/"), Some(Node::Directory { mode }) if mode & 0o100 == 0)
         {
             return Err("EACCES: root is not searchable".into());
         }
@@ -448,7 +549,7 @@ impl Kernel {
                 prefix.push('/');
                 prefix.push_str(piece);
                 let last = index + 1 == pieces.len();
-                match self.state.nodes.get(&prefix) {
+                match self.state.node(&prefix) {
                     Some(Node::Symlink { target }) if follow_last || !last => {
                         let suffix = pieces.get(index + 1..).unwrap_or_default().join("/");
                         replacement =
@@ -474,7 +575,7 @@ impl Kernel {
     }
 
     fn writable_parent(&self, path: &str) -> Result<(), String> {
-        match self.state.nodes.get(parent(path)) {
+        match self.state.node(parent(path)) {
             Some(Node::Directory { mode }) if mode & 0o300 == 0o300 => Ok(()),
             Some(Node::Directory { .. }) => Err("EACCES: parent is not writable".into()),
             Some(_) => Err("ENOTDIR: parent is not a directory".into()),
@@ -483,31 +584,38 @@ impl Kernel {
     }
 
     fn validate(&self) -> Result<(), String> {
-        if self.state.version != 3 || self.state.nodes.len() > MAX_NODES {
+        if self.state.version != 4
+            || self.state.nodes.len() > MAX_NODES
+            || self.state.inodes.len() > MAX_NODES
+        {
             return Err("EINVAL: invalid manifest version or node count".into());
         }
-        if !matches!(self.state.nodes.get("/"), Some(Node::Directory { .. })) {
+        if !matches!(self.state.node("/"), Some(Node::Directory { .. })) {
             return Err("EINVAL: root must be a directory".into());
         }
-        if self.state.metadata.keys().ne(self.state.nodes.keys()) {
-            return Err("EINVAL: metadata paths do not match nodes".into());
+        let mut linked = BTreeMap::<u64, usize>::new();
+        for id in self.state.nodes.values() {
+            if !self.state.inodes.contains_key(id) {
+                return Err("EINVAL: missing inode".into());
+            }
+            *linked.entry(*id).or_default() += 1;
         }
-        let mut inodes = BTreeSet::new();
-        for meta in self.state.metadata.values() {
-            if meta.inode == 0 || meta.inode >= self.state.next_inode || !inodes.insert(meta.inode)
-            {
-                return Err("EINVAL: duplicate or invalid inode identity".into());
+        if linked.len() != self.state.inodes.len() {
+            return Err("EINVAL: unlinked persisted inode".into());
+        }
+        for (id, inode) in &self.state.inodes {
+            if *id == 0 || *id >= self.state.next_inode || inode.metadata.inode != *id {
+                return Err("EINVAL: invalid inode identity".into());
+            }
+            if matches!(inode.node, Node::Directory { .. }) && linked.get(id) != Some(&1) {
+                return Err("EINVAL: directory hard links are forbidden".into());
             }
         }
-        for (path, node) in &self.state.nodes {
+        for (path, node) in self.state.entries() {
             if normalize(path, "/")? != *path || node.mode() > 0o777 {
                 return Err("EINVAL: noncanonical manifest path or mode".into());
             }
-            if path != "/"
-                && !matches!(
-                    self.state.nodes.get(parent(path)),
-                    Some(Node::Directory { .. })
-                )
+            if path != "/" && !matches!(self.state.node(parent(path)), Some(Node::Directory { .. }))
             {
                 return Err("EINVAL: orphaned node".into());
             }
@@ -539,17 +647,17 @@ impl Kernel {
 
     fn used_bytes(&self) -> u64 {
         self.state
-            .nodes
+            .inodes
             .values()
-            .filter_map(|node| match node {
-                Node::File { size, .. } => Some(*size),
-                _ => None,
+            .map(|inode| match inode.node {
+                Node::File { size, .. } => size,
+                _ => 0,
             })
             .sum()
     }
 
     fn writable_file(&self, path: &str, size: u64) -> Result<u32, String> {
-        let mode = match self.state.nodes.get(path) {
+        let mode = match self.state.node(path) {
             Some(Node::File { mode, .. }) if mode & 0o200 != 0 => *mode,
             Some(Node::File { .. }) => return Err("EACCES: file is not writable".into()),
             Some(_) => return Err("EISDIR: not a regular file".into()),
@@ -558,7 +666,7 @@ impl Kernel {
                 0o644
             }
         };
-        let old = self.state.nodes.get(path).map_or(0, Node::size);
+        let old = self.state.node(path).map_or(0, Node::size);
         if self.used_bytes().saturating_sub(old).saturating_add(size) > MAX_TOTAL {
             return Err("ENOSPC: filesystem byte quota exceeded".into());
         }
@@ -587,7 +695,7 @@ impl Kernel {
             return Err("EINVAL: invalid content digest".into());
         }
         let mode = self.writable_file(&path, size)?;
-        let existing: BTreeSet<_> = match self.state.nodes.get(&path) {
+        let existing: BTreeSet<_> = match self.state.node(&path) {
             Some(Node::File { chunks, .. }) => chunks.iter().cloned().collect(),
             _ => BTreeSet::new(),
         };
@@ -604,35 +712,76 @@ impl Kernel {
         })
     }
 
+    fn link_path(&mut self, source: &str, destination: &str, follow: bool) -> Result<(), String> {
+        let source = self.resolve(source, follow)?;
+        match self.state.node(&source) {
+            Some(Node::Directory { .. }) => {
+                return Err("EPERM: directory hard links are forbidden".into());
+            }
+            Some(_) => {}
+            None => return Err("ENOENT: source does not exist".into()),
+        }
+        self.package_writable(&source, false)?;
+        let destination = self.resolve(destination, false)?;
+        self.package_writable(&destination, false)?;
+        self.writable_parent(&destination)?;
+        if self.state.nodes.contains_key(&destination) {
+            return Err("EEXIST: destination exists".into());
+        }
+        if self.state.nodes.len() >= MAX_NODES {
+            return Err("ENOSPC: directory entry quota exceeded".into());
+        }
+        let id = *self
+            .state
+            .nodes
+            .get(&source)
+            .ok_or("EIO: missing source inode")?;
+        if let Some(inode) = self.state.inodes.get_mut(&id) {
+            inode.metadata.ctime_ns = self.now;
+        }
+        if let Some(metadata) = self.state.metadata_mut(parent(&destination)) {
+            metadata.mtime_ns = self.now;
+            metadata.ctime_ns = self.now;
+        }
+        self.state.nodes.insert(destination, id);
+        Ok(())
+    }
+
     fn insert(&mut self, path: String, node: Node) -> Result<(), String> {
-        if !self.state.nodes.contains_key(&path) && self.state.nodes.len() >= MAX_NODES {
+        if let Some(id) = self.state.nodes.get(&path) {
+            let inode = self.state.inodes.get_mut(id).ok_or("EIO: missing inode")?;
+            inode.node = node;
+            inode.metadata.mtime_ns = self.now;
+            inode.metadata.ctime_ns = self.now;
+            return Ok(());
+        }
+        if self.state.nodes.len() >= MAX_NODES {
             return Err("ENOSPC: inode quota exceeded".into());
         }
-        if let Some(meta) = self.state.metadata.get_mut(&path) {
-            meta.mtime_ns = self.now;
-            meta.ctime_ns = self.now;
-        } else {
-            if self.state.next_inode >= 9_007_199_254_740_991 {
-                return Err("EOVERFLOW: inode identity exhausted".into());
-            }
-            self.state.metadata.insert(
-                path.clone(),
-                Metadata {
-                    inode: self.state.next_inode,
+        if self.state.next_inode >= 9_007_199_254_740_991 {
+            return Err("EOVERFLOW: inode identity exhausted".into());
+        }
+        let id = self.state.next_inode;
+        self.state.next_inode += 1;
+        self.state.inodes.insert(
+            id,
+            Inode {
+                node,
+                metadata: Metadata {
+                    inode: id,
                     uid: 0,
                     gid: 0,
                     atime_ns: self.now,
                     mtime_ns: self.now,
                     ctime_ns: self.now,
                 },
-            );
-            self.state.next_inode += 1;
-            if let Some(meta) = self.state.metadata.get_mut(parent(&path)) {
-                meta.mtime_ns = self.now;
-                meta.ctime_ns = self.now;
-            }
+            },
+        );
+        if let Some(meta) = self.state.metadata_mut(parent(&path)) {
+            meta.mtime_ns = self.now;
+            meta.ctime_ns = self.now;
         }
-        self.state.nodes.insert(path, node);
+        self.state.nodes.insert(path, id);
         Ok(())
     }
 }
@@ -669,7 +818,7 @@ impl Kernel {
             ));
         }
         self.state.nodes.retain(|path, _| path == "/");
-        self.state.metadata.retain(|path, _| path == "/");
+        self.state.retain_linked();
         self.state.next_inode = 2;
         Ok(())
     }
@@ -677,10 +826,10 @@ impl Kernel {
     pub fn reset_snapshot_root(&mut self) -> Result<(), JsValue> {
         self.snapshot_import = true;
         self.state.nodes.retain(|path, _| path == "/");
-        self.state.metadata.retain(|path, _| path == "/");
-        self.state
-            .nodes
-            .insert("/".into(), Node::Directory { mode: 0o755 });
+        self.state.retain_linked();
+        if let Some(node) = self.state.node_mut("/") {
+            *node = Node::Directory { mode: 0o755 };
+        }
         self.state.packages.clear();
         self.state.links.clear();
         Ok(())
@@ -713,10 +862,10 @@ impl Kernel {
     }
     pub fn initialize_times(&mut self, now: u64) {
         self.now = now;
-        for meta in self.state.metadata.values_mut() {
-            meta.atime_ns = now;
-            meta.mtime_ns = now;
-            meta.ctime_ns = now;
+        for inode in self.state.inodes.values_mut() {
+            inode.metadata.atime_ns = now;
+            inode.metadata.mtime_ns = now;
+            inode.metadata.ctime_ns = now;
         }
     }
 
@@ -778,38 +927,25 @@ impl Kernel {
         let path = self.resolve(path, follow).map_err(|e| fail(&e))?;
         let node = self
             .state
-            .nodes
-            .get(&path)
+            .node(&path)
             .ok_or_else(|| fail("ENOENT: file does not exist"))?;
+        let metadata = self
+            .state
+            .metadata(&path)
+            .ok_or_else(|| fail("EIO: missing metadata"))?;
         serde_json::to_string(&Stat {
             path: &path,
             kind: node.kind(),
             size: node.size(),
             mode: node.mode(),
-            inode: self
-                .state
-                .metadata
-                .get(&path)
-                .ok_or_else(|| fail("EIO: missing metadata"))?
-                .inode,
-            uid: self
-                .state
-                .metadata
-                .get(&path)
-                .ok_or_else(|| fail("EIO: missing metadata"))?
-                .uid,
-            gid: self
-                .state
-                .metadata
-                .get(&path)
-                .ok_or_else(|| fail("EIO: missing metadata"))?
-                .gid,
+            inode: metadata.inode,
+            uid: metadata.uid,
+            gid: metadata.gid,
             nlink: match node {
                 Node::Directory { .. } => {
                     2 + self
                         .state
-                        .nodes
-                        .iter()
+                        .entries()
                         .filter(|(key, node)| {
                             key.as_str() != "/"
                                 && parent(key) == path
@@ -817,29 +953,16 @@ impl Kernel {
                         })
                         .count() as u64
                 }
-                _ => 1,
+                _ => self
+                    .state
+                    .nodes
+                    .values()
+                    .filter(|id| **id == metadata.inode)
+                    .count() as u64,
             },
-            atime_ns: self
-                .state
-                .metadata
-                .get(&path)
-                .ok_or_else(|| fail("EIO: missing metadata"))?
-                .atime_ns
-                .to_string(),
-            mtime_ns: self
-                .state
-                .metadata
-                .get(&path)
-                .ok_or_else(|| fail("EIO: missing metadata"))?
-                .mtime_ns
-                .to_string(),
-            ctime_ns: self
-                .state
-                .metadata
-                .get(&path)
-                .ok_or_else(|| fail("EIO: missing metadata"))?
-                .ctime_ns
-                .to_string(),
+            atime_ns: metadata.atime_ns.to_string(),
+            mtime_ns: metadata.mtime_ns.to_string(),
+            ctime_ns: metadata.ctime_ns.to_string(),
         })
         .map_err(|_| fail("EIO: serialization failed"))
     }
@@ -847,7 +970,7 @@ impl Kernel {
     pub fn chunks(&self, path: &str, for_write: bool) -> Result<String, JsValue> {
         let path = self.resolve(path, true).map_err(|e| fail(&e))?;
         let required = if for_write { 0o200 } else { 0o400 };
-        match self.state.nodes.get(&path) {
+        match self.state.node(&path) {
             Some(Node::File { chunks, mode, .. }) if mode & required != 0 => {
                 serde_json::to_string(chunks).map_err(|_| fail("EIO: serialization failed"))
             }
@@ -866,7 +989,7 @@ impl Kernel {
     ) -> Result<String, JsValue> {
         let path = self.resolve(path, true).map_err(|error| fail(&error))?;
         let required = if for_write { 0o200 } else { 0o400 };
-        let (size, chunks) = match self.state.nodes.get(&path) {
+        let (size, chunks) = match self.state.node(&path) {
             Some(Node::File { size, chunks, mode }) if mode & required != 0 => (*size, chunks),
             Some(Node::File { .. }) => return Err(fail("EACCES: file content access is denied")),
             Some(_) => return Err(fail("EISDIR: not a regular file")),
@@ -899,7 +1022,7 @@ impl Kernel {
         let path = self.resolve(path, true).map_err(|error| fail(&error))?;
         self.package_writable(&path, false)
             .map_err(|error| fail(&error))?;
-        let old_size = self.state.nodes.get(&path).map_or(0, Node::size);
+        let old_size = self.state.node(&path).map_or(0, Node::size);
         let size = if length == 0 {
             old_size
         } else {
@@ -913,7 +1036,7 @@ impl Kernel {
         }
         self.writable_file(&path, size)
             .map_err(|error| fail(&error))?;
-        let old = match self.state.nodes.get(&path) {
+        let old = match self.state.node(&path) {
             Some(Node::File { chunks, .. }) => chunks.as_slice(),
             _ => &[],
         };
@@ -998,7 +1121,7 @@ impl Kernel {
             current.push('/');
             current.push_str(part);
             let resolved = self.resolve(&current, true).map_err(|e| fail(&e))?;
-            if let Some(node) = self.state.nodes.get(&resolved) {
+            if let Some(node) = self.state.node(&resolved) {
                 if !matches!(node, Node::Directory { .. }) {
                     return Err(fail("ENOTDIR: path is not a directory"));
                 }
@@ -1021,7 +1144,7 @@ impl Kernel {
 
     pub fn readdir(&self, path: &str) -> Result<String, JsValue> {
         let path = self.resolve(path, true).map_err(|e| fail(&e))?;
-        match self.state.nodes.get(&path) {
+        match self.state.node(&path) {
             Some(Node::Directory { mode }) if mode & 0o500 == 0o500 => {}
             Some(Node::Directory { .. }) => return Err(fail("EACCES: directory is not readable")),
             Some(_) => return Err(fail("ENOTDIR: not a directory")),
@@ -1029,13 +1152,12 @@ impl Kernel {
         }
         let entries: Vec<_> = self
             .state
-            .nodes
-            .iter()
+            .entries()
             .filter(|(key, _)| key.as_str() != "/" && parent(key) == path)
             .map(|(key, value)| Entry {
                 name: key.rsplit('/').next().unwrap_or_default(),
                 kind: value.kind(),
-                inode: self.state.metadata.get(key).map_or(0, |meta| meta.inode),
+                inode: self.state.metadata(key).map_or(0, |meta| meta.inode),
             })
             .collect();
         serde_json::to_string(&entries).map_err(|_| fail("EIO: serialization failed"))
@@ -1068,16 +1190,27 @@ impl Kernel {
         if !recursive && self.state.nodes.keys().any(|key| key.starts_with(&prefix)) {
             return Err(fail("ENOTEMPTY: directory is not empty"));
         }
-        self.state
-            .metadata
-            .retain(|key, _| key != &path && !key.starts_with(&prefix));
-        if let Some(meta) = self.state.metadata.get_mut(parent(&path)) {
+
+        if let Some(meta) = self.state.metadata_mut(parent(&path)) {
             meta.mtime_ns = self.now;
             meta.ctime_ns = self.now;
         }
+        let removed: BTreeSet<_> = self
+            .state
+            .nodes
+            .iter()
+            .filter(|(key, _)| *key == &path || key.starts_with(&prefix))
+            .map(|(_, id)| *id)
+            .collect();
         self.state
             .nodes
             .retain(|key, _| key != &path && !key.starts_with(&prefix));
+        for id in removed {
+            if let Some(inode) = self.state.inodes.get_mut(&id) {
+                inode.metadata.ctime_ns = self.now;
+            }
+        }
+        self.state.retain_linked();
         Ok(())
     }
 
@@ -1095,13 +1228,12 @@ impl Kernel {
         self.writable_parent(&to).map_err(|e| fail(&e))?;
         let source = self
             .state
-            .nodes
-            .get(&from)
+            .node(&from)
             .ok_or_else(|| fail("ENOENT: source does not exist"))?;
-        if from == to {
+        if from == to || self.state.nodes.get(&from) == self.state.nodes.get(&to) {
             return Ok(());
         }
-        if let Some(destination) = self.state.nodes.get(&to) {
+        if let Some(destination) = self.state.node(&to) {
             if matches!(source, Node::Directory { .. })
                 != matches!(destination, Node::Directory { .. })
             {
@@ -1119,6 +1251,7 @@ impl Kernel {
                 return Err(fail("ENOTEMPTY: destination directory is not empty"));
             }
         }
+        let replaced = self.state.nodes.get(&to).copied();
         let keys: BTreeSet<_> = self
             .state
             .nodes
@@ -1137,27 +1270,30 @@ impl Kernel {
                 })
             })
             .collect();
-        let moved_metadata: Vec<_> = keys
-            .iter()
-            .filter_map(|key| {
-                self.state.metadata.remove(key).map(|mut meta| {
-                    meta.ctime_ns = self.now;
-                    (
-                        format!("{to}{}", key.strip_prefix(&from).unwrap_or_default()),
-                        meta,
-                    )
-                })
-            })
-            .collect();
-        self.state.metadata.extend(moved_metadata);
+        for (_, id) in &moved {
+            if let Some(inode) = self.state.inodes.get_mut(id) {
+                inode.metadata.ctime_ns = self.now;
+            }
+        }
         for path in [parent(&from), parent(&to)] {
-            if let Some(meta) = self.state.metadata.get_mut(path) {
+            if let Some(meta) = self.state.metadata_mut(path) {
                 meta.mtime_ns = self.now;
                 meta.ctime_ns = self.now;
             }
         }
         self.state.nodes.extend(moved);
+        if let Some(id) = replaced
+            && let Some(inode) = self.state.inodes.get_mut(&id)
+        {
+            inode.metadata.ctime_ns = self.now;
+        }
+        self.state.retain_linked();
         Ok(())
+    }
+
+    pub fn link(&mut self, source: &str, destination: &str, follow: bool) -> Result<(), JsValue> {
+        self.link_path(source, destination, follow)
+            .map_err(|error| fail(&error))
     }
 
     pub fn symlink(&mut self, target: &str, path: &str) -> Result<(), JsValue> {
@@ -1180,7 +1316,7 @@ impl Kernel {
 
     pub fn readlink(&self, path: &str) -> Result<String, JsValue> {
         let path = self.resolve(path, false).map_err(|e| fail(&e))?;
-        match self.state.nodes.get(&path) {
+        match self.state.node(&path) {
             Some(Node::Symlink { target }) => Ok(target.clone()),
             Some(_) => Err(fail("EINVAL: not a symlink")),
             None => Err(fail("ENOENT: symlink does not exist")),
@@ -1203,8 +1339,7 @@ impl Kernel {
             .map_err(|error| fail(&error))?;
         let metadata = self
             .state
-            .metadata
-            .get_mut(&path)
+            .metadata_mut(&path)
             .ok_or_else(|| fail("ENOENT: file does not exist"))?;
         if flags == 0 {
             return Ok(());
@@ -1234,7 +1369,7 @@ impl Kernel {
             .map_err(|error| fail(&error))?;
         self.package_writable(&path, false)
             .map_err(|error| fail(&error))?;
-        match self.state.nodes.get(&path) {
+        match self.state.node(&path) {
             Some(Node::Directory { mode }) if mode & 0o300 == 0o300 => {}
             Some(Node::Directory { .. }) => return Err(fail("EACCES: directory is not writable")),
             Some(_) => return Err(fail("ENOTDIR: not a directory")),
@@ -1269,8 +1404,7 @@ impl Kernel {
             .map_err(|error| fail(&error))?;
         let metadata = self
             .state
-            .metadata
-            .get_mut(&path)
+            .metadata_mut(&path)
             .ok_or_else(|| fail("ENOENT: file does not exist"))?;
         metadata.uid = uid;
         metadata.gid = gid;
@@ -1285,10 +1419,10 @@ impl Kernel {
         let path = self.resolve(path, true).map_err(|e| fail(&e))?;
         self.package_writable(&path, false)
             .map_err(|error| fail(&error))?;
-        match self.state.nodes.get_mut(&path) {
+        match self.state.node_mut(&path) {
             Some(Node::File { mode: current, .. } | Node::Directory { mode: current }) => {
                 *current = mode;
-                if let Some(meta) = self.state.metadata.get_mut(&path) {
+                if let Some(meta) = self.state.metadata_mut(&path) {
                     meta.ctime_ns = self.now;
                 }
                 Ok(())
@@ -1303,29 +1437,172 @@ mod tests {
     use super::*;
 
     #[test]
+    fn hard_links_share_payload_metadata_and_survive_unlink_and_round_trip() -> Result<(), String> {
+        let mut kernel = Kernel::fresh();
+        kernel.insert(
+            "/tmp/original".into(),
+            Node::File {
+                mode: 0o644,
+                size: 3,
+                chunks: vec!["a".repeat(64)],
+            },
+        )?;
+        let id = kernel
+            .state
+            .metadata("/tmp/original")
+            .ok_or("missing original")?
+            .inode;
+        kernel.set_time(100);
+        kernel.link_path("/tmp/original", "/tmp/alias", false)?;
+        assert_eq!(kernel.used_bytes(), 3);
+        assert_eq!(
+            kernel
+                .state
+                .metadata("/tmp/alias")
+                .ok_or("missing alias")?
+                .inode,
+            id
+        );
+        assert_eq!(
+            kernel
+                .state
+                .metadata("/tmp/original")
+                .ok_or("missing original")?
+                .ctime_ns,
+            100
+        );
+        kernel.insert(
+            "/tmp/alias".into(),
+            Node::File {
+                mode: 0o600,
+                size: 7,
+                chunks: vec!["b".repeat(64)],
+            },
+        )?;
+        assert_eq!(
+            kernel
+                .state
+                .node("/tmp/original")
+                .ok_or("missing original")?
+                .size(),
+            7
+        );
+        assert_eq!(
+            kernel
+                .state
+                .node("/tmp/original")
+                .ok_or("missing original")?
+                .mode(),
+            0o600
+        );
+        assert_eq!(kernel.used_bytes(), 7);
+        let before = kernel.state.nodes.len();
+        kernel
+            .rename("/tmp/original", "/tmp/alias")
+            .map_err(|_| "rename failed")?;
+        assert_eq!(kernel.state.nodes.len(), before);
+        kernel.set_time(200);
+        kernel
+            .remove("/tmp/original", false)
+            .map_err(|_| "unlink failed")?;
+        assert!(!kernel.state.nodes.contains_key("/tmp/original"));
+        assert_eq!(
+            kernel
+                .state
+                .metadata("/tmp/alias")
+                .ok_or("missing alias")?
+                .ctime_ns,
+            200
+        );
+        let encoded = kernel.manifest().map_err(|_| "serialization failed")?;
+        let restored = Kernel::new(Some(encoded)).map_err(|_| "restore failed")?;
+        assert_eq!(
+            restored
+                .state
+                .metadata("/tmp/alias")
+                .ok_or("missing alias")?
+                .inode,
+            id
+        );
+        assert_eq!(restored.used_bytes(), 7);
+        kernel
+            .remove("/tmp/alias", false)
+            .map_err(|_| "last unlink failed")?;
+        assert!(!kernel.state.inodes.contains_key(&id));
+        kernel.validate()?;
+        Ok(())
+    }
+
+    #[test]
+    fn hard_links_preserve_symlink_identity_and_reject_directories_and_missing_sources()
+    -> Result<(), String> {
+        let mut kernel = Kernel::fresh();
+        kernel.insert(
+            "/tmp/symbolic".into(),
+            Node::Symlink {
+                target: "missing".into(),
+            },
+        )?;
+        kernel.link_path("/tmp/symbolic", "/home/symbolic", false)?;
+        assert_eq!(
+            kernel.state.nodes.get("/tmp/symbolic"),
+            kernel.state.nodes.get("/home/symbolic")
+        );
+        assert!(
+            kernel
+                .link_path("/tmp/symbolic", "/home/followed", true)
+                .is_err()
+        );
+        assert!(kernel.link_path("/tmp", "/home/directory", false).is_err());
+        assert!(
+            kernel
+                .link_path("/tmp/absent", "/home/absent", false)
+                .is_err()
+        );
+        assert!(
+            kernel
+                .link_path("/tmp/symbolic", "/home/symbolic", false)
+                .is_err()
+        );
+        kernel.validate()?;
+        Ok(())
+    }
+
+    #[test]
+    fn inode_graph_rejects_missing_payloads_unlinked_inodes_and_directory_aliases()
+    -> Result<(), String> {
+        let mut kernel = Kernel::fresh();
+        kernel.state.nodes.insert("/tmp/missing".into(), 999);
+        assert!(kernel.validate().is_err());
+        kernel.state.nodes.remove("/tmp/missing");
+        let id = *kernel.state.nodes.get("/tmp").ok_or("missing tmp")?;
+        kernel.state.nodes.insert("/home/directory".into(), id);
+        assert!(kernel.validate().is_err());
+        kernel.state.nodes.remove("/home/directory");
+        kernel.state.nodes.remove("/tmp");
+        assert!(kernel.validate().is_err());
+        Ok(())
+    }
+
+    #[test]
     fn ownership_preserves_identity_and_follows_only_selected_symlinks() -> Result<(), String> {
         let mut kernel = Kernel::fresh();
         kernel.initialize_times(10);
         kernel
             .symlink("/tmp", "/home/alias")
             .map_err(|_| "link failed")?;
-        let inode = kernel
-            .state
-            .metadata
-            .get("/tmp")
-            .ok_or("missing inode")?
-            .inode;
+        let inode = kernel.state.metadata("/tmp").ok_or("missing inode")?.inode;
         kernel.set_time(20);
         kernel
             .chown("/home/alias", 1000, 1001, false)
             .map_err(|_| "link ownership failed")?;
-        let target = kernel.state.metadata.get("/tmp").ok_or("missing target")?;
+        let target = kernel.state.metadata("/tmp").ok_or("missing target")?;
         assert_eq!((target.uid, target.gid, target.ctime_ns), (0, 0, 10));
         kernel.set_time(30);
         kernel
             .chown("/home/alias", u32::MAX, 1002, true)
             .map_err(|_| "target ownership failed")?;
-        let target = kernel.state.metadata.get("/tmp").ok_or("missing target")?;
+        let target = kernel.state.metadata("/tmp").ok_or("missing target")?;
         assert_eq!(
             (
                 target.uid,
@@ -1337,11 +1614,7 @@ mod tests {
             ),
             (u32::MAX, 1002, inode, 10, 10, 30)
         );
-        let link = kernel
-            .state
-            .metadata
-            .get("/home/alias")
-            .ok_or("missing link")?;
+        let link = kernel.state.metadata("/home/alias").ok_or("missing link")?;
         assert_eq!((link.uid, link.gid, link.ctime_ns), (1000, 1001, 20));
         kernel.validate()?;
         Ok(())
@@ -1364,8 +1637,7 @@ mod tests {
         assert_eq!(
             kernel
                 .state
-                .metadata
-                .get("/restored")
+                .metadata("/restored")
                 .ok_or("missing inode")?
                 .inode,
             next
@@ -1384,7 +1656,7 @@ mod tests {
         kernel
             .set_times("/tmp", true, u64::MAX, 100, 1)
             .map_err(|_| "timestamp update failed")?;
-        let metadata = kernel.state.metadata.get("/tmp").ok_or("missing inode")?;
+        let metadata = kernel.state.metadata("/tmp").ok_or("missing inode")?;
         assert_eq!(metadata.inode, 4);
         assert_eq!(metadata.atime_ns, u64::MAX);
         assert_eq!(metadata.mtime_ns, 10);
@@ -1401,7 +1673,7 @@ mod tests {
         kernel
             .set_times("/tmp", true, 0, 0, 10)
             .map_err(|_| "timestamp NOW failed")?;
-        let metadata = kernel.state.metadata.get("/tmp").ok_or("missing inode")?;
+        let metadata = kernel.state.metadata("/tmp").ok_or("missing inode")?;
         assert_eq!(
             (metadata.atime_ns, metadata.mtime_ns, metadata.ctime_ns),
             (30, 30, 30)
@@ -1458,20 +1730,22 @@ mod tests {
     #[test]
     fn corrupt_chunks_and_orphans_are_rejected() {
         let mut kernel = Kernel::fresh();
-        kernel.state.nodes.insert(
-            "/tmp/x".into(),
-            Node::File {
-                size: 1,
-                mode: 0o644,
-                chunks: vec!["a".into()],
-            },
-        );
+        kernel
+            .insert(
+                "/tmp/x".into(),
+                Node::File {
+                    size: 1,
+                    mode: 0o644,
+                    chunks: vec!["a".into()],
+                },
+            )
+            .unwrap();
         assert!(kernel.validate().is_err());
         kernel.state.nodes.remove("/tmp/x");
+        kernel.state.retain_linked();
         kernel
-            .state
-            .nodes
-            .insert("/missing/x".into(), Node::Directory { mode: 0o755 });
+            .insert("/missing/x".into(), Node::Directory { mode: 0o755 })
+            .unwrap();
         assert!(kernel.validate().is_err());
     }
 
@@ -1479,13 +1753,11 @@ mod tests {
     fn symlink_cycles_are_bounded() {
         let mut kernel = Kernel::fresh();
         kernel
-            .state
-            .nodes
-            .insert("/tmp/a".into(), Node::Symlink { target: "b".into() });
+            .insert("/tmp/a".into(), Node::Symlink { target: "b".into() })
+            .unwrap();
         kernel
-            .state
-            .nodes
-            .insert("/tmp/b".into(), Node::Symlink { target: "a".into() });
+            .insert("/tmp/b".into(), Node::Symlink { target: "a".into() })
+            .unwrap();
         assert!(kernel.resolve("/tmp/a", true).is_err());
     }
 
