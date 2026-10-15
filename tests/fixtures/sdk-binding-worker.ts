@@ -141,8 +141,9 @@ export default {
                 context.execute("await external_wait(); return external_save();"),
               ).pipe(Effect.forkChild);
               yield* waiting.await;
-              yield* Effect.promise(() => context.dispose());
+              const closing = yield* Effect.sync(() => context.dispose());
               yield* release.open;
+              yield* Effect.promise(() => closing);
               return yield* Fiber.join(running);
             }),
           );

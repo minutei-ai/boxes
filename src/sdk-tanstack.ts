@@ -75,8 +75,20 @@ export const createBoxesIsolateDriver = (
                 active,
                 (runId) =>
                   cleanup.action(id, { op: "process.cancel", id: runId }).pipe(
+                    Effect.andThen(() =>
+                      cleanup.action(id, {
+                        op: "process.wait",
+                        id: runId,
+                        timeoutMs: 25000,
+                      }),
+                    ),
                     Effect.catchTag("BoxesError", (failure) => {
-                      if (failure.error === "ENOENT") return Effect.void;
+                      if (
+                        failure.error === "ENOENT" ||
+                        failure.error === "ECANCELED" ||
+                        failure.error === "EXECUTION_FAILED"
+                      )
+                        return Effect.void;
                       return Effect.fail(failure);
                     }),
                   ),
