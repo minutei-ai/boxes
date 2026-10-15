@@ -129,6 +129,7 @@ const reserve = Effect.fn("process.reserve")(function* (
     retainedOutput: Schema.decodeUnknownSync(StoredRun.fields.output)(null),
     program: prepared,
     etag: receipt.etag,
+    sandboxEtag: session.etag,
     deadlineAt: Schema.decodeUnknownSync(Schema.NullOr(Schema.Int))(null),
   };
 });
@@ -144,7 +145,7 @@ const complete = Effect.fn("process.complete")(function* (
   const { record, etag } = reservation;
   const key = `processes/${capability.sandboxId}/${record.id}.json`;
   const publication = { etag, cancelled: false };
-  const lifetime = { etag: Schema.decodeUnknownSync(Schema.NullOr(Schema.String))(null) };
+  const lifetime = { etag: reservation.sandboxEtag };
   const snapshots: (typeof ObservedOutput.Type)[] = [];
   const retained: (typeof StoredOutput.Type)[] = [];
   const captured: (typeof CapturedBytes.Type)[] = [];
@@ -690,13 +691,16 @@ export const dispatch = Effect.fn("process.dispatch")(function* (env: Env, body:
   if (stored.id !== identity.id)
     return yield* new StorageFailure({ cause: "Process identity mismatch" });
   const now = yield* Clock.currentTimeMillis;
-  const disposed = yield* Effect.gen(function* () {
-    if (stored.status !== "queued" || event.eTag !== object.etag) return false;
-    const lifetime = yield* observeDisposal(env, identity.sandboxId, null).pipe(Effect.result);
-    if (lifetime._tag === "Success") return false;
-    if (lifetime.failure._tag === "Fault" && lifetime.failure.code === "ECANCELED") return true;
-    return yield* lifetime.failure;
+  const lifetime = yield* Effect.gen(function* () {
+    if (stored.status !== "queued" || event.eTag !== object.etag) return null;
+    return yield* observeDisposal(env, identity.sandboxId, null).pipe(Effect.result);
   });
+  const disposed =
+    lifetime !== null &&
+    lifetime._tag === "Failure" &&
+    lifetime.failure._tag === "Fault" &&
+    lifetime.failure.code === "ECANCELED";
+  if (lifetime !== null && lifetime._tag === "Failure" && !disposed) return yield* lifetime.failure;
   if (
     disposed ||
     (stored.deadlineAt !== null &&
@@ -743,6 +747,9 @@ export const dispatch = Effect.fn("process.dispatch")(function* (env: Env, body:
     return;
   }
   if (stored.status !== "queued" || event.eTag !== object.etag) return;
+  if (lifetime === null)
+    return yield* new StorageFailure({ cause: "Queued lifetime was not observed" });
+  if (lifetime._tag === "Failure") return yield* lifetime.failure;
   if (stored.authority === null || stored.authority.sandboxId !== identity.sandboxId)
     return yield* new StorageFailure({ cause: "Queued execution has no matching authority" });
   const capability = stored.authority;
@@ -807,6 +814,7 @@ export const dispatch = Effect.fn("process.dispatch")(function* (env: Env, body:
     {
       record,
       etag: claimed.etag,
+      sandboxEtag: lifetime.success,
       deadlineAt: running.deadlineAt,
       stdinMode: running.stdinMode,
       checkpoint: stored.checkpoint,
