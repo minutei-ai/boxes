@@ -132,3 +132,46 @@ test("a trapping start belongs to the new image and never resumes the old exec f
   expect(record.output?.exitCode).toBeNull();
   expect(record.output?.stdout).toBe("Z");
 });
+
+test("failed script exec preserves the old frame, shared descriptor offsets and close-on-exec flags", async () => {
+  const source = Buffer.from(
+    await Bun.file(join(import.meta.dir, "../dist/wasi-exec-path.wasm")).arrayBuffer(),
+  ).toString("base64");
+  for (const item of [
+    { id: "script-loop", content: "#!/tmp/next.wasm\n", errno: 32 },
+    { id: "script-missing", content: "#!/tmp/absent-interpreter\n", errno: 44 },
+    { id: "script-empty", content: "#! \t\n", errno: 45 },
+    { id: "script-denied", content: "#!/tmp/data\n", errno: 2 },
+  ]) {
+    expect(
+      (
+        await act({
+          op: "filesystem.writeFile",
+          path: "/tmp/next.wasm",
+          content: item.content,
+          encoding: "utf8",
+        })
+      ).status,
+    ).toBe(200);
+    expect((await act({ op: "filesystem.chmod", path: "/tmp/next.wasm", mode: 493 })).status).toBe(
+      200,
+    );
+    const response = await act({ op: "process.run", id: item.id, language: "wasm", source });
+    expect(response.status).toBe(200);
+    const record = Schema.decodeUnknownSync(RunRecord)(await response.json());
+    expect(record.status).toBe("exited");
+    expect(record.output?.result).toBe(item.errno);
+    expect(record.output?.exitCode).toBe(0);
+    expect(record.output?.stdout).toBe("");
+  }
+  expect(
+    (
+      await act({
+        op: "filesystem.writeFile",
+        path: "/tmp/next.wasm",
+        content: image,
+        encoding: "base64",
+      })
+    ).status,
+  ).toBe(200);
+});

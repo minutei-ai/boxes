@@ -99,6 +99,60 @@ test(
         expect(Buffer.from(scriptFile.content, scriptFile.encoding).toString("utf8")).toBe(
           "persisted",
         );
+        for (const probe of [
+          {
+            id: "spawn-script",
+            source: "/tmp/installed-script 'a b'; printf after",
+            suffix: "after",
+          },
+          { id: "exec-script", source: "exec /tmp/installed-script 'a b'", suffix: "" },
+        ]) {
+          const run = yield* client.action(id, {
+            op: "process.execFile",
+            id: probe.id,
+            command: "sh",
+            args: ["-c", probe.source],
+            env: { CIRRO_MARKER: "child-environment" },
+            stdin: { content: "child input\n", encoding: "utf8" },
+          });
+          expect(run.output?.exitCode).toBe(0);
+          expect(run.output?.stderr).toBe("");
+          expect(run.output?.stdout).toBe(
+            `/tmp/installed-script|a b|child-environment|child input\n${probe.suffix}`,
+          );
+        }
+        yield* client.action(id, {
+          op: "filesystem.mkdir",
+          path: "/tmp/context",
+          recursive: false,
+        });
+        yield* client.action(id, {
+          op: "filesystem.symlink",
+          path: "/tmp/context/interpreter",
+          target: "/opt/cirro/bin/sh",
+        });
+        yield* client.action(id, {
+          op: "filesystem.writeFile",
+          path: "/tmp/context/script",
+          content: '#!./interpreter\nprintf "%s|%s|%s\\n" "$PWD" "$0" "$1"',
+          encoding: "utf8",
+        });
+        yield* client.action(id, {
+          op: "filesystem.chmod",
+          path: "/tmp/context/script",
+          mode: 493,
+        });
+        const relativeInterpreter = yield* client.action(id, {
+          op: "process.execFile",
+          id: "relative-interpreter",
+          command: "sh",
+          args: ["-c", "cd /tmp/context; /opt/cirro/bin/sh -c 'exec ./script hello'"],
+        });
+        expect(relativeInterpreter.output).toMatchObject({
+          exitCode: 0,
+          stderr: "",
+          stdout: "/tmp/context|/tmp/context/script|hello\n",
+        });
 
         yield* Effect.forEach(publishedShellCases, (probe, index) =>
           Effect.gen(function* () {

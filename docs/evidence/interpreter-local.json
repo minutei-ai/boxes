@@ -1,7 +1,7 @@
 {
   "status": "Source implementation validated locally; not included in the published 0.10.1 archives or current production Worker.",
-  "baseCommit": "7ccf7dc2dbaedf04afc735b0607f4c394089c46d",
-  "change": "Host process.execFile and built-in shell command dispatch resolve executable shebang chains to an installed WASI interpreter. Rust owns header parsing; Effect owns bounded R2 loading and admission into the existing immutable WASI program archive.",
+  "baseCommit": "f05a477cb1a104c21ce4576cfc68eba9dc773b39",
+  "change": "Host process.execFile, built-in shell dispatch and WASI path exec/spawn share the bounded executable loader. Rust owns header parsing and process replacement/child state; Effect owns R2 loading and permission/argument checks. Binary argv is preserved unchanged; shebang argv inserts the interpreter, optional argument and script path. Native spawn rejects malformed images with WASI ENOEXEC (45).",
   "nativeProof": {
     "test": "tests/interpreter.test.ts",
     "runtime": "Native Alchemy workerd, R2 and Queue; Bun 1.4.3 on local Linux.",
@@ -12,29 +12,51 @@
       "Built-in shell pipeline dispatch preserves stdin and argv.",
       "Missing/empty/non-executable interpreters reject admission; inserted arguments count against the 128-argument limit.",
       "Execute-only capabilities cannot read scripts; another sandbox capability is denied.",
-      "Replacement Worker consumes the original captured interpreter, argv, environment and stdin after the script header changes."
+      "Replacement Worker consumes the original captured interpreter, argv, environment and stdin after the script header changes.",
+      "Published Brush spawns and path-execs a shebang script with inherited argv, environment and stdin.",
+      "A child spawned into /tmp/context path-execs a script whose relative interpreter uses that native child cwd.",
+      "Failed path exec through recursive, missing, empty or non-executable interpreter headers returns the expected errno while the original frame checks shared descriptor offsets and close-on-exec flags.",
+      "Native spawn returns ENOEXEC for both non-module text and a truncated Wasm header, without accepting PID outputs or changing the shared file."
     ],
-    "milliseconds": 2198.11,
+    "milliseconds": 2150.33,
     "publishedInterpreterTest": "tests/published-shell.test.ts downloads the existing digest-pinned sh and jq packages, validates their exact size and SHA-256, then executes a shebang script through the real sh interpreter. The script observes argv/environment/stdin and writes a file that is read through the public filesystem API."
   },
   "validation": {
     "completeGate": "bun run check passed: runtime and SDK builds, TypeScript, workspace Clippy, Cargo tests and native Bun tests.",
     "nativeTests": {
-      "tests": 348,
+      "tests": 349,
       "files": 64,
-      "assertions": 4776,
-      "seconds": 129.74,
+      "assertions": 4814,
+      "seconds": 129.89,
       "failures": 0
     },
     "rustParser": "Header tests cover optional argument preservation, UTF-8, NUL, empty/plain inputs and the bounded header.",
-    "format": "bun run format:check passed."
+    "format": "bun run format:check passed.",
+    "rpcTimeout": {
+      "previousCI": "https://github.com/minutei-ai/boxes/actions/runs/38821311735",
+      "observedFailure": "The 25 ms deadline elapsed before callback admission: calls was zero. Other 347 tests passed.",
+      "change": "The fixture requests 1000 ms, holds its accepted callback until at least 1100 ms and awaits a native latch proving callback completion after guest failure. Production runtime deadlines and limits are unchanged.",
+      "nativeMilliseconds": 1156.24
+    }
   },
   "limits": [
     "At most four script levels and a header ending within 256 bytes; overlong headers are rejected rather than truncated.",
     "Final interpreter must be WASI. No automatic interpreter installation, new JS/Python execFile runtime or complete Linux execve parity is claimed.",
     "The interpreter binary and argv are captured before Queue execution. Script bodies remain filesystem reads performed by the interpreter, not immutable body snapshots.",
-    "WASI guest exec/fexec dispatch is unchanged; this increment covers host/agent process.execFile and the built-in shell boundary.",
+    "Descriptor-based fexec remains binary-only. The published Brush direct cd followed by relative exec does not transport its live libc cwd to the native process. Explicit spawned child cwd is verified; environment PWD is not substituted for the missing transport.",
     "No new release archives, production deployment, remote binding proof or Minutei deployment in this increment.",
     "Test duration is not a benchmark of production latency, throughput or cost."
-  ]
+  ],
+  "unresolvedReceiptRead": {
+    "observation": "One full native run reported a missing disposed process receipt after guest entry had been observed. That gate had 348 passes and one failure. The cause is not established.",
+    "followup": "An isolated cancellation file passed all seven tests; native overwrite stress observed no missing objects in 3000 reads with one writer or 6000 reads with four writers. The final full gate passed, including disposal.",
+    "diagnostic": "The cancellation test still fails immediately on a missing receipt and now records sandbox ID and current metadata ETag.",
+    "limits": "These passes do not prove the intermittent failure is fixed. No application storage retry or unproven Alchemy patch was added."
+  },
+  "upstreamExecAbi": {
+    "commit": "4d48628304c1ddedafc9d55f60752093fcf6f3d2",
+    "execTransport": "https://github.com/rivet-dev/agentos/blob/4d48628304c1ddedafc9d55f60752093fcf6f3d2/toolchain/crates/wasi-ext/src/lib.rs",
+    "brushCaller": "https://github.com/rivet-dev/agentos/blob/4d48628304c1ddedafc9d55f60752093fcf6f3d2/toolchain/std-patches/crates/brush-builtins/0001-wasi-exec-builtin.patch",
+    "observedGap": "Direct cd /tmp/context; exec ./script hello returned 127 with no output. Its exec ABI provides path, argv, env and closed descriptors, but no live libc cwd. The native process retains its inherited cwd."
+  }
 }

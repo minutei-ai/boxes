@@ -14,6 +14,7 @@ import {
 import wasm from "cirro:wasi";
 import { createBindings } from "../dist/wasi/bindings";
 import { requirePermission } from "./auth";
+import { loadExecutable } from "./executable";
 import {
   Capability,
   Fault,
@@ -39,7 +40,6 @@ import { kernelCall, publish, read, write, StorageFailure } from "./storage";
 import type { Kernel } from "../dist/kernel/cirro_kernel";
 import type { OutputCapture } from "./output";
 import type { Env } from "./resources";
-import wasmModuleBytes from "./wasm-module-bytes.json";
 
 export class WasmFailure extends Schema.TaggedError<WasmFailure>()("WasmFailure", {
   cause: Schema.Unknown,
@@ -498,13 +498,14 @@ export const wasi = Effect.fn("wasi.execute")(function* (
                 Effect.gen(function* () {
                   yield* requirePermission(capability, "execute");
                   yield* requirePermission(capability, "read");
-                  const bytes = yield* Effect.gen(function* () {
+                  const image = yield* Effect.gen(function* () {
                     if (input.fd !== null) {
                       const fd = input.fd;
-                      return yield* Effect.try({
+                      const bytes = yield* Effect.try({
                         try: () => guest.file_data(fd),
                         catch: (cause) => new WasmFailure({ cause }),
                       });
+                      return { bytes, argv: input.argv };
                     }
                     if (input.path === null)
                       return yield* new Fault({
@@ -517,32 +518,24 @@ export const wasi = Effect.fn("wasi.execute")(function* (
                       Match.when(true, () => image),
                       Match.orElse(() => `${input.cwd}/${image}`),
                     );
-                    const stat = yield* kernelCall(() => kernel.stat(path, true)).pipe(
-                      Effect.flatMap(Schema.decodeUnknownEffect(Schema.fromJsonString(FileStat))),
+                    return yield* loadExecutable(
+                      env,
+                      capability,
+                      kernel,
+                      path,
+                      input.argv,
+                      input.cwd,
                     );
-                    if (stat.kind !== "file" || (stat.mode & 0o111) === 0)
-                      return yield* new Fault({
-                        code: "EACCES",
-                        status: 403,
-                        message: "Exec image is not executable",
-                      });
-                    if (stat.size > wasmModuleBytes)
-                      return yield* new Fault({
-                        code: "EFBIG",
-                        status: 413,
-                        message: "Exec image exceeds the Wasm module limit",
-                      });
-                    return yield* read(env, capability.sandboxId, kernel, stat.path);
                   });
                   yield* Effect.try({
                     try: () =>
                       guest.replace_image(
-                        bytes,
+                        image.bytes,
                         Schema.encodeSync(
                           Schema.fromJsonString(
                             WasmConfiguration.mapFields((fields) => Struct.omit(fields, ["stdin"])),
                           ),
-                        )({ argv: input.argv, env: { ...input.env, PWD: input.cwd } }),
+                        )({ argv: image.argv, env: { ...input.env, PWD: input.cwd } }),
                       ),
                     catch: (cause) => new WasmFailure({ cause }),
                   });
@@ -720,13 +713,14 @@ export const wasi = Effect.fn("wasi.execute")(function* (
                       message: "Child image was not found",
                     });
                   });
-                  if (stat.size > wasmModuleBytes)
-                    return yield* new Fault({
-                      code: "EFBIG",
-                      status: 413,
-                      message: "Child image exceeds the Wasm module limit",
-                    });
-                  const bytes = yield* read(env, capability.sandboxId, kernel, stat.path);
+                  const image = yield* loadExecutable(
+                    env,
+                    capability,
+                    kernel,
+                    stat.path,
+                    input.argv,
+                    location.cwd,
+                  );
                   const childScope = yield* Scope.provide(family)(
                     Effect.acquireRelease(Scope.make(), (scope) => Scope.close(scope, Exit.void)),
                   );
@@ -735,14 +729,14 @@ export const wasi = Effect.fn("wasi.execute")(function* (
                       Effect.try({
                         try: () =>
                           guest.spawn_child(
-                            bytes,
+                            image.bytes,
                             Schema.encodeSync(
                               Schema.fromJsonString(
                                 WasmConfiguration.mapFields((fields) =>
                                   Struct.omit(fields, ["stdin"]),
                                 ),
                               ),
-                            )({ argv: input.argv, env: { ...input.env, PWD: location.cwd } }),
+                            )({ argv: image.argv, env: { ...input.env, PWD: location.cwd } }),
                             location.cwd,
                           ),
                         catch: (cause) => new WasmFailure({ cause }),
@@ -1334,6 +1328,10 @@ export const wasi = Effect.fn("wasi.execute")(function* (
                 ["ENOSPC", 51],
                 ["ENOMEM", 48],
                 ["EFBIG", 22],
+                ["E2BIG", 1],
+                ["ENOEXEC", 45],
+                ["UNSUPPORTED_RUNTIME", 45],
+                ["EILSEQ", 25],
                 ["ELOOP", 32],
                 ["ENOTCAPABLE", 76],
                 ["EIO", 29],

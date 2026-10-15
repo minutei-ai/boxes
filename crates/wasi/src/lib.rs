@@ -4273,7 +4273,7 @@ impl WasmGuest {
         ) {
             Ok(child) => child,
             Err(_) => {
-                self.respond(52, &[], "/", false, 0, &[])?;
+                self.respond(45, &[], "/", false, 0, &[])?;
                 return Ok(None);
             }
         };

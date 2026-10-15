@@ -371,7 +371,14 @@ test("disposal cancels an admitted guest instead of accepting its late result", 
     }
     for (const attempt of Array.from({ length: 200 }, (_, index) => index)) {
       const receipt = await objects.get(`processes/${id}/work.json`);
-      if (receipt === null) return Promise.reject(new Error("Missing disposed process receipt"));
+      if (receipt === null) {
+        const metadata = await objects.head(`processes/${id}/work.json`);
+        return Promise.reject(
+          new Error(
+            `Missing disposed process receipt for ${id}; current metadata ETag: ${metadata?.etag}`,
+          ),
+        );
+      }
       const stored = Schema.decodeUnknownSync(Schema.fromJsonString(StoredRun))(
         await receipt.text(),
       );

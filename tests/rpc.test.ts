@@ -65,6 +65,7 @@ test("disposal during an accepted callback prevents the next host effect", async
 test("RPC timeout terminates guest execution while accepted callback effects retain their own lifetime", async () => {
   const result = await probe("timeout");
   expect(result.calls).toBe(1);
+  expect(result.callbackCompleted).toBe(true);
   expect(result.record?.status).toBe("failed");
   expect(result.record?.output?.result).not.toBe("late");
 });

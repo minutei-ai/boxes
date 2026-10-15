@@ -126,7 +126,21 @@ test("child image authorization and invalid image failures leave PID outputs and
   const invalid = Schema.decodeUnknownSync(RunRecord)(
     await (await act({ op: "process.run", id: "invalid", language: "wasm", source })).json(),
   );
-  expect(invalid.output?.result).toBe(552);
+  expect(invalid.output?.result).toBe(545);
+  expect(
+    (
+      await act({
+        op: "filesystem.writeFile",
+        path: "/tmp/child.wasm",
+        content: "AGFzbQ==",
+        encoding: "base64",
+      })
+    ).status,
+  ).toBe(200);
+  const malformed = Schema.decodeUnknownSync(RunRecord)(
+    await (await act({ op: "process.run", id: "malformed-wasm", language: "wasm", source })).json(),
+  );
+  expect(malformed.output?.result).toBe(545);
   const file = Schema.decodeUnknownSync(FileContent)(
     await (await act({ op: "filesystem.readFile", path: "/tmp/shared" })).json(),
   );

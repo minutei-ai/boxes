@@ -27,6 +27,7 @@ export const BindingProof = Schema.Struct({
 export const RpcProbe = Schema.Struct({
   record: Schema.NullOr(RunRecord),
   calls: Schema.Int,
+  callbackCompleted: Schema.Boolean,
   denied: Schema.NullOr(Schema.Int),
 });
 export const DriverProof = Schema.Struct({
@@ -390,6 +391,8 @@ export default {
           });
           const agent = yield* makeAgentBinding(env.BOXES_AGENT, token);
           const calls = { count: 0 };
+          const completion = { done: false };
+          const callbackCompleted = yield* Latch.make();
           const input = {
             id: "rpc-probe",
             tools: ["lookup"],
@@ -403,7 +406,7 @@ export default {
             input.source =
               'export default async ({tools}) => { await tools.call({op:"filesystem.writeFile",path:"/tmp/source",content:"old",encoding:"utf8"}); await tools.call({op:"filesystem.link",from:"/tmp/source",to:"/tmp/alias",follow:false}); await tools.call({op:"filesystem.writeFile",path:"/tmp/alias",content:"binding",encoding:"utf8"}); const a = await tools.call({op:"filesystem.stat",path:"/tmp/source",follow:true}); const b = await tools.call({op:"filesystem.stat",path:"/tmp/alias",follow:true}); const file = await tools.call({op:"filesystem.readFile",path:"/tmp/source"}); return {same:a.inode===b.inode,links:a.nlink,content:file.content,callback:await tools.call({op:"host.call",name:"lookup",input:{}})}; }';
           }
-          if (mode === "timeout") input.timeoutMs = 25;
+          if (mode === "timeout") input.timeoutMs = 1000;
           if (mode === "deadline") input.timeoutMs = 5000;
           if (mode === "undefined")
             input.source =
@@ -454,12 +457,21 @@ export default {
               }
               if (mode === "timeout")
                 return Effect.runPromise(
-                  Effect.sleep(100).pipe(Effect.as({ ok: true as const, value: "late" })),
+                  Effect.sleep(input.timeoutMs + 100).pipe(
+                    Effect.tap(() =>
+                      Effect.sync(() => {
+                        completion.done = true;
+                      }),
+                    ),
+                    Effect.tap(() => callbackCompleted.open),
+                    Effect.as({ ok: true as const, value: "late" }),
+                  ),
                 );
               if (mode === "oversize") return { ok: true, value: "x".repeat(1_048_576) };
               return { ok: true, value: "callback" };
             });
           }).pipe(Effect.result);
+          if (mode === "timeout" && calls.count > 0) yield* callbackCompleted.await;
           if (result._tag === "Failure") {
             if (result.failure._tag !== "BoxesError") return yield* result.failure;
             yield* boxes.action(id, { op: "vm.dispose" });
@@ -467,6 +479,7 @@ export default {
               Schema.encodeSync(Schema.fromJsonString(RpcProbe))({
                 record: null,
                 calls: calls.count,
+                callbackCompleted: completion.done,
                 denied: result.failure.status,
               }),
             );
@@ -477,6 +490,7 @@ export default {
             Schema.encodeSync(Schema.fromJsonString(RpcProbe))({
               record: result.success,
               calls: calls.count,
+              callbackCompleted: completion.done,
               denied: null,
             }),
           );
