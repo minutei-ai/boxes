@@ -7,9 +7,14 @@ pub struct Command {
     gate: String,
     pipe: bool,
     negate: bool,
-    input: Option<String>,
-    output: Option<String>,
-    append: bool,
+    redirects: Vec<Redirection>,
+}
+
+#[derive(Debug, Serialize)]
+#[serde(tag = "kind", rename_all = "camelCase")]
+enum Redirection {
+    Input { path: String },
+    Output { path: String, append: bool },
 }
 
 #[derive(Debug, PartialEq, Eq)]
@@ -68,7 +73,20 @@ fn tokenize(source: &str) -> Result<Vec<Token>, String> {
             quoted = true;
         } else if c == '\n' || matches!(c, ';' | '|' | '&' | '<' | '>') {
             if active {
-                tokens.push(word_token(std::mem::take(&mut word), quoted));
+                if matches!(c, '<' | '>')
+                    && !quoted
+                    && word.bytes().all(|byte| byte.is_ascii_digit())
+                {
+                    let descriptor = word
+                        .parse::<u32>()
+                        .map_err(|_| "ENOTSUP: unsupported redirection descriptor")?;
+                    if !((descriptor == 0 && c == '<') || (descriptor == 1 && c == '>')) {
+                        return Err("ENOTSUP: only stdin input and stdout output redirections are implemented".into());
+                    }
+                    word.clear();
+                } else {
+                    tokens.push(word_token(std::mem::take(&mut word), quoted));
+                }
                 active = false;
                 quoted = false;
             }
@@ -118,20 +136,14 @@ pub fn parse(source: &str) -> Result<Vec<Command>, String> {
         gate: "always".into(),
         pipe: false,
         negate: false,
-        input: None,
-        output: None,
-        append: false,
+        redirects: Vec::new(),
     };
     let mut prefix = false;
     let mut iter = tokens.into_iter();
     while let Some(token) = iter.next() {
         match token {
             Token::Word(word) => current.argv.push(word),
-            Token::Bang
-                if current.argv.is_empty()
-                    && current.input.is_none()
-                    && current.output.is_none() =>
-            {
+            Token::Bang if current.argv.is_empty() && current.redirects.is_empty() => {
                 if current.gate == "pipe" {
                     return Err("EINVAL: negation must begin the pipeline".into());
                 }
@@ -145,20 +157,22 @@ pub fn parse(source: &str) -> Result<Vec<Command>, String> {
                     Some(Token::Bang) => "!".into(),
                     _ => return Err("EINVAL: redirect requires a path".into()),
                 };
+                if current.redirects.len() >= 128 {
+                    return Err("EFBIG: shell redirection quota exceeded".into());
+                }
                 if op == "<" {
-                    if current.input.is_some() {
-                        return Err("ENOTSUP: duplicate input redirect".into());
-                    }
-                    current.input = Some(path);
+                    current.redirects.push(Redirection::Input { path });
                 } else {
-                    if current.output.is_some() {
-                        return Err("ENOTSUP: duplicate output redirect".into());
-                    }
-                    current.output = Some(path);
-                    current.append = op == ">>";
+                    current.redirects.push(Redirection::Output {
+                        path,
+                        append: op == ">>",
+                    });
                 }
             }
             Token::Operator(op) => {
+                if current.argv.is_empty() && !current.redirects.is_empty() {
+                    current.argv.push("true".into());
+                }
                 if current.argv.is_empty() {
                     if prefix {
                         return Err("ENOTSUP: negation requires a nonempty pipeline".into());
@@ -183,13 +197,14 @@ pub fn parse(source: &str) -> Result<Vec<Command>, String> {
                     gate: gate.into(),
                     pipe: false,
                     negate,
-                    input: None,
-                    output: None,
-                    append: false,
+                    redirects: Vec::new(),
                 };
                 prefix = false;
             }
         }
+    }
+    if current.argv.is_empty() && !current.redirects.is_empty() {
+        current.argv.push("true".into());
     }
     if !current.argv.is_empty() {
         commands.push(current);
@@ -214,7 +229,9 @@ mod tests {
         assert_eq!(result.len(), 3);
         assert_eq!(result[0].argv, vec!["echo", "a && b"]);
         assert!(result[0].pipe);
-        assert_eq!(result[1].output.as_deref(), Some("/tmp/x"));
+        assert!(
+            matches!(&result[1].redirects[0], Redirection::Output { path, append: false } if path == "/tmp/x")
+        );
         assert_eq!(result[2].gate, "success");
         Ok(())
     }
@@ -246,14 +263,46 @@ mod tests {
             assert_eq!(commands[0].argv, vec!["!", "true"]);
             assert!(!commands[0].negate);
         }
-        assert_eq!(parse("echo ! > !")?[0].output.as_deref(), Some("!"));
-        assert_eq!(parse("cat < !")?[0].input.as_deref(), Some("!"));
+        assert!(
+            matches!(&parse("echo ! > !")?[0].redirects[0], Redirection::Output { path, append: false } if path == "!")
+        );
+        assert!(
+            matches!(&parse("cat < !")?[0].redirects[0], Redirection::Input { path } if path == "!")
+        );
         assert_eq!(parse("echo \"a\\qb\"")?[0].argv, vec!["echo", "a\\qb"]);
         assert_eq!(
             parse("echo before \\\n after")?[0].argv,
             vec!["echo", "before", "after"]
         );
         assert!(parse("!\\\n false")?[0].negate);
+        Ok(())
+    }
+
+    #[test]
+    fn redirects_preserve_order_descriptor_spelling_and_bounded_empty_commands()
+    -> Result<(), String> {
+        let commands = parse("cat 0< first 1> second >> third < fourth; > empty")?;
+        assert_eq!(commands[0].argv, vec!["cat"]);
+        assert!(
+            matches!(&commands[0].redirects[0], Redirection::Input { path } if path == "first")
+        );
+        assert!(
+            matches!(&commands[0].redirects[1], Redirection::Output { path, append: false } if path == "second")
+        );
+        assert!(
+            matches!(&commands[0].redirects[2], Redirection::Output { path, append: true } if path == "third")
+        );
+        assert!(
+            matches!(&commands[0].redirects[3], Redirection::Input { path } if path == "fourth")
+        );
+        assert_eq!(commands[1].argv, vec!["true"]);
+        assert_eq!(parse("echo 1\"\"> file")?[0].argv, vec!["echo", "1"]);
+        assert_eq!(parse("echo 2 > file")?[0].argv, vec!["echo", "2"]);
+        for source in ["echo 2> file", "echo 0> file", "cat 1< file"] {
+            assert!(parse(source).is_err(), "{source}");
+        }
+        assert!(parse(&format!("true{}", " > file".repeat(128))).is_ok());
+        assert!(parse(&format!("true{}", " > file".repeat(129))).is_err());
         Ok(())
     }
 
@@ -265,7 +314,6 @@ mod tests {
             "echo x >",
             "echo $(whoami)",
             "echo x &",
-            "echo x > a > b",
         ] {
             assert!(parse(source).is_err(), "{source}");
         }

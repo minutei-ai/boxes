@@ -179,7 +179,11 @@ test("binary shell preserves cat, WASI pipes, redirections, failure output and d
         expect(quota.output?.stderr).toContain("byte quota");
         expect(
           (yield* client.action(id, { op: "filesystem.exists", path: "/tmp/over-quota" })).exists,
-        ).toBe(false);
+        ).toBe(true);
+        expect(
+          (yield* client.action(id, { op: "filesystem.readFile", path: "/tmp/over-quota" }))
+            .content,
+        ).toBe("");
         const filterInput = Buffer.from([
           65, 255, 0, 13, 10, 98, 128, 10, 98, 128, 10, 195, 169, 32, 120,
         ]);

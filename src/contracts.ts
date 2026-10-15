@@ -887,9 +887,16 @@ export const ShellPlan = Schema.Array(
     gate: Schema.Literals(["always", "pipe", "success", "failure"]),
     pipe: Schema.Boolean,
     negate: Schema.Boolean,
-    input: Schema.NullOr(Schema.String),
-    output: Schema.NullOr(Schema.String),
-    append: Schema.Boolean,
+    redirects: Schema.Array(
+      Schema.Union([
+        Schema.Struct({ kind: Schema.Literal("input"), path: Schema.String }),
+        Schema.Struct({
+          kind: Schema.Literal("output"),
+          path: Schema.String,
+          append: Schema.Boolean,
+        }),
+      ]),
+    ).check(Schema.isMaxLength(128)),
   }),
 );
 export const CommandArguments = Schema.Array(Schema.String);

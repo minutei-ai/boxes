@@ -146,14 +146,16 @@ export const read = Effect.fn("filesystem.read")(function* (
   env: Env,
   id: string,
   kernel: Kernel,
-  path: string,
+  target: string | bigint,
   forWrite = false,
   offset = 0,
   length = 16_777_216,
 ) {
-  const plan = yield* kernelCall(() =>
-    kernel.read_plan(path, BigInt(offset), BigInt(length), forWrite),
-  ).pipe(Effect.flatMap(Schema.decodeUnknownEffect(Schema.fromJsonString(ReadPlan))));
+  const plan = yield* kernelCall(() => {
+    if (typeof target === "bigint")
+      return kernel.read_inode_plan(target, BigInt(offset), BigInt(length));
+    return kernel.read_plan(target, BigInt(offset), BigInt(length), forWrite);
+  }).pipe(Effect.flatMap(Schema.decodeUnknownEffect(Schema.fromJsonString(ReadPlan))));
   const blocks = yield* Effect.forEach(plan.blocks, (reference) => block(env, id, reference), {
     concurrency: 4,
   });

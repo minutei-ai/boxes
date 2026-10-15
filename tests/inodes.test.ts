@@ -1,7 +1,7 @@
 import { expect, test } from "bun:test";
 import { Schema } from "effect";
 import { initSync, Kernel, migrate_filesystem } from "../dist/kernel/cirro_kernel";
-import { FileStat } from "../src/contracts";
+import { FileStat, ReadPlan } from "../src/contracts";
 
 initSync({
   module: new WebAssembly.Module(
@@ -114,5 +114,33 @@ test("snapshot reconstruction preserves a migrated root inode and allocation cou
   ).toBe(100);
   const restored = new Kernel(kernel.manifest());
   restored.free();
+  kernel.free();
+});
+
+test("opened input and output identities retain authority without changing append-only files", () => {
+  const kernel = new Kernel();
+  kernel.write("/tmp/file", 3n, JSON.stringify(["a".repeat(64)]));
+  kernel.link("/tmp/file", "/tmp/alias", false);
+  const initial = Schema.decodeUnknownSync(Schema.fromJsonString(FileStat))(
+    kernel.stat("/tmp/file", true),
+  );
+  const inode = BigInt(initial.inode);
+  kernel.chmod("/tmp/file", 0o200);
+  const before = kernel.manifest();
+  expect(kernel.open_output("/tmp/file", true)).toBe(false);
+  expect(kernel.manifest()).toBe(before);
+  expect(() => kernel.read_plan("/tmp/file", 0n, 3n, false)).toThrow("EACCES");
+  expect(
+    Schema.decodeUnknownSync(Schema.fromJsonString(ReadPlan))(
+      kernel.read_inode_plan(inode, 0n, 3n),
+    ),
+  ).toMatchObject({ length: 3, blocks: [{ hash: "a".repeat(64), size: 3 }] });
+  expect(kernel.open_output("/tmp/alias", false)).toBe(true);
+  expect(
+    Schema.decodeUnknownSync(Schema.fromJsonString(FileStat))(kernel.stat("/tmp/file", true)),
+  ).toMatchObject({ inode: initial.inode, size: 0, mode: 0o200, nlink: 2 });
+  expect(kernel.open_output("/tmp/new", true)).toBe(true);
+  kernel.chmod("/tmp/file", 0o400);
+  expect(() => kernel.open_output("/tmp/file", true)).toThrow("EACCES");
   kernel.free();
 });

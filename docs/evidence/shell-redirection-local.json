@@ -1,0 +1,159 @@
+{
+  "scope": "Local ordered stdin/stdout redirection preparation and retained inode lifetime; not complete POSIX stream semantics",
+  "baselineSourceCommit": "5064027ae56acb034112dd8f94c6b5097ca6621b",
+  "regression": {
+    "source": "cat file > file",
+    "before": "existing bytes were retained because output opened after command execution",
+    "after": "output truncates the shared inode before input is read, matching host sh"
+  },
+  "validation": {
+    "check": "319 tests across 45 files; 3493 assertions; 188.52 seconds; build, SDK declarations, types and Clippy passed",
+    "kernel": "30 tests passed; 0.21 seconds",
+    "focusedNative": "8 tests across 4 files; 509 assertions; 7.43 seconds before additional authority checks",
+    "oracle": "24 workloads compare stdout, exit status and persisted filesystem state against host sh; host stderr wording is not compared",
+    "authority": "write-only grant appended to a mode-0200 file without returning its existing contents; denied read authority does not become guest read access",
+    "publication": "opening an existing append target with no stdout left the R2 head generation unchanged",
+    "inode": "native tests retained rename/unlink behavior, shared-inode truncation and append metadata; opened reads bypass later namespace/mode checks only at trusted inode boundaries",
+    "quota": "output opens before command quota validation; an over-quota command leaves its permitted output file empty instead of omitting the earlier open",
+    "format": "passed"
+  },
+  "artifactsSha256": {
+    "dist/worker/index.js": "9b186572633fab2666b7a0c6482424af34ebd08c9991da1a5ecabe057b8f0274",
+    "dist/worker/cirro_kernel_bg.wasm": "fdd0987fd2cc12c51054ef97d40210df20935562c123cbbdb1564b07de76733a"
+  },
+  "benchmark": {
+    "measuredAt": "2026-10-15T04:28:30.121Z",
+    "environment": {
+      "runtime": "local workerd via native Alchemy",
+      "alchemy": "2.0.0-beta.83",
+      "production": false,
+      "platform": "linux",
+      "arch": "x64"
+    },
+    "artifactBytes": {
+      "javascript": 334653,
+      "kernelWasm": 1086549,
+      "wasiWasm": 1648542,
+      "pythonWasm": 10705553,
+      "guestWasm": 1120072,
+      "compilerWasm": 1943596
+    },
+    "measurements": {
+      "fullEightMiB": {
+        "count": 25,
+        "p50Ms": 93.87193400000069,
+        "p95Ms": 111.50276800000029,
+        "minMs": 82.7685590000001,
+        "maxMs": 161.57317200000034
+      },
+      "rangeFourKiB": {
+        "count": 25,
+        "p50Ms": 4.792205999998259,
+        "p95Ms": 7.056667999999263,
+        "minMs": 4.354231000001164,
+        "maxMs": 8.275432000000364
+      },
+      "patchFourKiB": {
+        "count": 25,
+        "p50Ms": 15.08104800000001,
+        "p95Ms": 16.35237600000073,
+        "minMs": 14.607814999999391,
+        "maxMs": 33.92088200000035
+      },
+      "python": {
+        "count": 25,
+        "p50Ms": 53.187573000001066,
+        "p95Ms": 81.02669900000001,
+        "minMs": 46.310536999999385,
+        "maxMs": 242.56822900000043
+      },
+      "sequentialEightFiles": {
+        "count": 25,
+        "p50Ms": 75.96603700000014,
+        "p95Ms": 91.95474800000011,
+        "minMs": 65.84297800000013,
+        "maxMs": 107.8433170000003
+      },
+      "batchEightFiles": {
+        "count": 25,
+        "p50Ms": 41.9390570000005,
+        "p95Ms": 60.81860500000039,
+        "minMs": 37.54297899999983,
+        "maxMs": 70.7982820000002
+      },
+      "status": {
+        "count": 100,
+        "p50Ms": 3.106747999999925,
+        "p95Ms": 4.568667999999889,
+        "minMs": 2.6616690000000744,
+        "maxMs": 6.427100999999993
+      },
+      "write256KiB": {
+        "count": 25,
+        "p50Ms": 11.013960999999881,
+        "p95Ms": 15.320060000000012,
+        "minMs": 9.682903000000124,
+        "maxMs": 27.051397999999836
+      },
+      "read256KiB": {
+        "count": 25,
+        "p50Ms": 6.866627000000108,
+        "p95Ms": 8.281204000000116,
+        "minMs": 5.575833999999986,
+        "maxMs": 9.059035999999878
+      },
+      "isolatedJavascript": {
+        "count": 25,
+        "p50Ms": 12.366021999999248,
+        "p95Ms": 19.281724999999824,
+        "minMs": 11.874455000000125,
+        "maxMs": 50.239910999999665
+      },
+      "detachedJavascript": {
+        "count": 25,
+        "p50Ms": 132.65039200000047,
+        "p95Ms": 140.72914200000014,
+        "minMs": 120.46840499999962,
+        "maxMs": 145.12773599999946
+      },
+      "wasiFileAndSync": {
+        "count": 25,
+        "p50Ms": 42.08283399999891,
+        "p95Ms": 59.84754999999859,
+        "minMs": 33.716725000000224,
+        "maxMs": 161.95119599999998
+      },
+      "shellPipeline": {
+        "count": 25,
+        "p50Ms": 16.720854999999574,
+        "p95Ms": 30.674089000000095,
+        "minMs": 15.581263000000035,
+        "maxMs": 32.110835999999836
+      }
+    },
+    "wasiPublication": {
+      "samples": 25,
+      "rootPublications": 25
+    },
+    "batchPublication": {
+      "filesPerSample": 8,
+      "samples": 25,
+      "sequentialPublications": 200,
+      "batchPublications": 25
+    },
+    "contentDeduplication": {
+      "singleFileWrites": 25,
+      "uniqueBlocks": 1,
+      "singleFileLogicalBytesWritten": 6553600,
+      "storedBlockBytes": 262144
+    }
+  },
+  "limits": [
+    "At most 128 redirections per command. Only stdin reads and stdout overwrite/append are supported, including 0< and 1> spellings.",
+    "Other numeric descriptors, descriptor duplication, heredocs and non-regular-file redirections remain unsupported.",
+    "Pipelines and command input/output remain bounded byte buffers. Exact interleaving of redirected stdout with independent writes to the same file remains open.",
+    "Parameter expansion, command substitution, jobs and complete POSIX shell conformance remain open.",
+    "Single local shared-host benchmark; no production latency or AgentOS cost advantage established.",
+    "No remote CI or deployment evidence for this change."
+  ]
+}

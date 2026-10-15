@@ -431,6 +431,41 @@ impl Node {
 }
 
 impl Kernel {
+    fn read_plan_resolved(
+        &self,
+        path: &str,
+        offset: u64,
+        length: u64,
+        for_write: bool,
+        descriptor: bool,
+    ) -> Result<String, JsValue> {
+        let required = if for_write { 0o200 } else { 0o400 };
+        let (size, chunks) = match self.state.node(path) {
+            Some(Node::File { size, chunks, mode }) if descriptor || mode & required != 0 => {
+                (*size, chunks)
+            }
+            Some(Node::File { .. }) => return Err(fail("EACCES: file content access is denied")),
+            Some(_) => return Err(fail("EISDIR: not a regular file")),
+            None => return Err(fail("ENOENT: file does not exist")),
+        };
+        let length = length.min(size.saturating_sub(offset));
+        let mut blocks = Vec::new();
+        if length != 0 {
+            for index in offset / 262_144..(offset + length).div_ceil(262_144) {
+                blocks.push(ContentBlock {
+                    hash: &chunks[index as usize],
+                    size: (size - index * 262_144).min(262_144),
+                });
+            }
+        }
+        serde_json::to_string(&ReadPlan {
+            blocks,
+            skip: offset % 262_144,
+            length,
+        })
+        .map_err(|error| fail(&error.to_string()))
+    }
+
     fn set_times_resolved(
         &mut self,
         path: &str,
@@ -1071,29 +1106,37 @@ impl Kernel {
         for_write: bool,
     ) -> Result<String, JsValue> {
         let path = self.resolve(path, true).map_err(|error| fail(&error))?;
-        let required = if for_write { 0o200 } else { 0o400 };
-        let (size, chunks) = match self.state.node(&path) {
-            Some(Node::File { size, chunks, mode }) if mode & required != 0 => (*size, chunks),
-            Some(Node::File { .. }) => return Err(fail("EACCES: file content access is denied")),
-            Some(_) => return Err(fail("EISDIR: not a regular file")),
-            None => return Err(fail("ENOENT: file does not exist")),
-        };
-        let length = length.min(size.saturating_sub(offset));
-        let mut blocks = Vec::new();
-        if length != 0 {
-            for index in offset / 262_144..(offset + length).div_ceil(262_144) {
-                blocks.push(ContentBlock {
-                    hash: &chunks[index as usize],
-                    size: (size - index * 262_144).min(262_144),
-                });
-            }
+        self.read_plan_resolved(&path, offset, length, for_write, false)
+    }
+
+    pub fn read_inode_plan(&self, inode: u64, offset: u64, length: u64) -> Result<String, JsValue> {
+        let path = self
+            .inode_path(inode)
+            .ok_or_else(|| fail("ENOENT: inode does not exist"))?;
+        self.read_plan_resolved(&path, offset, length, false, true)
+    }
+
+    pub fn open_output(&mut self, path: &str, append: bool) -> Result<bool, JsValue> {
+        let path = self.resolve(path, true).map_err(|error| fail(&error))?;
+        self.package_writable(&path, false)
+            .map_err(|error| fail(&error))?;
+        let size = self.state.node(&path).map_or(0, Node::size);
+        let mode = self
+            .writable_file(&path, size, false)
+            .map_err(|error| fail(&error))?;
+        let changed = !append || !self.state.nodes.contains_key(&path);
+        if changed {
+            self.insert(
+                path,
+                Node::File {
+                    mode,
+                    size: 0,
+                    chunks: Vec::new(),
+                },
+            )
+            .map_err(|error| fail(&error))?;
         }
-        serde_json::to_string(&ReadPlan {
-            blocks,
-            skip: offset % 262_144,
-            length,
-        })
-        .map_err(|error| fail(&error.to_string()))
+        Ok(changed)
     }
 
     pub fn write_range_plan(
