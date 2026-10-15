@@ -37,9 +37,43 @@ export const load = Effect.fn("modules.load")(function* (
   ) {
     const defaults = yield* kernelCall(() => kernel.package_environment()).pipe(
       Effect.flatMap(
-        Schema.decodeUnknownEffect(Schema.fromJsonString(WasmConfiguration.fields.env)),
+        Schema.decodeUnknownEffect(
+          Schema.fromJsonString(
+            Schema.Record(WasmConfiguration.fields.env.key, WasmConfiguration.fields.env.value),
+          ),
+        ),
       ),
     );
+    const environment = { ...defaults, ...(action.env ?? {}) };
+    const args = action.args ?? [];
+    if (
+      args.some((value) => !value.isWellFormed() || Buffer.byteLength(value) > 4096) ||
+      Object.values(environment).some(
+        (value) => !value.isWellFormed() || Buffer.byteLength(value) > 4096,
+      ) ||
+      Object.keys(environment).some((key) => !key.isWellFormed())
+    )
+      return yield* new Fault({
+        code: "EINVAL",
+        status: 400,
+        message:
+          "WASI arguments and environment require valid UTF-8 with at most 4096 bytes per value",
+      });
+    if (!Schema.is(WasmConfiguration.fields.env)(environment))
+      return yield* new Fault({
+        code: "E2BIG",
+        status: 413,
+        message: "Combined package and execution environment exceeds its limits",
+      });
+    const environmentBytes = Buffer.byteLength(
+      Schema.encodeSync(Schema.fromJsonString(WasmConfiguration.fields.env))(environment),
+    );
+    if (environmentBytes > 65_536)
+      return yield* new Fault({
+        code: "E2BIG",
+        status: 413,
+        message: "WASI environment exceeds the 64 KiB configuration budget",
+      });
     const binary = yield* Effect.gen(function* () {
       if (action.op === "process.run") {
         if (Buffer.byteLength(action.source, "base64") > wasmModuleBytes)
@@ -48,12 +82,11 @@ export const load = Effect.fn("modules.load")(function* (
             status: 413,
             message: "Wasm source exceeds its module byte limit",
           });
-        return { source: action.source, entry: "/tmp/__cirro_inline__.wasm" };
+        return { entry: "/tmp/__cirro_inline__.wasm" };
       }
       yield* requirePermission(capability, "read");
       const path = yield* Effect.gen(function* () {
         if (action.op === "wasm.executeFile") return action.path;
-        const environment = { ...defaults, ...(action.env ?? {}) };
         return yield* kernelCall(() =>
           kernel.command_path(
             action.command,
@@ -71,17 +104,7 @@ export const load = Effect.fn("modules.load")(function* (
           status: 413,
           message: "Wasm file exceeds its module byte limit",
         });
-      const data = yield* read(env, capability.sandboxId, kernel, stat.path);
-      if (
-        action.op === "process.execFile" &&
-        !data.subarray(0, 4).equals(Buffer.from([0, 97, 115, 109]))
-      )
-        return yield* new Fault({
-          code: "UNSUPPORTED_RUNTIME",
-          status: 501,
-          message: "Installed command execution currently requires a WASI module",
-        });
-      return { source: data.toString("base64"), entry: stat.path };
+      return { entry: stat.path };
     });
     const stdin = yield* Effect.gen(function* () {
       if (action.stdin === undefined) return "";
@@ -106,32 +129,23 @@ export const load = Effect.fn("modules.load")(function* (
         });
       return encoded;
     });
-    const program = {
-      language: "wasm" as const,
-      source: binary.source,
-      argv: [binary.entry, ...(action.args ?? [])],
-      env: { ...defaults, ...(action.env ?? {}) },
+    const configuration = {
+      argv: [binary.entry, ...args],
+      env: environment,
       stdin,
-    } satisfies typeof WasmProgram.Type;
-    if (
-      program.argv.some((value) => !value.isWellFormed() || Buffer.byteLength(value) > 4096) ||
-      Object.values(program.env).some(
-        (value) => !value.isWellFormed() || Buffer.byteLength(value) > 4096,
-      ) ||
-      Object.keys(program.env).some((key) => !key.isWellFormed())
-    )
+    } satisfies typeof WasmConfiguration.Type;
+    if (!binary.entry.isWellFormed() || Buffer.byteLength(binary.entry) > 4096)
       return yield* new Fault({
         code: "EINVAL",
         status: 400,
-        message:
-          "WASI arguments and environment require valid UTF-8 with at most 4096 bytes per value",
+        message: "WASI executable path exceeds its UTF-8 argument limit",
       });
     const configurationBytes = Buffer.byteLength(
       Schema.encodeSync(
         Schema.fromJsonString(
           WasmConfiguration.mapFields((fields) => Struct.omit(fields, ["stdin"])),
         ),
-      )(program),
+      )(configuration),
     );
     if (configurationBytes > 65_536)
       return yield* new Fault({
@@ -139,7 +153,25 @@ export const load = Effect.fn("modules.load")(function* (
         status: 413,
         message: "WASI argv and environment exceed 64 KiB",
       });
-    return program;
+    const source = yield* Effect.gen(function* () {
+      if (action.op === "process.run") return action.source;
+      const data = yield* read(env, capability.sandboxId, kernel, binary.entry);
+      if (
+        action.op === "process.execFile" &&
+        !data.subarray(0, 4).equals(Buffer.from([0, 97, 115, 109]))
+      )
+        return yield* new Fault({
+          code: "UNSUPPORTED_RUNTIME",
+          status: 501,
+          message: "Installed command execution currently requires a WASI module",
+        });
+      return data.toString("base64");
+    });
+    return {
+      language: "wasm" as const,
+      source,
+      ...configuration,
+    } satisfies typeof WasmProgram.Type;
   }
   if (action.op === "process.run" && action.language === "python")
     return {

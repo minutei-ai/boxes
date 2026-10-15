@@ -30,7 +30,13 @@ export const shell = Effect.fn("shell.execute")(function* (
     Effect.flatMap(Schema.decodeUnknownEffect(Schema.fromJsonString(ShellPlan))),
   );
   const environment = yield* kernelCall(() => kernel.package_environment()).pipe(
-    Effect.flatMap(Schema.decodeUnknownEffect(Schema.fromJsonString(WasmConfiguration.fields.env))),
+    Effect.flatMap(
+      Schema.decodeUnknownEffect(
+        Schema.fromJsonString(
+          Schema.Record(WasmConfiguration.fields.env.key, WasmConfiguration.fields.env.value),
+        ),
+      ),
+    ),
   );
   const dirty = new Set<string>();
   const state = yield* Effect.reduce(

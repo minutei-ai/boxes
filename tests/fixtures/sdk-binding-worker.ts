@@ -499,6 +499,21 @@ export default {
         });
         if (restoredFile.content !== file.content)
           return yield* Effect.die("Restore lost file bytes");
+        const invalidEnvironment = yield* boxes
+          .action(id, {
+            op: "process.run",
+            id: "binding-environment",
+            language: "wasm",
+            source: "AGFzbQEAAAA=",
+            env: { MARKER: "é".repeat(4096) },
+          })
+          .pipe(Effect.flip);
+        if (
+          invalidEnvironment._tag !== "BoxesError" ||
+          invalidEnvironment.status !== 400 ||
+          invalidEnvironment.error !== "EINVAL"
+        )
+          return yield* Effect.die("Binding accepted an oversized UTF-8 environment value");
         const stderrRun = yield* boxes.action(id, {
           op: "process.run",
           id: "binding-stderr",
