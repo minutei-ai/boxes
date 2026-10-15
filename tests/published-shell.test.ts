@@ -66,6 +66,40 @@ test(
           }),
         );
 
+        yield* client.action(id, {
+          op: "filesystem.writeFile",
+          path: "/tmp/installed-script",
+          content:
+            '#!/opt/cirro/bin/sh\nread line; printf "%s|%s|%s|%s\\n" "$0" "$1" "$CIRRO_MARKER" "$line"; printf persisted > /tmp/from-script',
+          encoding: "utf8",
+        });
+        yield* client.action(id, {
+          op: "filesystem.chmod",
+          path: "/tmp/installed-script",
+          mode: 493,
+        });
+        const interpreted = yield* client.action(id, {
+          op: "process.execFile",
+          id: "installed-script",
+          command: "/tmp/installed-script",
+          args: ["a b"],
+          env: { CIRRO_MARKER: "script-environment" },
+          stdin: { content: "input line\n", encoding: "utf8" },
+        });
+        expect(interpreted.status).toBe("exited");
+        expect(interpreted.output?.exitCode).toBe(0);
+        expect(interpreted.output?.stderr).toBe("");
+        expect(interpreted.output?.stdout).toBe(
+          "/tmp/installed-script|a b|script-environment|input line\n",
+        );
+        const scriptFile = yield* client.action(id, {
+          op: "filesystem.readFile",
+          path: "/tmp/from-script",
+        });
+        expect(Buffer.from(scriptFile.content, scriptFile.encoding).toString("utf8")).toBe(
+          "persisted",
+        );
+
         yield* Effect.forEach(publishedShellCases, (probe, index) =>
           Effect.gen(function* () {
             const run = yield* client.action(id, {

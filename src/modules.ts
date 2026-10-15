@@ -1,5 +1,5 @@
 import wasmModuleBytes from "./wasm-module-bytes.json";
-import { Clock, Effect, Match, Schema, Struct } from "effect";
+import { Clock, Effect, Match, Option, Schema, Struct } from "effect";
 import compilerWasm from "cirro:compiler";
 import { createBindings } from "../dist/compiler/bindings";
 import {
@@ -17,6 +17,7 @@ import {
   ScriptProgram,
   WasmProgram,
   WasmConfiguration,
+  CommandArguments,
 } from "./contracts";
 import { requirePermission } from "./auth";
 import { kernelCall, open, read } from "./storage";
@@ -24,6 +25,76 @@ import { Kernel } from "../dist/kernel/cirro_kernel";
 import type { Env } from "./resources";
 
 const Header = ScriptProgram.mapFields((fields) => Struct.omit(fields, ["modules", "env"]));
+
+const executable = Effect.fn("modules.executable")(function* (
+  env: Env,
+  capability: typeof Capability.Type,
+  kernel: Kernel,
+  entry: string,
+  args: typeof WasmConfiguration.Type.argv,
+) {
+  const result = yield* Effect.reduce(
+    [0, 1, 2, 3, 4],
+    () => ({ entry, args, source: Option.none<string>() }),
+    (state, depth) =>
+      Effect.gen(function* () {
+        if (Option.isSome(state.source)) return state;
+        const stat = yield* kernelCall(() => kernel.stat(state.entry, true)).pipe(
+          Effect.flatMap(Schema.decodeUnknownEffect(Schema.fromJsonString(FileStat))),
+        );
+        if (stat.size > wasmModuleBytes)
+          return yield* new Fault({
+            code: "EFBIG",
+            status: 413,
+            message: "Executable exceeds its module byte limit",
+          });
+        const data = yield* read(env, capability.sandboxId, kernel, state.entry);
+        if (data.subarray(0, 4).equals(Buffer.from([0, 97, 115, 109])))
+          return { ...state, source: Option.some(data.toString("base64")) };
+        if (depth === 4)
+          return yield* new Fault({
+            code: "ELOOP",
+            status: 400,
+            message: "Interpreter nesting exceeds four scripts",
+          });
+        const header = yield* kernelCall(() =>
+          kernel.interpreter_arguments(data.subarray(0, 257)),
+        ).pipe(
+          Effect.flatMap(
+            Schema.decodeUnknownEffect(
+              Schema.fromJsonString(
+                CommandArguments.check(Schema.isMinLength(1), Schema.isMaxLength(2)),
+              ),
+            ),
+          ),
+        );
+        const interpreter = yield* kernelCall(() => kernel.canonical(header[0], "/home/cirro"));
+        const resolved = yield* kernelCall(() =>
+          kernel.command_path(interpreter, "/home/cirro", ""),
+        );
+        const arguments_ = [...header.slice(1), state.entry, ...state.args];
+        if (arguments_.length > 128)
+          return yield* new Fault({
+            code: "E2BIG",
+            status: 413,
+            message: "Interpreter arguments exceed the process argument limit",
+          });
+        return { entry: resolved, args: arguments_, source: Option.none<string>() };
+      }),
+  );
+  const source = yield* Option.match(result.source, {
+    onSome: Effect.succeed,
+    onNone: () =>
+      Effect.fail(
+        new Fault({
+          code: "ELOOP",
+          status: 400,
+          message: "Interpreter nesting exceeds four scripts",
+        }),
+      ),
+  });
+  return { entry: result.entry, args: result.args, source };
+});
 
 export const load = Effect.fn("modules.load")(function* (
   env: Env,
@@ -78,7 +149,7 @@ export const load = Effect.fn("modules.load")(function* (
             status: 413,
             message: "Wasm source exceeds its module byte limit",
           });
-        return { entry: "/tmp/__cirro_inline__.wasm" };
+        return { entry: "/tmp/__cirro_inline__.wasm", args, source: action.source };
       }
       yield* requirePermission(capability, "read");
       const path = yield* Effect.gen(function* () {
@@ -91,6 +162,8 @@ export const load = Effect.fn("modules.load")(function* (
           ),
         );
       });
+      if (action.op === "process.execFile")
+        return yield* executable(env, capability, kernel, path, args);
       const stat = yield* kernelCall(() => kernel.stat(path, true)).pipe(
         Effect.flatMap(Schema.decodeUnknownEffect(Schema.fromJsonString(FileStat))),
       );
@@ -100,7 +173,8 @@ export const load = Effect.fn("modules.load")(function* (
           status: 413,
           message: "Wasm file exceeds its module byte limit",
         });
-      return { entry: stat.path };
+      const data = yield* read(env, capability.sandboxId, kernel, stat.path);
+      return { entry: stat.path, args, source: data.toString("base64") };
     });
     const stdin = yield* Effect.gen(function* () {
       if (action.stdin === undefined) return "";
@@ -126,15 +200,17 @@ export const load = Effect.fn("modules.load")(function* (
       return encoded;
     });
     const configuration = {
-      argv: [binary.entry, ...args],
+      argv: [binary.entry, ...binary.args],
       env: environment,
       stdin,
     } satisfies typeof WasmConfiguration.Type;
-    if (!binary.entry.isWellFormed() || Buffer.byteLength(binary.entry) > 4096)
+    if (
+      configuration.argv.some((value) => !value.isWellFormed() || Buffer.byteLength(value) > 4096)
+    )
       return yield* new Fault({
         code: "EINVAL",
         status: 400,
-        message: "WASI executable path exceeds its UTF-8 argument limit",
+        message: "WASI argv exceeds its UTF-8 argument limit",
       });
     const configurationBytes = Buffer.byteLength(
       Schema.encodeSync(
@@ -149,23 +225,9 @@ export const load = Effect.fn("modules.load")(function* (
         status: 413,
         message: "WASI argv and environment exceed 64 KiB",
       });
-    const source = yield* Effect.gen(function* () {
-      if (action.op === "process.run") return action.source;
-      const data = yield* read(env, capability.sandboxId, kernel, binary.entry);
-      if (
-        action.op === "process.execFile" &&
-        !data.subarray(0, 4).equals(Buffer.from([0, 97, 115, 109]))
-      )
-        return yield* new Fault({
-          code: "UNSUPPORTED_RUNTIME",
-          status: 501,
-          message: "Installed command execution currently requires a WASI module",
-        });
-      return data.toString("base64");
-    });
     return {
       language: "wasm" as const,
-      source,
+      source: binary.source,
       ...configuration,
     } satisfies typeof WasmProgram.Type;
   }

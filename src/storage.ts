@@ -112,8 +112,10 @@ export const kernelCall = <A>(call: () => A) =>
           return new Fault({ code, status: 409, message: cause });
         if (code === "ENOSPC" || code === "EFBIG")
           return new Fault({ code, status: 413, message: cause });
-        if (["ENOTDIR", "EISDIR", "ELOOP", "READONLY"].includes(code))
+        if (["ENOTDIR", "EISDIR", "ELOOP", "READONLY", "ENOEXEC"].includes(code))
           return new Fault({ code, status: 400, message: cause });
+        if (code === "EILSEQ") return new Fault({ code, status: 422, message: cause });
+        if (code === "UNSUPPORTED_RUNTIME") return new Fault({ code, status: 501, message: cause });
         return new Fault({ code: "EINVAL", status: 400, message: cause });
       }
       return new StorageFailure({ cause });

@@ -1,0 +1,40 @@
+{
+  "status": "Source implementation validated locally; not included in the published 0.10.1 archives or current production Worker.",
+  "baseCommit": "7ccf7dc2dbaedf04afc735b0607f4c394089c46d",
+  "change": "Host process.execFile and built-in shell command dispatch resolve executable shebang chains to an installed WASI interpreter. Rust owns header parsing; Effect owns bounded R2 loading and admission into the existing immutable WASI program archive.",
+  "nativeProof": {
+    "test": "tests/interpreter.test.ts",
+    "runtime": "Native Alchemy workerd, R2 and Queue; Bun 1.4.3 on local Linux.",
+    "cases": [
+      "Preserves optional argument containing spaces, nested script paths, caller argv, environment and binary stdin.",
+      "Four script levels execute; self-recursive interpretation fails ELOOP.",
+      "Relative interpreter path resolves against /home/cirro without PATH search.",
+      "Built-in shell pipeline dispatch preserves stdin and argv.",
+      "Missing/empty/non-executable interpreters reject admission; inserted arguments count against the 128-argument limit.",
+      "Execute-only capabilities cannot read scripts; another sandbox capability is denied.",
+      "Replacement Worker consumes the original captured interpreter, argv, environment and stdin after the script header changes."
+    ],
+    "milliseconds": 2198.11,
+    "publishedInterpreterTest": "tests/published-shell.test.ts downloads the existing digest-pinned sh and jq packages, validates their exact size and SHA-256, then executes a shebang script through the real sh interpreter. The script observes argv/environment/stdin and writes a file that is read through the public filesystem API."
+  },
+  "validation": {
+    "completeGate": "bun run check passed: runtime and SDK builds, TypeScript, workspace Clippy, Cargo tests and native Bun tests.",
+    "nativeTests": {
+      "tests": 348,
+      "files": 64,
+      "assertions": 4776,
+      "seconds": 129.74,
+      "failures": 0
+    },
+    "rustParser": "Header tests cover optional argument preservation, UTF-8, NUL, empty/plain inputs and the bounded header.",
+    "format": "bun run format:check passed."
+  },
+  "limits": [
+    "At most four script levels and a header ending within 256 bytes; overlong headers are rejected rather than truncated.",
+    "Final interpreter must be WASI. No automatic interpreter installation, new JS/Python execFile runtime or complete Linux execve parity is claimed.",
+    "The interpreter binary and argv are captured before Queue execution. Script bodies remain filesystem reads performed by the interpreter, not immutable body snapshots.",
+    "WASI guest exec/fexec dispatch is unchanged; this increment covers host/agent process.execFile and the built-in shell boundary.",
+    "No new release archives, production deployment, remote binding proof or Minutei deployment in this increment.",
+    "Test duration is not a benchmark of production latency, throughput or cost."
+  ]
+}

@@ -3,6 +3,40 @@ use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 use std::collections::{BTreeMap, BTreeSet};
 
+fn interpreter_arguments(bytes: &[u8]) -> Result<Vec<&str>, String> {
+    if !bytes.starts_with(b"#!") {
+        return Err(
+            "UNSUPPORTED_RUNTIME: executable requires WASI or a shebang interpreter".into(),
+        );
+    }
+    let end = bytes.iter().take(256).position(|byte| *byte == b'\n');
+    let end = match end {
+        Some(end) => end,
+        None if bytes.len() < 256 => bytes.len(),
+        None => return Err("ENOEXEC: interpreter header exceeds 255 bytes".into()),
+    };
+    let header = std::str::from_utf8(&bytes[2..end])
+        .map_err(|_| "EILSEQ: interpreter header must be UTF-8".to_string())?;
+    if header.contains('\0') {
+        return Err("ENOEXEC: interpreter header contains NUL".into());
+    }
+    let header = header.trim_matches([' ', '\t']);
+    if header.is_empty() {
+        return Err("ENOEXEC: interpreter path is empty".into());
+    }
+    match header.find([' ', '\t']) {
+        Some(index) => {
+            let argument = header[index..].trim_matches([' ', '\t']);
+            if argument.is_empty() {
+                Ok(vec![&header[..index]])
+            } else {
+                Ok(vec![&header[..index], argument])
+            }
+        }
+        None => Ok(vec![header]),
+    }
+}
+
 mod format {
     include!(concat!(env!("OUT_DIR"), "/v2_generated.rs"));
 }
@@ -658,6 +692,11 @@ impl Kernel {
 
 #[wasm_bindgen::prelude::wasm_bindgen]
 impl Kernel {
+    pub fn interpreter_arguments(&self, bytes: &[u8]) -> Result<String, wasm_bindgen::JsValue> {
+        let arguments = interpreter_arguments(bytes).map_err(|error| super::fail(&error))?;
+        serde_json::to_string(&arguments)
+            .map_err(|_| super::fail("EIO: interpreter argument serialization failed"))
+    }
     pub fn install_package(&mut self, bytes: &[u8]) -> Result<String, wasm_bindgen::JsValue> {
         let prepared = prepare(bytes).map_err(|error| super::fail(&error))?;
         self.install_prepared(&prepared)
@@ -752,6 +791,38 @@ impl Kernel {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn interpreter_headers_preserve_one_optional_argument_and_bound_parsing() {
+        assert_eq!(
+            interpreter_arguments(b"#! /bin/run\nbody").unwrap(),
+            ["/bin/run"]
+        );
+        assert_eq!(
+            interpreter_arguments(b"#!\t/bin/run\t -x two  \t\nbody").unwrap(),
+            ["/bin/run", "-x two"]
+        );
+        assert_eq!(interpreter_arguments(b"#!/bin/run").unwrap(), ["/bin/run"]);
+        for bytes in [
+            b"plain".as_slice(),
+            b"#! \t\n",
+            b"#!/bin/\xff\n",
+            b"#!/bin/a\0\n",
+        ] {
+            assert!(interpreter_arguments(bytes).is_err());
+        }
+        assert!(
+            interpreter_arguments(
+                &b"#!"
+                    .as_slice()
+                    .iter()
+                    .copied()
+                    .chain(std::iter::repeat_n(b'a', 254))
+                    .collect::<Vec<_>>()
+            )
+            .is_err()
+        );
+    }
 
     fn fixture() -> (format::PackageManifest, format::MountIndex, Vec<u8>) {
         let manifest = format::PackageManifest {
