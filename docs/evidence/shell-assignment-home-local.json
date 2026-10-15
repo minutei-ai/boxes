@@ -1,0 +1,40 @@
+{
+  "scope": "Local assignment HOME tilde expansion, including literal export/readonly declaration operands.",
+  "specification": "https://pubs.opengroup.org/onlinepubs/9799919799/utilities/V3_chap02.html#tag_19_06_01",
+  "semantics": "Recognize unquoted tilde prefixes after the first assignment equals sign and unquoted colon delimiters, terminating at slash, colon or word end. Preserve quote/parameter boundaries. Expand from the environment visible to each assignment without splitting, globbing or reparsing inserted HOME/parameter values. Defer unsupported login-name lookup until actual expansion so conditionally skipped commands stay skipped.",
+  "bounds": "Retain 8192 transformed fragments, 4096 bytes per variable and existing environment/expanded byte quotas. No persistence format or infrastructure change.",
+  "artifactsSha256": {
+    "crates/kernel/src/shell.rs": "aa75d8271446e1cdd1f21ec28447c85f72020eb239c1698ef5d6b3a99ef8dc95",
+    "tests/shell-variables.test.ts": "74717e84e8c62070f00aedcbbd0149f8fac12de72437f9c26cf9a367409f2a2f",
+    "dist/kernel/cirro_kernel_bg.wasm": "3c80cd3b32fd8a5d2b63ea6292f19813552bda74a9f4249971355513c0658d29"
+  },
+  "validation": {
+    "build": "Final bun run build passed, followed by final native shell-variables suite.",
+    "kernel": "43 tests passed; 85 new exact-stdout native sh oracle comparisons (17 assignment forms across five HOME values). Fragment boundary tests accept 4095 tilde-colon pairs and reject 4096, with empty HOME. Missing HOME and login-name lookup reject explicitly.",
+    "oracle": "GNU bash 5.3.20 invoked as sh. Includes empty/space/metacharacter HOME, colon lists, quoted/escaped prefixes, quoted prefix terminators and literal parameter contents.",
+    "clippy": "cargo clippy --workspace --all-targets -- -D warnings passed.",
+    "nativeRegression": "Five native Alchemy workerd/R2/Queue suites passed: 760 assertions, 13.00 seconds. Includes parameters, control, redirection, readonly and variables.",
+    "finalNative": "Final rebuilt native shell-variables suite passed: 99 assertions, 4.20 seconds. Final failure assertions distinguish ENOTSUP from EFBIG.",
+    "nativeCoverage": [
+      "Export and readonly declaration operands",
+      "Sequential HOME assignment and temporary command prefix scope",
+      "Quote boundaries and no reparse of parameter-inserted tilde",
+      "Conditional skipping and pipeline isolation",
+      "No write permission required for local-only variables",
+      "Missing HOME, unsupported login and expanded value quota reject before creating redirect target",
+      "Queued assignment uses captured HOME after configuration replacement and original Worker termination"
+    ],
+    "typecheck": "bun run typecheck passed."
+  },
+  "delivery": {
+    "local": true,
+    "production": "Not deployed or remotely verified in this change.",
+    "minutei": "Assignment tilde behavior not yet proved through actual Minutei binding.",
+    "github": "No GitHub action, push or publication."
+  },
+  "remaining": [
+    "Login-name tilde lookup",
+    "Remaining POSIX shell and AgentOS parity gates",
+    "Authenticated remote delivery and production performance/cost evidence"
+  ]
+}

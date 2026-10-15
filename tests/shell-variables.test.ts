@@ -26,7 +26,11 @@ test(
           const url = (yield* Effect.promise(() => worker.ready)).toString();
           const admin = yield* make({ url, token: Redacted.make("cirro-local-test-credential") });
           const id = "variables";
-          const environment = { VALUE: " two words ", CIRRO_MARKER: "configured" };
+          const environment = {
+            HOME: "/tmp/captured home",
+            VALUE: " two words ",
+            CIRRO_MARKER: "configured",
+          };
           yield* admin.create({
             id,
             environment,
@@ -43,6 +47,18 @@ test(
           });
           const client = yield* make({ url, token: Redacted.make(grant.token) });
           const cases = [
+            'A=~:~/bin:/bin:~; echo "$A"',
+            'export A=~/file; echo "$A"',
+            'readonly A=~; echo "$A"',
+            'HOME="/tmp/new home" A=~/file; echo "$A"',
+            'A=~; HOME=/tmp/new; echo "$A"',
+            'A=old; A=~/file echo "$A"; echo "$A"',
+            "A='prefix':~; echo \"$A\"",
+            "A=prefix:''~; echo \"$A\"",
+            "A=prefix:~''; echo \"$A\"",
+            'VALUE=":~"; A=$VALUE; echo "$A"',
+            'A=old; false && A=~root; echo "$A"',
+            'A=old; A=~ | cat; echo "$A"',
             'A=one; unset -v -- A; echo "[$A]"',
             'false; A=$?; echo "$A:$?"',
             'A=old; A=new export B=$A; echo "$A:$B"',
@@ -171,6 +187,30 @@ test(
             source: 'A="retained value" >/tmp/empty; echo "$A"',
           });
           expect(only.output?.stdout).toBe("retained value\n");
+          yield* Effect.forEach(["unset HOME; A=~", "A=~root/file", "A=~/file"], (source, index) =>
+            Effect.gen(function* () {
+              const result = yield* client.action(id, {
+                op: "process.run",
+                id: `tilde-rejection-${index}`,
+                language: "shell",
+                source: `${source} echo unreachable >/tmp/tilde-rejection-${index}`,
+                env: { HOME: "x".repeat(4096) },
+              });
+              expect(result.output?.exitCode).toBe(1);
+              expect(result.output?.stdout).toBe("");
+              if (index === 2) {
+                expect(result.output?.stderr).toContain("EFBIG");
+              } else {
+                expect(result.output?.stderr).toContain("ENOTSUP");
+              }
+              expect(
+                (yield* client.action(id, {
+                  op: "filesystem.exists",
+                  path: `/tmp/tilde-rejection-${index}`,
+                })).exists,
+              ).toBe(false);
+            }),
+          );
           const tooLarge = yield* client.action(id, {
             op: "process.run",
             id: "value-quota",
@@ -209,9 +249,9 @@ test(
             op: "process.run",
             id: "readonly",
             language: "shell",
-            source: 'A=local; export A; readonly A; echo "$A"',
+            source: 'A=~/local; export A; readonly A; echo "$A"',
           });
-          expect(localOnly.output?.stdout).toBe("local\n");
+          expect(localOnly.output?.stdout).toBe("/tmp/captured home/local\n");
           const exportedQuota = yield* client.action(id, {
             op: "process.run",
             id: "exported-quota",
@@ -283,7 +323,7 @@ test(
               id: "queued",
               language: "shell",
               source:
-                "probe; CIRRO_MARKER=queued; export CIRRO_MARKER; readonly CIRRO_MARKER; probe",
+                'A=~/saved; echo "$A"; probe; CIRRO_MARKER=queued; export CIRRO_MARKER; readonly CIRRO_MARKER; probe',
             },
           });
           expect(queued.status).toBe("queued");
@@ -315,6 +355,7 @@ test(
             ]),
           );
           const finished = yield* next.action(id, { op: "process.get", id: "queued" });
+          expect(finished.output?.stdout).toContain("/tmp/captured home/saved\n");
           expect(finished.output?.stdout).toContain("marker=configured\n");
           expect(finished.output?.stdout).toContain("marker=queued\n");
           expect((yield* next.action(id, { op: "config.get" })).environment).toEqual({

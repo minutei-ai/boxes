@@ -39,6 +39,7 @@ enum Redirection {
 enum Part {
     Literal { value: String, quoted: bool },
     Parameter { name: String, quoted: bool },
+    Tilde { login: String },
 }
 
 #[derive(Debug, Default, PartialEq, Eq)]
@@ -291,6 +292,17 @@ pub fn expand(
         for (index, part) in word.0.iter().enumerate() {
             let mut value = match part {
                 Part::Literal { value, .. } => value.as_str(),
+                Part::Tilde { login } => {
+                    if !login.is_empty() {
+                        return Err(
+                            "ENOTSUP: shell login-name tilde expansion is not implemented".into(),
+                        );
+                    }
+                    environment
+                        .get("HOME")
+                        .ok_or("ENOTSUP: shell tilde expansion requires HOME")?
+                        .as_str()
+                }
                 Part::Parameter { name, .. } if name == "?" => status_text.as_str(),
                 Part::Parameter { name, .. } => {
                     environment.get(name).map(String::as_str).unwrap_or("")
@@ -412,21 +424,49 @@ fn assignment(word: &Word) -> Result<Option<(String, Word)>, String> {
     if !variable_name(name) {
         return Ok(None);
     }
-    if value.starts_with('~') || value.contains(":~") {
-        return Err("ENOTSUP: assignment tilde expansion is not implemented".into());
-    }
-    let mut parts = vec![Part::Literal {
+    let first = Part::Literal {
         value: value.into(),
-        quoted: true,
-    }];
-    for part in &word.0[1..] {
+        quoted: false,
+    };
+    let mut parts = Vec::new();
+    for (index, part) in std::iter::once(&first)
+        .chain(word.0[1..].iter())
+        .enumerate()
+    {
         match part {
             Part::Literal { value, quoted } => {
-                if !quoted && value.contains(":~") {
-                    return Err("ENOTSUP: assignment tilde expansion is not implemented".into());
+                let mut consumed = 0;
+                if !quoted {
+                    for (offset, _) in value.match_indices('~') {
+                        if offset < consumed
+                            || !(offset == 0 && index == 0
+                                || offset > 0 && value.as_bytes()[offset - 1] == b':')
+                        {
+                            continue;
+                        }
+                        let suffix = &value[offset + 1..];
+                        let end = suffix
+                            .find([':', '/'])
+                            .map(|end| offset + 1 + end)
+                            .unwrap_or(value.len());
+                        if end == value.len() && index + 1 != word.0.len() {
+                            continue;
+                        }
+                        if parts.len() + 2 > 8192 {
+                            return Err("EFBIG: shell word fragment quota exceeded".into());
+                        }
+                        parts.push(Part::Literal {
+                            value: value[consumed..offset].into(),
+                            quoted: true,
+                        });
+                        parts.push(Part::Tilde {
+                            login: value[offset + 1..end].into(),
+                        });
+                        consumed = end;
+                    }
                 }
                 parts.push(Part::Literal {
-                    value: value.clone(),
+                    value: value[consumed..].into(),
                     quoted: true,
                 });
             }
@@ -434,6 +474,12 @@ fn assignment(word: &Word) -> Result<Option<(String, Word)>, String> {
                 name: name.clone(),
                 quoted: true,
             }),
+            Part::Tilde { login } => parts.push(Part::Tilde {
+                login: login.clone(),
+            }),
+        }
+        if parts.len() > 8192 {
+            return Err("EFBIG: shell word fragment quota exceeded".into());
         }
     }
     Ok(Some((name.into(), Word(parts))))
@@ -1116,6 +1162,74 @@ mod tests {
     }
 
     #[test]
+    fn assignment_tilde_expansion_matches_native_shell() -> Result<(), String> {
+        for home in [
+            "/tmp/home",
+            "/tmp/home with space",
+            "/tmp/*?$OTHER",
+            "",
+            "/",
+        ] {
+            let environment =
+                BTreeMap::from([("HOME".into(), home.into()), ("VALUE".into(), ":~".into())]);
+            for word in [
+                "A=~",
+                "A=~/file",
+                "A=~:~/bin:/bin:~",
+                "A=prefix:~",
+                "A='~'",
+                r"A=\~",
+                "A=~''",
+                "A=~'/'file",
+                "A='prefix':~",
+                "A=prefix:''~",
+                "A=prefix:~''",
+                "A=$VALUE",
+                "A=$VALUE:~",
+                "A=':'~",
+                "A=~/''file",
+                "A=foo:~/bar:~/baz",
+                "A=foo:~:~",
+            ] {
+                let command = parse(word)?.remove(0);
+                let actual = assignment_value(&command.assignments[0].1, &environment, 0)?;
+                let oracle = std::process::Command::new("sh")
+                    .args(["-c", &format!("{word}; printf '%s' \"$A\"")])
+                    .envs(&environment)
+                    .output()
+                    .map_err(|error| error.to_string())?;
+                assert!(oracle.status.success(), "{word}");
+                assert_eq!(
+                    actual.as_bytes(),
+                    oracle.stdout,
+                    "word={word:?}, HOME={home:?}"
+                );
+            }
+        }
+        Ok(())
+    }
+
+    #[test]
+    fn assignment_tilde_fragments_are_bounded() -> Result<(), String> {
+        let environment = BTreeMap::from([("HOME".into(), String::new())]);
+        let command = parse(&format!("A={}", "~:".repeat(4095)))?.remove(0);
+        assert_eq!(
+            assignment_value(&command.assignments[0].1, &environment, 0)?,
+            ":".repeat(4095)
+        );
+        assert!(
+            parse(&format!("A={}", "~:".repeat(4096)))
+                .unwrap_err()
+                .contains("fragment quota")
+        );
+        for word in ["A=~", "A=prefix:~", "A=~root/file"] {
+            let command = parse(word)?.remove(0);
+            assert!(assignment_value(&command.assignments[0].1, &BTreeMap::new(), 0).is_err());
+        }
+        Ok(())
+    }
+
+    #[test]
     fn assignment_values_match_native_shell_without_field_splitting() -> Result<(), String> {
         for value in [
             "",
@@ -1156,8 +1270,8 @@ mod tests {
                 );
             }
         }
-        assert!(parse("A=~").is_err());
-        assert!(parse("A=prefix:~").is_err());
+        assert!(parse("A=~").is_ok());
+        assert!(parse("A=prefix:~").is_ok());
         for word in [r"A\=value", r#"A"B"=value"#, "1A=value"] {
             let command = parse(word)?.remove(0);
             assert!(command.assignments.is_empty());
