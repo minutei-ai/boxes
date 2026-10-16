@@ -92,12 +92,13 @@
       "diagnosisEvidence": "docs/evidence/local-http-transport.json",
       "rerun": {
         "attempt": 2,
-        "conclusion": "",
+        "conclusion": "success",
         "headSha": "39cbdd07351b820032c823fe9a2b9ade56f0d2bc",
-        "status": "in_progress",
+        "status": "completed",
         "url": "https://github.com/minutei-ai/boxes/actions/runs/38837440866"
       },
-      "rerunLimit": "This rerun uses the original tag code, before the test-only mitigation. Its result does not prove that the old transport configuration is fixed."
+      "rerunLimit": "This rerun uses the original tag code, before the test-only mitigation. Its result does not prove that the old transport configuration is fixed.",
+      "initialAttemptUrl": "https://github.com/minutei-ai/boxes/actions/runs/38837440866/attempts/1"
     },
     "uploadedAssets": "Uploaded draft assets downloaded through native gh; both attached SHA256SUMS passed. Publicly installed Minutei SDK/runtime files match all 24 archive files. Existing 0.11.0 assets retained.",
     "deployment": {
@@ -966,7 +967,8 @@
       "commit": "cf9ac24d71e016c76bb362e221b5dde43f73d18c",
       "evidence": "docs/evidence/local-http-transport.json",
       "result": "Original native repeated tests: 59 passed, 1 failed. With explicit connection lifetime: 60 passed, 0 failed. Full suite: 352 passed, 4783 assertions, 145.53 seconds. TypeScript passed.",
-      "scope": "Test callers only; existing 0.12.0 SDK/runtime archives and deployed Worker unchanged."
+      "scope": "Test callers only; existing 0.12.0 SDK/runtime archives and deployed Worker unchanged.",
+      "ci": "https://github.com/minutei-ai/boxes/actions/runs/38840417438"
     }
   },
   "limits": [
