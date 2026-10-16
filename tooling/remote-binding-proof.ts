@@ -109,11 +109,13 @@ const report = await Effect.runPromise(
               denied.failure.status !== 404
             )
               return yield* Effect.die("Disposed binding sandbox remained publicly readable");
-            const reclaimed = yield* client
-              .action(id, { op: "vm.reclaim", limit: 1000 })
-              .pipe(
-                Effect.repeat({ until: (progress) => progress.status !== "pending", times: 7 }),
-              );
+            const reclaimed = yield* Effect.gen(function* () {
+              const progress = yield* client.action(id, { op: "vm.reclaim", limit: 1000 });
+              if (progress.status === "blocked") yield* Effect.sleep("1 second");
+              return progress;
+            }).pipe(
+              Effect.repeat({ until: (progress) => progress.status === "complete", times: 40 }),
+            );
             if (reclaimed.status !== "complete") return yield* Effect.die(reclaimed);
           }).pipe(Effect.orDie),
       );

@@ -389,6 +389,21 @@ await Effect.runPromise(
           )(yield* Effect.promise(() => response.text()));
         }),
       );
+      const inventoryWriter = yield* make({
+        url: proxy.env.ORIGINS.runtime,
+        token: Redacted.make(retainedGrant.token),
+      });
+      yield* Effect.forEach(
+        Array.from({ length: 50 }, (_, index) => `inventory-${String(index).padStart(3, "0")}`),
+        (id) =>
+          inventoryWriter.action("package-terminal", {
+            op: "process.run",
+            id,
+            language: "javascript",
+            source: "export default()=>0",
+          }),
+        { concurrency: 4 },
+      );
       const ownership = yield* admin.mintCapability("package-terminal", {
         permissions: ["read", "write", "execute", "manage"],
         expiresInSeconds: 60,
@@ -433,6 +448,8 @@ await Effect.runPromise(
           );
         }),
       );
+      if (terminal.inventory.pages < 4)
+        return yield* Effect.die("Packaged terminal proof did not cross both inventory pages");
       console.log(
         Schema.encodeSync(
           Schema.fromJsonString(

@@ -1,5 +1,5 @@
 {
-  "status": "Experimental 0.21.0 candidate validated with exact SDK/runtime archives and native bindings; publication, deployment, migration continuation and Minutei upgrade pending.",
+  "status": "Experimental 0.21.0 published and deployed; source/tag CI, exact downloads, real old-context migration, storage checks and local Minutei consumer passed. The first full remote proof failed in its terminal inventory consumer; its cursor fix and cleanup are verified locally, and a fresh remote proof is running. Full AgentOS parity remains open.",
   "version": "0.21.0",
   "sourceBase": "0a4ad2e4e5e0a0c46b2f67e1ccaf18f65f09f2d6",
   "previousDelivery": "sdk-0.20.0-delivery.json",
@@ -192,27 +192,140 @@
     "guestRuntimeSha256": "dcf1a9d66b4c3a11106076c3e9d5fa1f596b8846a811dfeec9ecf3a8744af01f",
     "guestRuntimeMatchesReleased020": true,
     "limits": [
-      "The inventory is a point-in-time listing, not proof of all concurrent or future writers.",
-      "The owned legacy probe has an idle 0.20.0 closure and a tombstone. Both remain pending actual migration verification and cleanup."
+      "The inventory is a point-in-time listing, not a guarantee about all concurrent/future writers.",
+      "The intentionally prepared 0.20.0 closure and tombstone were migrated, verified through 0.21.0 and physically collected."
     ]
   },
   "publication": {
-    "status": "pending",
+    "status": "published",
+    "release": "https://github.com/minutei-ai/boxes/releases/tag/sdk-v0.21.0",
     "tag": "sdk-v0.21.0",
+    "tagCommit": "e8d3f1f1b7af9eff09c2ff4d87a780b251c3a26e",
+    "annotatedTagObject": "6f780a60207317fd5e846440ed095e916400f7af",
+    "publishedAt": "2026-10-16T23:44:02Z",
     "prerelease": true,
-    "latest": false
+    "latest": false,
+    "anonymousDownloads": [
+      {
+        "file": "minutei-ai-boxes-0.21.0.tgz",
+        "bytes": 84076,
+        "sha256": "da7a02d1e4f4bb5cc37020bcb4abc8bc8154b22e72d6826af8160c21f7cf74e0"
+      },
+      {
+        "file": "minutei-ai-boxes-runtime-0.21.0.tgz",
+        "bytes": 5570955,
+        "sha256": "cf2cb6be0517b9afcbf6be9d2ec30cd6a2a0d23f1489036bda9175de1e848c15"
+      },
+      {
+        "file": "SHA256SUMS",
+        "bytes": 196,
+        "sha256": "3ea4db75054d7c179b1f31b2145f7e2abdbfcea0088165cbc82ebfb8eae6a981"
+      }
+    ]
   },
   "deployment": {
-    "status": "pending; production remains 0.20.0",
+    "status": "Alchemy deployment and unconditional migrations completed",
     "profile": "minutei",
-    "worker": "cirro-sandbox-prod-rs7wexxow56rmsoz"
+    "worker": "cirro-sandbox-prod-rs7wexxow56rmsoz",
+    "exitCode": 0,
+    "seconds": 178.4,
+    "migrationSeconds": 164.4,
+    "contextLanguageMigration": {
+      "migrated": 2,
+      "pages": 9
+    },
+    "storage": {
+      "measuredAt": 1792194071756,
+      "profile": "minutei",
+      "worker": "cirro-sandbox-prod-rs7wexxow56rmsoz",
+      "bucket": "cirro-objects-prod-vbk2p6ruhs2m645y",
+      "sandboxId": "software-storage-3cc26111-2574-4aee-b950-4eabab7b2d81",
+      "baseDigest": "e81f7f0e7a269a467614cbab3ccc0b18ff692f478219caff4b44bf3ea425aab3",
+      "placementMode": "smart",
+      "status": {
+        "id": "software-storage-3cc26111-2574-4aee-b950-4eabab7b2d81",
+        "generation": 0,
+        "filesystemBytes": 77754575,
+        "policy": {
+          "networkHosts": [],
+          "interruptBudget": 100000,
+          "memoryBytes": 8388608,
+          "maxOutputBytes": 1048576
+        }
+      },
+      "catalogPackages": 10,
+      "objectsAfterCreate": 1,
+      "privateSoftwareBlobsAfterCreate": 0,
+      "sharedObjectsBefore": 354,
+      "sharedObjectsAfterCollection": 354,
+      "reclaimed": true
+    },
+    "legacyCutover": {
+      "id": "language-cutover-5d9b023b-f075-4ae9-9262-8a56c21107cb",
+      "measuredAt": 1792194095410,
+      "context": {
+        "id": "retained",
+        "language": "javascript",
+        "generation": 0,
+        "state": "idle",
+        "createdAt": 1792193716158,
+        "updatedAt": 1792193720844,
+        "executionId": "before",
+        "deadlineAt": null
+      },
+      "before": 41,
+      "after": 42,
+      "tombstoneRecreated": {
+        "id": "deleted",
+        "language": "python",
+        "generation": 2,
+        "state": "idle",
+        "createdAt": 1792194090447,
+        "updatedAt": 1792194090447,
+        "executionId": null,
+        "deadlineAt": null
+      },
+      "pythonResult": 42,
+      "languageMismatch": "CONTEXT_LANGUAGE_MISMATCH",
+      "cleanup": {
+        "complete": true
+      }
+    }
   },
   "minutei": {
-    "status": "pending; local SDK/runtime remain 0.20.0; retained JS/TS enabled locally. No Minutei push or deployment performed."
+    "status": "SDK/runtime 0.21.0 committed locally; no Minutei push or deployment performed.",
+    "commit": "22818eec68cfb867127c1325eeeec17aed95b6af",
+    "version": "0.21.0",
+    "installedFilesComparedWithAnonymousRelease": 24,
+    "checks": {
+      "webTypecheck": "passed with 29 dependencies; web task 34.5 seconds",
+      "nxSync": "passed",
+      "format": "passed"
+    },
+    "nativeProof": {
+      "clientVersion": "0.21.0",
+      "runtimeVersion": "0.21.0",
+      "runtimeArchiveSha256": "cf2cb6be0517b9afcbf6be9d2ec30cd6a2a0d23f1489036bda9175de1e848c15",
+      "consumerCommit": "c118023fc43052479576f3c712b4017a041dd8a8",
+      "consumerBundleSha256": "6d5681e6743a981a49e76503c1ae238a7df9944e8b2802e77308f7127eb94771",
+      "transport": "native workerd Agent service binding; actual Minutei Code Mode and tenant SQLite; local R2, KV and Queue",
+      "retention": true,
+      "isolatedRegistry": true,
+      "capabilities": true,
+      "consumerFixturesSha256": {
+        "boxes-retention.ts": "2f90aacc149345cf51ffefc0f00e468c51e00d75cbe7f3e3dd68c532714edf70",
+        "boxes-code.worker.ts": "c3d6f06ea5f5afe322076052267468c4702fe79aff596fa847d68bdc3045e5f4"
+      }
+    },
+    "limits": [
+      "Minutei Code Mode currently uses the retained JavaScript context; direct Python application/tool adoption is not proved.",
+      "History Queue messages were accepted and dropped in the local proof; consumption, authenticated browser/model behavior and Minutei production remain unverified."
+    ]
   },
   "openGates": [
-    "Publication and deployment, real old-context migration continuation/cleanup, production native Python binding proof and local Minutei consumer upgrade.",
+    "Complete fresh production binding/terminal report after the proof consumer fix.",
     "Queued/cron retained contexts; broader Python stdlib/import/filesystem and process/network/terminal parity.",
+    "Actual Minutei production/model validation and Python application adoption.",
     "Production latency, request billing and AgentOS cost comparison."
   ],
   "ci": {
@@ -221,6 +334,54 @@
       "commit": "0a4ad2e4e5e0a0c46b2f67e1ccaf18f65f09f2d6",
       "status": "success",
       "url": "https://github.com/minutei-ai/boxes/actions/runs/38981753060"
+    },
+    "releaseSource": {
+      "run": 38982381808,
+      "commit": "e8d3f1f1b7af9eff09c2ff4d87a780b251c3a26e",
+      "status": "success"
+    },
+    "tag": {
+      "run": 38982961948,
+      "status": "success"
+    }
+  },
+  "remoteBinding": {
+    "status": "fresh run in progress after proof-only pagination correction",
+    "firstAttempt": {
+      "exitCode": 1,
+      "sandboxId": "remote-binding-b2473b4b-e83f-4126-b223-822580c391b8",
+      "failure": "Native binding did not discover the active terminal. The proof inspected only the first filtered process-list page; additional Python cases moved the terminal beyond its 50-record window.",
+      "confirmedScope": "Retained JS/TS/Python validation completes before the later terminal stage in the actual sequential proof. No complete first-attempt report was produced.",
+      "cleanup": {
+        "id": "remote-binding-b2473b4b-e83f-4126-b223-822580c391b8",
+        "progress": {
+          "phase": "complete",
+          "status": "complete",
+          "removed": 0,
+          "blocking": []
+        }
+      }
+    }
+  },
+  "paginationRegression": {
+    "reproduction": {
+      "command": "package:proof with 50 real prior JavaScript processes using the unchanged public archives and the old proof consumer",
+      "exitCode": 1,
+      "failure": "Native binding did not discover the active terminal"
+    },
+    "fix": "The terminal proof consumes filtered-page cursors while checking both running and settled metadata. API, runtime and published archive bytes are unchanged. The remote proof finalizer also resumes blocked collection while the disposed native process settles.",
+    "verified": {
+      "command": "package:proof with the same archives and 50 real prior processes after the consumer fix",
+      "exitCode": 0,
+      "inventoryPages": 4,
+      "running": "running",
+      "settled": "exited",
+      "pythonResults": [[42, "current", "c2VlZA=="], "FORBIDDEN", false]
+    },
+    "sourcesSha256": {
+      "tests/fixtures/terminal-proof.ts": "c2adab3e3f34fccb4ef1d399f31b25e7cf2a2642bd3f9519ab4a0f8f7cb7cdc3",
+      "tooling/package-proof.ts": "070e36d18c72b211cb0a481f76fc67580eafe9c34672a4b30d30d4fa98079c81",
+      "tooling/remote-binding-proof.ts": "ced78c94f5a683e8020878a72f8f3baa835d1e11a71ab0a6aea06ec5dfef632d"
     }
   }
 }
