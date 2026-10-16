@@ -1,7 +1,7 @@
-import { Clock, Effect, Fiber, Latch, Redacted, Schema } from "effect";
+import { Clock, Effect, Fiber, Latch, Redacted, Schedule, Schema } from "effect";
 import { makeBinding } from "../../src/sdk";
 import { makeAgentBinding } from "../../src/sdk-rpc";
-import { createBoxesIsolateDriver } from "../../src/sdk-tanstack";
+import { BoxesContextCleanupError, createBoxesIsolateDriver } from "../../src/sdk-tanstack";
 import type { AgentProtocol } from "../../src/rpc-protocol";
 import {
   CronRecord,
@@ -53,6 +53,10 @@ export const DriverAbortProof = Schema.Struct({
   preflight: Schema.String,
   cancelled: Schema.String,
   writes: Schema.Array(Schema.String),
+});
+export const DriverCleanupProof = Schema.Struct({
+  failure: BoxesContextCleanupError,
+  closed: Schema.Boolean,
 });
 const RpcCase = Schema.Literals([
   "hardlinks",
@@ -325,28 +329,82 @@ export default {
               }),
             );
           }
-          if (new URL(request.url).searchParams.get("driver") === "bulk") {
-            const context = yield* Effect.tryPromise(() =>
-              driver.createContext({
-                memoryLimit: 16,
-                timeout: 10000,
-                bindings: {},
+          if (new URL(request.url).searchParams.get("driver") === "blocked")
+            return yield* Effect.scoped(
+              Effect.gen(function* () {
+                const context = yield* Effect.acquireRelease(
+                  Effect.tryPromise(() => driver.createContext({ bindings: {} })),
+                  (context) => Effect.promise(() => context.dispose()),
+                );
+                const spawned = yield* Effect.tryPromise(() =>
+                  context.execute(
+                    'return await tools.call({op:"process.spawn",execution:{op:"process.run",id:"pending-cleanup",language:"javascript",source:"export default () => 42;"}});',
+                  ),
+                );
+                if (!spawned.success) return yield* Effect.die(spawned);
+                const first = yield* Effect.tryPromise({
+                  try: () => context.dispose(),
+                  catch: (cause) => cause,
+                }).pipe(Effect.result);
+                if (first._tag !== "Failure")
+                  return yield* Effect.die("Queued receipt did not block collection");
+                const failure = yield* Schema.decodeUnknownEffect(BoxesContextCleanupError)(
+                  first.failure,
+                );
+                yield* boxes.action(id, {
+                  op: "filesystem.writeFile",
+                  path: "/cleanup-blocked",
+                  content: failure.sandboxId,
+                  encoding: "utf8",
+                });
+                const closed = yield* Effect.tryPromise(() =>
+                  context.execute(
+                    'return tools.call({op:"filesystem.writeFile",path:"/late",content:"late",encoding:"utf8"});',
+                  ),
+                );
+                yield* Effect.tryPromise({
+                  try: () => context.dispose(),
+                  catch: (cause) => cause,
+                }).pipe(
+                  Effect.retry({
+                    while: Schema.is(BoxesContextCleanupError),
+                    schedule: Schedule.spaced("10 millis"),
+                    times: 200,
+                  }),
+                );
+                yield* boxes.action(id, { op: "vm.dispose" });
+                return new Response(
+                  Schema.encodeSync(Schema.fromJsonString(DriverCleanupProof))({
+                    failure,
+                    closed: !closed.success,
+                  }),
+                );
               }),
             );
-            const result = yield* Effect.tryPromise(() =>
-              context.execute(
-                'for (let batch = 0; batch < 8; batch++) { const entries = Array.from({length:128}, (_, offset) => ({path:`/tmp/gc-${batch*128+offset}`,content:`payload-${batch*128+offset}`,encoding:"utf8"})); const writes = await tools.call({op:"filesystem.writeFiles",entries}); if (writes.some(write => !write.success)) return -1; } return (await tools.call({op:"filesystem.readdir",path:"/tmp"})).length;',
-              ),
+          if (new URL(request.url).searchParams.get("driver") === "bulk")
+            return yield* Effect.scoped(
+              Effect.gen(function* () {
+                const context = yield* Effect.acquireRelease(
+                  Effect.tryPromise(() =>
+                    driver.createContext({ memoryLimit: 16, timeout: 10000, bindings: {} }),
+                  ),
+                  (context) => Effect.promise(() => context.dispose()),
+                );
+                const result = yield* Effect.tryPromise(() =>
+                  context.execute(
+                    'for (let batch = 0; batch < 8; batch++) { const entries = Array.from({length:128}, (_, offset) => ({path:`/tmp/gc-${batch*128+offset}`,content:`payload-${batch*128+offset}`,encoding:"utf8"})); const writes = await tools.call({op:"filesystem.writeFiles",entries}); if (writes.some(write => !write.success)) return -1; } return (await tools.call({op:"filesystem.readdir",path:"/tmp"})).length;',
+                  ),
+                );
+                yield* Effect.tryPromise(() => Promise.all([context.dispose(), context.dispose()]));
+                yield* Effect.tryPromise(() => context.dispose());
+                yield* boxes.action(id, { op: "vm.dispose" });
+                return new Response(
+                  Schema.encodeSync(Schema.fromJsonString(Schema.Int))(
+                    Schema.decodeUnknownSync(Schema.Int)(result.value),
+                  ),
+                );
+              }),
             );
-            yield* Effect.tryPromise(() => Promise.all([context.dispose(), context.dispose()]));
-            yield* Effect.tryPromise(() => context.dispose());
-            yield* boxes.action(id, { op: "vm.dispose" });
-            return new Response(
-              Schema.encodeSync(Schema.fromJsonString(Schema.Int))(
-                Schema.decodeUnknownSync(Schema.Int)(result.value),
-              ),
-            );
-          }
           const writes: string[] = [];
           const context = yield* Effect.tryPromise(() =>
             driver.createContext({

@@ -14,6 +14,7 @@ import {
 import { Id } from "../src/contracts";
 import {
   BindingProof,
+  DriverProof,
   PersistentDriverProof,
   RpcProbe,
 } from "../tests/fixtures/sdk-binding-worker";
@@ -203,6 +204,14 @@ await Effect.runPromise(
         binding.restoredStat.inode <= binding.stat.inode
       )
         return yield* Effect.die("Packaged binding proof mismatch");
+      const ephemeral = yield* Schema.decodeUnknownEffect(DriverProof)(
+        yield* request("/?driver=true", "package-ephemeral"),
+      );
+      if (!ephemeral.closed || !ephemeral.voidResult || ephemeral.writes.length !== 1)
+        return yield* Effect.die("Packaged ephemeral driver proof mismatch");
+      const collected = yield* Schema.decodeUnknownEffect(Schema.Literal(1024))(
+        yield* request("/?driver=bulk", "package-ephemeral-bulk"),
+      );
       const rpc = yield* Schema.decodeUnknownEffect(RpcProbe)(
         yield* request("/?rpc=hardlinks", "package-hardlinks"),
       );
@@ -251,8 +260,7 @@ await Effect.runPromise(
         )({
           version: sdk.version,
           transport: "native Alchemy workerd service binding and Agent RPC; local R2 and Queue",
-          proof:
-            "SDK archive exports and consumer declarations; runtime archive; filesystem snapshot restore; hard-link metadata; RPC callbacks and cooperative disposal; persistent driver contexts and cancellation; scoped authority",
+          proof: `SDK archive exports and consumer declarations; runtime archive; filesystem snapshot restore; hard-link metadata; RPC callbacks and cooperative disposal; ephemeral context disposal with ${collected} files and concurrent closes; persistent driver contexts and cancellation; scoped authority`,
         }),
       );
     }),

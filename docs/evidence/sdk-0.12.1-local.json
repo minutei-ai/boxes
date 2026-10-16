@@ -1,0 +1,73 @@
+{
+  "status": "Local candidate evidence for experimental SDK/runtime 0.12.1. Publication and new SDK production verification are separate gates.",
+  "version": "0.12.1",
+  "implementationCommit": "b9c7544243ce65939902d6534a80fe1d6daa28fe",
+  "change": "Ephemeral Code Mode context disposal closes execution, cancels owned active runs, writes the sandbox tombstone and drives native paginated R2 reclamation with management-only authority. Concurrent closes serialize; retrying dispose after a blocked collection resumes reclamation without reopening execution. Persistent contexts retain their files and do not acquire management authority.",
+  "verification": {
+    "fullNativeCheck": {
+      "command": "bun run check",
+      "tests": 354,
+      "files": 65,
+      "assertions": 4797,
+      "seconds": 140.14,
+      "failures": 0,
+      "includes": [
+        "Runtime and SDK build",
+        "TypeScript",
+        "Workspace Clippy",
+        "Cargo tests",
+        "Native workerd/R2/Queue tests"
+      ]
+    },
+    "focused": {
+      "command": "bun test tests/tanstack.test.ts tests/persistent-driver.test.ts",
+      "tests": 5,
+      "files": 2,
+      "assertions": 69,
+      "seconds": 6.66,
+      "failures": 0
+    },
+    "nativeRecovery": "The context spawns a genuine queued JavaScript child. First disposal reports BoxesContextCleanupError with the native blocked progress. A fixture-owned file acknowledges the error before the host delivers the original Queue message. Retried disposal completes after the native consumer settles cancellation. Further execution is denied, all process/input/schedule payloads disappear, only the deleted head remains, and persisted reclamation state is complete.",
+    "pagination": "A guest writes 1,024 distinct files in eight batches of 128. Concurrent and repeated closes complete; native R2 inspection finds only the tombstone under the sandbox prefix and no process/input/schedule payloads.",
+    "exactArchives": "bun run package:proof passed against the frozen SDK/runtime archives. The consumer resolves emitted declarations and runs native service binding/RPC, filesystem snapshot/hard-link, ephemeral 1,024-file concurrent closure, persistent contexts and cancellation checks.",
+    "format": "bun run format:check passed.",
+    "cleanInstall": "Bun installation with scripts disabled checks root, rpc, contracts and tanstack exports and the cleanup error Schema from the archive."
+  },
+  "archives": [
+    {
+      "name": "minutei-ai-boxes-0.12.1.tgz",
+      "bytes": 69675,
+      "entries": 16,
+      "sha256": "c49dd52d72f8fb99bd1a145b9d4c7c7d994352cd685c7746528146a8094c6647",
+      "configuredCredentialAbsent": true,
+      "licenseMatches": true
+    },
+    {
+      "name": "minutei-ai-boxes-runtime-0.12.1.tgz",
+      "bytes": 5523640,
+      "entries": 8,
+      "sha256": "1f5692b23c7b7d91c64b1bc06b1a78c8a9503d327baa4b44bc56f632473c47a0",
+      "configuredCredentialAbsent": true,
+      "licenseMatches": true,
+      "deployableAssetsMatch0120": true,
+      "deployableAssetsMatchCurrentBuild": true,
+      "runtimeAssets": {
+        "cirro_compiler_bg.wasm": "27d9b0022a634ed4eef47b6561ad38cafde3522c17e834afed1264440678bf2f",
+        "cirro_guest_bg.wasm": "b773b74626b08bd1083860081ccd2a3d0fdff80dcd97b5ec13ed7c6e2148ef22",
+        "cirro_kernel_bg.wasm": "1d3d1811805905af3c00e8afedd696c22d585db7538877306c28e7b099725e92",
+        "cirro_python_bg.wasm": "8aa6aec5ab6fb0623637e2b6dda7318f4934e4736f4a97e45ca3312bf32e529c",
+        "cirro_wasi_bg.wasm": "719f3bfa9fcaec2a9552f1d17b1fecdaf4a1753edc3f78b628c0791451fd0cff",
+        "index.js": "f7e9c9ea3ff28c52e04c715f512c64784161b8f5a595d75db6a2041b2e98c43a"
+      }
+    }
+  ],
+  "backend": "All six deployable Worker JavaScript/Wasm files match the frozen published 0.12.0 runtime archive byte for byte and match the current build. The runtime archive version metadata changes. No backend redeployment is required for this SDK increment; the existing vm.reclaim backend was already delivered in 0.12.0.",
+  "limits": [
+    "The 60-second deadline bounds collection; active-run cancellation and capability minting retain their native lifetimes.",
+    "Blocked collection reports its native receipts instead of polling indefinitely; the owner must arrange settlement and retry dispose.",
+    "Late creation after an uncertain response and late writes after a completed sweep are not globally fenced.",
+    "This is SDK-owned ephemeral lifecycle cleanup, not global automatic garbage collection of every disposed sandbox or live unreferenced blob.",
+    "No new SDK production proof, Minutei dependency update, Minutei push/deployment, production latency or AgentOS cost advantage is established by these local checks.",
+    "Full AgentOS parity remains open, including PTY, restart, other interpreter semantics and the remaining inventory gates."
+  ]
+}
