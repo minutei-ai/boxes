@@ -10,6 +10,7 @@ import {
   ProcessCancelAction,
   ProcessDelivery,
   ProcessListAction,
+  ProcessInputAction,
   OutputMigrationInput,
   StoredRun,
   Id,
@@ -21,6 +22,52 @@ import type { Env } from "../../src/resources";
 
 type TestEnv = Env & { SELF: Fetcher };
 export class Control extends WorkerEntrypoint<TestEnv> {
+  inputRequests(sandboxId: string, token: string, action: typeof ProcessInputAction.Type) {
+    const requests: string[] = [];
+    const bindings = {
+      ...this.env,
+      OBJECTS: new Proxy(this.env.OBJECTS, {
+        get(target, property) {
+          if (property === "get")
+            return (...args: Parameters<Env["OBJECTS"]["get"]>) => {
+              requests.push(`get:${args[0]}`);
+              return target.get(...args).then((value) => {
+                requests.push(`received:${args[0]}`);
+                return value;
+              });
+            };
+          if (property === "head")
+            return (...args: Parameters<Env["OBJECTS"]["head"]>) => {
+              requests.push(`head:${args[0]}`);
+              return target.head(...args);
+            };
+          if (property === "put")
+            return (...args: Parameters<Env["OBJECTS"]["put"]>) => {
+              requests.push(`put:${args[0]}`);
+              return target.put(...args);
+            };
+          const value = Reflect.get(target, property, target);
+          if (typeof value === "function") return value.bind(target);
+          return value;
+        },
+      }),
+    };
+    const request = new Request(`https://boxes.test/v1/sandboxes/${sandboxId}/action`, {
+      method: "POST",
+      headers: { authorization: `Bearer ${token}`, "content-type": "application/json" },
+      body: Schema.encodeSync(Schema.fromJsonString(ProcessInputAction))(action),
+    });
+    return Effect.runPromise(
+      Effect.gen(function* () {
+        const response = yield* handleRequest(request, bindings);
+        return {
+          status: response.status,
+          body: yield* Effect.promise(() => response.text()),
+          requests,
+        };
+      }),
+    );
+  }
   migrateProcessIndex(token: string, cursor: typeof OutputMigrationInput.Type.cursor) {
     const counts = { writes: 0, notifications: 0 };
     const bindings = {

@@ -1,0 +1,252 @@
+{
+  "status": "Experimental 0.19.2 source candidate; publication, CI and production validation pending. Full AgentOS parity remains open.",
+  "version": "0.19.2",
+  "localEvidence": "input-admission-local.json",
+  "previousDelivery": "sdk-0.19.1-delivery.json",
+  "change": "Native R2 stdin read acquisition in parallel; no redundant input HEAD, unchanged guest deadlines, persistence format and final lifetime/expiry checks.",
+  "publication": {
+    "status": "pending",
+    "release": "https://github.com/minutei-ai/boxes/releases/tag/sdk-v0.19.2"
+  },
+  "deployment": {
+    "status": "pending",
+    "profile": "minutei",
+    "worker": "cirro-sandbox-prod-rs7wexxow56rmsoz"
+  },
+  "minutei": "Currently 0.19.1 locally; no Minutei push or deployment authorized.",
+  "openGates": [
+    "Production HTTP Reedline cursor reliability with the new admission path.",
+    "Complete process, terminal, network and language parity in docs/parity.md.",
+    "Production latency, request billing and cost comparison against AgentOS."
+  ],
+  "artifacts": [
+    {
+      "file": "minutei-ai-boxes-0.19.2.tgz",
+      "bytes": 78588,
+      "sha256": "3afcd7575e4da8da2e1cbbf5f1c3bbe94ac111d91fd5928d705d096f126b05ec"
+    },
+    {
+      "file": "minutei-ai-boxes-runtime-0.19.2.tgz",
+      "bytes": 5549929,
+      "sha256": "0b76cf585247aa2610b9a863e595472f21eaf7604c6612724471c254d0b517f3"
+    }
+  ],
+  "local": {
+    "exactPackageProof": {
+      "exitCode": 0,
+      "report": {
+        "version": "0.19.2",
+        "transport": "native Alchemy workerd service binding and Agent RPC; local R2 and Queue",
+        "proof": "SDK archive exports and consumer declarations; runtime archive; filesystem snapshot restore; hard-link metadata; RPC callbacks and cooperative disposal; ephemeral context disposal with 1024 files and concurrent closes; persistent driver contexts and cancellation; scoped authority",
+        "terminal": {
+          "inventory": {
+            "running": {
+              "id": "terminal-live",
+              "status": "running",
+              "sourceHash": "a8a6480394435899e061e452f41d433ae5dcff92bcf00e197b8faea415137b28",
+              "language": "wasm",
+              "startedAt": 1792179465261,
+              "finishedAt": null,
+              "stdinMode": "pty"
+            },
+            "settled": {
+              "id": "terminal-live",
+              "status": "exited",
+              "sourceHash": "a8a6480394435899e061e452f41d433ae5dcff92bcf00e197b8faea415137b28",
+              "language": "wasm",
+              "startedAt": 1792179465261,
+              "finishedAt": 1792179465960,
+              "stdinMode": "pty"
+            }
+          },
+          "initial": {
+            "cols": 80,
+            "rows": 24,
+            "revision": 0
+          },
+          "resized": {
+            "cols": 100,
+            "rows": 30,
+            "revision": 2
+          },
+          "terminal": {
+            "id": "terminal-live",
+            "status": "exited",
+            "sourceHash": "a8a6480394435899e061e452f41d433ae5dcff92bcf00e197b8faea415137b28",
+            "language": "wasm",
+            "startedAt": 1792179465261,
+            "finishedAt": 1792179465960,
+            "output": {
+              "stdout": "ready\neof-ready\nwinch\nafter-one\nwinch\ndone\n",
+              "stderr": "",
+              "result": null,
+              "exitCode": 0
+            }
+          },
+          "agent": {
+            "id": "terminal-agent",
+            "status": "exited",
+            "sourceHash": "0bc9adff0ae13ee1bef54d4ae1ab07254e340a996cec8b6a418fe919151d4056",
+            "language": "typescript",
+            "startedAt": 1792179465832,
+            "finishedAt": 1792179465915,
+            "output": {
+              "stdout": "",
+              "stderr": "",
+              "result": {
+                "cols": 100,
+                "rows": 30,
+                "revision": 2
+              },
+              "exitCode": 0
+            }
+          },
+          "input": {
+            "offset": 0,
+            "total": 0,
+            "closed": true
+          },
+          "staleRevision": 409,
+          "foreignSandbox": 401,
+          "foreground": {
+            "id": "terminal-foreground",
+            "status": "exited",
+            "sourceHash": "ba142b7baf1b3995c8c0c79e34cbbaa5a5918c22842d94de6aaed64be41b3dc3",
+            "language": "wasm",
+            "startedAt": 1792179466000,
+            "finishedAt": 1792179466047,
+            "output": {
+              "stdout": "interrupt\npair-done\n",
+              "stderr": "",
+              "result": null,
+              "exitCode": 0
+            }
+          },
+          "rawOwners": {
+            "id": "terminal-raw-owners",
+            "status": "exited",
+            "sourceHash": "47334effdf47f9cd168641c5b517244045a26912fab8c5f7dd63d11088783fc2",
+            "language": "wasm",
+            "startedAt": 1792179466254,
+            "finishedAt": 1792179466428,
+            "output": {
+              "stdout": "raw-owners-restored\n",
+              "stderr": "",
+              "result": null,
+              "exitCode": 0
+            }
+          },
+          "termios": {
+            "id": "terminal-termios",
+            "status": "exited",
+            "sourceHash": "10c8332bd7f638de1770e1493da38074a0b06d618c198f589d69c36c835c641f",
+            "language": "wasm",
+            "startedAt": 1792179466445,
+            "finishedAt": 1792179466492,
+            "output": {
+              "stdout": "termios-verified\n",
+              "stderr": "",
+              "result": null,
+              "exitCode": 0
+            }
+          },
+          "attributes": {
+            "initial": {
+              "desired": {
+                "attributes": null,
+                "revision": 0
+              },
+              "observed": {
+                "attributes": {
+                  "icrnl": true,
+                  "opost": true,
+                  "onlcr": true,
+                  "icanon": true,
+                  "echo": true,
+                  "isig": true,
+                  "cc": [3, 28, 26, 4, 127, 21, 23]
+                },
+                "revision": 0
+              },
+              "settled": false
+            },
+            "guest": {
+              "desired": {
+                "attributes": {
+                  "icrnl": false,
+                  "opost": false,
+                  "onlcr": false,
+                  "icanon": false,
+                  "echo": false,
+                  "isig": false,
+                  "cc": [1, 2, 3, 4, 5, 6, 7]
+                },
+                "revision": 1
+              },
+              "observed": {
+                "attributes": {
+                  "icrnl": false,
+                  "opost": false,
+                  "onlcr": false,
+                  "icanon": false,
+                  "echo": true,
+                  "isig": false,
+                  "cc": [1, 2, 3, 4, 5, 6, 7]
+                },
+                "revision": 1
+              },
+              "settled": false
+            },
+            "final": {
+              "desired": {
+                "attributes": {
+                  "icrnl": true,
+                  "opost": true,
+                  "onlcr": true,
+                  "icanon": true,
+                  "echo": false,
+                  "isig": true,
+                  "cc": [1, 2, 3, 4, 5, 6, 7]
+                },
+                "revision": 3
+              },
+              "observed": {
+                "attributes": {
+                  "icrnl": true,
+                  "opost": true,
+                  "onlcr": true,
+                  "icanon": true,
+                  "echo": false,
+                  "isig": true,
+                  "cc": [1, 2, 3, 4, 5, 6, 7]
+                },
+                "revision": 3
+              },
+              "settled": true
+            },
+            "process": {
+              "id": "terminal-attributes",
+              "status": "exited",
+              "sourceHash": "631b044078fbac8a03ddea47e5b1ef2185f919c6289a76ec7112a84ab6c8b3b0",
+              "language": "wasm",
+              "startedAt": 1792179466535,
+              "finishedAt": 1792179467283,
+              "output": {
+                "stdout": "attributes-ready\r\nraw-ok\nguest-changed\nconfigured-again\neof-ready\nterminal-done\r\n",
+                "stderr": "",
+                "result": null,
+                "exitCode": 0
+              }
+            },
+            "staleRevision": 409,
+            "foreignSandbox": 401
+          }
+        }
+      }
+    },
+    "archiveComparison": {
+      "files": 22,
+      "result": "Exact source/build bytes match; native Bun package.json formatting compared as JSON values."
+    }
+  }
+}

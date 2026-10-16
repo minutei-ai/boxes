@@ -16,11 +16,7 @@ import { head, StorageFailure } from "./storage";
 import { restore } from "./code";
 import type { Env } from "./resources";
 
-const load = Effect.fn("input.load")(function* (env: Env, sandboxId: string, id: string) {
-  const object = yield* Effect.tryPromise({
-    try: () => env.OBJECTS.get(`process-input/${sandboxId}/${id}.json`),
-    catch: (cause) => new StorageFailure({ cause }),
-  });
+const decodeInput = Effect.fn("input.decode")(function* (object: R2ObjectBody | null) {
   if (object === null)
     return yield* new StorageFailure({ cause: "Missing interactive input head" });
   if (object.size > 131_072) return yield* new StorageFailure({ cause: "Oversized input head" });
@@ -45,6 +41,14 @@ const load = Effect.fn("input.load")(function* (env: Env, sandboxId: string, id:
       return yield* new StorageFailure({ cause: "Invalid terminal attribute control state" });
   }
   return { input, etag: object.etag };
+});
+
+const load = Effect.fn("input.load")(function* (env: Env, sandboxId: string, id: string) {
+  const object = yield* Effect.tryPromise({
+    try: () => env.OBJECTS.get(`process-input/${sandboxId}/${id}.json`),
+    catch: (cause) => new StorageFailure({ cause }),
+  });
+  return yield* decodeInput(object);
 });
 
 export const initializeInput = Effect.fn("input.initialize")(function* (
@@ -177,11 +181,20 @@ const openInput = Effect.fn("input.open")(function* (
   capability: typeof Capability.Type,
   id: string,
 ) {
-  yield* head(env, capability.sandboxId);
-  const process = yield* Effect.tryPromise({
-    try: () => env.OBJECTS.get(`processes/${capability.sandboxId}/${id}.json`),
-    catch: (cause) => new StorageFailure({ cause }),
-  });
+  const { process, object } = yield* Effect.all(
+    {
+      lifetime: head(env, capability.sandboxId),
+      process: Effect.tryPromise({
+        try: () => env.OBJECTS.get(`processes/${capability.sandboxId}/${id}.json`),
+        catch: (cause) => new StorageFailure({ cause }),
+      }),
+      object: Effect.tryPromise({
+        try: () => env.OBJECTS.get(`process-input/${capability.sandboxId}/${id}.json`),
+        catch: (cause) => new StorageFailure({ cause }),
+      }),
+    },
+    { concurrency: "unbounded" },
+  );
   if (process === null)
     return yield* new Fault({ code: "ENOENT", status: 404, message: "Execution does not exist" });
   if (process.size > 8_388_608)
@@ -197,23 +210,18 @@ const openInput = Effect.fn("input.open")(function* (
       status: 400,
       message: "Process stdin is not interactive",
     });
-  const object = yield* Effect.tryPromise({
-    try: () => env.OBJECTS.head(`process-input/${capability.sandboxId}/${id}.json`),
-    catch: (cause) => new StorageFailure({ cause }),
-  });
-  if (object === null) {
-    yield* requirePermission(capability, "execute");
-    const program = yield* restore(env, capability.sandboxId, record.sourceHash);
-    if (program.language !== "wasm")
-      return yield* new StorageFailure({ cause: "Interactive process has a different runtime" });
-    yield* initializeInput(
-      env,
-      capability.sandboxId,
-      id,
-      Buffer.from(program.stdin, "base64"),
-      record.inputMode,
-    );
-  }
+  if (object !== null) return { record, ...(yield* decodeInput(object)) };
+  yield* requirePermission(capability, "execute");
+  const program = yield* restore(env, capability.sandboxId, record.sourceHash);
+  if (program.language !== "wasm")
+    return yield* new StorageFailure({ cause: "Interactive process has a different runtime" });
+  yield* initializeInput(
+    env,
+    capability.sandboxId,
+    id,
+    Buffer.from(program.stdin, "base64"),
+    record.inputMode,
+  );
   return { record, ...(yield* load(env, capability.sandboxId, id)) };
 });
 

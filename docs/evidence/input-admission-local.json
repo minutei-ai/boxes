@@ -1,0 +1,94 @@
+{
+  "status": "Local full native check passed; 0.19.2 publication and production validation pending.",
+  "measuredAt": "2026-10-16T19:31:55.114564+00:00",
+  "baselineCommit": "ebfe8ebc53ff597ff540a750b3d2f19d16f66cfc",
+  "productionTrigger": {
+    "delivery": "sdk-0.19.1-delivery.json",
+    "transport": "HTTP Reedline",
+    "queryReadMilliseconds": 416,
+    "acknowledgedReplyWriteMilliseconds": 1140,
+    "guestDeadlineMilliseconds": 2000,
+    "outcome": "Guest cursor timeout, exit 1, scoped sandbox reclaimed."
+  },
+  "runtime": "Native Alchemy workerd/R2/Queue with real bindings. Request tracing forwards every operation to the same native bucket owner; no mocked R2 or fabricated receipts.",
+  "baseline": {
+    "nativeGets": 4,
+    "nativeHeads": 1,
+    "nativePuts": 2,
+    "totalRequests": 7,
+    "countRegression": {
+      "passed": 0,
+      "failed": 1,
+      "seconds": 1.38
+    }
+  },
+  "candidate": {
+    "nativeGets": 4,
+    "nativeHeads": 0,
+    "nativePuts": 2,
+    "totalRequests": 6,
+    "initialReadAcquisition": "Three native get calls begin before their receive events; the root lifetime, process receipt and input body are independent.",
+    "focused": {
+      "passed": 9,
+      "failed": 0,
+      "files": 3,
+      "assertions": 85,
+      "seconds": 20.84,
+      "scope": "Before consolidating head/put assertions into one exact-count assertion; the final full suite validates the current harness."
+    },
+    "finalCountTest": "passed"
+  },
+  "preserved": [
+    "Exactly one current-root recheck before conditional publication, in addition to admission lifetime validation.",
+    "Capability expiry is checked again before publication.",
+    "Native input ETag still serializes append, resize and close.",
+    "An exact replay returns its receipt without another write.",
+    "Persisted input head and immutable blob contain the accepted bytes.",
+    "Read-only capabilities are rejected without bucket requests.",
+    "A disposed sandbox rejects the mutation and causes no puts.",
+    "Missing-head recovery still requires execute authority and conditional initialization.",
+    "The existing bounded size, chunk sum and terminal-control consistency decoder remains the single policy owner."
+  ],
+  "filesSha256": {
+    "src/input.ts": "cba36565a1e2dac7d9a9cbdf92ee375e75702dd1d44e629bb858312c2b0e75d1",
+    "tests/fixtures/clock-worker.ts": "ab4a71daadf2a7bcf360115c25a54a58f316b2153b1983692e41a90b5cbea20f",
+    "tests/input-admission.test.ts": "fe4b87bde932043078f044fb6980054d2959fb37c46e9872918b6160c7aab92d"
+  },
+  "fullCheck": {
+    "command": "bun run check",
+    "exitCode": 0,
+    "tests": 414,
+    "files": 91,
+    "assertions": 5933,
+    "testSeconds": 227.71,
+    "buildTypecheckClippyCargoTests": "passed"
+  },
+  "limits": [
+    "The successful append drops one R2 request; this is not a production latency or billing comparison.",
+    "Metadata reads can already be in flight when a lifetime check rejects a disposed sandbox.",
+    "The 0.19.1 production HTTP cursor failures remain open until the new path is delivered and verified."
+  ],
+  "existingRecoveryRegression": "tests/terminal-resize.test.ts deletes the real input head, rejects readonly initialization, recovers with execute authority and checks resize/close ETag races.",
+  "benchmark": {
+    "command": "bun run bench",
+    "exitCode": 0,
+    "rawReportSha256": "a9b3447fb658d1817a897963bb94ff91eaa3e695a1d2fb7b6296341a7239d236",
+    "scope": "Native local workerd warm workloads on a shared host; no production latency or billing comparison.",
+    "wasiPublication": {
+      "samples": 25,
+      "rootPublications": 25
+    },
+    "batchPublication": {
+      "filesPerSample": 8,
+      "samples": 25,
+      "sequentialPublications": 200,
+      "batchPublications": 25
+    },
+    "contentDeduplication": {
+      "singleFileWrites": 25,
+      "uniqueBlocks": 1,
+      "singleFileLogicalBytesWritten": 6553600,
+      "storedBlockBytes": 262144
+    }
+  }
+}
