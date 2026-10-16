@@ -1026,6 +1026,109 @@ fn directory_bytes(entries: &[DirectoryEntry], cookie: u64, length: usize) -> Re
     Ok(data)
 }
 
+fn queue_signal(state: &State, pid: i32, signal: u32) -> Result<(), Failure> {
+    if signal > 64 {
+        return Err(Failure::Errno(28));
+    }
+    let table = state.processes.borrow();
+    let targets = if pid <= 0 {
+        let group = if pid < 0 {
+            pid.unsigned_abs()
+        } else if state.pid == 1 {
+            table.root_group
+        } else {
+            table
+                .children
+                .get(&state.pid)
+                .ok_or(Failure::Errno(71))?
+                .group
+        };
+        let mut targets: Vec<_> = table
+            .children
+            .values()
+            .filter(|child| child.group == group)
+            .map(|child| {
+                (
+                    child.pending_signals.clone(),
+                    child.stopped.clone(),
+                    child.transitions.clone(),
+                    child.dispositions.clone(),
+                )
+            })
+            .collect();
+        if table.root_group == group {
+            targets.push((
+                table.root_pending_signals.clone(),
+                table.root_stopped.clone(),
+                table.root_transitions.clone(),
+                table.root_dispositions.clone(),
+            ));
+        }
+        targets
+    } else if pid == 1 {
+        vec![(
+            table.root_pending_signals.clone(),
+            table.root_stopped.clone(),
+            table.root_transitions.clone(),
+            table.root_dispositions.clone(),
+        )]
+    } else {
+        let child = table
+            .children
+            .get(&(pid as u32))
+            .ok_or(Failure::Errno(71))?;
+        vec![(
+            child.pending_signals.clone(),
+            child.stopped.clone(),
+            child.transitions.clone(),
+            child.dispositions.clone(),
+        )]
+    };
+    drop(table);
+    if targets.is_empty() {
+        return Err(Failure::Errno(71));
+    }
+    if signal == 0 {
+        return Ok(());
+    }
+    let operations = state.requests.get();
+    if operations >= 256 {
+        return Err(Failure::Budget);
+    }
+    state.requests.set(operations + 1);
+    for (pending, stopped, transitions, dispositions) in targets {
+        let disposition = dispositions.borrow().get(&signal).cloned();
+        let ignored = disposition
+            .as_ref()
+            .is_some_and(|disposition| disposition.action == 1)
+            || (disposition
+                .as_ref()
+                .is_none_or(|disposition| disposition.action == 0)
+                && matches!(signal, 17 | 23 | 28));
+        if signal == 18 {
+            pending.set(pending.get() & !((1 << 18) | (1 << 19) | (1 << 20) | (1 << 21)));
+            if stopped.replace(false) {
+                transitions.borrow_mut().push_back(0xffff);
+                let table = state.processes.borrow();
+                for (pid, child) in &table.children {
+                    if Rc::ptr_eq(&child.transitions, &transitions) {
+                        notify_signal_parent(&table, *pid, true);
+                    }
+                }
+            }
+            if disposition
+                .as_ref()
+                .is_some_and(|disposition| disposition.action == 2)
+            {
+                pending.set(pending.get() | (1 << 17));
+            }
+        } else if !ignored {
+            pending.set(pending.get() | (1u64 << (signal - 1)));
+        }
+    }
+    Ok(())
+}
+
 fn dispatch(caller: &mut Caller<'_, State>, name: &str, args: &[u64]) -> Result<i32, Failure> {
     let a: Vec<usize> = args.iter().map(|arg| *arg as usize).collect();
     if name.starts_with("fd_")
@@ -1099,104 +1202,9 @@ fn dispatch(caller: &mut Caller<'_, State>, name: &str, args: &[u64]) -> Result<
         "proc_kill" => {
             let pid = a[0] as u32 as i32;
             let signal = a[1] as u32;
-            if signal > 64 {
-                return Err(Failure::Errno(28));
-            }
-            let table = caller.data().processes.borrow();
-            let targets = if pid <= 0 {
-                let group = if pid < 0 {
-                    pid.unsigned_abs()
-                } else if caller.data().pid == 1 {
-                    table.root_group
-                } else {
-                    table
-                        .children
-                        .get(&caller.data().pid)
-                        .ok_or(Failure::Errno(71))?
-                        .group
-                };
-                let mut targets: Vec<_> = table
-                    .children
-                    .values()
-                    .filter(|child| child.group == group)
-                    .map(|child| {
-                        (
-                            child.pending_signals.clone(),
-                            child.stopped.clone(),
-                            child.transitions.clone(),
-                            child.dispositions.clone(),
-                        )
-                    })
-                    .collect();
-                if table.root_group == group {
-                    targets.push((
-                        table.root_pending_signals.clone(),
-                        table.root_stopped.clone(),
-                        table.root_transitions.clone(),
-                        table.root_dispositions.clone(),
-                    ));
-                }
-                targets
-            } else if pid == 1 {
-                vec![(
-                    table.root_pending_signals.clone(),
-                    table.root_stopped.clone(),
-                    table.root_transitions.clone(),
-                    table.root_dispositions.clone(),
-                )]
-            } else {
-                let child = table
-                    .children
-                    .get(&(pid as u32))
-                    .ok_or(Failure::Errno(71))?;
-                vec![(
-                    child.pending_signals.clone(),
-                    child.stopped.clone(),
-                    child.transitions.clone(),
-                    child.dispositions.clone(),
-                )]
-            };
-            drop(table);
-            if targets.is_empty() {
-                return Err(Failure::Errno(71));
-            }
+            queue_signal(caller.data(), pid, signal)?;
             if signal == 0 {
                 return Ok(0);
-            }
-            let operations = caller.data().requests.get();
-            if operations >= 256 {
-                return Err(Failure::Budget);
-            }
-            caller.data().requests.set(operations + 1);
-            for (pending, stopped, transitions, dispositions) in targets {
-                let disposition = dispositions.borrow().get(&signal).cloned();
-                let ignored = disposition
-                    .as_ref()
-                    .is_some_and(|disposition| disposition.action == 1)
-                    || (disposition
-                        .as_ref()
-                        .is_none_or(|disposition| disposition.action == 0)
-                        && matches!(signal, 17 | 23 | 28));
-                if signal == 18 {
-                    pending.set(pending.get() & !((1 << 18) | (1 << 19) | (1 << 20) | (1 << 21)));
-                    if stopped.replace(false) {
-                        transitions.borrow_mut().push_back(0xffff);
-                        let table = caller.data().processes.borrow();
-                        for (pid, child) in &table.children {
-                            if Rc::ptr_eq(&child.transitions, &transitions) {
-                                notify_signal_parent(&table, *pid, true);
-                            }
-                        }
-                    }
-                    if disposition
-                        .as_ref()
-                        .is_some_and(|disposition| disposition.action == 2)
-                    {
-                        pending.set(pending.get() | (1 << 17));
-                    }
-                } else if !ignored {
-                    pending.set(pending.get() | (1u64 << (signal - 1)));
-                }
             }
             caller.data_mut().readiness_notification = true;
             if let Some(signal) = deliver_signal(caller.data_mut()) {
@@ -2976,13 +2984,16 @@ fn dispatch(caller: &mut Caller<'_, State>, name: &str, args: &[u64]) -> Result<
                 .get(&(a[0] as u32))
                 .and_then(|descriptor| descriptor.pipe.as_ref())
                 .ok_or(Failure::Errno(59))?;
-            if pipe.terminal.is_none() {
-                return Err(Failure::Errno(59));
-            }
+            let terminal = pipe
+                .terminal
+                .as_ref()
+                .ok_or(Failure::Errno(59))?
+                .terminal
+                .clone();
             bytes(caller, a[1], 2)?;
             bytes(caller, a[2], 2)?;
-            put(caller, a[1], &80u16.to_le_bytes())?;
-            put(caller, a[2], &24u16.to_le_bytes())?;
+            put(caller, a[1], &terminal.cols.get().to_le_bytes())?;
+            put(caller, a[2], &terminal.rows.get().to_le_bytes())?;
         }
         "set_open_mode" => caller.data_mut().open_mode = Some(a[0] as u32 & 0o7777),
         "set_open_direct" => caller.data_mut().open_direct = a[0] != 0,
@@ -4838,6 +4849,7 @@ impl WasmGuest {
             return Err(JsValue::from_str("Terminal descriptor limit exceeded"));
         }
         let terminal = pty::Terminal::new();
+        terminal.foreground.set(state.processes.borrow().root_group);
         let slave = Rc::new(PipeEndpoint {
             pipe: terminal.input.clone(),
             reading: true,
@@ -4895,6 +4907,51 @@ impl WasmGuest {
     pub fn input_offset(&self) -> usize {
         self.store.data().stdin_offset.get()
     }
+    pub fn update_terminal(
+        &mut self,
+        cols: u32,
+        rows: u32,
+        revision: u32,
+    ) -> Result<bool, JsValue> {
+        if cols == 0 || cols > u16::MAX as u32 || rows == 0 || rows > u16::MAX as u32 {
+            return Err(JsValue::from_str("Invalid terminal size"));
+        }
+        let state = self.store.data_mut();
+        let attachment = state
+            .terminal
+            .clone()
+            .ok_or_else(|| JsValue::from_str("No attached terminal"))?;
+        let terminal = &attachment.terminal;
+        let changed = terminal.cols.get() != cols as u16 || terminal.rows.get() != rows as u16;
+        if revision < terminal.revision.get() || (revision == terminal.revision.get() && changed) {
+            return Err(JsValue::from_str("Terminal geometry revision mismatch"));
+        }
+        if revision == terminal.revision.get() {
+            return Ok(false);
+        }
+        if terminal.foreground.get() != 0 {
+            match queue_signal(state, -(terminal.foreground.get() as i32), 28) {
+                Ok(()) | Err(Failure::Errno(71)) => {}
+                Err(Failure::Errno(errno)) => {
+                    return Err(JsValue::from_str(&format!(
+                        "Terminal signal failed with errno {errno}"
+                    )));
+                }
+                Err(Failure::Budget) => {
+                    return Err(JsValue::from_str("Terminal signal budget exceeded"));
+                }
+                Err(Failure::Suspend | Failure::Signal(_)) => {
+                    return Err(JsValue::from_str("Invalid terminal signal suspension"));
+                }
+            }
+        }
+        terminal.cols.set(cols as u16);
+        terminal.rows.set(rows as u16);
+        terminal.revision.set(revision);
+        state.readiness_notification = true;
+        Ok(true)
+    }
+
     pub fn stdin_capacity(&self) -> usize {
         if let Some(attachment) = &self.store.data().terminal {
             return attachment.terminal.capacity();

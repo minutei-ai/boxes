@@ -6,7 +6,14 @@ import { ExecutionCheckpoint, HeapSnapshot, ProcessDelivery, StoredRun } from ".
 import { make } from "../src/sdk";
 import { runtime } from "../tooling/worker-test";
 
-for (const mode of ["cooked", "raw", "family", "cancelled"] as const) {
+for (const mode of [
+  "cooked",
+  "raw",
+  "family",
+  "cancelled",
+  "geometry",
+  "geometry-restart",
+] as const) {
   test(`active ${mode} PTY preserves its checkpointed state across Worker replacement`, () =>
     Effect.runPromise(
       Effect.scoped(
@@ -57,6 +64,8 @@ for (const mode of ["cooked", "raw", "family", "cancelled"] as const) {
               }
               const artifact = Match.value(mode).pipe(
                 Match.when("family", () => "wasi-recovery-family.wasm"),
+                Match.when("geometry", () => "wasi-pty-resize-recovery.wasm"),
+                Match.when("geometry-restart", () => "wasi-pty-resize-restart.wasm"),
                 Match.when("cancelled", () => "wasi-pty-recovery-cooked.wasm"),
                 Match.orElse((mode) => `wasi-pty-recovery-${mode}.wasm`),
               );
@@ -130,6 +139,33 @@ for (const mode of ["cooked", "raw", "family", "cancelled"] as const) {
                 expect(prefix.split("ready\r\n").length).toBe(2);
               }
               if (mode === "cancelled") expect(prefix).toBe("hel");
+              if (mode === "raw")
+                expect(
+                  yield* client.action("active", {
+                    op: "process.terminal.resize",
+                    id: "job",
+                    cols: 132,
+                    rows: 45,
+                    revision: 0,
+                  }),
+                ).toEqual({ cols: 132, rows: 45, revision: 1 });
+              if (mode === "geometry" || mode === "geometry-restart") {
+                yield* client.action("active", {
+                  op: "process.terminal.resize",
+                  id: "job",
+                  cols: 120,
+                  rows: 40,
+                  revision: 0,
+                });
+                yield* client.action("active", {
+                  op: "process.terminal.resize",
+                  id: "job",
+                  cols: 80,
+                  rows: 24,
+                  revision: 1,
+                });
+                expect(prefix).toBe("hel");
+              }
               const tail = Match.value(mode).pipe(
                 Match.when("raw", () => Buffer.from([0, 3, 4, 13, 10, 127, 255])),
                 Match.orElse(() => Buffer.from("lo\r")),
@@ -146,6 +182,15 @@ for (const mode of ["cooked", "raw", "family", "cancelled"] as const) {
                   .pipe(Effect.flip),
               ).toMatchObject({ status: 401 });
               const total = yield* Effect.gen(function* () {
+                if (mode === "geometry") return 3;
+                if (mode === "geometry-restart") {
+                  yield* client.action("active", {
+                    op: "process.stdin.close",
+                    id: "job",
+                    offset: 3,
+                  });
+                  return 3;
+                }
                 if (mode === "cancelled") {
                   yield* client.action("active", { op: "process.cancel", id: "job" });
                   expect(
@@ -205,6 +250,14 @@ for (const mode of ["cooked", "raw", "family", "cancelled"] as const) {
           const delivery = yield* Effect.promise(() => control.deliver("executions", [resumed]));
           expect(delivery.explicitAcks).toEqual([resumed.id]);
           const record = yield* client.action("active", { op: "process.get", id: "job" });
+          if (mode === "geometry" || mode === "geometry-restart")
+            expect(
+              yield* client.action("active", { op: "process.terminal.status", id: "job" }),
+            ).toEqual({ cols: 80, rows: 24, revision: 2 });
+          if (mode === "raw")
+            expect(
+              yield* client.action("active", { op: "process.terminal.status", id: "job" }),
+            ).toEqual({ cols: 132, rows: 45, revision: 1 });
           if (mode === "cancelled") {
             expect(record.status).toBe("cancelled");
             expect(record.output?.exitCode).toBeNull();
@@ -227,6 +280,8 @@ for (const mode of ["cooked", "raw", "family", "cancelled"] as const) {
           );
           const suffix = Match.value(mode).pipe(
             Match.when("cancelled", () => Buffer.alloc(0)),
+            Match.when("geometry", () => Buffer.from("winch\r\ndone\r\n")),
+            Match.when("geometry-restart", () => Buffer.from("winch\r\ndone\r\n")),
             Match.when("cooked", () => Buffer.from("lo\r\nread:hello\r\neof\r\n")),
             Match.when("family", () => Buffer.from("lo\r\nhello\r\n\r\nbytes=6\r\n")),
             Match.orElse(() =>

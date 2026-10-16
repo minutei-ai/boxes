@@ -36,17 +36,21 @@ import {
   ProcessOutputPage,
   LiveOutputPage,
   InputReceipt,
+  InputMigrationInput,
+  InputMigrationReceipt,
+  TerminalGeometry,
   Status,
   Success,
   TokenResponse,
 } from "./contracts";
-import { input } from "./input";
+import { input, terminal } from "./input";
 import { reclaim } from "./reclamation";
 import { HostFailure } from "./host";
 import { AgentProtocol, type HostCallback } from "./rpc-protocol";
 import { importSnapshot } from "./snapshot";
 import { tick } from "./cron";
 import { guestAction } from "./capabilities";
+import { migrateInput } from "./input-migration";
 import { migrateConfiguration } from "./configuration-migration";
 import { migrateFilesystem } from "./filesystem-migration";
 import { migrateProcesses, migrateOutput, migrateDeadlines } from "./process-migration";
@@ -118,6 +122,17 @@ const route = Effect.fn("api.route")(function* (request: Request, env: Env) {
     yield* administrator(env, token);
     const receipt = yield* migrateProcesses(env);
     return new Response(Schema.encodeSync(Schema.fromJsonString(MigrationReceipt))(receipt), {
+      headers: { "content-type": "application/json", "cache-control": "no-store" },
+    });
+  }
+  if (url.pathname === "/v1/migrations/input-geometry-v2") {
+    yield* administrator(env, token);
+    const bytes = yield* readBounded(request.body, 4096);
+    const input = yield* Schema.decodeUnknownEffect(Schema.fromJsonString(InputMigrationInput), {
+      onExcessProperty: "error",
+    })(bytes.toString("utf8"));
+    const receipt = yield* migrateInput(env, input.cursor ?? null);
+    return new Response(Schema.encodeSync(Schema.fromJsonString(InputMigrationReceipt))(receipt), {
       headers: { "content-type": "application/json", "cache-control": "no-store" },
     });
   }
@@ -299,6 +314,11 @@ const route = Effect.fn("api.route")(function* (request: Request, env: Env) {
         input(env, capability, action).pipe(
           Effect.map((value) => Schema.encodeSync(Schema.fromJsonString(InputReceipt))(value)),
         ),
+    ),
+    Match.whenOr({ op: "process.terminal.status" }, { op: "process.terminal.resize" }, (action) =>
+      terminal(env, capability, action).pipe(
+        Effect.map((value) => Schema.encodeSync(Schema.fromJsonString(TerminalGeometry))(value)),
+      ),
     ),
     Match.when({ op: "process.recovery.status" }, (action) =>
       recoveryStatus(env, capability, action).pipe(

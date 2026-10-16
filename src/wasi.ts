@@ -174,18 +174,31 @@ export const wasi = Effect.fn("wasi.execute")(function* (
       BigInt(Math.max(0, now - restored.savedAt)) * 1_000_000n -
       monotonic;
   }
-  if (inputId !== null && restored === null) {
+  if (inputId !== null && stdinMode === "closed")
+    return yield* new WasmFailure({ cause: "Interactive process has closed input mode" });
+  if (inputId !== null && restored === null && stdinMode !== "closed") {
     yield* initializeInput(
       env,
       capability.sandboxId,
       inputId,
       Buffer.from(program.stdin, "base64"),
+      stdinMode,
     );
     yield* Effect.try({
       try: () => {
         if (stdinMode === "pty") return guest.enable_terminal();
         return guest.enable_stdin();
       },
+      catch: (cause) => new WasmFailure({ cause }),
+    });
+  }
+  if (inputId !== null && stdinMode === "pty") {
+    const control = yield* readInput(env, capability.sandboxId, inputId, guest.input_offset(), 0);
+    if (control.terminal === null)
+      return yield* new StorageFailure({ cause: "PTY input head has no geometry" });
+    const geometry = control.terminal;
+    yield* Effect.try({
+      try: () => guest.update_terminal(geometry.cols, geometry.rows, geometry.revision),
       catch: (cause) => new WasmFailure({ cause }),
     });
   }
@@ -368,17 +381,29 @@ export const wasi = Effect.fn("wasi.execute")(function* (
       while (true) {
         if (parking.active) return;
         const wake = changes.pending;
-        if (!guest.stdin_has_reader()) {
+        const hasReader = guest.stdin_has_reader();
+        if (!hasReader && stdinMode !== "pty") {
           yield* finishInput(env, capability.sandboxId, inputId);
           return;
         }
         const capacity = guest.stdin_capacity();
-        if (capacity > 0) {
+        if (capacity > 0 || stdinMode === "pty") {
           const offset = guest.input_offset();
           const received = yield* readInput(env, capability.sandboxId, inputId, offset, capacity);
-          if (received.data.length > 0 || received.closed) {
-            const position = yield* semaphore.withPermits(1)(
-              Effect.gen(function* () {
+          const advanced = yield* semaphore.withPermits(1)(
+            Effect.gen(function* () {
+              const resized = yield* Effect.gen(function* () {
+                if (stdinMode !== "pty") return false;
+                if (received.terminal === null)
+                  return yield* new StorageFailure({ cause: "PTY input head has no geometry" });
+                const geometry = received.terminal;
+                return yield* Effect.try({
+                  try: () => guest.update_terminal(geometry.cols, geometry.rows, geometry.revision),
+                  catch: (cause) => new WasmFailure({ cause }),
+                });
+              });
+              const closed = guest.stdin_closed();
+              if (hasReader && !closed && (received.data.length > 0 || received.closed)) {
                 yield* Effect.try({
                   try: () =>
                     guest.feed_stdin(
@@ -388,16 +413,24 @@ export const wasi = Effect.fn("wasi.execute")(function* (
                   catch: (cause) => new WasmFailure({ cause }),
                 });
                 if (stdinMode === "pty") yield* captureStdio(guest, false);
-                return guest.input_offset();
-              }),
-            );
+              }
+              return resized || guest.input_offset() > offset || (!closed && guest.stdin_closed());
+            }),
+          );
+          if (!hasReader && !received.closed)
+            yield* finishInput(env, capability.sandboxId, inputId);
+          if (advanced) {
             yield* notify();
-            if (received.closed && position === received.total && guest.stdin_closed()) return;
-            if (position > offset) {
-              polling.sleep = yield* pause;
-              continue;
-            }
+            polling.sleep = yield* pause;
           }
+          if (
+            received.closed &&
+            guest.input_offset() === received.total &&
+            guest.stdin_closed() &&
+            stdinMode !== "pty"
+          )
+            return;
+          if (advanced) continue;
         }
         yield* Effect.raceFirst(polling.sleep(undefined).pipe(Effect.orDie), Deferred.await(wake));
       }

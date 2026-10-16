@@ -109,6 +109,16 @@ test.each(["minimal", "reedline"])(
             },
           });
           expect((yield* observed("BOXES$ ")).state).toBe("running");
+          if (backend === "reedline")
+            expect(
+              yield* client.action("session", {
+                op: "process.terminal.resize",
+                id: "interactive",
+                cols: 120,
+                rows: 40,
+                revision: 0,
+              }),
+            ).toEqual({ cols: 120, rows: 40, revision: 1 });
           const command = "printf 'output:%s\\n' hello; printf marker > /tmp/interactive-marker\r";
           if (backend === "reedline")
             yield* input("\x1b[200~" + command.slice(0, -1) + "\x1b[201~\r");

@@ -15,7 +15,7 @@ import {
 } from "./process";
 import { open } from "./storage";
 import { fetchAuthorized } from "./network";
-import { input } from "./input";
+import { input, terminal } from "./input";
 import { software } from "./software";
 import { cron } from "./cron";
 import type { Env } from "./resources";
@@ -44,6 +44,8 @@ export const guestAction = Effect.fn("guest.action")(function* (
     action.op === "process.stdin.status"
   )
     return yield* input(env, capability, action);
+  if (action.op === "process.terminal.status" || action.op === "process.terminal.resize")
+    return yield* terminal(env, capability, action);
   if (action.op === "process.recovery.status")
     return yield* recoveryStatus(env, capability, action);
   if (action.op === "process.output.readLive") return yield* liveOutput(env, capability, action);

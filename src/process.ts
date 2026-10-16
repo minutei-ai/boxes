@@ -126,6 +126,7 @@ const reserve = Effect.fn("process.reserve")(function* (
       capability.sandboxId,
       record.id,
       Buffer.from(program.stdin, "base64"),
+      stdinMode,
     );
   const prepared: ReturnType<typeof restore> = Effect.succeed(program);
   return {

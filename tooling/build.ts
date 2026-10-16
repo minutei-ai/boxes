@@ -278,6 +278,10 @@ await Effect.runPromise(
       "tty-rights",
       "recovery-cooked",
       "recovery-raw",
+      "resize",
+      "resize-initial",
+      "resize-recovery",
+      "resize-restart",
     ]) {
       yield* run([
         "rustc",

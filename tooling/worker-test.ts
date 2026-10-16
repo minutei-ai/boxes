@@ -25,7 +25,7 @@ const Endpoints = Schema.Struct({
   origin: Schema.UndefinedOr(Schema.String),
   binding: Schema.UndefinedOr(Schema.String),
 });
-type TestEnv = { ENDPOINTS: typeof Endpoints.Type; CONTROL: Fetcher<Control> };
+type TestEnv = { ENDPOINTS: typeof Endpoints.Type; CONTROL: Fetcher<Control>; BOXES: Fetcher };
 const Options = Schema.Struct({
   binding: Schema.optionalKey(Schema.Boolean),
   origin: Schema.optionalKey(Schema.Struct({ delay: Schema.Int, body: Schema.String })),
@@ -154,6 +154,7 @@ export const runtime = (persist: string, options: typeof Options.Type = {}) => {
       });
     }),
     Service.local({ binding: "CONTROL", scriptName: name, entrypoint: "Control" }),
+    Service.local({ binding: "BOXES", scriptName: name }),
   ];
   const ready = PlatformProxy.getPlatformProxy<TestEnv, typeof bindings>({
     name: `${name}-proxy`,
@@ -182,6 +183,7 @@ export const runtime = (persist: string, options: typeof Options.Type = {}) => {
       return proxy.env.OBJECTS;
     }),
     control: ready.then((value) => value.env.CONTROL),
+    service: ready.then((value) => value.env.BOXES),
     dispose: () => ready.then((value) => value.dispose()),
   };
 };

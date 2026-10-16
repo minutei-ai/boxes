@@ -9,6 +9,8 @@ import {
   EnvironmentMigrationReceipt,
   OutputMigrationInput,
   OutputMigrationReceipt,
+  InputMigrationInput,
+  InputMigrationReceipt,
   ProcessDeadlineMigrationInput,
   ProcessDeadlineMigrationReceipt,
   FilesystemMigrationInput,
@@ -138,6 +140,37 @@ const migrate = Alchemy.Action(
           });
           if (page.cursor !== null) cursors.push(page.cursor);
         }
+        const inputGeometry = { pages: 0, migrated: 0 };
+        const inputCursors: (typeof InputMigrationReceipt.Type.cursor)[] = [null];
+        while (inputCursors.length > 0) {
+          const cursor = inputCursors.shift();
+          const page = yield* Effect.gen(function* () {
+            const response = yield* http.post(new URL("/v1/migrations/input-geometry-v2", url), {
+              headers: { authorization: `Bearer ${Redacted.value(key)}` },
+              body: HttpBody.text(
+                Schema.encodeSync(Schema.fromJsonString(InputMigrationInput))({ cursor }),
+                "application/json",
+              ),
+            });
+            if (response.status < 200 || response.status >= 300)
+              return yield* new MigrationStatusError({
+                status: response.status,
+                path: "/v1/migrations/input-geometry-v2",
+              });
+            return yield* Schema.decodeUnknownEffect(Schema.fromJsonString(InputMigrationReceipt))(
+              yield* response.text,
+            );
+          }).pipe(Effect.timeout("120 seconds"));
+          inputGeometry.pages += 1;
+          inputGeometry.migrated += page.migrated;
+          yield* Effect.logInfo({
+            migration: "input-geometry-v2",
+            page: inputGeometry.pages,
+            migrated: page.migrated,
+            hasMore: page.cursor !== null,
+          });
+          if (page.cursor !== null) inputCursors.push(page.cursor);
+        }
         const configurationPrograms = yield* environmentMigration(configurationHeads.cursor);
         const filesystem = { pages: 0, migrated: 0 };
         const filesystemCursors: (typeof FilesystemMigrationReceipt.Type.cursor)[] = [null];
@@ -208,6 +241,7 @@ const migrate = Alchemy.Action(
           filesystemMigration: filesystem,
           environmentMigration: { heads: configurationHeads, programs: configurationPrograms },
           inputMigration: progress,
+          inputGeometryMigration: inputGeometry,
           deadlineMigration: deadlines,
           deployedAt: input.deployedAt,
         };

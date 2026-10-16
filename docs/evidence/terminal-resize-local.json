@@ -1,0 +1,182 @@
+{
+  "scope": "Source-only durable PTY geometry, native SIGWINCH and version-2 input-head cutover after public SDK/runtime 0.12.1",
+  "baseCommit": "c02bf992c4b39c8b779ddf9fc5a783c9d0df77aa",
+  "priorSourceCi": {
+    "run": 38854736431,
+    "conclusion": "success",
+    "verifiedThisTurn": true
+  },
+  "reference": "https://github.com/rivet-dev/agentos/blob/4d48628304c1ddedafc9d55f60752093fcf6f3d2/crates/kernel/src/kernel.rs#L6224",
+  "before": {
+    "evidence": "Pinned base source: Action had no terminal control operation, native get_size returned fixed 80/24, and the input feeder returned after delivered EOF",
+    "limit": "This is a source comparison, not a recorded pre-change failing runtime test"
+  },
+  "contract": {
+    "status": {
+      "operation": "process.terminal.status",
+      "permission": "read",
+      "response": ["cols", "rows", "revision"]
+    },
+    "resize": {
+      "operation": "process.terminal.resize",
+      "permission": "execute",
+      "dimensions": "Integers from 1 through 65535",
+      "revision": "Observed unsigned-32-bit revision, required; stale state and concurrent input mutation return 409",
+      "noOp": "Same size with current revision preserves R2 ETag and emits no signal",
+      "lifecycle": "Queued/running PTYs only; stdin EOF alone does not prevent resizing; settled receipts return 409"
+    },
+    "authority": "Existing sandbox capabilities, lifetime and expiry checks; read-only access cannot repair an incompletely initialized input head",
+    "acknowledgement": "Retained desired state, not synchronous guest observation; existing adaptive polling observes updates cooperatively"
+  },
+  "ownership": {
+    "persisted": "InputHead version 2 in the existing process-input/<sandbox>/<id>.json owns terminal geometry alongside size/chunks/EOF; null geometry for pipe input",
+    "publication": "Existing input-head ETag serializes resize, append and close; no second terminal namespace, coordinator, application database or extra production Worker",
+    "native": "Terminal Cell values own applied geometry/revision within its process-family heap; get_size reads those cells for each actual descriptor",
+    "signal": "Existing native process signal policy is shared by proc_kill and resize; a newly applied revision queues SIGWINCH to the terminal foreground group, initially the root group",
+    "coalescing": "Every higher retained revision signals, including updates that return to the old dimensions; repeated observations of the same applied revision do not duplicate signals",
+    "reader": "Geometry is read with the existing input head even at capacity or after EOF; only actual input, closure or geometry progress notifies/reset backoff",
+    "initialization": "Geometry is installed before fresh entry and before parked guest resumption"
+  },
+  "nativeProofs": {
+    "runtime": "Native Alchemy workerd, R2 and Queue; actual platform-proxy service binding and compiled Rust guest programs; no replacement bindings or execution mocks",
+    "focused": {
+      "command": "bun test tests/terminal-resize.test.ts tests/input-migration.test.ts tests/pty-recovery.test.ts tests/published-pty.test.ts",
+      "log": "/tmp/boxes-terminal-resize-final-focused.log",
+      "passed": 11,
+      "failed": 0,
+      "assertions": 188,
+      "seconds": 22.49
+    },
+    "bindingAndGuest": [
+      "Scoped Effect makeBinding sends actual terminal calls through a native Service.local binding",
+      "Read-only terminal status succeeds; resize fails 403",
+      "Cross-sandbox resize fails 401",
+      "Malformed zero-width request returns 400 without changing the head ETag",
+      "Two same-revision resize requests produce one success and one 409",
+      "After stdin EOF, two SIGWINCH handlers read expected dimensions from native fd 0/1/2 and interrupt real clock polls",
+      "No-op resize preserves ETag and signal count",
+      "A separate TypeScript guest calls terminal.status and terminal.resize through scoped tools; returned revision and target guest exit/output are checked",
+      "Settled terminal rejects later resize"
+    ],
+    "replacement": [
+      "Read-only status does not create a missing input head; execute-authorized recovery recreates it from the archived reservation",
+      "Concurrent input close and resize preserve both fields; any 409 is followed by native status inspection before an explicit retry",
+      "132-by-45 geometry survives replacing the Worker and is visible in the first guest instruction",
+      "Raw-mode active checkpoint restores a retained 132-by-45 resize with exact buffered bytes and EOF",
+      "Two parked resizes returning to 80-by-24 coalesce to one SIGWINCH at retained revision 2",
+      "Caught signal interrupts a non-restarting host_tty.read without losing its frame",
+      "With SA_RESTART, the parked host_tty.read resumes and receives the retained hel bytes after EOF",
+      "Duplicate stale Queue deliveries preserve terminal receipt ETag and byte output"
+    ],
+    "publishedShell": "Digest-pinned Brush Reedline runs interactive commands, history and line editing after a 120-by-40 resize; fixed cursor replies are used rather than rendered-screen assertions"
+  },
+  "migration": {
+    "endpoint": "/v1/migrations/input-geometry-v2",
+    "deployment": "Unconditional Alchemy action after process receipt migration, with typed input/receipt and continuation loop; no flags or manual pause gate",
+    "bounds": "50 input heads per page; four concurrent native operations; input bodies limited to 131072 bytes and process receipts to 8388608 bytes",
+    "conversion": "Version 1 preserves size, chunks and EOF; existing PTY receipt gets previous fixed 80/24/revision-0 geometry, other/orphan input gets null; conditional ETag publication",
+    "runtime": "Version 2 only; historical version decoding is confined to the migration owner",
+    "proof": [
+      "56 historical heads span two pages; replaying the first page converts zero already-current records",
+      "Native stdout/input block references and byte counts remain unchanged",
+      "Already resized version-2 geometry and ETag survive full migration replay",
+      "Scoped capability cannot call administrator migration endpoint",
+      "Inconsistent historical chunk total returns 500 without rewriting the bad head; after correcting fixture data, replay converts only that head"
+    ],
+    "heapLimit": "Does not convert older Rust heap layouts; exact-runtime digest validation remains enforced"
+  },
+  "verification": {
+    "full": {
+      "command": "bun run check",
+      "log": "/tmp/boxes-terminal-resize-check.log",
+      "exitCode": 0,
+      "passed": 371,
+      "failed": 0,
+      "assertions": 5074,
+      "files": 74,
+      "seconds": 152.3,
+      "includes": [
+        "runtime/SDK build",
+        "TypeScript",
+        "workspace Clippy with warnings denied",
+        "native Rust tests",
+        "native workerd suites"
+      ]
+    },
+    "format": {
+      "command": "bun run format:check",
+      "log": "/tmp/boxes-terminal-resize-format.log",
+      "exitCode": 0
+    },
+    "benchmark": {
+      "command": "bun run bench",
+      "log": "/tmp/boxes-terminal-resize-benchmark.log",
+      "output": "/tmp/boxes-terminal-resize-benchmark.json",
+      "exitCode": 0,
+      "environment": {
+        "runtime": "local workerd via native Alchemy",
+        "alchemy": "2.0.0-beta.83",
+        "production": false,
+        "platform": "linux",
+        "arch": "x64"
+      },
+      "artifactBytes": {
+        "javascript": 369402,
+        "kernelWasm": 1139581,
+        "wasiWasm": 1672610,
+        "pythonWasm": 10719083,
+        "guestWasm": 1129863,
+        "compilerWasm": 1943596
+      },
+      "limit": "Unpaired general native workloads, not a terminal latency, idle-control request-count or production billing comparison; existing performance-local.json bytes restored after the run"
+    }
+  },
+  "sourceSha256": {
+    "src/contracts.ts": "bc47c6ae33956f942e79c1cb04f7b9c8b03636755c814ff074a0ad567061cd52",
+    "src/input.ts": "2fcbb738563fd8e0fc755bc6e12921e79b735727f1717409ddcbd20605f55a99",
+    "src/input-migration.ts": "7dfe0ef5aa531d5ac79e1e4d6d5997ee34a1db2a09845b18abd03e782a30095d",
+    "src/wasi.ts": "14bafeb54f896b302e4d74c29c8ae2a320ed570563bd47e08b5dc2befceae074",
+    "src/capabilities.ts": "195232517e379829f60c3109e0aad0efd29247c269e669e7e220b85e9af0d56d",
+    "src/index.ts": "911cfa1b2161da1eb7dfda3caa1a92f20e5a815901aa02eb88d6e60b5992170c",
+    "src/process.ts": "c91da3f1a401446145fdf85300ea53b9a9203dd4ce886e6f85952e63230a11c4",
+    "alchemy.run.ts": "14aa9ff05063997e4b85031f66b57e7ce10a41dd4c99bb9337cae983e986a7de",
+    "crates/wasi/src/lib.rs": "35685961fb625964c253769181e56723633edd7dbe1557f728d379f46c95125f",
+    "crates/wasi/src/pty.rs": "ef01c4114235f981f7065285932e42cb9591b7bfef27816696199f0dbcb6b42d",
+    "tests/terminal-resize.test.ts": "64f418b1e0ee121b08171cfed187728fefaa7e39cf86a8e45abd469e6cec9b29",
+    "tests/input-migration.test.ts": "e8e7e070c3c261c2d1af8683c510c1a16646aea6ab54b75221e8b076aaa1fe8e",
+    "tests/pty-recovery.test.ts": "9d400e8a62fbb7fe4a220ca38581d31a976b50e8357802aadaf223875e612bf8",
+    "tests/published-pty.test.ts": "cf4e1d6ba294d4390abf9c4b7fe05ad927d023a3f6335ea2447595468f4c4e3c",
+    "tests/fixtures/wasi-pty.rs": "729e677e4e08a088759e1f69d9d20b94b4649c827beade4841d55261bd9ce099",
+    "tooling/build.ts": "43a3ae438e802444cdf1dc8b59af4d27a2f8bbeab5b58b12d7fca51030ace2de",
+    "tooling/worker-test.ts": "28b310bdf442ba99c005342c1b05907c2c8e576510e5a9761f78ce92362225c1"
+  },
+  "artifacts": {
+    "dist/worker/index.js": {
+      "bytes": 369402,
+      "sha256": "e1c110239af1d8a67878fbf811bb64a64f7a6eb44730955bbe0feed7abe0b7bb"
+    },
+    "dist/clock-worker/index.js": {
+      "bytes": 387772,
+      "sha256": "39f10e87c889442aa0d058dcef65ad8b5f3ca7a35687ac5f836b844067b09ade"
+    },
+    "dist/wasi/cirro_wasi_bg.wasm": {
+      "bytes": 1672610,
+      "sha256": "12ce6c393c36094c4b5bcc47ee22f8eae386a4ccfb4cb998182b0cd5c804223e"
+    }
+  },
+  "delivery": {
+    "publication": "No new release or public asset upload",
+    "deployment": "No new deployment or production migration",
+    "minutei": "Consumer unchanged; no Minutei push or deploy"
+  },
+  "remaining": [
+    "Terminal-specific listing and richer metadata",
+    "Foreground-group setters, full termios and input-key signal/job control",
+    "Rendered-screen resize behavior",
+    "Published shell continuation after Worker replacement",
+    "Cross-build heap migration and abrupt-crash recovery before a confirmed checkpoint",
+    "Current shared native host-request family budget still bounds session lifetime",
+    "Production interactive terminal and actual remote Minutei application/model delivery",
+    "Idle-control R2 reads after EOF, production latency/memory and real AgentOS cost comparison remain unmeasured"
+  ]
+}

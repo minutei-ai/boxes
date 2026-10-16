@@ -3,6 +3,8 @@ use std::convert::TryInto;
 #[link(wasm_import_module = "host_process")]
 unsafe extern "C" {
     fn pty_open(master: *mut u32, slave: *mut u32) -> u32;
+    #[cfg(any(case = "resize", case = "resize-recovery", case = "resize-restart"))]
+    fn proc_sigaction(signal: u32, action: u32, lo: u32, hi: u32, flags: u32) -> u32;
     fn fd_dup(fd: u32, output: *mut u32) -> u32;
     fn fd_dup2(fd: u32, target: u32) -> u32;
     fn proc_spawn_v3(
@@ -76,6 +78,34 @@ fn receive(fd: u32, data: &mut [u8]) -> (u32, u32) {
     (unsafe { fd_read(fd, &io, 1, &mut count) }, count)
 }
 
+#[cfg(any(case = "resize", case = "resize-recovery", case = "resize-restart"))]
+static mut RESIZES: u32 = 0;
+#[cfg(any(case = "resize", case = "resize-recovery", case = "resize-restart"))]
+#[unsafe(no_mangle)]
+pub extern "C" fn __wasi_signal_trampoline(signal: u32) {
+    unsafe {
+        let mut cols = 0;
+        let mut rows = 0;
+        if signal != 28 || get_size(0, &mut cols, &mut rows) != 0 {
+            proc_exit(100);
+        }
+        RESIZES += 1;
+        if cfg!(case = "resize-recovery") || cfg!(case = "resize-restart") {
+            if RESIZES != 1 || cols != 80 || rows != 24 {
+                proc_exit(101);
+            }
+        } else if (RESIZES == 1 && (cols != 120 || rows != 40))
+            || (RESIZES == 2 && (cols != 100 || rows != 30))
+        {
+            proc_exit(101);
+        }
+        if get_size(1, &mut cols, &mut rows) != 0 || get_size(2, &mut cols, &mut rows) != 0 {
+            proc_exit(102);
+        }
+        send(1, b"winch\n");
+    }
+}
+
 #[cfg(any(
     case = "child",
     case = "session",
@@ -84,13 +114,80 @@ fn receive(fd: u32, data: &mut [u8]) -> (u32, u32) {
     case = "tty-invalid",
     case = "tty-rights",
     case = "recovery-cooked",
-    case = "recovery-raw"
+    case = "recovery-raw",
+    case = "resize",
+    case = "resize-initial",
+    case = "resize-recovery",
+    case = "resize-restart"
 ))]
 #[unsafe(no_mangle)]
 pub extern "C" fn _start() {
     unsafe {
         if isatty(0) != 1 || isatty(1) != 1 || isatty(2) != 1 {
             proc_exit(51);
+        }
+        #[cfg(any(case = "resize-recovery", case = "resize-restart"))]
+        {
+            let flags = if cfg!(case = "resize-restart") {
+                0x10000000
+            } else {
+                0
+            };
+            if proc_sigaction(28, 2, 0, 0, flags) != 0 {
+                proc_exit(108);
+            }
+            let mut data = [0u8; 3];
+            let count = read(data.as_mut_ptr(), 3, u32::MAX);
+            if cfg!(case = "resize-restart") {
+                if count != 3 || &data != b"hel" {
+                    proc_exit(109);
+                }
+            } else if count != 0 {
+                proc_exit(109);
+            }
+            if RESIZES != 1 {
+                proc_exit(110);
+            }
+            send(1, b"done\n");
+            proc_exit(0);
+        }
+        if cfg!(case = "resize-initial") {
+            let mut cols = 0;
+            let mut rows = 0;
+            if get_size(0, &mut cols, &mut rows) != 0 || cols != 132 || rows != 45 {
+                proc_exit(103);
+            }
+            send(1, b"initial132x45\n");
+            proc_exit(0);
+        }
+        #[cfg(case = "resize")]
+        {
+            if set_raw_mode(1) != 0 || proc_sigaction(28, 2, 0, 0, 0) != 0 {
+                proc_exit(104);
+            }
+            send(1, b"ready\n");
+            let mut byte = 0;
+            if read(&mut byte, 1, u32::MAX) != 0 {
+                proc_exit(105);
+            }
+            send(1, b"eof-ready\n");
+            for expected in 1..=2 {
+                let mut subscription = [0u8; 48];
+                subscription[16..20].copy_from_slice(&1u32.to_le_bytes());
+                subscription[24..32].copy_from_slice(&31_000_000_000u64.to_le_bytes());
+                let mut event = [0u8; 32];
+                let mut count = 0;
+                if poll_oneoff(subscription.as_ptr(), event.as_mut_ptr(), 1, &mut count) != 27
+                    || RESIZES != expected
+                {
+                    proc_exit(106);
+                }
+                if expected == 1 {
+                    send(1, b"after-one\n");
+                }
+            }
+            send(1, b"done\n");
+            proc_exit(0);
         }
         if cfg!(case = "recovery-cooked") {
             let mut data = [0u8; 32];
@@ -120,6 +217,11 @@ pub extern "C" fn _start() {
                 || count != 1
             {
                 proc_exit(83);
+            }
+            let mut cols = 0;
+            let mut rows = 0;
+            if get_size(0, &mut cols, &mut rows) != 0 || cols != 132 || rows != 45 {
+                proc_exit(107);
             }
             let mut total = 0usize;
             while total < 9 {
@@ -255,7 +357,11 @@ pub extern "C" fn _start() {
     case = "tty-invalid",
     case = "tty-rights",
     case = "recovery-cooked",
-    case = "recovery-raw"
+    case = "recovery-raw",
+    case = "resize",
+    case = "resize-initial",
+    case = "resize-recovery",
+    case = "resize-restart"
 )))]
 #[unsafe(no_mangle)]
 pub extern "C" fn run() -> i32 {

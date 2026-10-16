@@ -239,8 +239,22 @@ export const InputReceipt = Schema.Struct({
   total: Schema.Int,
   closed: Schema.Boolean,
 });
+export const TerminalGeometry = Schema.Struct({
+  cols: Schema.Int.check(Schema.isBetween({ minimum: 1, maximum: 65535 })),
+  rows: Schema.Int.check(Schema.isBetween({ minimum: 1, maximum: 65535 })),
+  revision: Schema.Int.check(Schema.isBetween({ minimum: 0, maximum: 4294967295 })),
+});
+export const TerminalAction = Schema.Union([
+  Schema.Struct({ op: Schema.Literal("process.terminal.status"), id: Id }),
+  Schema.Struct({
+    op: Schema.Literal("process.terminal.resize"),
+    id: Id,
+    ...TerminalGeometry.fields,
+  }),
+]);
 export const InputHead = Schema.Struct({
-  version: Schema.Literal(1),
+  version: Schema.Literal(2),
+  terminal: Schema.NullOr(TerminalGeometry),
   size: Schema.Int.check(Schema.isBetween({ minimum: 0, maximum: 16_777_216 })),
   closed: Schema.Boolean,
   chunks: Schema.Array(
@@ -479,6 +493,7 @@ export const GuestAction = Schema.Union([
   ProcessReadAction,
   ProcessCancelAction,
   ProcessInputAction,
+  TerminalAction,
   SoftwareAction,
 ]);
 export const ModuleImports = Schema.Array(Schema.String.check(Schema.isMaxLength(4096))).check(
@@ -969,6 +984,14 @@ export const ShellPlan = Schema.Array(
 );
 export const CommandArguments = Schema.Array(Schema.String);
 
+export const InputMigrationInput = Schema.Struct({
+  cursor: Schema.optionalKey(Schema.NullOr(Schema.String.check(Schema.isMaxLength(2048)))),
+});
+export const InputMigrationReceipt = Schema.Struct({
+  migrated: Schema.Int,
+  cursor: Schema.NullOr(Schema.String),
+});
+
 export const OutputMigrationInput = Schema.Struct({
   cursor: Schema.optionalKey(Schema.NullOr(Schema.String)),
 });
@@ -1069,6 +1092,8 @@ export const ActionResponses = {
   "process.stdin.write": InputReceipt,
   "process.stdin.close": InputReceipt,
   "process.stdin.status": InputReceipt,
+  "process.terminal.status": TerminalGeometry,
+  "process.terminal.resize": TerminalGeometry,
   "process.output.read": ProcessOutputPage,
   "process.output.readLive": LiveOutputPage,
   "process.recovery.status": RecoveryStatus,

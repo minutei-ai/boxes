@@ -1,5 +1,12 @@
 import { Clock, Effect, Schema } from "effect";
-import { Capability, Fault, InputHead, ProcessInputAction, StoredRun } from "./contracts";
+import {
+  Capability,
+  Fault,
+  InputHead,
+  ProcessInputAction,
+  StoredRun,
+  TerminalAction,
+} from "./contracts";
 import { requirePermission } from "./auth";
 import { head, StorageFailure } from "./storage";
 import { restore } from "./code";
@@ -28,6 +35,7 @@ export const initializeInput = Effect.fn("input.initialize")(function* (
   sandboxId: string,
   id: string,
   initial: Uint8Array,
+  mode: Exclude<typeof StoredRun.Type.stdinMode, "closed">,
 ) {
   const current = yield* Effect.tryPromise({
     try: () => env.OBJECTS.head(`process-input/${sandboxId}/${id}.json`),
@@ -55,12 +63,17 @@ export const initializeInput = Effect.fn("input.initialize")(function* (
     });
     chunks.push({ hash, size: bytes.byteLength });
   }
+  const geometry = yield* Effect.sync(() => {
+    if (mode === "pty") return { cols: 80, rows: 24, revision: 0 };
+    return null;
+  });
   yield* Effect.tryPromise({
     try: () =>
       env.OBJECTS.put(
         `process-input/${sandboxId}/${id}.json`,
         Schema.encodeSync(Schema.fromJsonString(InputHead))({
-          version: 1,
+          version: 2,
+          terminal: geometry,
           size: initial.byteLength,
           closed: false,
           chunks,
@@ -104,7 +117,7 @@ export const readInput = Effect.fn("input.read")(function* (
   length: number,
 ) {
   const { input } = yield* load(env, sandboxId, id);
-  if (offset < 0 || offset > input.size || length < 1 || length > 65_536)
+  if (offset < 0 || offset > input.size || length < 0 || length > 65_536)
     return yield* new StorageFailure({ cause: "Invalid stdin read range" });
   const end = Math.min(offset + length, input.size);
   const data: Buffer[] = [];
@@ -131,18 +144,22 @@ export const readInput = Effect.fn("input.read")(function* (
       Buffer.from(bytes).subarray(Math.max(offset - start, 0), Math.min(end - start, chunk.size)),
     );
   }
-  return { data: Buffer.concat(data), closed: input.closed, total: input.size };
+  return {
+    data: Buffer.concat(data),
+    closed: input.closed,
+    total: input.size,
+    terminal: input.terminal,
+  };
 });
 
-export const input = Effect.fn("process.input")(function* (
+const openInput = Effect.fn("input.open")(function* (
   env: Env,
   capability: typeof Capability.Type,
-  action: typeof ProcessInputAction.Type,
+  id: string,
 ) {
-  yield* requirePermission(capability, "execute");
   yield* head(env, capability.sandboxId);
   const process = yield* Effect.tryPromise({
-    try: () => env.OBJECTS.get(`processes/${capability.sandboxId}/${action.id}.json`),
+    try: () => env.OBJECTS.get(`processes/${capability.sandboxId}/${id}.json`),
     catch: (cause) => new StorageFailure({ cause }),
   });
   if (process === null)
@@ -161,21 +178,32 @@ export const input = Effect.fn("process.input")(function* (
       message: "Process stdin is not interactive",
     });
   const object = yield* Effect.tryPromise({
-    try: () => env.OBJECTS.head(`process-input/${capability.sandboxId}/${action.id}.json`),
+    try: () => env.OBJECTS.head(`process-input/${capability.sandboxId}/${id}.json`),
     catch: (cause) => new StorageFailure({ cause }),
   });
   if (object === null) {
+    yield* requirePermission(capability, "execute");
     const program = yield* restore(env, capability.sandboxId, record.sourceHash);
     if (program.language !== "wasm")
       return yield* new StorageFailure({ cause: "Interactive process has a different runtime" });
     yield* initializeInput(
       env,
       capability.sandboxId,
-      action.id,
+      id,
       Buffer.from(program.stdin, "base64"),
+      record.stdinMode,
     );
   }
-  const { input: current, etag } = yield* load(env, capability.sandboxId, action.id);
+  return { record, ...(yield* load(env, capability.sandboxId, id)) };
+});
+
+export const input = Effect.fn("process.input")(function* (
+  env: Env,
+  capability: typeof Capability.Type,
+  action: typeof ProcessInputAction.Type,
+) {
+  yield* requirePermission(capability, "execute");
+  const { record, input: current, etag } = yield* openInput(env, capability, action.id);
   const closed = current.closed || (record.status !== "queued" && record.status !== "running");
   if (action.op === "process.stdin.status")
     return { offset: current.size, total: current.size, closed };
@@ -268,4 +296,64 @@ export const input = Effect.fn("process.input")(function* (
       message: "Concurrent stdin mutation; inspect process.stdin.status",
     });
   return { offset: updated.size, total: updated.size, closed: updated.closed };
+});
+
+export const terminal = Effect.fn("process.terminal")(function* (
+  env: Env,
+  capability: typeof Capability.Type,
+  action: typeof TerminalAction.Type,
+) {
+  if (action.op === "process.terminal.status") yield* requirePermission(capability, "read");
+  else yield* requirePermission(capability, "execute");
+  const { record, input: current, etag } = yield* openInput(env, capability, action.id);
+  if (record.stdinMode !== "pty")
+    return yield* new Fault({ code: "EINVAL", status: 400, message: "Process has no terminal" });
+  if (current.terminal === null)
+    return yield* new StorageFailure({ cause: "PTY input head has no geometry" });
+  if (action.op === "process.terminal.status") return current.terminal;
+  if (record.status !== "queued" && record.status !== "running")
+    return yield* new Fault({
+      code: "EPIPE",
+      status: 409,
+      message: "Process terminal has settled",
+    });
+  if (action.revision !== current.terminal.revision)
+    return yield* new Fault({
+      code: "CONFLICT",
+      status: 409,
+      message: "Terminal revision changed; inspect process.terminal.status",
+    });
+  if (action.cols === current.terminal.cols && action.rows === current.terminal.rows)
+    return current.terminal;
+  if (current.terminal.revision === 4294967295)
+    return yield* new Fault({
+      code: "EFBIG",
+      status: 409,
+      message: "Terminal revision limit exceeded",
+    });
+  const geometry = {
+    cols: action.cols,
+    rows: action.rows,
+    revision: current.terminal.revision + 1,
+  };
+  const now = yield* Clock.currentTimeMillis;
+  if (capability.expiresAt <= now)
+    return yield* new Fault({ code: "UNAUTHORIZED", status: 401, message: "Capability expired" });
+  yield* head(env, capability.sandboxId);
+  const saved = yield* Effect.tryPromise({
+    try: () =>
+      env.OBJECTS.put(
+        `process-input/${capability.sandboxId}/${action.id}.json`,
+        Schema.encodeSync(Schema.fromJsonString(InputHead))({ ...current, terminal: geometry }),
+        { onlyIf: { etagMatches: etag } },
+      ),
+    catch: (cause) => new StorageFailure({ cause }),
+  });
+  if (saved === null)
+    return yield* new Fault({
+      code: "CONFLICT",
+      status: 409,
+      message: "Concurrent input or terminal mutation; inspect process.terminal.status",
+    });
+  return geometry;
 });

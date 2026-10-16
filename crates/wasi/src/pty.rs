@@ -10,6 +10,10 @@ pub(super) struct Terminal {
     pub input: Rc<Pipe>,
     pub output: Rc<Pipe>,
     pub raw: Cell<bool>,
+    pub cols: Cell<u16>,
+    pub rows: Cell<u16>,
+    pub revision: Cell<u32>,
+    pub foreground: Cell<u32>,
     line: RefCell<Vec<u8>>,
     lines: RefCell<VecDeque<usize>>,
 }
@@ -32,6 +36,10 @@ impl Terminal {
             input: pipe(),
             output: pipe(),
             raw: Cell::new(false),
+            cols: Cell::new(80),
+            rows: Cell::new(24),
+            revision: Cell::new(0),
+            foreground: Cell::new(0),
             line: RefCell::new(Vec::new()),
             lines: RefCell::new(VecDeque::new()),
         })
