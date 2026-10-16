@@ -1,5 +1,5 @@
 {
-  "status": "Published experimental SDK/runtime 0.12.1. Source CI, exact public archive downloads and native remote SDK interoperability passed. Full AgentOS parity remains open.",
+  "status": "Published experimental SDK/runtime 0.12.1. Source/tag CI, exact public downloads, native production SDK interoperability and actual local Minutei integration passed. Full AgentOS parity remains open.",
   "version": "0.12.1",
   "sourceCommit": "1285569d0eb71be62622363d529d27076f664207",
   "implementationCommit": "b9c7544243ce65939902d6534a80fe1d6daa28fe",
@@ -66,8 +66,8 @@
     "tagCI": {
       "url": "https://github.com/minutei-ai/boxes/actions/runs/38844655540",
       "headSha": "1285569d0eb71be62622363d529d27076f664207",
-      "lastObservedStatus": "in_progress",
-      "scope": "The tag-triggered run is distinct from the successful source CI and was not yet complete when this record was written."
+      "status": "completed",
+      "conclusion": "success"
     },
     "publicDownloads": "Anonymous HTTPS downloads of both published archives match the frozen, locally tested bytes. Authenticated draft downloads also matched before publication.",
     "nativeProductionBinding": {
@@ -125,7 +125,51 @@
     }
   },
   "backend": "No deployment in this increment. All six deployable assets match the published/deployed 0.12.0 runtime bytes; archive version metadata changes only.",
-  "minutei": "No dependency update, push or deployment in this increment. The actual local consumer remains on public 0.12.0 SDK/runtime dependencies verified by sdk-0.12.0-delivery.json.",
+  "minutei": {
+    "status": "Local integration committed; no Minutei push or deployment.",
+    "commit": "96dddc57faac80499adecc1dc68571678c5a53db",
+    "publicArtifacts": [
+      {
+        "archive": "minutei-ai-boxes-0.12.1.tgz",
+        "sha256": "c49dd52d72f8fb99bd1a145b9d4c7c7d994352cd685c7746528146a8094c6647",
+        "files": 16,
+        "allInstalledBytesMatch": true
+      },
+      {
+        "archive": "minutei-ai-boxes-runtime-0.12.1.tgz",
+        "sha256": "1f5692b23c7b7d91c64b1bc06b1a78c8a9503d327baa4b44bc56f632473c47a0",
+        "files": 8,
+        "allInstalledBytesMatch": true
+      }
+    ],
+    "nativeTests": {
+      "command": "bun run test --project web --project web-integration apps/web/__tests__/boxes-code.test.ts apps/web/__tests__/tenant-lifecycle.test.ts",
+      "files": 2,
+      "tests": 2,
+      "passed": 2,
+      "seconds": 27.78,
+      "environment": "Existing native Python test environment with the declared Iceberg dependencies; no source/test changes made to obtain the pass."
+    },
+    "initialEnvironmentFailure": "The Boxes Code Mode test passed. The unrelated tenant-lifecycle fixture exited before starting its Python Iceberg server because the selected system Python lacked pyiceberg. The repeat used the existing native test environment and passed both tests.",
+    "typecheck": "Nx web:typecheck and its 29 dependency tasks passed.",
+    "format": "The changed web package manifest passed the owning oxfmt configuration; git diff --check passed.",
+    "actualConsumerProof": {
+      "clientVersion": "0.12.1",
+      "runtimeVersion": "0.12.1",
+      "runtimeArchiveSha256": "1f5692b23c7b7d91c64b1bc06b1a78c8a9503d327baa4b44bc56f632473c47a0",
+      "consumerCommit": "96dddc57faac80499adecc1dc68571678c5a53db",
+      "consumerBundleSha256": "78894f5c0028992ab331bc04e02da43005b3251201c5c6edd02e4bf11f501587",
+      "transport": "native workerd Agent service binding; actual Minutei Code Mode and tenant SQLite; local R2, KV and Queue",
+      "retention": true,
+      "isolatedRegistry": true,
+      "capabilities": true,
+      "consumerFixturesSha256": {
+        "boxes-retention.ts": "ab69256069295b3e155a6e47ebc916e23f4ae760eb4a7ae7afebd9bbc37b050f",
+        "boxes-code.worker.ts": "c3d6f06ea5f5afe322076052267468c4702fe79aff596fa847d68bdc3045e5f4"
+      }
+    },
+    "limits": "Local native Agent binding, actual Code Mode and tenant SQLite only. The history Queue has no consumer in this fixture; authenticated application, live model behavior and Minutei deployment remain unverified."
+  },
   "remaining": [
     "Global garbage collection and late-write fencing",
     "Uncertain context creation after a lost response",
