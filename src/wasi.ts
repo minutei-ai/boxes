@@ -109,7 +109,7 @@ export const wasi = Effect.fn("wasi.execute")(function* (
   canHandover: boolean,
   stdinMode: typeof StoredRun.Type.stdinMode = "closed",
 ) {
-  const leaseStartedAt = yield* Clock.currentTimeMillis;
+  const handoverAt = (yield* Clock.currentTimeMillis) + 30_000;
   const policy = initial.head.policy;
   const restored = yield* Effect.gen(function* () {
     if (checkpointReference === null) return null;
@@ -513,7 +513,7 @@ export const wasi = Effect.fn("wasi.execute")(function* (
               if (
                 canHandover &&
                 guest.pid === 1 &&
-                (yield* Clock.currentTimeMillis) - leaseStartedAt >= 30_000
+                (yield* Clock.currentTimeMillis) >= handoverAt
               ) {
                 yield* semaphore.take(1);
                 lease.held = true;
@@ -534,7 +534,7 @@ export const wasi = Effect.fn("wasi.execute")(function* (
                   message: "Capability expired while stopped",
                 });
               const pause = Match.value(canHandover && guest.pid === 1).pipe(
-                Match.when(true, () => Math.min(1000, untilExpiry)),
+                Match.when(true, () => Math.min(1000, untilExpiry, Math.max(0, handoverAt - now))),
                 Match.orElse(() => untilExpiry),
               );
               yield* Effect.raceFirst(Deferred.await(wake), Effect.sleep(pause));
@@ -834,7 +834,7 @@ export const wasi = Effect.fn("wasi.execute")(function* (
                     if (
                       canHandover &&
                       guest.pid === 1 &&
-                      (yield* Clock.currentTimeMillis) - leaseStartedAt >= 30_000
+                      (yield* Clock.currentTimeMillis) >= handoverAt
                     ) {
                       yield* semaphore.take(1);
                       lease.held = true;
@@ -856,7 +856,10 @@ export const wasi = Effect.fn("wasi.execute")(function* (
                       return [Fiber.await(fiber).pipe(Effect.asVoid)];
                     });
                     if (waiting.length === 0) break;
-                    if (canHandover && guest.pid === 1) waiting.push(Effect.sleep(1000));
+                    if (canHandover && guest.pid === 1) {
+                      const remaining = Math.max(0, handoverAt - (yield* Clock.currentTimeMillis));
+                      waiting.push(Effect.sleep(Math.min(1000, remaining)));
+                    }
                     yield* Effect.raceAllFirst([...waiting, Deferred.await(wake)]);
                   }
                   return { data: Buffer.alloc(0), path: "/", directory: false, value: 0n };
@@ -1228,7 +1231,7 @@ export const wasi = Effect.fn("wasi.execute")(function* (
                     if (
                       canHandover &&
                       guest.pid === 1 &&
-                      (yield* Clock.currentTimeMillis) - leaseStartedAt >= 30_000
+                      (yield* Clock.currentTimeMillis) >= handoverAt
                     )
                       return yield* handover(Number(guest.fuel_used()));
                     const ioReady = yield* Effect.try({
@@ -1265,16 +1268,13 @@ export const wasi = Effect.fn("wasi.execute")(function* (
                     }, untilExpiry);
                     lease.held = false;
                     yield* semaphore.release(1);
-                    const pause = Match.value(
-                      canHandover && guest.pid === 1 && first > 1_000_000_000n,
-                    ).pipe(
-                      Match.when(true, () => 1_000_000_000n),
-                      Match.orElse(() => first),
-                    );
-                    yield* Effect.raceFirst(
-                      Effect.sleep(Duration.max(Duration.nanos(pause), Duration.millis(1))),
-                      Deferred.await(wake),
-                    );
+                    const pause = yield* Effect.gen(function* () {
+                      const desired = Duration.max(Duration.nanos(first), Duration.millis(1));
+                      if (!canHandover || guest.pid !== 1) return desired;
+                      const remaining = Math.max(0, handoverAt - (yield* Clock.currentTimeMillis));
+                      return Duration.min(desired, Duration.millis(Math.min(1000, remaining)));
+                    });
+                    yield* Effect.raceFirst(Effect.sleep(pause), Deferred.await(wake));
                     readings.realtime = yield* Clock.currentTimeNanos;
                     readings.monotonic = (yield* Clock.monotonicTimeNanos) + clocks.offset;
                   }

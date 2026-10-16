@@ -29,6 +29,10 @@ unsafe extern "C" {
         core: *mut u32,
     ) -> u32;
 }
+#[link(wasm_import_module = "wasi_snapshot_preview1")]
+unsafe extern "C" {
+    fn poll_oneoff(input: *const u8, output: *mut u8, count: u32, ready: *mut u32) -> u32;
+}
 #[unsafe(no_mangle)]
 pub extern "C" fn run() -> i32 {
     unsafe {
@@ -56,7 +60,19 @@ pub extern "C" fn run() -> i32 {
         if status != 0 {
             return 100 + status as i32;
         }
-        if cfg!(case = "stopped") && proc_kill(1, 19) != 0 {
+        if cfg!(case = "delayed-stopped") {
+            let mut subscription = [0u8; 48];
+            subscription[16..20].copy_from_slice(&1u32.to_le_bytes());
+            subscription[24..32].copy_from_slice(&20_000_000u64.to_le_bytes());
+            let mut event = [0u8; 32];
+            let mut count = 0;
+            if poll_oneoff(subscription.as_ptr(), event.as_mut_ptr(), 1, &mut count) != 0
+                || count != 1
+            {
+                return 151;
+            }
+        }
+        if (cfg!(case = "stopped") || cfg!(case = "delayed-stopped")) && proc_kill(1, 19) != 0 {
             return 150;
         }
         let mut code = 0;

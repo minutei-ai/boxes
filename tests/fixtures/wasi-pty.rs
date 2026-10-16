@@ -114,6 +114,7 @@ pub extern "C" fn __wasi_signal_trampoline(signal: u32) {
     case = "tty-invalid",
     case = "tty-rights",
     case = "recovery-cooked",
+    case = "recovery-delayed",
     case = "recovery-raw",
     case = "resize",
     case = "resize-initial",
@@ -189,7 +190,20 @@ pub extern "C" fn _start() {
             send(1, b"done\n");
             proc_exit(0);
         }
-        if cfg!(case = "recovery-cooked") {
+        if cfg!(case = "recovery-delayed") {
+            send(1, b"delayed\n");
+            let mut subscription = [0u8; 48];
+            subscription[16..20].copy_from_slice(&1u32.to_le_bytes());
+            subscription[24..32].copy_from_slice(&20_000_000u64.to_le_bytes());
+            let mut event = [0u8; 32];
+            let mut count = 0;
+            if poll_oneoff(subscription.as_ptr(), event.as_mut_ptr(), 1, &mut count) != 0
+                || count != 1
+            {
+                proc_exit(111);
+            }
+        }
+        if cfg!(case = "recovery-cooked") || cfg!(case = "recovery-delayed") {
             let mut data = [0u8; 32];
             if read(data.as_mut_ptr(), 32, u32::MAX) != 6 || &data[..6] != b"hello\n" {
                 proc_exit(80);
@@ -357,6 +371,7 @@ pub extern "C" fn _start() {
     case = "tty-invalid",
     case = "tty-rights",
     case = "recovery-cooked",
+    case = "recovery-delayed",
     case = "recovery-raw",
     case = "resize",
     case = "resize-initial",

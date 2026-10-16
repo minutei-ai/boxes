@@ -6,7 +6,7 @@ import { PLATFORM_PROXY_PREFIX } from "@alchemy.run/cloudflare-runtime/core/plat
 import type { Fetcher } from "@cloudflare/workers-types/experimental";
 import { consume, handleRequest } from "../../src/index";
 export { Agent } from "../../src/index";
-import { ProcessDelivery, StoredRun, StdioRef } from "../../src/contracts";
+import { ProcessDelivery, StoredRun } from "../../src/contracts";
 import { tick } from "../../src/cron";
 import { reconcile } from "../../src/process";
 import type { Env } from "../../src/resources";
@@ -101,9 +101,6 @@ export default {
         Effect.gen(function* () {
           const start = yield* Schema.decodeUnknownEffect(Schema.Int)(env.CLOCK_START);
           const advance = yield* Schema.decodeUnknownEffect(Schema.Int)(env.CLOCK_ADVANCE);
-          const afterBytes = yield* Schema.decodeUnknownEffect(StdioRef.fields.size)(
-            env.CLOCK_ADVANCE_AFTER_BYTES,
-          );
           const clock = yield* TestClock.make();
           yield* clock.setTime(start);
           const delivery = yield* consume(batch, bindings).pipe(
@@ -120,10 +117,7 @@ export default {
               return yield* Schema.decodeUnknownEffect(Schema.fromJsonString(StoredRun))(text);
             }).pipe(
               Effect.repeat({
-                until: (record) =>
-                  record?.status === "running" &&
-                  record.output !== null &&
-                  record.output.stdout.size >= afterBytes,
+                until: (record) => record?.status === "running" && record.output !== null,
                 schedule: Schedule.spaced("1 millis"),
               }),
             );
@@ -141,7 +135,6 @@ declare global {
     interface Env {
       CLOCK_START: number;
       CLOCK_ADVANCE: number;
-      CLOCK_ADVANCE_AFTER_BYTES: number;
       CLOCK_CONTROLLED: boolean;
     }
   }

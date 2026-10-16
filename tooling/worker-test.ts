@@ -1,5 +1,4 @@
 import { Clock, Effect, Schema } from "effect";
-import { StdioRef } from "../src/contracts";
 import { Runtime, PlatformProxy, type QueueConsumer } from "@alchemy.run/cloudflare-runtime/core";
 import {
   R2Bucket,
@@ -31,7 +30,6 @@ const Options = Schema.Struct({
   binding: Schema.optionalKey(Schema.Boolean),
   origin: Schema.optionalKey(Schema.Struct({ delay: Schema.Int, body: Schema.String })),
   advance: Schema.optionalKey(Schema.Int),
-  advanceAfterBytes: Schema.optionalKey(StdioRef.fields.size),
   clockStart: Schema.optionalKey(Schema.Int),
   consume: Schema.optionalKey(Schema.Boolean),
   controlled: Schema.optionalKey(Schema.Boolean),
@@ -58,7 +56,6 @@ export const runtime = (persist: string, options: typeof Options.Type = {}) => {
     Text.local("API_KEY", "cirro-local-test-credential"),
     Json.local("CLOCK_START", start),
     Json.local("CLOCK_ADVANCE", advance),
-    Json.local("CLOCK_ADVANCE_AFTER_BYTES", options.advanceAfterBytes ?? 0),
     Json.local("CLOCK_CONTROLLED", options.controlled ?? true),
     Queue.local(producer),
     Service.self("SELF"),

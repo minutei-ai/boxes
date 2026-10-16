@@ -278,6 +278,7 @@ await Effect.runPromise(
       "tty-invalid",
       "tty-rights",
       "recovery-cooked",
+      "recovery-delayed",
       "recovery-raw",
       "resize",
       "resize-initial",
@@ -1049,6 +1050,21 @@ await Effect.runPromise(
       "tests/fixtures/wasi-recovery-family.rs",
       "-o",
       "dist/wasi-recovery-stopped.wasm",
+    ]);
+    yield* run([
+      "rustc",
+      "--crate-type",
+      "cdylib",
+      "--target",
+      "wasm32-unknown-unknown",
+      "-O",
+      "-C",
+      "strip=symbols",
+      "--cfg",
+      'case="delayed-stopped"',
+      "tests/fixtures/wasi-recovery-family.rs",
+      "-o",
+      "dist/wasi-recovery-stopped-delayed.wasm",
     ]);
     yield* run([
       "rustc",

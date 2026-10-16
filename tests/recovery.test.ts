@@ -166,7 +166,7 @@ for (const mode of ["synced", "unsynced"] as const) {
     await rm(directory, { recursive: true, force: true });
   }, 30000);
 }
-for (const role of ["root", "family", "stopped"] as const) {
+for (const role of ["root", "family", "stopped", "stopped-delayed"] as const) {
   test(`${role} blocked stdin checkpoints and resumes with buffered bytes and EOF after Worker replacement`, async () => {
     const directory = await mkdtemp(join(tmpdir(), "cirro-idle-recovery-"));
     const first = runtime(directory, { advance: 30000 });
@@ -195,11 +195,13 @@ for (const role of ["root", "family", "stopped"] as const) {
     const artifact = Match.value(role).pipe(
       Match.when("family", () => "wasi-recovery-family.wasm"),
       Match.when("stopped", () => "wasi-recovery-stopped.wasm"),
+      Match.when("stopped-delayed", () => "wasi-recovery-stopped-delayed.wasm"),
       Match.orElse(() => "wasi-stdin.wasm"),
     );
     if (role !== "root") {
       const childArtifact = Match.value(role).pipe(
         Match.when("stopped", () => "wasi-stdin-resume-parent.wasm"),
+        Match.when("stopped-delayed", () => "wasi-stdin-resume-parent.wasm"),
         Match.orElse(() => "wasi-stdin.wasm"),
       );
       const child = Buffer.from(
@@ -271,6 +273,7 @@ for (const role of ["root", "family", "stopped"] as const) {
     const envelope = Schema.decodeUnknownSync(Schema.fromJsonString(ExecutionCheckpoint))(
       await envelopeObject.text(),
     );
+    expect(envelope.savedAt).toBe(first.time);
     const heapObject = await bucket.get(`sandboxes/idle/checkpoints/${envelope.heap}.json`);
     expect(heapObject).not.toBeNull();
     if (heapObject === null) return;

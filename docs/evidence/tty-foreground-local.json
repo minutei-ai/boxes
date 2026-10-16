@@ -58,7 +58,7 @@
       "seconds": 2.76,
       "change": "Only the clock-advance readiness predicate changed for this probe: wait for the completed setup messages before advancing the same 30 seconds. No checkpoint/status/output assertion was removed and no timeout increased."
     },
-    "clockHarness": "The test helper now accepts advanceAfterBytes, validated with StdioRef.size. The foreground fixture supplies the exact byte count of child-ready, initial input echo and owned messages. Other workloads retain the default any-output predicate. Every recovery case verifies the native Queue outcome before checking its persisted checkpoint. Diagnostic logs and temporary fixed thresholds were removed.",
+    "clockHarness": "Historical 2b7c35b probe used advanceAfterBytes to wait for completed setup. The deadline follow-up identified sleeps overshooting the absolute lease and removes this workaround, its bindings, Schema field and callers. Foreground now resumes with the clock advancing after the first output.",
     "generalBenchmark": {
       "command": "bun run bench",
       "result": "passed",
@@ -91,7 +91,7 @@
     }
   },
   "limits": [
-    "The successful recovery proof covers completed setup. Immediate virtual-time handover during in-flight multi-child initialization still produced an exception; no production diagnosis or runtime fix for that phase is claimed. Admission/handover overlap remains an explicit open gate.",
+    "The initial immediate-advance failure is resolved by the handover-deadline follow-up: relative sleeps could overshoot the 30-second lease. Its before/after native tests cover child wait, delayed poll and delayed stopped state. Broader arbitrary-interruption/admission coverage remains with the full recovery gates.",
     "Controlling-terminal acquisition/session ownership, SIGTTIN/SIGTTOU background-access policy, raw-mode recovery leases, full termios and richer public terminal metadata/listing remain open.",
     "Arbitrary-crash and cross-build native heap recovery remain open.",
     "Remote CI and production delivery of this source increment are separate gates; no new performance or cost advantage is claimed."
@@ -121,5 +121,7 @@
       "bytes": 369402,
       "sha256": "c08bf2dbc14dd2a315d53c1fad03adc253fadf62d16da763826bdff829223dc7"
     }
-  }
+  },
+  "implementationCommit": "2b7c35b3291ee1363df068fc0c06b21d65dee822",
+  "followUpEvidence": "docs/evidence/handover-deadline-local.json"
 }

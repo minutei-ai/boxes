@@ -1,0 +1,130 @@
+{
+  "status": "Locally verified source fix after published 0.13.0. No new archive, release or production deployment. Full AgentOS parity remains open.",
+  "baseCommit": "2b7c35b3291ee1363df068fc0c06b21d65dee822",
+  "baseCI": {
+    "url": "https://github.com/minutei-ai/boxes/actions/runs/38866681298",
+    "status": "completed",
+    "conclusion": "success"
+  },
+  "problem": "A root entering child wait, poll or stopped state after admission could schedule its next one-second wake beyond the 30-second execution lease. With exact native virtual-time advancement, the delivery then had no due wake and the native Queue returned exception, leaving the receipt running rather than checkpointed.",
+  "diagnosis": {
+    "observedTrace": {
+      "leaseMs": 30000,
+      "childWaitEntryOffsetMs": 144,
+      "lastWaitCheckOffsetMs": 29144,
+      "nextUnboundedWakeOffsetMs": 30144,
+      "clockAdvanceMs": 30000
+    },
+    "rejectedHypothesis": "An uninterruptible semaphore waiter blocking family scope closure was initially suspected. Instrumentation showed handover/scope closure had not started. Timestamped root wait observations proved the relative-sleep overshoot; no semaphore or scope lifetime change was made.",
+    "previousWorkaround": "The earlier source proof waited for completed setup stdout before advancing time. That readiness option, Schema import/field, native JSON binding, global Env field and sole caller are removed in this cutover. The clock now advances after the first acknowledged output for every workload."
+  },
+  "change": "One absolute handoverAt deadline owns the existing 30-second lease. Eligible root stopped/child-wait/poll paths cap each requested sleep by the remaining lease and the existing observation bound. Guest clock and capability-expiry bounds retain their meanings. A poll can immediately recheck an expired lease instead of forcing another one-millisecond delay. Fuel thresholds, process grants, persisted deadlines, Semaphore behavior and checkpoint formats are unchanged.",
+  "verification": {
+    "before": {
+      "source": "Original src/wasi.ts from 2b7c35b, with identical new fixture/test sources and the first-output clock driver.",
+      "command": "bun test tests/pty-recovery.test.ts tests/recovery.test.ts --test-name-pattern 'active (foreground|delayed)|stopped-delayed'",
+      "passed": 0,
+      "failed": 3,
+      "seconds": 4.24,
+      "failures": [
+        "stopped-delayed receipt remained running",
+        "foreground-family delivery returned native Queue exception",
+        "delayed canonical read delivery returned native Queue exception"
+      ]
+    },
+    "after": {
+      "command": "bun test tests/pty-recovery.test.ts tests/recovery.test.ts --test-name-pattern 'active (foreground|delayed)|stopped-delayed'",
+      "passed": 3,
+      "failed": 0,
+      "assertions": 65,
+      "seconds": 7.25
+    },
+    "fullNativeCheck": {
+      "command": "bun run check",
+      "tests": 385,
+      "files": 76,
+      "assertions": 5242,
+      "seconds": 189.99,
+      "failures": 0,
+      "includes": [
+        "Runtime and SDK build",
+        "TypeScript",
+        "Workspace Clippy",
+        "Cargo tests",
+        "Native workerd/R2/Queue tests"
+      ]
+    },
+    "format": "bun run format:check passed.",
+    "boundary": "The delayed fixtures perform a real 20-millisecond WASI clock poll before entering an indefinite read or signal stop. All PTY and blocked-family lease checkpoints assert savedAt equals the original start plus the same 30,000-millisecond advance.",
+    "retention": "Replacement Workers use real native R2 checkpoints and original grants/deadlines. Parent/child handles, selected foreground, partial canonical input, stopped parent/continued child, buffered bytes and EOF retain exact results. Stale Queue delivery preserves terminal receipts and output without reentry. Existing synced/unsynced filesystem handover tests also pass.",
+    "cleanup": "All DEBUG-handover instrumentation was removed. No timeout was increased and the original failing foreground flow runs without a setup readiness gate.",
+    "generalBenchmark": {
+      "command": "bun run bench",
+      "result": "passed",
+      "environment": {
+        "runtime": "local workerd via native Alchemy",
+        "alchemy": "2.0.0-beta.83",
+        "production": false,
+        "platform": "linux",
+        "arch": "x64"
+      },
+      "artifactBytes": {
+        "javascript": 369509,
+        "kernelWasm": 1139581,
+        "wasiWasm": 1676510,
+        "pythonWasm": 10719083,
+        "guestWasm": 1129863,
+        "compilerWasm": 1943596
+      },
+      "wasiPublication": {
+        "samples": 25,
+        "rootPublications": 25
+      },
+      "contentDeduplication": {
+        "singleFileWrites": 25,
+        "uniqueBlocks": 1,
+        "singleFileLogicalBytesWritten": 6553600,
+        "storedBlockBytes": 262144
+      },
+      "limits": "Maintained local regression workload; no paired baseline, production latency or billing claim. Existing performance evidence was preserved."
+    }
+  },
+  "limits": [
+    "Local native workerd/R2/Queue with request-local Effect TestClock; no new production incident or production timing proof is claimed.",
+    "Requested sleeps respect the deadline; platform scheduling and outstanding native I/O can still delay actual execution.",
+    "These cases close the reproduced admission-time scheduling defect, not every possible interruption, arbitrary-crash or cross-build recovery case.",
+    "Remote CI, matching archives and production delivery of this source fix remain separate gates."
+  ],
+  "runtimeAssets": {
+    "cirro_compiler_bg.wasm": {
+      "bytes": 1943596,
+      "sha256": "27d9b0022a634ed4eef47b6561ad38cafde3522c17e834afed1264440678bf2f",
+      "unchangedFromForegroundSource": true
+    },
+    "cirro_guest_bg.wasm": {
+      "bytes": 1129863,
+      "sha256": "b773b74626b08bd1083860081ccd2a3d0fdff80dcd97b5ec13ed7c6e2148ef22",
+      "unchangedFromForegroundSource": true
+    },
+    "cirro_kernel_bg.wasm": {
+      "bytes": 1139581,
+      "sha256": "1d3d1811805905af3c00e8afedd696c22d585db7538877306c28e7b099725e92",
+      "unchangedFromForegroundSource": true
+    },
+    "cirro_python_bg.wasm": {
+      "bytes": 10719083,
+      "sha256": "8aa6aec5ab6fb0623637e2b6dda7318f4934e4736f4a97e45ca3312bf32e529c",
+      "unchangedFromForegroundSource": true
+    },
+    "cirro_wasi_bg.wasm": {
+      "bytes": 1676510,
+      "sha256": "ec69d42567efcb741aa978559f66ac5b1d849a686a7b173c3678495d0b0c90ef",
+      "unchangedFromForegroundSource": true
+    },
+    "index.js": {
+      "bytes": 369509,
+      "sha256": "50ce016e9bd24a58f5b0fd04a0ae9d91d99a49ab576cd864085dba879cf2afc1",
+      "unchangedFromForegroundSource": false
+    }
+  }
+}

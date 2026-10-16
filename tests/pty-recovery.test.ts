@@ -15,6 +15,7 @@ for (const mode of [
   "geometry-restart",
   "signals",
   "foreground",
+  "delayed",
 ] as const) {
   test(`active ${mode} PTY preserves its checkpointed state across Worker replacement`, () =>
     Effect.runPromise(
@@ -27,17 +28,7 @@ for (const mode of [
           const retained = yield* Effect.scoped(
             Effect.gen(function* () {
               const worker = yield* Effect.acquireRelease(
-                Effect.sync(() =>
-                  runtime(directory, {
-                    advance: 30000,
-                    advanceAfterBytes: Match.value(mode).pipe(
-                      Match.when("foreground", () =>
-                        Buffer.byteLength("child-ready\r\nhelowned\r\n"),
-                      ),
-                      Match.orElse(() => 0),
-                    ),
-                  }),
-                ),
+                Effect.sync(() => runtime(directory, { advance: 30000 })),
                 (worker) => Effect.promise(() => worker.dispose()),
               );
               const url = (yield* Effect.promise(() => worker.ready)).toString();
@@ -102,6 +93,7 @@ for (const mode of [
                 Match.when("geometry-restart", () => "wasi-pty-resize-restart.wasm"),
                 Match.when("signals", () => "wasi-tty-signals-recovery.wasm"),
                 Match.when("foreground", () => "wasi-tty-foreground-recovery.wasm"),
+                Match.when("delayed", () => "wasi-pty-recovery-delayed.wasm"),
                 Match.when("cancelled", () => "wasi-pty-recovery-cooked.wasm"),
                 Match.orElse((mode) => `wasi-pty-recovery-${mode}.wasm`),
               );
@@ -152,6 +144,7 @@ for (const mode of [
               const envelope = yield* Schema.decodeUnknownEffect(
                 Schema.fromJsonString(ExecutionCheckpoint),
               )(yield* Effect.promise(() => envelopeObject.text()));
+              expect(envelope.savedAt).toBe(worker.time);
               const heapObject = yield* Effect.promise(() =>
                 objects.get(`sandboxes/active/checkpoints/${envelope.heap}.json`),
               );
@@ -182,6 +175,10 @@ for (const mode of [
                 expect(prefix).toContain("hel");
                 expect(prefix.split("owned\r\n").length).toBe(2);
                 expect(prefix.split("child-ready\r\n").length).toBe(2);
+              }
+              if (mode === "delayed") {
+                expect(prefix).toContain("delayed\r\n");
+                expect(prefix).toContain("hel");
               }
               if (mode === "raw")
                 expect(
@@ -331,6 +328,7 @@ for (const mode of [
             Match.when("signals", () => Buffer.from("kept\r\ninterrupt\r\ndone\r\n")),
             Match.when("foreground", () => Buffer.from("reclaimed\r\ndone\r\n")),
             Match.when("cooked", () => Buffer.from("lo\r\nread:hello\r\neof\r\n")),
+            Match.when("delayed", () => Buffer.from("lo\r\nread:hello\r\neof\r\n")),
             Match.when("family", () => Buffer.from("lo\r\nhello\r\n\r\nbytes=6\r\n")),
             Match.orElse(() =>
               Buffer.concat([
