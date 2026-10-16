@@ -416,9 +416,15 @@ export const WasmProgram = Schema.Struct({
   ...WasmConfiguration.fields,
 });
 export const PythonAction = Schema.Union([
+  InlineRun.mapFields((fields) => ({
+    ...fields,
+    contextId: Schema.optionalKey(Id),
+    language: Schema.Literal("python"),
+  })),
   Schema.Struct({
     op: Schema.Literal("python.execute"),
     id: Id,
+    contextId: Schema.optionalKey(Id),
     env: Schema.optionalKey(Environment),
     source: ScriptSource,
     filePath: Schema.optionalKey(Path),
@@ -426,6 +432,7 @@ export const PythonAction = Schema.Union([
   Schema.Struct({
     op: Schema.Literal("python.evaluate"),
     id: Id,
+    contextId: Schema.optionalKey(Id),
     env: Schema.optionalKey(Environment),
     expression: ScriptSource,
     filePath: Schema.optionalKey(Path),
@@ -433,6 +440,7 @@ export const PythonAction = Schema.Union([
   Schema.Struct({
     op: Schema.Literal("python.executeFile"),
     id: Id,
+    contextId: Schema.optionalKey(Id),
     path: Path,
     env: Schema.optionalKey(Environment),
   }),
@@ -475,7 +483,7 @@ export const ScriptAction = Schema.Union([
   }),
 ]);
 export const RunAction = Schema.Union([
-  InlineRun.mapFields((fields) => ({ ...fields, language: Schema.Literals(["python", "shell"]) })),
+  InlineRun.mapFields((fields) => ({ ...fields, language: Schema.Literal("shell") })),
   ScriptAction,
   PythonAction,
   Schema.Struct({
@@ -490,6 +498,7 @@ export const RunAction = Schema.Union([
 ]);
 export const ContextRecord = Schema.Struct({
   id: Id,
+  language: Schema.Literals(["javascript", "python"]),
   generation: Schema.Int.check(Schema.isGreaterThanOrEqualTo(0)),
   state: Schema.Literals(["idle", "running", "failed", "deleted"]),
   createdAt: Schema.Int,
@@ -503,7 +512,11 @@ export const ContextPage = Schema.Struct({
   cursor: Schema.NullOr(Schema.String),
 });
 export const ContextAction = Schema.Union([
-  Schema.Struct({ op: Schema.Literal("contexts.create"), id: Id }),
+  Schema.Struct({
+    op: Schema.Literal("contexts.create"),
+    id: Id,
+    language: Schema.optionalKey(ContextRecord.fields.language),
+  }),
   Schema.Struct({ op: Schema.Literal("contexts.get"), id: Id }),
   Schema.Struct({ op: Schema.Literal("contexts.reset"), id: Id }),
   Schema.Struct({ op: Schema.Literal("contexts.delete"), id: Id }),
@@ -1144,11 +1157,30 @@ export const EnvironmentMigrationReceipt = Schema.Struct({
   migrated: Schema.Int,
   cursor: Schema.NullOr(EnvironmentMigrationCursor),
 });
+const ContextMigrationCursor = Schema.Struct({
+  root: Schema.NullOr(Schema.String.check(Schema.isMaxLength(2048))),
+  pending: Schema.Array(
+    Schema.Struct({
+      sandboxId: Id,
+      continuation: Schema.NullOr(Schema.String.check(Schema.isMaxLength(2048))),
+    }),
+  ).check(Schema.isMaxLength(25)),
+});
+export const ContextMigrationInput = Schema.Struct({
+  cursor: Schema.optionalKey(Schema.NullOr(ContextMigrationCursor)),
+});
+export const ContextMigrationReceipt = Schema.Struct({
+  migrated: Schema.Int,
+  cursor: Schema.NullOr(ContextMigrationCursor),
+});
 export const MigrationReceipt = Schema.Struct({ migrated: Schema.Int });
 
+export const checkpointPageLimit = 1024;
 export const MemoryPages = Schema.Struct({
-  memoryBytes: Schema.Int.check(Schema.isBetween({ minimum: 65_536, maximum: 67_108_864 })),
-  pages: Schema.Array(Digest).check(Schema.isMaxLength(1024)),
+  memoryBytes: Schema.Int.check(
+    Schema.isBetween({ minimum: 65_536, maximum: checkpointPageLimit * 65_536 }),
+  ),
+  pages: Schema.Array(Digest).check(Schema.isMaxLength(checkpointPageLimit)),
 });
 export const ContextHeap = Schema.Struct({
   runtime: Digest,

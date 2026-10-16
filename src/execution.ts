@@ -66,7 +66,9 @@ export const execute = Effect.fn("execution.run")(function* (
     });
   if (program.language === "python")
     return {
-      outcome: yield* python(env, capability, program, session, capture).pipe(Effect.result),
+      outcome: yield* python(env, capability, program, session, capture, context).pipe(
+        Effect.result,
+      ),
       program,
       changed: false,
     };

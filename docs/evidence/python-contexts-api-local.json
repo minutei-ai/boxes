@@ -1,0 +1,97 @@
+{
+  "status": "Public Python context API and explicit language cutover verified locally on unreleased main; publication, production cutover and Minutei Python delivery remain pending.",
+  "sourceBase": "dad8cecfe29d1adec55f8b8949e3bcb336683032",
+  "pythonRuntimeSha256": "438ea33a3579525ec1d60be1cd25bea686c7faff7e75eef01b5e27f674a79bdb",
+  "sourcesSha256": {
+    "src/contracts.ts": "26d09d0567cae755e3b4fe3c945df6dfc945bade4ab4d9bd5a137b63b909f63b",
+    "src/contexts.ts": "4e190825c5d16119b8fecb64cb0b9e71a8ca60536f14dfe546dc0433a1911107",
+    "src/context-migration.ts": "8209b227e6826428c2e8a801edf74f83b8be6a06317c9e4a1c6396d296e7b5c4",
+    "src/python.ts": "73c0a7c765576caac6fa9843702ea61921784fbafcdf28a7b6350949f0aa6564",
+    "src/execution.ts": "0a6dae076c00964920b19728ed5488106441f3a1069712dd580e503b3e20ea84",
+    "src/process.ts": "2027ac2f5c3939761bfd98aea49c695ed729fb077161c53b468793d3a253ad06",
+    "src/memory.ts": "533b48df052f16358bf98761487e9f51a8ca396ab844b73fdeed5222dab0f12d",
+    "src/index.ts": "7ea24a776ec9268a6f89d69c07fc9b1308f5eefeab224700a0b985544099530a",
+    "alchemy.run.ts": "a25f7283dd76f2129e8f7c1c1599b3a379a6e42a5d495f491bc6f8bf1371661b",
+    "tests/contexts.test.ts": "e80aa2587661f8cce26e47c2672c59e79943297bb1aa733b707875ae374a13dd",
+    "tests/context-migration.test.ts": "1d831aa222b8e0688bdfb8a172841d432586aecfb026d69c5b8640910999ca35",
+    "tests/fixtures/clock-worker.ts": "99ddb35e3c913b3bf20e6fb9c290f37ff98941179c909c5c22f8701d0bfc2f5c",
+    "tests/fixtures/sdk-binding-worker.ts": "b454edd2ba70eeea64d03a27cf02c98b4b2661b403a5dbc9a6823de02ded2fda"
+  },
+  "contract": {
+    "create": "contexts.create optionally selects language javascript or python; omission selects JavaScript. Language is required in stored/public records and fixed for each context generation. JavaScript and TypeScript share one runtime.",
+    "execution": "Python execute/evaluate/executeFile and host process.run accept contextId through Effect HTTP/service/Agent clients. Calls without contextId remain ephemeral. Language mismatch is rejected before process reservation.",
+    "ownership": "The existing unique claim, deadline, capability, generation, CAS and terminal-receipt owners apply. Python restores actual RustPython pages, refreshes environment/output/fuel/requests and publishes a quiescent native heap. Host effects use current grants; no source replay or JSON globals reconstruction.",
+    "bounds": "The shared checkpointPageLimit owns the 1024-page/64 MiB native checkpoint ceiling and now also caps retained Python Wasm growth. Ephemeral Python keeps its prior memory policy. Runtime and fixed memory/output limits are checked before retained program entry.",
+    "failure": "Normal syntax/runtime exceptions can settle with exit code 1 and retain state. A trap/interruption after entry fails the context and blocks later execution until explicit reset. Pre-entry rejection preserves the prior heap. Context and process settlement remain distinct R2 writes."
+  },
+  "migration": {
+    "endpoint": "/v1/migrations/context-language-v1",
+    "owner": "Unconditional Alchemy Migrations action; administrator-only endpoint. Runtime accepts only the current language-bearing record.",
+    "pagination": "At most 25 root sandbox prefixes and eight context records per sandbox per request, four sandbox tasks active. Root and unfinished context continuations are explicit. Delimiter listings do not scan heap payload objects.",
+    "conversion": "Only the migration recognizes the prior record, assigns javascript and rebuilds native summary metadata under its acquired ETag. It preserves heap, generation, tombstone, claim identity and deadline.",
+    "requestEvidence": {
+      "nativeR2": true,
+      "sandboxes": 26,
+      "legacyContexts": 11,
+      "firstBatchContextGets": 8,
+      "firstBatchConverted": 8,
+      "alreadyConvertedBatchContextGets": 0,
+      "repeatedMigrationConverted": 0
+    },
+    "fencing": "A conditional write with the old context ETag returns null after conversion. An expired migrated running claim remains inspectable and can be explicitly reset. Production behavior with in-flight older Worker versions remains unverified."
+  },
+  "checks": {
+    "fullBeforeFinalMetadataOptimization": {
+      "command": "bun run check",
+      "exitCode": 0,
+      "tests": 427,
+      "failed": 0,
+      "assertions": 6085,
+      "files": 95,
+      "testSeconds": 225.97,
+      "includes": [
+        "Worker/Wasm build",
+        "SDK build",
+        "TypeScript",
+        "workspace Clippy",
+        "Rust tests",
+        "native workerd suite"
+      ]
+    },
+    "finalNative": {
+      "command": "bun test tests/contexts.test.ts tests/context-migration.test.ts tests/context-heap.test.ts tests/python-context-heap.test.ts",
+      "exitCode": 0,
+      "tests": 13,
+      "failed": 0,
+      "assertions": 167,
+      "files": 4,
+      "seconds": 24.92
+    },
+    "finalBuild": {
+      "command": "bun run build",
+      "exitCode": 0
+    },
+    "finalTypecheck": {
+      "command": "bun run typecheck",
+      "exitCode": 0
+    },
+    "format": {
+      "command": "bun run format:check",
+      "exitCode": 0
+    }
+  },
+  "proofs": [
+    "HTTP closes the first Worker, restores a genuine Python closure in a replacement, renews environment values, and executes through all four Python selectors. Ephemeral code cannot see retained globals.",
+    "Duplicate process IDs preserve state; a JavaScript call cannot execute a Python context; execute-only authority cannot read retained state.",
+    "A Python syntax exception returns exit code 1 without destroying the prior closure. A native fuel trap fails the context, further execution is blocked, and explicit reset starts fresh state.",
+    "Reset/delete/recreate preserve language and advance generation. Native sandbox disposal/collection removes context records and native pages.",
+    "The native Agent service binding closes/replaces the original Worker, restores the closure from 41 to 42 and its /seed.py code identity. A retained async write function receives current read/execute-only grants and returns FORBIDDEN.",
+    "Actual R2 migration crosses root/context pagination, preserves a real retained JavaScript heap and tombstone, rejects non-administrator migration, refuses legacy runtime reads, is idempotent and fences an old conditional write. Native binding traces show eight body gets for eight old records and zero for the converted batch."
+  ],
+  "openGates": [
+    "Python SDK/runtime publication and production deployment/cutover, including older in-flight writers.",
+    "Actual Minutei Python consumer and production/model validation.",
+    "Queued/cron retained contexts, broader Python stdlib/import/filesystem parity and remaining process/network/terminal contracts.",
+    "Production latency, request billing and AgentOS cost comparison."
+  ]
+}

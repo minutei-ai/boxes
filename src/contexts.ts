@@ -1,9 +1,11 @@
 import { Clock, Effect, Schema, Struct } from "effect";
 import revision from "../dist/guest/revision.json";
+import pythonRevision from "../dist/python/revision.json";
 import { requirePermission } from "./auth";
 import {
   Capability,
   ContextAction,
+  ContextRecord,
   ContextHeap,
   ContextMetadata,
   Fault,
@@ -21,7 +23,9 @@ const readContext = Effect.fn("contexts.read")(function* (env: Env, sandboxId: s
   if (object === null) return null;
   if (object.size > 131_072)
     return yield* new StorageFailure({ cause: "Oversized context record" });
-  const record = yield* Schema.decodeUnknownEffect(Schema.fromJsonString(StoredContext))(
+  const record = yield* Schema.decodeUnknownEffect(Schema.fromJsonString(StoredContext), {
+    onExcessProperty: "error",
+  })(
     yield* Effect.tryPromise({
       try: () => object.text(),
       catch: (cause) => new StorageFailure({ cause }),
@@ -35,6 +39,7 @@ export const createContext = Effect.fn("contexts.create")(function* (
   env: Env,
   capability: typeof Capability.Type,
   id: string,
+  language: typeof ContextRecord.Type.language,
 ) {
   yield* requirePermission(capability, "execute");
   yield* head(env, capability.sandboxId);
@@ -51,6 +56,7 @@ export const createContext = Effect.fn("contexts.create")(function* (
     });
   const record = {
     id,
+    language,
     generation,
     state: "idle" as const,
     createdAt: now,
@@ -203,6 +209,7 @@ export const acquireContext = Effect.fn("contexts.acquire")(function* (
   executionId: string,
   deadlineAt: number,
   memoryLimitBytes: typeof Policy.Type.memoryBytes | null,
+  language: typeof ContextRecord.Type.language,
 ) {
   yield* requirePermission(capability, "read");
   yield* requirePermission(capability, "execute");
@@ -210,6 +217,12 @@ export const acquireContext = Effect.fn("contexts.acquire")(function* (
   const current = yield* readContext(env, capability.sandboxId, id);
   if (current === null || current.record.state === "deleted")
     return yield* new Fault({ code: "ENOENT", status: 404, message: "Context does not exist" });
+  if (current.record.language !== language)
+    return yield* new Fault({
+      code: "CONTEXT_LANGUAGE_MISMATCH",
+      status: 409,
+      message: "Execution language does not match its context",
+    });
   if (current.record.state === "running")
     return yield* new Fault({
       code: "CONTEXT_BUSY",
@@ -223,7 +236,10 @@ export const acquireContext = Effect.fn("contexts.acquire")(function* (
       message: "Reset the failed context before executing again",
     });
   if (current.record.heap !== null) {
-    if (current.record.heap.runtime !== revision.sha256)
+    if (
+      current.record.heap.runtime !==
+      { javascript: revision.sha256, python: pythonRevision.sha256 }[language]
+    )
       return yield* new Fault({
         code: "CHECKPOINT_RUNTIME_MISMATCH",
         status: 409,

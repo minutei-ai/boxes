@@ -7,6 +7,7 @@ import {
   Fault,
   RunAction,
   ScriptAction,
+  PythonAction,
   StoredRun,
   StoredRunMetadata,
   ProcessDelivery,
@@ -574,11 +575,16 @@ export const run = Effect.fn("process.run")(function* (
       });
       const context = yield* Effect.gen(function* () {
         if (selectedContext === null) return null;
-        if (!Schema.is(ScriptAction)(action))
+        const language = yield* Effect.sync(() => {
+          if (Schema.is(PythonAction)(action)) return "python" as const;
+          if (Schema.is(ScriptAction)(action)) return "javascript" as const;
+          return null;
+        });
+        if (language === null)
           return yield* new Fault({
             code: "UNSUPPORTED_RUNTIME",
             status: 501,
-            message: "Retained contexts require JavaScript or TypeScript",
+            message: "Retained contexts require JavaScript, TypeScript or Python",
           });
         const deadlineAt =
           (yield* Clock.currentTimeMillis) +
@@ -590,6 +596,7 @@ export const run = Effect.fn("process.run")(function* (
           action.id,
           deadlineAt,
           memoryLimitBytes,
+          language,
         );
       });
       const reservation = yield* Effect.scoped(

@@ -487,3 +487,245 @@ test(
     ),
   10000,
 );
+
+test(
+  "public Python contexts retain closures, fence language/authority and require reset after interruption",
+  () =>
+    Effect.runPromise(
+      Effect.scoped(
+        Effect.gen(function* () {
+          const directory = yield* Effect.acquireRelease(
+            Effect.promise(() => mkdtemp(join(tmpdir(), "boxes-python-api-"))),
+            (path) => Effect.promise(() => rm(path, { recursive: true, force: true })),
+          );
+          const token = yield* Effect.scoped(
+            Effect.gen(function* () {
+              const first = yield* connect(directory);
+              yield* first.client.create({ id: "python-api", policy });
+              const grant = yield* first.client.mintCapability("python-api", {
+                permissions: ["read", "write", "execute", "manage"],
+                expiresInSeconds: 600,
+              });
+              const client = yield* make({ url: first.url, token: Redacted.make(grant.token) });
+              expect(
+                (yield* client.action("python-api", {
+                  op: "contexts.create",
+                  id: "state",
+                  language: "python",
+                })).language,
+              ).toBe("python");
+              const seeded = yield* client.action("python-api", {
+                op: "python.execute",
+                id: "seed",
+                contextId: "state",
+                filePath: "/seed.py",
+                env: { MODE: "first", OLD: "gone" },
+                source:
+                  "import os\ncached_env=os.environ\ndef factory():\n n=40\n def next():\n  nonlocal n\n  n+=1\n  return n\n return next\nnext_value=factory()\nnext_value()",
+              });
+              expect(seeded.output?.result).toBe(41);
+              yield* client.action("python-api", {
+                op: "filesystem.writeFile",
+                path: "/next.py",
+                content: "next_value()",
+                encoding: "utf8",
+              });
+              return grant.token;
+            }),
+          );
+          const second = yield* connect(directory, token);
+          const client = second.client;
+          const resumed = yield* client.action("python-api", {
+            op: "python.evaluate",
+            id: "resume",
+            contextId: "state",
+            env: { MODE: "second" },
+            expression: "[next_value(),cached_env.get('MODE'),cached_env.get('OLD')]",
+          });
+          expect(resumed.output?.result).toEqual([42, "second", null]);
+          expect(
+            (yield* client.action("python-api", {
+              op: "process.run",
+              id: "inline",
+              contextId: "state",
+              language: "python",
+              source: "next_value()",
+            })).output?.result,
+          ).toBe(43);
+          expect(
+            (yield* client.action("python-api", {
+              op: "python.executeFile",
+              id: "file",
+              contextId: "state",
+              path: "/next.py",
+            })).output?.result,
+          ).toBe(44);
+          const duplicate = yield* client
+            .action("python-api", {
+              op: "python.evaluate",
+              id: "file",
+              contextId: "state",
+              expression: "next_value()",
+            })
+            .pipe(Effect.result);
+          if (duplicate._tag !== "Failure" || duplicate.failure._tag !== "BoxesError")
+            return yield* Effect.die("Duplicate Python execution was admitted");
+          expect(duplicate.failure.error).toBe("EEXIST");
+          const mismatch = yield* client
+            .action("python-api", {
+              op: "javascript.evaluate",
+              id: "wrong-language",
+              contextId: "state",
+              expression: "42",
+            })
+            .pipe(Effect.result);
+          if (mismatch._tag !== "Failure" || mismatch.failure._tag !== "BoxesError")
+            return yield* Effect.die("Wrong context language was admitted");
+          expect(mismatch.failure.error).toBe("CONTEXT_LANGUAGE_MISMATCH");
+          expect(
+            (yield* client.action("python-api", {
+              op: "python.evaluate",
+              id: "ordinary",
+              expression: "'next_value' in globals()",
+            })).output?.result,
+          ).toBe(false);
+          const invalid = yield* client.action("python-api", {
+            op: "python.execute",
+            id: "syntax",
+            contextId: "state",
+            source: "def :",
+          });
+          expect(invalid.output?.exitCode).toBe(1);
+          expect(
+            (yield* client.action("python-api", {
+              op: "python.evaluate",
+              id: "after-syntax",
+              contextId: "state",
+              expression: "next_value()",
+            })).output?.result,
+          ).toBe(45);
+          const administrator = yield* make({
+            url: second.url,
+            token: Redacted.make("cirro-local-test-credential"),
+          });
+          const executeGrant = yield* administrator.mintCapability("python-api", {
+            permissions: ["execute"],
+            expiresInSeconds: 60,
+          });
+          const executeOnly = yield* make({
+            url: second.url,
+            token: Redacted.make(executeGrant.token),
+          });
+          const unauthorized = yield* executeOnly
+            .action("python-api", {
+              op: "python.evaluate",
+              id: "execute-only",
+              contextId: "state",
+              expression: "next_value()",
+            })
+            .pipe(Effect.result);
+          if (unauthorized._tag !== "Failure" || unauthorized.failure._tag !== "BoxesError")
+            return yield* Effect.die("Execute-only authority read retained Python state");
+          expect(unauthorized.failure.status).toBe(403);
+          const failed = yield* client.action("python-api", {
+            op: "python.execute",
+            id: "loop",
+            contextId: "state",
+            source: "while True:\n pass",
+          });
+          expect(failed.status).toBe("failed");
+          expect(
+            (yield* client.action("python-api", { op: "contexts.get", id: "state" })).state,
+          ).toBe("failed");
+          const blocked = yield* client
+            .action("python-api", {
+              op: "python.evaluate",
+              id: "after-trap",
+              contextId: "state",
+              expression: "next_value()",
+            })
+            .pipe(Effect.result);
+          if (blocked._tag !== "Failure" || blocked.failure._tag !== "BoxesError")
+            return yield* Effect.die("Failed Python context was replayed");
+          expect(blocked.failure.error).toBe("CONTEXT_FAILED");
+          const reset = yield* client.action("python-api", { op: "contexts.reset", id: "state" });
+          expect([reset.language, reset.generation]).toEqual(["python", 1]);
+          expect(
+            (yield* client.action("python-api", {
+              op: "python.evaluate",
+              id: "fresh",
+              contextId: "state",
+              expression: "'next_value' in globals()",
+            })).output?.result,
+          ).toBe(false);
+          yield* client.action("python-api", { op: "contexts.delete", id: "state" });
+          expect(
+            (yield* client.action("python-api", {
+              op: "contexts.create",
+              id: "state",
+              language: "python",
+            })).generation,
+          ).toBe(3);
+          yield* client.action("python-api", { op: "vm.dispose" });
+          const reclaimed = yield* client
+            .action("python-api", { op: "vm.reclaim", limit: 1000 })
+            .pipe(Effect.repeat({ until: (result) => result.status === "complete", times: 5 }));
+          expect(reclaimed.status).toBe("complete");
+          const objects = yield* Effect.promise(() => second.worker.objects);
+          const remaining = yield* Effect.promise(() =>
+            objects.list({ prefix: "sandboxes/python-api/" }),
+          );
+          expect(remaining.objects.map((object) => object.key)).toEqual([
+            "sandboxes/python-api/head.json",
+          ]);
+        }),
+      ).pipe(Effect.provide(FetchHttpClient.layer)),
+    ),
+  60_000,
+);
+
+test(
+  "native Agent binding resumes Python with renewed grants in a replacement Worker",
+  () =>
+    Effect.runPromise(
+      Effect.scoped(
+        Effect.gen(function* () {
+          const directory = yield* Effect.acquireRelease(
+            Effect.promise(() => mkdtemp(join(tmpdir(), "boxes-python-binding-"))),
+            (path) => Effect.promise(() => rm(path, { recursive: true, force: true })),
+          );
+          const proofs = yield* Effect.forEach(["create", "read"] as const, (phase) =>
+            Effect.scoped(
+              Effect.gen(function* () {
+                const worker = yield* Effect.acquireRelease(
+                  Effect.sync(() => runtime(directory, { binding: true, controlled: false })),
+                  (worker) => Effect.promise(() => worker.dispose()),
+                );
+                const url = yield* Effect.promise(() => worker.binding());
+                url.searchParams.set("python_contexts", phase);
+                const response = yield* Effect.promise(() =>
+                  fetch(url, {
+                    method: "POST",
+                    body: Schema.encodeSync(Schema.fromJsonString(Id))("python-binding"),
+                  }),
+                );
+                if (response.status !== 200)
+                  return yield* Effect.die({
+                    status: response.status,
+                    body: yield* Effect.promise(() => response.text()),
+                  });
+                return yield* Schema.decodeUnknownEffect(
+                  Schema.fromJsonString(ContextBindingProof),
+                )(yield* Effect.promise(() => response.text()));
+              }),
+            ),
+          );
+          expect(proofs[0]?.records[0]?.output?.result).toBe(41);
+          expect(proofs[1]?.context.language).toBe("python");
+          expect(proofs[1]?.records[0]?.output?.result).toEqual([42, "current", "/seed.py"]);
+          expect(proofs[1]?.records[1]?.output?.result).toBe("FORBIDDEN");
+        }),
+      ),
+    ),
+  60_000,
+);

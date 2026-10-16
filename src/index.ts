@@ -7,6 +7,8 @@ import { SoftwareBaseDigest } from "./default-software";
 import {
   Action,
   ContextRecord,
+  ContextMigrationInput,
+  ContextMigrationReceipt,
   ContextPage,
   AgentRequest,
   AgentReply,
@@ -58,6 +60,7 @@ import { guestAction } from "./capabilities";
 import { createContext, getContext, listContexts, changeContext } from "./contexts";
 import { migrateInput } from "./input-migration";
 import { migrateConfiguration } from "./configuration-migration";
+import { migrateContexts } from "./context-migration";
 import { migrateFilesystem } from "./filesystem-migration";
 import { migrateProcesses, migrateOutput, migrateDeadlines } from "./process-migration";
 import { migrateWasm } from "./wasm-migration";
@@ -119,6 +122,20 @@ const route = Effect.fn("api.route")(function* (request: Request, env: Env) {
     const receipt = yield* migrateConfiguration(env, input);
     return new Response(
       Schema.encodeSync(Schema.fromJsonString(EnvironmentMigrationReceipt))(receipt),
+      {
+        headers: { "content-type": "application/json", "cache-control": "no-store" },
+      },
+    );
+  }
+  if (url.pathname === "/v1/migrations/context-language-v1") {
+    yield* administrator(env, token);
+    const bytes = yield* readBounded(request.body, 131072);
+    const input = yield* Schema.decodeUnknownEffect(Schema.fromJsonString(ContextMigrationInput), {
+      onExcessProperty: "error",
+    })(bytes.toString("utf8"));
+    const receipt = yield* migrateContexts(env, input);
+    return new Response(
+      Schema.encodeSync(Schema.fromJsonString(ContextMigrationReceipt))(receipt),
       {
         headers: { "content-type": "application/json", "cache-control": "no-store" },
       },
@@ -317,7 +334,7 @@ const route = Effect.fn("api.route")(function* (request: Request, env: Env) {
   const value = yield* Match.value(action)
     .pipe(
       Match.when({ op: "contexts.create" }, (action) =>
-        createContext(env, capability, action.id).pipe(
+        createContext(env, capability, action.id, action.language ?? "javascript").pipe(
           Effect.map((record) => Schema.encodeSync(Schema.fromJsonString(ContextRecord))(record)),
         ),
       ),

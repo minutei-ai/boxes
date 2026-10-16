@@ -12,6 +12,8 @@ import {
   ProcessListAction,
   ProcessInputAction,
   OutputMigrationInput,
+  ContextMigrationInput,
+  ContextMigrationReceipt,
   StoredRun,
   StoredContext,
   Id,
@@ -20,9 +22,15 @@ import { tick } from "../../src/cron";
 import { reconcile } from "../../src/process";
 import { authorize } from "../../src/auth";
 import { acquireContext } from "../../src/contexts";
+import { migrateContexts } from "../../src/context-migration";
 import { ContextClaimProof } from "./context-checkpoint-contract";
 import { readOutputRange } from "../../src/output";
 import type { Env } from "../../src/resources";
+
+const ContextMigrationTrace = ContextMigrationReceipt.mapFields((fields) => ({
+  ...fields,
+  reads: Schema.Int,
+}));
 
 type TestEnv = Env & { SELF: Fetcher };
 export class Control extends WorkerEntrypoint<TestEnv> {
@@ -40,7 +48,7 @@ export class Control extends WorkerEntrypoint<TestEnv> {
               const original = yield* Effect.promise(() => bindings.OBJECTS.head(key));
               if (original === null) return yield* Effect.die("Missing test context");
               const first = yield* Effect.scoped(
-                acquireContext(bindings, capability, id, "same", now + 60_000, null),
+                acquireContext(bindings, capability, id, "same", now + 60_000, null, "javascript"),
               );
               const restored = yield* Effect.promise(() => bindings.OBJECTS.head(key));
               const proof = yield* Effect.scoped(
@@ -52,6 +60,7 @@ export class Control extends WorkerEntrypoint<TestEnv> {
                     "same",
                     now + 60_000,
                     null,
+                    "javascript",
                   );
                   const stale = yield* Effect.promise(() =>
                     bindings.OBJECTS.put(
@@ -285,6 +294,29 @@ export class Control extends WorkerEntrypoint<TestEnv> {
     return Effect.runPromise(
       reconcile(bindings).pipe(
         Effect.map((result) => ({ ...result, receiptReads: counts.receiptReads })),
+      ),
+    );
+  }
+  contextMigration(input: typeof ContextMigrationInput.Type) {
+    const counts = { reads: 0 };
+    const bindings = {
+      ...this.env,
+      OBJECTS: new Proxy(this.env.OBJECTS, {
+        get(target, property) {
+          if (property === "get")
+            return (...args: Parameters<Env["OBJECTS"]["get"]>) => {
+              counts.reads += 1;
+              return target.get(...args);
+            };
+          const value = Reflect.get(target, property, target);
+          if (typeof value === "function") return value.bind(target);
+          return value;
+        },
+      }),
+    };
+    return Effect.runPromise(
+      migrateContexts(bindings, input).pipe(
+        Effect.map((result) => ContextMigrationTrace.make({ ...result, reads: counts.reads })),
       ),
     );
   }

@@ -15,6 +15,8 @@ import {
   ProcessDeadlineMigrationReceipt,
   FilesystemMigrationInput,
   FilesystemMigrationReceipt,
+  ContextMigrationInput,
+  ContextMigrationReceipt,
 } from "./src/contracts";
 
 const Deployment = Schema.Struct({
@@ -236,8 +238,39 @@ const migrate = Alchemy.Action(
           });
           if (page.cursor !== null) deadlineCursors.push(page.cursor);
         }
+        const contexts = { migrated: 0, pages: 0 };
+        const contextCursors: (typeof ContextMigrationReceipt.Type.cursor)[] = [null];
+        while (contextCursors.length > 0) {
+          const cursor = contextCursors.shift();
+          const page = yield* Effect.gen(function* () {
+            const response = yield* http.post(new URL("/v1/migrations/context-language-v1", url), {
+              headers: { authorization: `Bearer ${Redacted.value(key)}` },
+              body: HttpBody.text(
+                Schema.encodeSync(Schema.fromJsonString(ContextMigrationInput))({ cursor }),
+                "application/json",
+              ),
+            });
+            if (response.status < 200 || response.status >= 300)
+              return yield* new MigrationStatusError({
+                status: response.status,
+                path: "/v1/migrations/context-language-v1",
+              });
+            return yield* Schema.decodeUnknownEffect(
+              Schema.fromJsonString(ContextMigrationReceipt),
+            )(yield* response.text);
+          }).pipe(Effect.timeout("120 seconds"));
+          contexts.migrated += page.migrated;
+          contexts.pages += 1;
+          yield* Effect.logInfo({
+            migration: "context-language-v1",
+            ...contexts,
+            hasMore: page.cursor !== null,
+          });
+          if (page.cursor !== null) contextCursors.push(page.cursor);
+        }
         return {
           receipts,
+          contextLanguageMigration: contexts,
           filesystemMigration: filesystem,
           environmentMigration: { heads: configurationHeads, programs: configurationPrograms },
           processIndexMigration: progress,

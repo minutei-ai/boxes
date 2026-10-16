@@ -271,7 +271,7 @@ Starting with 0.20.0, a persistent target may also supply `contextId` for a call
 
 `memoryLimit` is sent as a per-execution byte ceiling to RPC. Rust applies the smaller of that ceiling and the current sandbox policy, without changing the persisted policy. The optional `memoryBytes` field of `runWithTools` has the same behavior for JavaScript/TypeScript executions; omission uses the sandbox policy. Files, policy and process receipts persist. Version 0.19.2 uses fresh JavaScript heaps; `contextId` enables retained language state starting with 0.20.0. Host callback implementations remain request-local in both modes. The existing timeout and token expiry still apply.
 
-Retained language contexts require matching SDK/runtime builds of 0.20.0 or later. Create a context inside a sandbox, then supply `contextId` to JavaScript/TypeScript `execute`, `evaluate`, `executeFile`, `process.run`, or native `runWithTools`:
+Retained JavaScript/TypeScript contexts require matching SDK/runtime builds of 0.20.0 or later. Create a context inside a sandbox, then supply `contextId` to JavaScript/TypeScript `execute`, `evaluate`, `executeFile`, `process.run`, or native `runWithTools`:
 
 ```ts
 yield * boxes.action(sandboxId, { op: "contexts.create", id: "analysis" });
@@ -296,14 +296,38 @@ yield * boxes.action(sandboxId, { op: "contexts.delete", id: "analysis" });
 
 The native QuickJS heap, closures and module cache survive replacement Workers through validated R2 pages. Repeated file paths execute new entry code while preserving filename/URL metadata. Each call receives fresh output, environment, fuel, microtask/request budgets and current callback authority. A function retained from an earlier turn uses the current `runWithTools` callback, tool allowlist and call budget. JavaScript and TypeScript share the context; calls without `contextId` keep their ephemeral behavior.
 
-`contexts.get` returns state, generation, timestamps, last execution ID and active deadline. `contexts.list` consumes `limit` (1–100) and native `cursor`; deleted records are omitted, so a page can be empty while retaining a cursor. Get/list require `read`; create/reset/delete require `execute`; running retained code requires both `read` and `execute`. Only one execution owns a context. A competing execution, reset or delete returns `CONTEXT_BUSY`. Execution IDs remain unique within the sandbox, including across contexts.
+On unreleased main, `contexts.get` also returns the fixed `language` (`javascript` or `python`); JavaScript and TypeScript share the JavaScript runtime. It returns state, generation, timestamps, last execution ID and active deadline. `contexts.list` consumes `limit` (1–100) and native `cursor`; deleted records are omitted, so a page can be empty while retaining a cursor. Get/list require `read`; create/reset/delete require `execute`; running retained code requires both `read` and `execute`. Only one execution owns a context. A competing execution, reset or delete returns `CONTEXT_BUSY`. Execution IDs remain unique within the sandbox, including across contexts.
 
 Failed preflight or duplicate execution admission preserves the previous context. A timeout, interruption or leftover asynchronous work after entry marks it `failed`; later execution returns `CONTEXT_FAILED` until explicit reset. A running context left by an uncertain or interrupted request remains inspectable and can be reset/deleted after its recorded deadline. Reads do not replay it. Inspect both context and process records after an uncertain response: context publication and terminal process-receipt publication are separate R2 writes. Already accepted host effects retain their existing lifetime.
 
-Reset drops retained interpreter state and increments its generation; delete conditionally writes a tombstone, and recreating the ID creates a new generation. Immutable pages stay within the sandbox storage lifecycle and are reclaimed by disposal/collection. Runtime binary, memory and output ceilings must match the retained heap; reset before changing them. Python, queued and cron retained contexts remain unsupported. The [local API evidence](evidence/contexts-api-local.json) covers actual HTTP, native Agent bindings, replacement Workers, permission renewal and collection; the [delivery record](https://github.com/minutei-ai/boxes/blob/main/docs/evidence/sdk-0.20.0-delivery.json) tracks production validation and Minutei adoption.
+Reset drops retained interpreter state and increments its generation; delete conditionally writes a tombstone, and recreating the ID creates a new generation. Immutable pages stay within the sandbox storage lifecycle and are reclaimed by disposal/collection. Runtime binary, memory and output ceilings must match the retained heap; reset before changing them. The published 0.20.0 runtime supports retained JavaScript/TypeScript contexts. Python selection is available only on unreleased main; queued and cron retained contexts remain unsupported. The [local API evidence](evidence/contexts-api-local.json) covers actual HTTP, native Agent bindings, replacement Workers, permission renewal and collection; the [delivery record](https://github.com/minutei-ai/boxes/blob/main/docs/evidence/sdk-0.20.0-delivery.json) tracks production validation and Minutei adoption.
 
 SDK 0.9 replaces the driver's former credential argument with the explicit target. Existing ephemeral callers pass `{ kind: "ephemeral", administratorToken }`; persistent callers pass `{ kind: "persistent", sandboxId, capabilityToken }`.
 
 `bun run binding:remote:proof` bundles the shared native consumer fixture against an installed SDK package selected by `CIRRO_SDK_DIRECTORY`. Set `ALCHEMY_PROFILE=minutei`, `CIRRO_WORKER` to the existing Worker name and `CIRRO_URL` to its deployed URL; supply `CIRRO_API_KEY` privately. The command creates two authenticated Alchemy edge preview consumers with native default and `Agent` service bindings. The first receives a short-lived read/write/execute capability; the replacement receives only read/execute. It checks callbacks, void results, fresh globals, file retention and authority denials, then reconnects persistent Code Mode contexts across the consumers. Closed contexts refuse late execution, per-context memory limits and the sandbox memory ceiling remain enforced, and a prior completed process receipt survives context closure. Its scoped management client disposes the sandbox and requires a subsequent 404 before printing the report. Preview sessions expire through the native platform lifecycle. The command refuses interactive authentication. [Transport evidence](evidence/remote-binding-production.json) and [persistent Code Mode evidence](evidence/persistent-binding-production.json) cover installed Minutei SDK 0.9.0 and current 0.10.0. They do not exercise the remote Minutei application or model. The persistent proof records an initial consumer error 1101 that did not reproduce after diagnostics were added; its cause remains unresolved.
 
 `bun run reclaim:proof --smoke` creates eight synthetic files and a completed process, checks management and live-root denials, then resumes collection from a second native Cloudflare preview consumer using renewed management authority. Without arguments it stages 1,005 distinct files in ordered batches with deduplicated, bounded-concurrency uploads. Fixture runs verify three persisted file contents and record each batch request duration, including client/HTTP latency. These synthetic proof samples are separate from production performance distributions. `bun run reclaim:proof --collect <sandbox-id>` collects an already disposed root in at most 32 continuation calls and reports `pending`, `blocked` or `complete`. It never disposes an active root in this mode. Set `ALCHEMY_PROFILE=minutei`, `CIRRO_WORKER` and `CIRRO_URL`, and supply `CIRRO_API_KEY` privately. The administrator credential stays in the local process; preview consumers receive only a sandbox token. Returned page sizes may be below the requested limit. The command uses native Effect HttpClient request options to disable Bun connection reuse after an observed socket reset; it does not replay failed submissions automatically.
+
+Unreleased main adds `language: "python"` to `contexts.create` and `contextId` to Python `execute`, `evaluate`, `executeFile` and host `process.run`. This requires SDK/runtime builds from that source; the published 0.20.0 archives do not include it. Omitting create's language selects JavaScript. A context cannot change its interpreter; delete/recreate it to select another language.
+
+```ts
+yield *
+  boxes.action(sandboxId, { op: "contexts.create", id: "analysis-python", language: "python" });
+yield *
+  boxes.action(sandboxId, {
+    op: "python.execute",
+    id: "seed-python",
+    contextId: "analysis-python",
+    source: "count=40\ndef next_value():\n global count\n count+=1\n return count",
+  });
+const next =
+  yield *
+  boxes.action(sandboxId, {
+    op: "python.evaluate",
+    id: "read-python",
+    contextId: "analysis-python",
+    expression: "next_value()",
+  });
+```
+
+Python retains the native interpreter, globals and lexical closures through validated R2 pages. Each execution refreshes the environment, output, fuel and host-request budget. Retained tool functions use current sandbox grants; a previous `write` grant cannot authorize a later readonly execution. Language mismatch is rejected before process reservation. Ordinary syntax/runtime exceptions settle with exit code 1 and can retain state; interruption/traps fail the context and require explicit reset. The shared native checkpoint ceiling additionally bounds retained heaps to 64 MiB. The [Python context evidence](evidence/python-contexts-api-local.json) records local HTTP, native bindings, failure/reset/deletion and migration checks; publication and deployment remain pending.

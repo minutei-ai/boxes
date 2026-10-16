@@ -94,6 +94,61 @@ export default {
           memoryBytes: 8388608,
           maxOutputBytes: 1048576,
         };
+        const pythonPhase = new URL(request.url).searchParams.get("python_contexts");
+        if (pythonPhase !== null) {
+          const phase = yield* Schema.decodeUnknownEffect(Schema.Literals(["create", "read"]))(
+            pythonPhase,
+          );
+          if (phase === "create") yield* admin.create({ id, policy });
+          const permissions = yield* Effect.sync(() => {
+            if (phase === "create") return ["read", "write", "execute"] as const;
+            return ["read", "execute"] as const;
+          });
+          const grant = yield* admin.mintCapability(id, { permissions, expiresInSeconds: 600 });
+          const agent = yield* makeAgentBinding(env.BOXES_AGENT, Redacted.make(grant.token));
+          if (phase === "create") {
+            yield* agent.action(id, { op: "contexts.create", id: "python", language: "python" });
+            const record = yield* agent.action(id, {
+              op: "python.execute",
+              id: "python-seed",
+              contextId: "python",
+              filePath: "/seed.py",
+              env: { MODE: "seed" },
+              source:
+                "import os\ndef factory():\n n=40\n def next():\n  nonlocal n\n  n+=1\n  return n\n return next\nnext_value=factory()\nasync def saved_write():\n return await tools.call({'op':'filesystem.writeFile','path':'/tmp/blocked','content':'denied','encoding':'utf8'})\nnext_value()",
+            });
+            return new Response(
+              Schema.encodeSync(Schema.fromJsonString(ContextBindingProof))({
+                records: [record],
+                context: yield* agent.action(id, { op: "contexts.get", id: "python" }),
+                errors: [],
+                calls: 0,
+              }),
+            );
+          }
+          const next = yield* agent.action(id, {
+            op: "python.evaluate",
+            id: "python-resume",
+            contextId: "python",
+            env: { MODE: "current" },
+            expression: "[next_value(),os.getenv('MODE'),next_value.__code__.co_filename]",
+          });
+          const denied = yield* agent.action(id, {
+            op: "python.execute",
+            id: "python-denied",
+            contextId: "python",
+            source:
+              "try:\n await saved_write()\nexcept RuntimeError as error:\n denied=error.error\ndenied",
+          });
+          return new Response(
+            Schema.encodeSync(Schema.fromJsonString(ContextBindingProof))({
+              records: [next, denied],
+              context: yield* agent.action(id, { op: "contexts.get", id: "python" }),
+              errors: [],
+              calls: 0,
+            }),
+          );
+        }
         const contextPhase = new URL(request.url).searchParams.get("contexts");
         if (contextPhase !== null) {
           const phase = yield* Schema.decodeUnknownEffect(

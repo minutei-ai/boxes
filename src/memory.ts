@@ -1,5 +1,5 @@
 import { Effect } from "effect";
-import { MemoryPages } from "./contracts";
+import { checkpointPageLimit, MemoryPages } from "./contracts";
 import { StorageFailure } from "./storage";
 import type { Env } from "./resources";
 
@@ -10,7 +10,11 @@ export const saveMemoryPages = Effect.fn("memory.savePages")(function* (
   previous: typeof MemoryPages.Type.pages = [],
 ) {
   const memoryBytes = memory.buffer.byteLength;
-  if (memoryBytes < 65_536 || memoryBytes > 67_108_864 || memoryBytes % 65_536 !== 0)
+  if (
+    memoryBytes < 65_536 ||
+    memoryBytes > checkpointPageLimit * 65_536 ||
+    memoryBytes % 65_536 !== 0
+  )
     return yield* new StorageFailure({ cause: "Rust heap exceeds checkpoint limits" });
   const retained = new Set(previous);
   const uploaded = new Set<string>();
@@ -45,7 +49,7 @@ export const restoreMemoryPages = Effect.fn("memory.restorePages")(function* (
 ) {
   if (
     snapshot.memoryBytes < 65_536 ||
-    snapshot.memoryBytes > 67_108_864 ||
+    snapshot.memoryBytes > checkpointPageLimit * 65_536 ||
     snapshot.memoryBytes % 65_536 !== 0 ||
     snapshot.pages.length !== snapshot.memoryBytes / 65_536
   )
