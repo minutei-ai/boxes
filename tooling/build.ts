@@ -266,6 +266,23 @@ await Effect.runPromise(
         'import { cirroWasi } from "./cirro_wasi";\nexport declare const createBindings: () => typeof cirroWasi;\n',
       ),
     );
+    for (const fixture of ["normal", "blocked", "parent", "child"]) {
+      yield* run([
+        "rustc",
+        "--crate-type",
+        "cdylib",
+        "--target",
+        "wasm32-unknown-unknown",
+        "-O",
+        "-C",
+        "strip=symbols",
+        "--cfg",
+        `case="${fixture}"`,
+        "tests/fixtures/wasi-pty.rs",
+        "-o",
+        `dist/wasi-pty-${fixture}.wasm`,
+      ]);
+    }
     for (const fixture of ["normal", "blocked"]) {
       yield* run([
         "rustc",

@@ -9,6 +9,8 @@ use wasmi::{
     StoreLimitsBuilder, TrapCode, Val,
 };
 
+mod pty;
+
 #[derive(Deserialize)]
 #[serde(deny_unknown_fields)]
 struct Configuration {
@@ -34,6 +36,7 @@ struct Pipe {
 struct PipeEndpoint {
     pipe: Rc<Pipe>,
     reading: bool,
+    terminal: Option<pty::Side>,
 }
 
 impl PipeEndpoint {
@@ -44,10 +47,96 @@ impl PipeEndpoint {
             self.pipe.readers.get() > 0
         }
     }
+
+    fn write_pipe(&self) -> &Pipe {
+        match &self.terminal {
+            Some(side) if side.master => &side.terminal.input,
+            Some(side) => &side.terminal.output,
+            None => &self.pipe,
+        }
+    }
+
+    fn write_peer(&self) -> bool {
+        self.write_pipe().readers.get() > 0
+    }
+
+    fn write_error(&self) -> i32 {
+        if self.terminal.is_some() { 29 } else { 64 }
+    }
+
+    fn readable(&self) -> usize {
+        if let Some(side) = &self.terminal
+            && !side.master
+        {
+            return side.terminal.available();
+        }
+        self.pipe.bytes.borrow().len()
+    }
+
+    fn read_ready(&self) -> bool {
+        if !self.has_peer() {
+            return true;
+        }
+        if let Some(side) = &self.terminal
+            && !side.master
+        {
+            return side.terminal.ready();
+        }
+        !self.pipe.bytes.borrow().is_empty()
+    }
+
+    fn read_data(&self, length: usize) -> Result<Vec<u8>, i32> {
+        let length = length.min(self.readable());
+        if length == 0 && !self.has_peer() && self.terminal.as_ref().is_some_and(|side| side.master)
+        {
+            return Err(29);
+        }
+        let data = self.pipe.bytes.borrow_mut().drain(..length).collect();
+        if let Some(side) = &self.terminal
+            && !side.master
+        {
+            side.terminal.consume(length);
+        }
+        Ok(data)
+    }
+
+    fn write_ready(&self, data: &[u8]) -> bool {
+        if !self.write_peer() {
+            return true;
+        }
+        if let Some(side) = &self.terminal {
+            return data
+                .first()
+                .is_none_or(|byte| side.terminal.writable(side.master, *byte));
+        }
+        let space = PIPE_BYTES - self.pipe.bytes.borrow().len();
+        space > 0 && (data.len() > PIPE_ATOMIC_BYTES || space >= data.len())
+    }
+
+    fn write_data(&self, data: &[u8]) -> Result<usize, i32> {
+        if !self.write_peer() {
+            return Err(self.write_error());
+        }
+        if let Some(side) = &self.terminal {
+            return side.terminal.write(side.master, data);
+        }
+        if !self.write_ready(data) {
+            return Err(6);
+        }
+        let count = data.len().min(PIPE_BYTES - self.pipe.bytes.borrow().len());
+        self.pipe.bytes.borrow_mut().extend(&data[..count]);
+        Ok(count)
+    }
 }
 
 impl Drop for PipeEndpoint {
     fn drop(&mut self) {
+        if self.terminal.is_some() {
+            self.pipe.readers.set(self.pipe.readers.get() - 1);
+            let pipe = self.write_pipe();
+            pipe.writers.set(pipe.writers.get() - 1);
+            return;
+        }
         let count = if self.reading {
             &self.pipe.readers
         } else {
@@ -685,20 +774,27 @@ fn pipe_event(state: &State, fd: u32, event: &mut [u8; 32]) -> bool {
         return true;
     };
     let writing = event[10] == 2;
-    let length = pipe.pipe.bytes.borrow().len();
-    let available = if writing { PIPE_BYTES - length } else { length };
+    let available = if writing {
+        PIPE_BYTES - pipe.write_pipe().bytes.borrow().len()
+    } else {
+        pipe.readable()
+    };
     event[8..10].fill(0);
     event[24..26].fill(0);
     event[16..24].copy_from_slice(&(available as u64).to_le_bytes());
-    if !pipe.has_peer() {
+    if (writing && !pipe.write_peer()) || (!writing && !pipe.has_peer()) {
         if writing {
-            event[8..10].copy_from_slice(&64u16.to_le_bytes());
+            event[8..10].copy_from_slice(&(pipe.write_error() as u16).to_le_bytes());
         } else {
             event[24..26].copy_from_slice(&1u16.to_le_bytes());
         }
         return true;
     }
-    available > 0
+    if writing {
+        pipe.write_ready(b"x")
+    } else {
+        pipe.read_ready()
+    }
 }
 
 fn buffered_bytes(state: &State) -> usize {
@@ -1609,9 +1705,12 @@ fn dispatch(caller: &mut Caller<'_, State>, name: &str, args: &[u64]) -> Result<
                 return Err(Failure::Signal(signal));
             }
         }
-        "fd_pipe" => {
+        "fd_pipe" | "pty_open" => {
             bytes(caller, a[0], 4)?;
             bytes(caller, a[1], 4)?;
+            if name == "pty_open" && a[0] < a[1] + 4 && a[1] < a[0] + 4 {
+                return Err(Failure::Errno(28));
+            }
             if caller.data().descriptors.len() + 2 > MAX_FILES {
                 return Err(Failure::Errno(33));
             }
@@ -1631,38 +1730,72 @@ fn dispatch(caller: &mut Caller<'_, State>, name: &str, args: &[u64]) -> Result<
                 .borrow_mut()
                 .pipes
                 .retain(|pipe| pipe.strong_count() > 0);
-            if caller.data().processes.borrow().pipes.len() >= 64 {
+            let terminal = (name == "pty_open").then(pty::Terminal::new);
+            let needed = if terminal.is_some() { 2 } else { 1 };
+            if caller.data().processes.borrow().pipes.len() + needed > 64 {
                 return Err(Failure::Errno(33));
             }
-            let pipe = Rc::new(Pipe {
-                bytes: RefCell::new(VecDeque::new()),
-                readers: Cell::new(1),
-                writers: Cell::new(1),
-            });
+            let pipe = terminal
+                .as_ref()
+                .map(|tty| tty.input.clone())
+                .unwrap_or_else(|| {
+                    Rc::new(Pipe {
+                        bytes: RefCell::new(VecDeque::new()),
+                        readers: Cell::new(1),
+                        writers: Cell::new(1),
+                    })
+                });
             caller
                 .data()
                 .processes
                 .borrow_mut()
                 .pipes
                 .push(Rc::downgrade(&pipe));
+            if let Some(tty) = &terminal {
+                caller
+                    .data()
+                    .processes
+                    .borrow_mut()
+                    .pipes
+                    .push(Rc::downgrade(&tty.output));
+            }
             let mut metadata = [0u8; 76];
-            metadata[64..68].copy_from_slice(&0o10600u32.to_le_bytes());
+            let mode: u32 = if terminal.is_some() { 0o20620 } else { 0o10600 };
+            if terminal.is_some() {
+                metadata[16] = 2;
+            }
+            metadata[64..68].copy_from_slice(&mode.to_le_bytes());
             for (fd, read) in [(*reader, true), (*writer, false)] {
                 caller.data_mut().descriptors.insert(
                     fd,
                     Descriptor {
                         path: "/".into(),
                         directory: false,
-                        read,
-                        write: !read,
+                        read: read || terminal.is_some(),
+                        write: !read || terminal.is_some(),
                         flags: Rc::new(Cell::new(0)),
                         offset: Rc::new(Cell::new(0)),
                         stdio: None,
                         pipe: Some(Rc::new(PipeEndpoint {
-                            pipe: pipe.clone(),
-                            reading: read,
+                            pipe: match &terminal {
+                                Some(tty) if read => tty.output.clone(),
+                                _ => pipe.clone(),
+                            },
+                            reading: read || terminal.is_some(),
+                            terminal: terminal.as_ref().map(|tty| pty::Side {
+                                terminal: tty.clone(),
+                                master: read,
+                            }),
                         })),
-                        rights: (if read { 2 } else { 64 }) | (1 << 3) | (1 << 21) | (1 << 27),
+                        rights: (if terminal.is_some() {
+                            66
+                        } else if read {
+                            2
+                        } else {
+                            64
+                        }) | (1 << 3)
+                            | (1 << 21)
+                            | (1 << 27),
                         inheriting: 0,
                         cache: None,
                         linked: false,
@@ -1759,7 +1892,13 @@ fn dispatch(caller: &mut Caller<'_, State>, name: &str, args: &[u64]) -> Result<
                 return Err(Failure::Errno(8));
             }
             bytes(caller, a[1], 4)?;
-            put(caller, a[1], &0u32.to_le_bytes())?;
+            let tty = caller
+                .data()
+                .descriptors
+                .get(&fd)
+                .and_then(|descriptor| descriptor.pipe.as_ref())
+                .is_some_and(|pipe| pipe.terminal.is_some());
+            put(caller, a[1], &u32::from(tty).to_le_bytes())?;
             return Ok(0);
         }
         "fd_mode" | "fd_size" | "fd_blocks" | "fd_owner" | "path_mode" | "path_size"
@@ -1936,7 +2075,13 @@ fn dispatch(caller: &mut Caller<'_, State>, name: &str, args: &[u64]) -> Result<
                     .descriptors
                     .get(&(a[0] as u32))
                     .ok_or(Failure::Errno(8))?;
-                stat[0] = if descriptor.pipe.is_some() {
+                stat[0] = if descriptor
+                    .pipe
+                    .as_ref()
+                    .is_some_and(|pipe| pipe.terminal.is_some())
+                {
+                    2
+                } else if descriptor.pipe.is_some() {
                     0
                 } else if descriptor.directory {
                     3
@@ -2031,7 +2176,7 @@ fn dispatch(caller: &mut Caller<'_, State>, name: &str, args: &[u64]) -> Result<
                     put(caller, output, &0u32.to_le_bytes())?;
                     return Ok(0);
                 }
-                if pipe.pipe.bytes.borrow().is_empty() && pipe.has_peer() {
+                if !pipe.read_ready() {
                     if descriptor.flags.get() & 4 != 0 {
                         return Err(Failure::Errno(6));
                     }
@@ -2049,21 +2194,22 @@ fn dispatch(caller: &mut Caller<'_, State>, name: &str, args: &[u64]) -> Result<
                     );
                 }
                 let mut read = 0usize;
+                let mut remaining = pipe.readable();
                 for (pointer, length) in vectors {
-                    let available = pipe.pipe.bytes.borrow().len();
-                    let data: Vec<u8> = pipe
-                        .pipe
-                        .bytes
-                        .borrow_mut()
-                        .drain(..length.min(available))
-                        .collect();
+                    if length == 0 {
+                        continue;
+                    }
+                    let data = pipe
+                        .read_data(length.min(remaining))
+                        .map_err(Failure::Errno)?;
                     put(caller, pointer, &data)?;
                     read += data.len();
-                    if data.len() < length {
+                    remaining -= data.len();
+                    if remaining == 0 {
                         break;
                     }
                 }
-                if read != 0 {
+                if read != 0 || pipe.terminal.is_some() {
                     caller.data_mut().readiness_notification = true;
                 }
                 put(caller, output, &(read as u32).to_le_bytes())?;
@@ -2149,12 +2295,10 @@ fn dispatch(caller: &mut Caller<'_, State>, name: &str, args: &[u64]) -> Result<
                     if name == "fd_pwrite" {
                         return Err(Failure::Errno(70));
                     }
-                    if !pipe.has_peer() {
-                        return Err(Failure::Errno(64));
+                    if !pipe.write_peer() {
+                        return Err(Failure::Errno(pipe.write_error()));
                     }
-                    let available = PIPE_BYTES.saturating_sub(pipe.pipe.bytes.borrow().len());
-                    if available == 0 || (data.len() <= PIPE_ATOMIC_BYTES && available < data.len())
-                    {
+                    if !pipe.write_ready(&data) {
                         if descriptor.flags.get() & 4 != 0 {
                             return Err(Failure::Errno(6));
                         }
@@ -2171,8 +2315,7 @@ fn dispatch(caller: &mut Caller<'_, State>, name: &str, args: &[u64]) -> Result<
                             },
                         );
                     }
-                    let count = data.len().min(available);
-                    pipe.pipe.bytes.borrow_mut().extend(&data[..count]);
+                    let count = pipe.write_data(&data).map_err(Failure::Errno)?;
                     if count != 0 {
                         state.readiness_notification = true;
                     }
@@ -2479,19 +2622,12 @@ fn dispatch(caller: &mut Caller<'_, State>, name: &str, args: &[u64]) -> Result<
                                 errno = 76;
                             } else if descriptor.directory {
                                 errno = 31;
-                            } else if let Some(pipe) = &descriptor.pipe {
+                            } else if descriptor.pipe.is_some() {
                                 pipe_fds.insert(index, fd);
-                                let length = pipe.pipe.bytes.borrow().len();
-                                let peer = pipe.has_peer();
-                                let available = if writing { PIPE_BYTES - length } else { length };
-                                event[16..24].copy_from_slice(&(available as u64).to_le_bytes());
-                                if writing && !peer {
-                                    errno = 64;
-                                } else if !writing && !peer {
-                                    event[24..26].copy_from_slice(&1u16.to_le_bytes());
-                                } else if available == 0 {
+                                if !pipe_event(state, fd, &mut event) {
                                     blocked.insert(index);
                                 }
+                                errno = u16::from_le_bytes(event[8..10].try_into().unwrap());
                             } else if let Some(file) =
                                 descriptor.cache.and_then(|cache| state.files.get(&cache))
                             {
@@ -2757,7 +2893,34 @@ fn dispatch(caller: &mut Caller<'_, State>, name: &str, args: &[u64]) -> Result<
                 caller.data_mut().umask = a[0] as u32 & 0o777;
             }
         }
-        "set_raw_mode" => return Err(Failure::Errno(59)),
+        "set_raw_mode" => {
+            if a[0] > 1 {
+                return Err(Failure::Errno(28));
+            }
+            let side = caller
+                .data()
+                .descriptors
+                .get(&0)
+                .and_then(|descriptor| descriptor.pipe.as_ref())
+                .and_then(|pipe| pipe.terminal.as_ref())
+                .ok_or(Failure::Errno(59))?;
+            side.terminal.set_raw(a[0] == 1);
+        }
+        "get_size" => {
+            let pipe = caller
+                .data()
+                .descriptors
+                .get(&(a[0] as u32))
+                .and_then(|descriptor| descriptor.pipe.as_ref())
+                .ok_or(Failure::Errno(59))?;
+            if pipe.terminal.is_none() {
+                return Err(Failure::Errno(59));
+            }
+            bytes(caller, a[1], 2)?;
+            bytes(caller, a[2], 2)?;
+            put(caller, a[1], &80u16.to_le_bytes())?;
+            put(caller, a[2], &24u16.to_le_bytes())?;
+        }
         "set_open_mode" => caller.data_mut().open_mode = Some(a[0] as u32 & 0o7777),
         "set_open_direct" => caller.data_mut().open_direct = a[0] != 0,
         "net_recv" | "net_send" => {
@@ -3147,20 +3310,47 @@ fn linker(engine: &Engine) -> Result<Linker<State>, String> {
     bind!("host_process","umask",a:i32,b:i32,c:i32);
     bind!("host_process","proc_umask",a:i32,b:i32);
     bind!("host_tty","set_raw_mode",a:i32);
+    bind!("host_tty","get_size",a:i32,b:i32,c:i32);
+    linker
+        .func_wrap(
+            "host_tty",
+            "isatty",
+            |caller: Caller<'_, State>, fd: i32| -> i32 {
+                i32::from(
+                    caller
+                        .data()
+                        .descriptors
+                        .get(&(fd as u32))
+                        .and_then(|descriptor| descriptor.pipe.as_ref())
+                        .is_some_and(|pipe| pipe.terminal.is_some()),
+                )
+            },
+        )
+        .map_err(|error| error.to_string())?;
     linker
         .func_wrap(
             "host_tty",
             "read",
-            |_caller: Caller<'_, State>,
+            |caller: Caller<'_, State>,
              _pointer: i32,
              _length: i32,
              _timeout: i32|
              -> Result<i32, Error> {
+                if caller
+                    .data()
+                    .descriptors
+                    .get(&0)
+                    .and_then(|descriptor| descriptor.pipe.as_ref())
+                    .is_some_and(|pipe| pipe.terminal.is_some())
+                {
+                    return Err(Error::new("host_tty.read is unsupported; use WASI fd_read"));
+                }
                 Err(Error::new("TTY input requires an attached terminal"))
             },
         )
         .map_err(|error| error.to_string())?;
     bind!("host_process","proc_getpid",a:i32);
+    bind!("host_process","pty_open",a:i32,b:i32);
     bind!("host_process","proc_kill",a:i32,b:i32);
     bind!("host_process","proc_sigaction",a:i32,b:i32,c:i32,d:i32,e:i32);
     bind!("host_process","proc_waitpid_v3",a:i32,b:i32,c:i32,d:i32);
@@ -3966,16 +4156,12 @@ impl WasmGuest {
                 .descriptors
                 .get(fd)
                 .and_then(|descriptor| descriptor.pipe.as_ref())
-                .is_some_and(|pipe| !pipe.pipe.bytes.borrow().is_empty() || !pipe.has_peer()),
+                .is_some_and(|pipe| pipe.read_ready()),
             Completion::PipeWrite { fd, data, .. } => state
                 .descriptors
                 .get(fd)
                 .and_then(|descriptor| descriptor.pipe.as_ref())
-                .is_some_and(|pipe| {
-                    let space = PIPE_BYTES - pipe.pipe.bytes.borrow().len();
-                    !pipe.has_peer()
-                        || space > 0 && (data.len() > PIPE_ATOMIC_BYTES || space >= data.len())
-                }),
+                .is_some_and(|pipe| pipe.write_ready(data)),
             Completion::Poll {
                 events, pipe_fds, ..
             } => pipe_fds.iter().any(|(index, fd)| {
@@ -4528,11 +4714,13 @@ impl WasmGuest {
         descriptor.pipe = Some(Rc::new(PipeEndpoint {
             pipe: pipe.clone(),
             reading: true,
+            terminal: None,
         }));
         state.descriptors.insert(0, descriptor);
         *state.stdin_writer.borrow_mut() = Some(Rc::new(PipeEndpoint {
             pipe: pipe.clone(),
             reading: false,
+            terminal: None,
         }));
         state
             .processes
@@ -4699,22 +4887,27 @@ impl WasmGuest {
                         .and_then(|descriptor| descriptor.pipe.clone())
                         .ok_or_else(|| JsValue::from_str("Missing pipe"))?;
                     let mut count = 0usize;
+                    let mut remaining = pipe.readable();
                     let memory = self
                         .memory
                         .ok_or_else(|| JsValue::from_str("Missing memory"))?;
                     for (pointer, length) in vectors {
-                        let available = pipe.pipe.bytes.borrow().len();
-                        let bytes: Vec<u8> = pipe
-                            .pipe
-                            .bytes
-                            .borrow_mut()
-                            .drain(..length.min(available))
-                            .collect();
+                        if length == 0 {
+                            continue;
+                        }
+                        let data = match pipe.read_data(length.min(remaining)) {
+                            Ok(data) => data,
+                            Err(errno) => {
+                                result = errno;
+                                break;
+                            }
+                        };
                         memory
-                            .write(&mut self.store, pointer, &bytes)
+                            .write(&mut self.store, pointer, &data)
                             .map_err(|error| JsValue::from_str(&error.to_string()))?;
-                        count += bytes.len();
-                        if bytes.len() < length {
+                        count += data.len();
+                        remaining -= data.len();
+                        if remaining == 0 {
                             break;
                         }
                     }
@@ -4730,15 +4923,13 @@ impl WasmGuest {
                         .get(&fd)
                         .and_then(|descriptor| descriptor.pipe.clone())
                         .ok_or_else(|| JsValue::from_str("Missing pipe"))?;
-                    if !pipe.has_peer() {
-                        result = 64;
-                    } else {
-                        let count = data.len().min(PIPE_BYTES - pipe.pipe.bytes.borrow().len());
-                        pipe.pipe.bytes.borrow_mut().extend(&data[..count]);
-                        self.memory
+                    match pipe.write_data(&data) {
+                        Err(errno) => result = errno,
+                        Ok(count) => self
+                            .memory
                             .ok_or_else(|| JsValue::from_str("Missing memory"))?
                             .write(&mut self.store, output, &(count as u32).to_le_bytes())
-                            .map_err(|error| JsValue::from_str(&error.to_string()))?;
+                            .map_err(|error| JsValue::from_str(&error.to_string()))?,
                     }
                 }
                 Completion::Spawn { pointer, .. } => {

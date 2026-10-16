@@ -1,0 +1,147 @@
+{
+  "status": "Source-only native WASI PTY descriptor implementation. Public terminal sessions and full AgentOS PTY parity remain open.",
+  "baseCommit": "6f67f31b2e32128874ac292b9e10def393c76282",
+  "reference": {
+    "commit": "4d48628304c1ddedafc9d55f60752093fcf6f3d2",
+    "abi": "https://github.com/rivet-dev/agentos/blob/4d48628304c1ddedafc9d55f60752093fcf6f3d2/toolchain/crates/wasi-ext/src/lib.rs",
+    "consumer": "https://github.com/rivet-dev/agentos/blob/4d48628304c1ddedafc9d55f60752093fcf6f3d2/toolchain/crates/libs/wasi-pty/src/lib.rs",
+    "scope": "The native master/slave descriptor contract, not the complete terminal API or an interactive shell proof."
+  },
+  "baseline": {
+    "command": "bun test tests/pty.test.ts",
+    "passed": 0,
+    "failed": 1,
+    "milliseconds": 1411,
+    "failure": "Native guest linking failed because host_process.pty_open was not defined. The expected exited receipt was failed."
+  },
+  "implementation": {
+    "owners": ["crates/wasi/src/pty.rs", "crates/wasi/src/lib.rs"],
+    "abi": [
+      "host_process.pty_open",
+      "host_tty.isatty",
+      "host_tty.get_size",
+      "host_tty.set_raw_mode",
+      "existing host_user.isatty and WASI descriptor operations"
+    ],
+    "storage": "Terminal bytes and mode belong to process-local native descriptors. Process source, receipt, queued lifetime and acknowledged parent capture keep their existing R2 owners; there is no second terminal namespace or Worker.",
+    "lifetime": "Each duplex endpoint uses the existing pipe pool and open-description reference counts. Dup and child stdio retain the same pair until the final alias closes; child stdout and stderr use one slave output direction.",
+    "bounds": {
+      "bytesPerDirection": 65536,
+      "unfinishedLineBytes": 4096,
+      "committedLineOrEofRecords": 4096,
+      "familyPipeBuffers": 64,
+      "initialColumns": 80,
+      "initialRows": 24
+    },
+    "behavior": [
+      "Canonical CR/newline processing, byte DEL editing and echo; one committed line per read",
+      "Ctrl-D on an empty line yields one zero-byte read while later input stays writable",
+      "Raw mode preserves NUL, control bytes, CR, LF and DEL without echo; disabling raw mode restores cooked handling",
+      "Cooked slave output expands newline to CRLF; raw output preserves bytes",
+      "Native poll reports an EOF record as readable with zero bytes; descriptor rights remain monotonic",
+      "Both output pointers validate before PTY allocation; overlapping result slots reject EINVAL",
+      "Master drains buffered output before EIO after the last slave closes; ordinary pipes retain EOF/EPIPE semantics",
+      "The new pair starts in canonical mode even after a previous process used raw mode, and normal captured stdio stays non-TTY"
+    ]
+  },
+  "verification": {
+    "fullGate": {
+      "command": "bun run check",
+      "tests": 356,
+      "files": 66,
+      "assertions": 4827,
+      "seconds": 139.71,
+      "failures": 0,
+      "includes": [
+        "Runtime and SDK builds",
+        "TypeScript",
+        "Workspace Clippy with warnings denied",
+        "Cargo tests",
+        "Native workerd/R2/Queue tests"
+      ]
+    },
+    "focused": {
+      "command": "bun test tests/pty.test.ts tests/pipe.test.ts tests/inherited-pipe.test.ts",
+      "tests": 7,
+      "files": 3,
+      "assertions": 51,
+      "seconds": 9.02,
+      "failures": 0
+    },
+    "ptyOnly": {
+      "command": "bun test tests/pty.test.ts",
+      "tests": 2,
+      "assertions": 13,
+      "seconds": 3.85,
+      "failures": 0,
+      "scope": "Earlier focused run before adding fdstat, poll, invalid-pointer and rights checks; those extra cases passed in the final focused and full gates."
+    },
+    "rust": {
+      "command": "cargo test -p cirro-wasi",
+      "tests": 9,
+      "failures": 0,
+      "scope": "Three direct line/mode/bounds tests plus six existing native Wasmi tests; the workspace Cargo gate passed again in bun run check."
+    },
+    "child": "A genuine WASI child inherits one slave as fd 0/1/2, observes terminal identity, blocks on canonical input, writes ordered stdout/stderr and exits with code 7. Its parent reads echo and child output from the master and observes the real native wait status.",
+    "cancellation": "A queued WASI process emits a captured marker and blocks on the empty PTY. Live output confirms running; zero-time wait reports ETIMEDOUT. Explicit cancellation settles ECANCELED and retains the marker without a fabricated exit code.",
+    "format": "bun run format:check passed; git diff --check passed."
+  },
+  "assets": [
+    {
+      "name": "cirro_compiler_bg.wasm",
+      "bytes": 1943596,
+      "published0121Bytes": 1943596,
+      "changed": false,
+      "sha256": "27d9b0022a634ed4eef47b6561ad38cafde3522c17e834afed1264440678bf2f"
+    },
+    {
+      "name": "cirro_guest_bg.wasm",
+      "bytes": 1129863,
+      "published0121Bytes": 1129863,
+      "changed": false,
+      "sha256": "b773b74626b08bd1083860081ccd2a3d0fdff80dcd97b5ec13ed7c6e2148ef22"
+    },
+    {
+      "name": "cirro_kernel_bg.wasm",
+      "bytes": 1139581,
+      "published0121Bytes": 1139581,
+      "changed": false,
+      "sha256": "1d3d1811805905af3c00e8afedd696c22d585db7538877306c28e7b099725e92"
+    },
+    {
+      "name": "cirro_python_bg.wasm",
+      "bytes": 10719083,
+      "published0121Bytes": 10719083,
+      "changed": false,
+      "sha256": "8aa6aec5ab6fb0623637e2b6dda7318f4934e4736f4a97e45ca3312bf32e529c"
+    },
+    {
+      "name": "cirro_wasi_bg.wasm",
+      "bytes": 1665731,
+      "published0121Bytes": 1655155,
+      "changed": true,
+      "sha256": "cbdea78da44be13a018713fb669e62163b463bdadd06a8a25f227249548f2bd5"
+    },
+    {
+      "name": "index.js",
+      "bytes": 361775,
+      "published0121Bytes": 361775,
+      "changed": true,
+      "sha256": "b7e621088836f2879629bbc8fae1f44496762411dbb81f80b855f4b1373823dd"
+    }
+  ],
+  "delivery": {
+    "sourceCI": "Not yet queried for this commit.",
+    "release": "No new archives or tag; published 0.12.1 artifacts are unchanged.",
+    "deployment": "No new deployment.",
+    "minutei": "No dependency change in this increment; local consumer remains on the published 0.12.1 SDK/runtime."
+  },
+  "remaining": [
+    "Public terminal session open/list/write/resize/read/wait/close contracts and persistence",
+    "Window resizing and full termios configuration",
+    "Foreground process-group and terminal-generated signals",
+    "Custom host_tty.read ABI and real published interactive-shell behavior",
+    "Verified same-build PTY heap checkpoint and Worker replacement",
+    "Production proof, maximum-scale memory/latency measurements and AgentOS cost comparison"
+  ]
+}
