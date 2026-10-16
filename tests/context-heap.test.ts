@@ -98,13 +98,18 @@ test(
             yield* Effect.promise(() => manifest.text()),
           );
           const blob = yield* Effect.promise(() =>
-            objects.get(`context-heap/${metadata.digest}.bin`),
+            objects.get(`sandboxes/context-heap-proof/checkpoint-pages/${metadata.pages[0]}`),
           );
           if (blob === null) return yield* Effect.die("Missing native R2 context image");
           const original = yield* Effect.promise(() => blob.arrayBuffer());
           const corrupt = new Uint8Array(original.slice(0));
           corrupt[corrupt.byteLength - 1] ^= 1;
-          yield* Effect.promise(() => objects.put(`context-heap/${metadata.digest}.bin`, corrupt));
+          yield* Effect.promise(() =>
+            objects.put(
+              `sandboxes/context-heap-proof/checkpoint-pages/${metadata.pages[0]}`,
+              corrupt,
+            ),
+          );
           const rejected = yield* Effect.promise(() =>
             fetch(url, {
               method: "POST",
@@ -122,7 +127,12 @@ test(
               yield* Effect.promise(() => rejected.text()),
             ),
           ).toEqual({ error: "STORAGE_FAILURE", message: "Context checkpoint validation failed" });
-          yield* Effect.promise(() => objects.put(`context-heap/${metadata.digest}.bin`, original));
+          yield* Effect.promise(() =>
+            objects.put(
+              `sandboxes/context-heap-proof/checkpoint-pages/${metadata.pages[0]}`,
+              original,
+            ),
+          );
           const changed = Schema.encodeSync(Schema.fromJsonString(ContextMemory))({
             ...metadata,
             runtime: "0".repeat(64),
@@ -203,9 +213,26 @@ const transferContext = Effect.fn("contextTest.transfer")(function* (
         }),
       );
       expect(response.status).toBe(200);
-      return yield* Schema.decodeUnknownEffect(Schema.fromJsonString(ContextCheckpointProof))(
-        yield* Effect.promise(() => response.text()),
+      const proof = yield* Schema.decodeUnknownEffect(
+        Schema.fromJsonString(ContextCheckpointProof),
+      )(yield* Effect.promise(() => response.text()));
+      if (!("hash" in proof)) return yield* Effect.die("Expected a saved context image");
+      const objects = yield* Effect.promise(() => worker.objects);
+      const manifest = yield* Effect.promise(() => objects.get(`context-heap/${proof.hash}.json`));
+      if (manifest === null) return yield* Effect.die("Missing saved context manifest");
+      const snapshot = yield* Schema.decodeUnknownEffect(Schema.fromJsonString(ContextMemory))(
+        yield* Effect.promise(() => manifest.text()),
       );
+      const inventory = yield* Effect.promise(() =>
+        objects.list({ prefix: "sandboxes/context-heap-proof/checkpoint-pages/", limit: 1000 }),
+      );
+      expect(inventory.truncated).toBe(false);
+      const manifests = yield* Effect.promise(() =>
+        objects.list({ prefix: "context-heap/", limit: 1000 }),
+      );
+      expect(manifests.truncated).toBe(false);
+      expect(manifests.objects.every((object) => object.key.endsWith(".json"))).toBe(true);
+      return { ...proof, snapshot, storedPages: inventory.objects.length };
     }),
   );
 });
@@ -239,6 +266,11 @@ test(
           });
           if (saved.op !== "saved") return yield* Effect.die("Initial context was not saved");
           expect(saved.request).toEqual({ op: "host.call", name: "echo", input: 2 });
+          const firstPages = new Set(saved.snapshot.pages);
+          expect(saved.storage.uniquePages).toBe(firstPages.size);
+          expect(saved.storage.pageWrites).toBe(saved.storage.uniquePages);
+          expect(saved.storedPages).toBe(saved.storage.uniquePages);
+          expect(saved.storage.uniquePages).toBeLessThan(saved.storage.pages);
           const second = yield* transferContext(directory, {
             op: "reenter",
             hash: saved.hash,
@@ -273,6 +305,13 @@ test(
             exitCode: 0,
           });
           expect(second.hash).not.toBe(saved.hash);
+          const secondPages = new Set(second.snapshot.pages);
+          expect(second.storage.uniquePages).toBe(secondPages.size);
+          expect(second.storage.pageWrites).toBe(
+            Array.from(secondPages).filter((hash) => !firstPages.has(hash)).length,
+          );
+          expect(second.storage.pageWrites).toBeLessThan(second.storage.uniquePages);
+          expect(second.storedPages).toBe(saved.storedPages + second.storage.pageWrites);
           const third = yield* transferContext(directory, {
             op: "continue",
             hash: second.hash,
@@ -300,8 +339,57 @@ test(
             exitCode: 0,
           });
           expect(third.hash).not.toBe(second.hash);
+          const thirdPages = new Set(third.snapshot.pages);
+          expect(third.storage.uniquePages).toBe(thirdPages.size);
+          expect(third.storage.pageWrites).toBe(
+            Array.from(thirdPages).filter((hash) => !secondPages.has(hash)).length,
+          );
+          expect(third.storage.pageWrites).toBeLessThan(third.storage.uniquePages);
+          expect(third.storedPages).toBe(second.storedPages + third.storage.pageWrites);
         }),
       ),
     ),
   15000,
+);
+
+test(
+  "native R2 pages deduplicate equal content, skip unchanged uploads and reject invalid layouts",
+  () =>
+    Effect.runPromise(
+      Effect.scoped(
+        Effect.gen(function* () {
+          const directory = yield* Effect.acquireRelease(
+            Effect.promise(() => mkdtemp(join(tmpdir(), "boxes-native-pages-"))),
+            (path) => Effect.promise(() => rm(path, { recursive: true, force: true })),
+          );
+          const worker = yield* Effect.acquireRelease(
+            Effect.sync(() => runtime(directory, { artifact: "context-checkpoint-worker" })),
+            (worker) => Effect.promise(() => worker.dispose()),
+          );
+          const url = yield* Effect.promise(() => worker.ready);
+          const response = yield* Effect.promise(() =>
+            fetch(url, {
+              method: "POST",
+              body: Schema.encodeSync(Schema.fromJsonString(ContextCheckpointRequest))({
+                op: "pages",
+              }),
+            }),
+          );
+          expect(response.status).toBe(200);
+          const proof = yield* Schema.decodeUnknownEffect(
+            Schema.fromJsonString(ContextCheckpointProof),
+          )(yield* Effect.promise(() => response.text()));
+          if (proof.op !== "pages") return yield* Effect.die("Missing native page proof");
+          expect(proof.first).toEqual({ pages: 3, uniquePages: 1, pageWrites: 1 });
+          expect(proof.unchanged).toEqual({ pages: 3, uniquePages: 1, pageWrites: 0 });
+          expect(proof.changed).toEqual({ pages: 3, uniquePages: 2, pageWrites: 1 });
+          expect(proof.restoredBytes).toEqual([0, 0, 42]);
+          expect(proof.storedPages).toBe(2);
+          expect(proof.rejectedLayouts).toEqual(
+            Array.from({ length: 4 }, () => "Invalid checkpoint page layout"),
+          );
+        }),
+      ),
+    ),
+  10000,
 );

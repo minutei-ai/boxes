@@ -1106,13 +1106,14 @@ export const EnvironmentMigrationReceipt = Schema.Struct({
 });
 export const MigrationReceipt = Schema.Struct({ migrated: Schema.Int });
 
+export const MemoryPages = Schema.Struct({
+  memoryBytes: Schema.Int.check(Schema.isBetween({ minimum: 65_536, maximum: 67_108_864 })),
+  pages: Schema.Array(Digest).check(Schema.isMaxLength(1024)),
+});
 export const HeapSnapshot = Schema.Struct({
   version: Schema.Literal(1),
-  runtime: Schema.String.check(Schema.isPattern(/^[a-f0-9]{64}$/)),
-  memoryBytes: Schema.Int.check(Schema.isBetween({ minimum: 65_536, maximum: 67_108_864 })),
-  pages: Schema.Array(Schema.String.check(Schema.isPattern(/^[a-f0-9]{64}$/))).check(
-    Schema.isMaxLength(1024),
-  ),
+  runtime: Digest,
+  ...MemoryPages.fields,
   handles: Schema.Array(
     Schema.Struct({
       pid: Schema.Int.check(Schema.isBetween({ minimum: 1, maximum: 2147483647 })),

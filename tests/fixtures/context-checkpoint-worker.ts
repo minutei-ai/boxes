@@ -6,6 +6,7 @@ import revision from "../../dist/guest/revision.json";
 import { createBindings } from "../../dist/guest/bindings";
 import { ErrorResponse, Fault, HostCall, ScriptProgram, ToolStep } from "../../src/contracts";
 import { StorageFailure } from "../../src/storage";
+import { saveMemoryPages, restoreMemoryPages } from "../../src/memory";
 import type { Env } from "../../src/resources";
 import {
   ContextCheckpointProof,
@@ -22,16 +23,30 @@ const saveMemory = Effect.fn("contextFixture.saveMemory")(function* (
   objects: Env["OBJECTS"],
   memory: WebAssembly.Memory,
   handle: number,
+  previous: typeof ContextMemory.Type.pages = [],
 ) {
-  const bytes = Uint8Array.from(new Uint8Array(memory.buffer));
-  const digest = Buffer.from(
-    yield* Effect.promise(() => crypto.subtle.digest("SHA-256", bytes)),
-  ).toString("hex");
+  const observed = { writes: 0 };
+  const traced = new Proxy(objects, {
+    get(target, property) {
+      if (property === "put")
+        return (...args: Parameters<Env["OBJECTS"]["put"]>) => {
+          if (args[0].startsWith("sandboxes/context-heap-proof/checkpoint-pages/"))
+            observed.writes += 1;
+          return target.put(...args);
+        };
+      const value = Reflect.get(target, property, target);
+      if (typeof value === "function") return value.bind(target);
+      return value;
+    },
+  });
+  const saved = yield* saveMemoryPages(traced, "context-heap-proof", memory, previous);
+  if (observed.writes !== saved.pageWrites)
+    return yield* Effect.die("Native R2 writes differ from page accounting");
   const metadata = yield* Schema.decodeUnknownEffect(ContextMemory)({
-    version: 1,
+    version: 2,
     runtime: revision.sha256,
-    digest,
-    memoryBytes: bytes.byteLength,
+    memoryBytes: saved.memoryBytes,
+    pages: saved.pages,
     handle,
   });
   const body = Schema.encodeSync(Schema.fromJsonString(ContextMemory))(metadata);
@@ -39,16 +54,18 @@ const saveMemory = Effect.fn("contextFixture.saveMemory")(function* (
     yield* Effect.promise(() => crypto.subtle.digest("SHA-256", new TextEncoder().encode(body))),
   ).toString("hex");
   yield* Effect.promise(() =>
-    objects.put(`context-heap/${digest}.bin`, bytes, {
-      onlyIf: { etagDoesNotMatch: "*" },
-    }),
-  );
-  yield* Effect.promise(() =>
     objects.put(`context-heap/${hash}.json`, body, {
       onlyIf: { etagDoesNotMatch: "*" },
     }),
   );
-  return hash;
+  return {
+    hash,
+    storage: {
+      pages: saved.pages.length,
+      uniquePages: new Set(saved.pages).size,
+      pageWrites: observed.writes,
+    },
+  };
 });
 
 export default {
@@ -61,6 +78,72 @@ export default {
           const input = yield* Schema.decodeUnknownEffect(
             Schema.fromJsonString(ContextCheckpointRequest),
           )(yield* Effect.promise(() => request.text()));
+          if (input.op === "pages") {
+            const memory = new WebAssembly.Memory({ initial: 3, maximum: 4 });
+            const first = yield* saveMemoryPages(env.OBJECTS, "memory-pages-proof", memory);
+            const unchanged = yield* saveMemoryPages(
+              env.OBJECTS,
+              "memory-pages-proof",
+              memory,
+              first.pages,
+            );
+            new Uint8Array(memory.buffer)[131_072] = 42;
+            const changed = yield* saveMemoryPages(
+              env.OBJECTS,
+              "memory-pages-proof",
+              memory,
+              unchanged.pages,
+            );
+            const restored = new WebAssembly.Memory({ initial: 1, maximum: 4 });
+            yield* restoreMemoryPages(env.OBJECTS, "memory-pages-proof", restored, changed);
+            const rejectedLayouts = yield* Effect.forEach(
+              [
+                { ...changed, memoryBytes: changed.memoryBytes + 1 },
+                { ...changed, pages: changed.pages.slice(1) },
+                { ...changed, memoryBytes: 0, pages: [] },
+                { ...changed, memoryBytes: 67_174_400 },
+              ],
+              (snapshot) =>
+                restoreMemoryPages(env.OBJECTS, "memory-pages-proof", restored, snapshot).pipe(
+                  Effect.result,
+                  Effect.flatMap((result) => {
+                    if (result._tag === "Success")
+                      return Effect.die("Invalid memory layout was restored");
+                    return Schema.decodeUnknownEffect(Schema.String)(result.failure.cause);
+                  }),
+                ),
+            );
+            const inventory = yield* Effect.promise(() =>
+              env.OBJECTS.list({
+                prefix: "sandboxes/memory-pages-proof/checkpoint-pages/",
+                limit: 1000,
+              }),
+            );
+            if (inventory.truncated) return yield* Effect.die("Incomplete page inventory");
+            return {
+              op: "pages" as const,
+              first: {
+                pages: first.pages.length,
+                uniquePages: new Set(first.pages).size,
+                pageWrites: first.pageWrites,
+              },
+              unchanged: {
+                pages: unchanged.pages.length,
+                uniquePages: new Set(unchanged.pages).size,
+                pageWrites: unchanged.pageWrites,
+              },
+              changed: {
+                pages: changed.pages.length,
+                uniquePages: new Set(changed.pages).size,
+                pageWrites: changed.pageWrites,
+              },
+              restoredBytes: [0, 65_536, 131_072].map(
+                (offset) => new Uint8Array(restored.buffer)[offset],
+              ),
+              storedPages: inventory.objects.length,
+              rejectedLayouts,
+            };
+          }
           if (input.op === "save-reused") {
             const bindings = createBindings();
             bindings.initSync({ module: wasm });
@@ -108,13 +191,13 @@ export default {
             }
             retained.released = true;
             const handle = guest.park();
-            const hash = yield* saveMemory(env.OBJECTS, native.memory, handle);
-            return { op: "saved" as const, hash, request: before.action };
+            const saved = yield* saveMemory(env.OBJECTS, native.memory, handle);
+            return { op: "saved" as const, ...saved, request: before.action };
           }
           const stored = yield* Effect.promise(() =>
             env.OBJECTS.get(`context-heap/${input.hash}.json`),
           );
-          if (stored === null || stored.size > 4096)
+          if (stored === null || stored.size > 131_072)
             return yield* new StorageFailure({ cause: "Missing context manifest" });
           const text = yield* Effect.promise(() => stored.text());
           const hash = Buffer.from(
@@ -133,24 +216,9 @@ export default {
               status: 409,
               message: "Context uses another Rust runtime",
             });
-          const blob = yield* Effect.promise(() =>
-            env.OBJECTS.get(`context-heap/${metadata.digest}.bin`),
-          );
-          if (blob === null || blob.size !== metadata.memoryBytes)
-            return yield* new StorageFailure({ cause: "Missing context heap" });
-          const bytes = yield* Effect.promise(() => blob.arrayBuffer());
-          const digest = Buffer.from(
-            yield* Effect.promise(() => crypto.subtle.digest("SHA-256", bytes)),
-          ).toString("hex");
-          if (digest !== metadata.digest)
-            return yield* new StorageFailure({ cause: "Context heap digest mismatch" });
           const bindings = createBindings();
           const native = bindings.initSync({ module: wasm });
-          const additional = (metadata.memoryBytes - native.memory.buffer.byteLength) / 65_536;
-          if (!Number.isInteger(additional) || additional < 0)
-            return yield* new StorageFailure({ cause: "Invalid context memory layout" });
-          if (additional > 0) native.memory.grow(additional);
-          new Uint8Array(native.memory.buffer).set(new Uint8Array(bytes));
+          yield* restoreMemoryPages(env.OBJECTS, "context-heap-proof", native.memory, metadata);
           const retained = yield* Effect.acquireRelease(
             Effect.sync(() => ({ guest: bindings.Guest.resume(metadata.handle), released: false })),
             (retained) =>
@@ -170,8 +238,8 @@ export default {
             if (next.kind !== "done") return yield* Effect.die("Context reentry did not complete");
             retained.released = true;
             const handle = guest.park();
-            const hash = yield* saveMemory(env.OBJECTS, native.memory, handle);
-            return { op: "continued" as const, output: next.output, hash };
+            const saved = yield* saveMemory(env.OBJECTS, native.memory, handle, metadata.pages);
+            return { op: "continued" as const, output: next.output, ...saved };
           }
           guest.respond(
             Schema.encodeSync(Schema.fromJsonString(Schema.Number))(input.reply),
@@ -187,12 +255,12 @@ export default {
           if (next.kind !== "done") return yield* Effect.die("Context reentry did not complete");
           retained.released = true;
           const handle = guest.park();
-          const nextHash = yield* saveMemory(env.OBJECTS, native.memory, handle);
+          const saved = yield* saveMemory(env.OBJECTS, native.memory, handle, metadata.pages);
           return {
             op: "reentered" as const,
             previous: after.output,
             output: next.output,
-            hash: nextHash,
+            ...saved,
           };
         }),
       ).pipe(

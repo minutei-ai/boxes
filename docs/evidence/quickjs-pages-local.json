@@ -1,0 +1,85 @@
+{
+  "status": "Unreleased shared native memory pager. The WASI runtime uses it in source; QuickJS uses it in native replacement-worker fixtures. Public contexts and production QuickJS checkpoint integration remain open. Deployed/public runtime remains 0.19.2.",
+  "measuredAt": "2026-10-16T21:13:42.872055+00:00",
+  "baseCommit": "daabf6161b8ceabc24463bde75a75546c239717a",
+  "sourceSha256": {
+    "src/memory.ts": "751b2f5fc206ff37a62830cc856499a0d4339f09dc42a6969a723bbef2cc102e",
+    "src/checkpoint.ts": "78f9c8d834458f8b328fd984f5c4c6de663cd3f6aba63697a66b79b1b205aea7",
+    "src/contracts.ts": "594cbf850ac9cab9d5f732599b8c69c1ca2d17c76f32b7224d656f9ff640fb58",
+    "tests/fixtures/context-checkpoint-contract.ts": "d355e6828390780161c444b0a855e206f3322edccd8231b71757ec1b15cb8eb8",
+    "tests/fixtures/context-checkpoint-worker.ts": "86dab75a0d6671dbff7253f2a002f23d8e9c87e311ebfc2f2e7ca97e15bbd912",
+    "tests/context-heap.test.ts": "72a7e6ecf2ad03bd5d91652b5daeaca5a07edae139cf928906e75c097a9a80ca"
+  },
+  "nativeRuntime": {
+    "quickjs": "9ae0613643088b52845bebdfd49bd15c1e8217d9eb89fcd658403ccb96265463",
+    "wasi": "0d1fd49eb2d515f724ad1067dec002f07d009d056bb6091402807b8ac5110090"
+  },
+  "storage": {
+    "owner": "src/memory.ts owns bounded 64 KiB memory-page persistence and restoration for WASI and QuickJS.",
+    "contract": "Effect Schema MemoryPages owns the 64 KiB to 64 MiB memory bound and at most 1024 SHA-256 page identities. Native restoration checks alignment and exact page count before growing memory or reading pages.",
+    "writes": "One conditional R2 put per unique newly encountered page. Only hashes of pages successfully restored in the same sandbox may be supplied as previous pages; unchanged restored pages do not issue another put.",
+    "reads": "One R2 get per unique hash, bounded to four concurrent pages. Every page size and digest is checked before native Guest adoption.",
+    "wasi": "Existing version-1 manifest fields, runtime SHA checks, PID/handle ownership and sandboxes/<id>/checkpoint-pages/<hash> keys are preserved. No persisted production shape changes.",
+    "quickjs": "The fixture version-2 manifest contains runtime digest, memory size, ordered page hashes and one native handle. It stores no whole-heap .bin object. The actual closure and captured console survive two R2 transfers and execution reentry across three fully closed/replacement Workers.",
+    "accounting": "A fixture Proxy counts and forwards real native R2 put calls. Its count must equal the pager count. Tests compare each new snapshot hash set against the prior restored set and inspect the persisted R2 inventory."
+  },
+  "nativePageCases": {
+    "first": {
+      "pages": 3,
+      "uniquePages": 1,
+      "pageWrites": 1
+    },
+    "unchanged": {
+      "pages": 3,
+      "uniquePages": 1,
+      "pageWrites": 0
+    },
+    "onePageChanged": {
+      "pages": 3,
+      "uniquePages": 2,
+      "pageWrites": 1
+    },
+    "storedPages": 2,
+    "restoredPageFirstBytes": [0, 0, 42],
+    "rejectedLayouts": [
+      "unaligned byte size",
+      "page count mismatch",
+      "zero memory",
+      "memory above 64 MiB"
+    ]
+  },
+  "checks": [
+    {
+      "command": "TMPDIR=<writable-scratch> bun test tests/context-heap.test.ts tests/checkpoint.test.ts",
+      "exitCode": 0,
+      "result": "6 tests passed, 0 failed, 80 assertions in 9.05 seconds. This preliminary run preceded the final write tracing and zero-change/layout probe; the complete check verifies final source."
+    },
+    {
+      "command": "First full check attempt: TypeScript",
+      "exitCode": 2,
+      "result": "Two new test assertions used Set.difference, absent from the configured ES2024 type library. Replaced them with native Set.has and Array.filter; target/compiler settings unchanged."
+    },
+    {
+      "command": "TMPDIR=<writable-scratch> bun run check",
+      "exitCode": 0,
+      "result": "Build, SDK build, TypeScript, Clippy with warnings denied, workspace Rust tests and native Alchemy workerd tests passed. Bun: 417 pass, 0 fail, 5964 assertions across 92 files in 234.96 seconds."
+    },
+    {
+      "command": "bun run format:check",
+      "exitCode": 0,
+      "result": "Oxfmt, cargo fmt and Rust fixture formatting passed."
+    }
+  ],
+  "limits": [
+    "This is local native Alchemy workerd/R2 proof, not a Cloudflare production deployment.",
+    "Fewer native R2 put calls for unchanged pages do not establish production latency, throughput or measured billing savings.",
+    "Exact-runtime native heaps are retained; cross-build migration and arbitrary-crash external-effect recovery remain open.",
+    "Public contexts operations, execution entry/file identity, scoped authority and exclusive durable ownership remain open.",
+    "Retained Python globals, remaining language/process parity and final production/cost gates remain open."
+  ],
+  "parentCI": {
+    "commit": "daabf6161b8ceabc24463bde75a75546c239717a",
+    "run": "https://github.com/minutei-ai/boxes/actions/runs/38966968113",
+    "conclusion": "success"
+  }
+}
