@@ -358,7 +358,7 @@ await Effect.runPromise(
         `dist/wasi-tty-raw-owner-${fixture}.wasm`,
       ]);
     }
-    for (const fixture of ["pair", "recovery", "child"]) {
+    for (const fixture of ["pair", "recovery", "child", "api", "api-recovery"]) {
       yield* run([
         "rustc",
         "--crate-type",

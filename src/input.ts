@@ -5,7 +5,11 @@ import {
   InputHead,
   ProcessInputAction,
   StoredRun,
-  TerminalAction,
+  TerminalGeometryAction,
+  TerminalAttributesAction,
+  TerminalConfigureAction,
+  TerminalAttributeState,
+  initialTerminalControl,
 } from "./contracts";
 import { requirePermission } from "./auth";
 import { head, StorageFailure } from "./storage";
@@ -27,6 +31,19 @@ const load = Effect.fn("input.load")(function* (env: Env, sandboxId: string, id:
   const input = yield* Schema.decodeUnknownEffect(Schema.fromJsonString(InputHead))(text);
   if (input.chunks.reduce((size, chunk) => size + chunk.size, 0) !== input.size)
     return yield* new StorageFailure({ cause: "Input chunk sizes do not match its head" });
+  if ((input.terminal === null) !== (input.attributes === null))
+    return yield* new StorageFailure({ cause: "Input terminal metadata does not match its mode" });
+  if (input.attributes !== null) {
+    const control = input.attributes;
+    if (
+      control.observed > control.requested ||
+      (control.observed > 0 && control.snapshot === null) ||
+      (control.snapshot !== null && control.snapshot.revision > control.desired.revision) ||
+      (control.desired.attributes === null) !== (control.desired.revision === 0) ||
+      (control.settled && control.observed !== control.requested)
+    )
+      return yield* new StorageFailure({ cause: "Invalid terminal attribute control state" });
+  }
   return { input, etag: object.etag };
 });
 
@@ -63,17 +80,21 @@ export const initializeInput = Effect.fn("input.initialize")(function* (
     });
     chunks.push({ hash, size: bytes.byteLength });
   }
-  const geometry = yield* Effect.sync(() => {
-    if (mode === "pty") return { cols: 80, rows: 24, revision: 0 };
-    return null;
+  const metadata = yield* Effect.sync(() => {
+    if (mode === "pty")
+      return {
+        terminal: { cols: 80, rows: 24, revision: 0 },
+        attributes: initialTerminalControl,
+      };
+    return { terminal: null, attributes: null };
   });
   yield* Effect.tryPromise({
     try: () =>
       env.OBJECTS.put(
         `process-input/${sandboxId}/${id}.json`,
         Schema.encodeSync(Schema.fromJsonString(InputHead))({
-          version: 2,
-          terminal: geometry,
+          version: 3,
+          ...metadata,
           size: initial.byteLength,
           closed: false,
           chunks,
@@ -116,7 +137,8 @@ export const readInput = Effect.fn("input.read")(function* (
   offset: number,
   length: number,
 ) {
-  const { input } = yield* load(env, sandboxId, id);
+  const current = yield* load(env, sandboxId, id);
+  const input = current.input;
   if (offset < 0 || offset > input.size || length < 0 || length > 65_536)
     return yield* new StorageFailure({ cause: "Invalid stdin read range" });
   const end = Math.min(offset + length, input.size);
@@ -146,9 +168,7 @@ export const readInput = Effect.fn("input.read")(function* (
   }
   return {
     data: Buffer.concat(data),
-    closed: input.closed,
-    total: input.size,
-    terminal: input.terminal,
+    head: current,
   };
 });
 
@@ -301,7 +321,7 @@ export const input = Effect.fn("process.input")(function* (
 export const terminal = Effect.fn("process.terminal")(function* (
   env: Env,
   capability: typeof Capability.Type,
-  action: typeof TerminalAction.Type,
+  action: typeof TerminalGeometryAction.Type,
 ) {
   if (action.op === "process.terminal.status") yield* requirePermission(capability, "read");
   else yield* requirePermission(capability, "execute");
@@ -310,8 +330,10 @@ export const terminal = Effect.fn("process.terminal")(function* (
     return yield* new Fault({ code: "EINVAL", status: 400, message: "Process has no terminal" });
   if (current.terminal === null)
     return yield* new StorageFailure({ cause: "PTY input head has no geometry" });
+  if (current.attributes === null)
+    return yield* new StorageFailure({ cause: "PTY input head has no attributes" });
   if (action.op === "process.terminal.status") return current.terminal;
-  if (record.status !== "queued" && record.status !== "running")
+  if (current.attributes.settled || (record.status !== "queued" && record.status !== "running"))
     return yield* new Fault({
       code: "EPIPE",
       status: 409,
@@ -356,4 +378,187 @@ export const terminal = Effect.fn("process.terminal")(function* (
       message: "Concurrent input or terminal mutation; inspect process.terminal.status",
     });
   return geometry;
+});
+
+export const observeTerminal = Effect.fn("input.observeTerminal")(function* (
+  env: Env,
+  sandboxId: string,
+  id: string,
+  current: Effect.Success<ReturnType<typeof load>>,
+  snapshot: typeof TerminalAttributeState.Type,
+  settled: boolean,
+) {
+  const { input, etag } = current;
+  const control = input.attributes;
+  if (control === null)
+    return yield* new StorageFailure({ cause: "Input has no terminal attributes" });
+  if (control.settled) return true;
+  if (snapshot.revision !== control.desired.revision) return false;
+  if (!settled && control.requested === control.observed) return true;
+  const saved = yield* Effect.tryPromise({
+    try: () =>
+      env.OBJECTS.put(
+        `process-input/${sandboxId}/${id}.json`,
+        Schema.encodeSync(Schema.fromJsonString(InputHead))({
+          ...input,
+          closed: input.closed || settled,
+          attributes: { ...control, snapshot, settled, observed: control.requested },
+        }),
+        { onlyIf: { etagMatches: etag } },
+      ),
+    catch: (cause) => new StorageFailure({ cause }),
+  });
+  return saved !== null;
+});
+
+export const configureTerminalAttributes = Effect.fn("process.configureTerminalAttributes")(
+  function* (
+    env: Env,
+    capability: typeof Capability.Type,
+    action: typeof TerminalConfigureAction.Type,
+  ) {
+    yield* requirePermission(capability, "execute");
+    const { record, input: current, etag } = yield* openInput(env, capability, action.id);
+    if (record.stdinMode !== "pty")
+      return yield* new Fault({ code: "EINVAL", status: 400, message: "Process has no terminal" });
+    const control = current.attributes;
+    if (control === null)
+      return yield* new StorageFailure({ cause: "PTY input head has no attributes" });
+    if (control.settled || (record.status !== "queued" && record.status !== "running"))
+      return yield* new Fault({
+        code: "EPIPE",
+        status: 409,
+        message: "Process terminal has settled",
+      });
+    if (action.revision !== control.desired.revision)
+      return yield* new Fault({
+        code: "CONFLICT",
+        status: 409,
+        message: "Terminal attribute revision changed; inspect process.terminal.attributes",
+      });
+    if (control.desired.revision === 4294967295)
+      return yield* new Fault({
+        code: "EFBIG",
+        status: 409,
+        message: "Terminal attribute revision limit exceeded",
+      });
+    const desired = { attributes: action.attributes, revision: control.desired.revision + 1 };
+    const observedAt = yield* Clock.currentTimeMillis;
+    if (capability.expiresAt <= observedAt)
+      return yield* new Fault({ code: "UNAUTHORIZED", status: 401, message: "Capability expired" });
+    yield* head(env, capability.sandboxId);
+    const saved = yield* Effect.tryPromise({
+      try: () =>
+        env.OBJECTS.put(
+          `process-input/${capability.sandboxId}/${action.id}.json`,
+          Schema.encodeSync(Schema.fromJsonString(InputHead))({
+            ...current,
+            attributes: { ...control, desired },
+          }),
+          { onlyIf: { etagMatches: etag } },
+        ),
+      catch: (cause) => new StorageFailure({ cause }),
+    });
+    if (saved === null)
+      return yield* new Fault({
+        code: "CONFLICT",
+        status: 409,
+        message: "Concurrent input or terminal mutation; inspect terminal state",
+      });
+    return desired;
+  },
+);
+
+export const terminalAttributes = Effect.fn("process.terminalAttributes")(function* (
+  env: Env,
+  capability: typeof Capability.Type,
+  action: typeof TerminalAttributesAction.Type,
+) {
+  yield* requirePermission(capability, "read");
+  const startedAt = yield* Clock.currentTimeMillis;
+  const deadline = Math.min(capability.expiresAt, startedAt + action.timeoutMs);
+  const request = { epoch: 0, delay: 16 };
+  for (const attempt of Array.from({ length: 3 }, (_, index) => index)) {
+    const now = yield* Clock.currentTimeMillis;
+    if (capability.expiresAt <= now)
+      return yield* new Fault({ code: "UNAUTHORIZED", status: 401, message: "Capability expired" });
+    const { record, input: current, etag } = yield* openInput(env, capability, action.id);
+    if (record.stdinMode !== "pty")
+      return yield* new Fault({ code: "EINVAL", status: 400, message: "Process has no terminal" });
+    const control = current.attributes;
+    if (control === null)
+      return yield* new StorageFailure({ cause: "PTY input head has no attributes" });
+    const observedAt = yield* Clock.currentTimeMillis;
+    if (capability.expiresAt <= observedAt)
+      return yield* new Fault({ code: "UNAUTHORIZED", status: 401, message: "Capability expired" });
+    if (control.settled && control.snapshot !== null)
+      return { desired: control.desired, observed: control.snapshot, settled: true };
+    if (control.settled || (record.status !== "queued" && record.status !== "running"))
+      return yield* new Fault({
+        code: "EPIPE",
+        status: 409,
+        message: "Terminal has settled without a fresh attribute observation",
+      });
+    if (control.requested > control.observed) {
+      request.epoch = control.requested;
+      break;
+    }
+    if (control.requested === 4294967295)
+      return yield* new Fault({
+        code: "EFBIG",
+        status: 409,
+        message: "Terminal observation limit exceeded",
+      });
+    const requested = control.requested + 1;
+    const saved = yield* Effect.tryPromise({
+      try: () =>
+        env.OBJECTS.put(
+          `process-input/${capability.sandboxId}/${action.id}.json`,
+          Schema.encodeSync(Schema.fromJsonString(InputHead))({
+            ...current,
+            attributes: { ...control, requested },
+          }),
+          { onlyIf: { etagMatches: etag } },
+        ),
+      catch: (cause) => new StorageFailure({ cause }),
+    });
+    if (saved !== null) {
+      request.epoch = requested;
+      break;
+    }
+    if (attempt === 2)
+      return yield* new Fault({
+        code: "CONFLICT",
+        status: 409,
+        message: "Concurrent terminal observation; retry the read",
+      });
+  }
+  while (true) {
+    const now = yield* Clock.currentTimeMillis;
+    if (capability.expiresAt <= now)
+      return yield* new Fault({ code: "UNAUTHORIZED", status: 401, message: "Capability expired" });
+    const { record, input: current } = yield* openInput(env, capability, action.id);
+    const observedAt = yield* Clock.currentTimeMillis;
+    if (capability.expiresAt <= observedAt)
+      return yield* new Fault({ code: "UNAUTHORIZED", status: 401, message: "Capability expired" });
+    const control = current.attributes;
+    if (control === null)
+      return yield* new StorageFailure({ cause: "PTY input head has no attributes" });
+    if (control.snapshot !== null && (control.settled || control.observed >= request.epoch))
+      return { desired: control.desired, observed: control.snapshot, settled: control.settled };
+    if (control.settled || (record.status !== "queued" && record.status !== "running"))
+      return yield* new Fault({
+        code: "EPIPE",
+        status: 409,
+        message: "No final terminal attributes were retained",
+      });
+    if (observedAt >= deadline)
+      return yield* new Fault({
+        code: "ETIMEDOUT",
+        status: 408,
+        message: "No fresh terminal attributes were observed before the deadline",
+      });
+    yield* Effect.sleep(Math.min(request.delay, deadline - observedAt));
+    request.delay = Math.min(request.delay * 2, 1000);
+  }
 });

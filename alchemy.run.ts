@@ -140,12 +140,12 @@ const migrate = Alchemy.Action(
           });
           if (page.cursor !== null) cursors.push(page.cursor);
         }
-        const inputGeometry = { pages: 0, migrated: 0 };
+        const inputTerminal = { pages: 0, migrated: 0 };
         const inputCursors: (typeof InputMigrationReceipt.Type.cursor)[] = [null];
         while (inputCursors.length > 0) {
           const cursor = inputCursors.shift();
           const page = yield* Effect.gen(function* () {
-            const response = yield* http.post(new URL("/v1/migrations/input-geometry-v2", url), {
+            const response = yield* http.post(new URL("/v1/migrations/input-terminal-v3", url), {
               headers: { authorization: `Bearer ${Redacted.value(key)}` },
               body: HttpBody.text(
                 Schema.encodeSync(Schema.fromJsonString(InputMigrationInput))({ cursor }),
@@ -155,17 +155,17 @@ const migrate = Alchemy.Action(
             if (response.status < 200 || response.status >= 300)
               return yield* new MigrationStatusError({
                 status: response.status,
-                path: "/v1/migrations/input-geometry-v2",
+                path: "/v1/migrations/input-terminal-v3",
               });
             return yield* Schema.decodeUnknownEffect(Schema.fromJsonString(InputMigrationReceipt))(
               yield* response.text,
             );
           }).pipe(Effect.timeout("120 seconds"));
-          inputGeometry.pages += 1;
-          inputGeometry.migrated += page.migrated;
+          inputTerminal.pages += 1;
+          inputTerminal.migrated += page.migrated;
           yield* Effect.logInfo({
-            migration: "input-geometry-v2",
-            page: inputGeometry.pages,
+            migration: "input-terminal-v3",
+            page: inputTerminal.pages,
             migrated: page.migrated,
             hasMore: page.cursor !== null,
           });
@@ -241,7 +241,7 @@ const migrate = Alchemy.Action(
           filesystemMigration: filesystem,
           environmentMigration: { heads: configurationHeads, programs: configurationPrograms },
           inputMigration: progress,
-          inputGeometryMigration: inputGeometry,
+          inputTerminalMigration: inputTerminal,
           deadlineMigration: deadlines,
           deployedAt: input.deployedAt,
         };

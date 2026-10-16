@@ -28,6 +28,8 @@ import {
   WasmProgram,
   WasmConfiguration,
   StoredRun,
+  TerminalAttributes,
+  TerminalAttributeState,
 } from "./contracts";
 import type { open } from "./storage";
 import {
@@ -37,7 +39,7 @@ import {
   saveExecutionCheckpoint,
   restoreExecutionCheckpoint,
 } from "./checkpoint";
-import { initializeInput, readInput, finishInput } from "./input";
+import { initializeInput, readInput, finishInput, observeTerminal } from "./input";
 import { kernelCall, publish, read, write, StorageFailure } from "./storage";
 import type { Kernel } from "../dist/kernel/cirro_kernel";
 import type { OutputCapture } from "./output";
@@ -192,15 +194,62 @@ export const wasi = Effect.fn("wasi.execute")(function* (
       catch: (cause) => new WasmFailure({ cause }),
     });
   }
-  if (inputId !== null && stdinMode === "pty") {
-    const control = yield* readInput(env, capability.sandboxId, inputId, guest.input_offset(), 0);
-    if (control.terminal === null)
+  const applyTerminal = Effect.fn("wasi.terminalControl")(function* (
+    control: Effect.Success<ReturnType<typeof readInput>>,
+    settled: boolean,
+  ) {
+    if (inputId === null || stdinMode !== "pty") return { advanced: false, acknowledged: true };
+    if (control.head.input.terminal === null)
       return yield* new StorageFailure({ cause: "PTY input head has no geometry" });
-    const geometry = control.terminal;
-    yield* Effect.try({
+    if (control.head.input.attributes === null)
+      return yield* new StorageFailure({ cause: "PTY input head has no attributes" });
+    if (control.head.input.attributes.settled) return { advanced: false, acknowledged: true };
+    const geometry = control.head.input.terminal;
+    const resized = yield* Effect.try({
       try: () => guest.update_terminal(geometry.cols, geometry.rows, geometry.revision),
       catch: (cause) => new WasmFailure({ cause }),
     });
+    const desired = control.head.input.attributes.desired;
+    const configured = yield* Effect.gen(function* () {
+      const attributes = desired.attributes;
+      if (attributes === null) return false;
+      return yield* Effect.try({
+        try: () =>
+          guest.configure_terminal(
+            Schema.encodeSync(Schema.fromJsonString(TerminalAttributes))(attributes),
+            desired.revision,
+          ),
+        catch: (cause) => new WasmFailure({ cause }),
+      });
+    });
+    if (
+      !settled &&
+      control.head.input.attributes.requested === control.head.input.attributes.observed
+    )
+      return { advanced: resized || configured, acknowledged: true };
+    const text = yield* Effect.try({
+      try: () => {
+        if (settled) return guest.close_terminal();
+        return guest.terminal_attributes();
+      },
+      catch: (cause) => new WasmFailure({ cause }),
+    });
+    const snapshot = yield* Schema.decodeUnknownEffect(
+      Schema.fromJsonString(TerminalAttributeState),
+    )(text);
+    const acknowledged = yield* observeTerminal(
+      env,
+      capability.sandboxId,
+      inputId,
+      control.head,
+      snapshot,
+      settled,
+    );
+    return { advanced: resized || configured || acknowledged, acknowledged };
+  });
+  if (inputId !== null && stdinMode === "pty") {
+    const control = yield* readInput(env, capability.sandboxId, inputId, guest.input_offset(), 0);
+    yield* applyTerminal(control, false);
   }
   const kernel = initial.kernel;
   const checkpoint = yield* kernelCall(() => kernel.manifest());
@@ -392,40 +441,40 @@ export const wasi = Effect.fn("wasi.execute")(function* (
           const received = yield* readInput(env, capability.sandboxId, inputId, offset, capacity);
           const advanced = yield* semaphore.withPermits(1)(
             Effect.gen(function* () {
-              const resized = yield* Effect.gen(function* () {
-                if (stdinMode !== "pty") return false;
-                if (received.terminal === null)
-                  return yield* new StorageFailure({ cause: "PTY input head has no geometry" });
-                const geometry = received.terminal;
-                return yield* Effect.try({
-                  try: () => guest.update_terminal(geometry.cols, geometry.rows, geometry.revision),
-                  catch: (cause) => new WasmFailure({ cause }),
-                });
-              });
+              const terminal = yield* applyTerminal(received, false);
               const closed = guest.stdin_closed();
-              if (hasReader && !closed && (received.data.length > 0 || received.closed)) {
+              if (
+                hasReader &&
+                !closed &&
+                (received.data.length > 0 || received.head.input.closed)
+              ) {
                 yield* Effect.try({
                   try: () =>
                     guest.feed_stdin(
                       received.data,
-                      received.closed && offset + received.data.length === received.total,
+                      received.head.input.closed &&
+                        offset + received.data.length === received.head.input.size,
                     ),
                   catch: (cause) => new WasmFailure({ cause }),
                 });
                 if (stdinMode === "pty") yield* captureStdio(guest, false);
               }
-              return resized || guest.input_offset() > offset || (!closed && guest.stdin_closed());
+              return (
+                terminal.advanced ||
+                guest.input_offset() > offset ||
+                (!closed && guest.stdin_closed())
+              );
             }),
           );
-          if (!hasReader && !received.closed)
+          if (!hasReader && !received.head.input.closed)
             yield* finishInput(env, capability.sandboxId, inputId);
           if (advanced) {
             yield* notify();
             polling.sleep = yield* pause;
           }
           if (
-            received.closed &&
-            guest.input_offset() === received.total &&
+            received.head.input.closed &&
+            guest.input_offset() === received.head.input.size &&
             guest.stdin_closed() &&
             stdinMode !== "pty"
           )
@@ -1442,6 +1491,28 @@ export const wasi = Effect.fn("wasi.execute")(function* (
     const fiber = yield* Scope.provide(family)(Effect.forkScoped(work));
     children.set(pid, fiber);
   });
+  const finishTerminal = Effect.fn("wasi.finishTerminal")(function* () {
+    if (inputId === null || stdinMode !== "pty" || parking.active) return;
+    yield* semaphore.withPermits(1)(
+      Effect.gen(function* () {
+        for (const attempt of [0, 1, 2]) {
+          const control = yield* readInput(
+            env,
+            capability.sandboxId,
+            inputId,
+            guest.input_offset(),
+            0,
+          );
+          const completed = yield* applyTerminal(control, true);
+          if (completed.acknowledged) return;
+          if (attempt === 2)
+            return yield* new StorageFailure({
+              cause: "Terminal settlement conflicted with concurrent controls",
+            });
+        }
+      }),
+    );
+  });
   for (const item of native.handles.filter((item) => item.pid !== 1)) {
     const scope = yield* Scope.provide(family)(
       Effect.acquireRelease(Scope.make(), (scope) => Scope.close(scope, Exit.void)),
@@ -1473,12 +1544,18 @@ export const wasi = Effect.fn("wasi.execute")(function* (
       catch: (cause) => new WasmFailure({ cause }),
     }).pipe(Effect.flatMap(Schema.decodeUnknownEffect(Schema.fromJsonString(WasmStep))));
     if (terminal.kind !== "done") return yield* new WasmFailure({ cause: "Missing parent exit" });
+    yield* finishTerminal();
     return terminal.output;
   }).pipe(
     Effect.onError(() =>
       Effect.gen(function* () {
         yield* Scope.close(family, Exit.void);
-        yield* kernelCall(() => kernel.restore_manifest(state.checkpoint)).pipe(Effect.orDie);
+        yield* finishTerminal().pipe(
+          Effect.ensuring(
+            kernelCall(() => kernel.restore_manifest(state.checkpoint)).pipe(Effect.orDie),
+          ),
+          Effect.orDie,
+        );
       }),
     ),
   );

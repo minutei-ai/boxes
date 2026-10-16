@@ -109,7 +109,31 @@ The runtime source after 0.14.0 also exposes native guest attribute imports. The
 
 Bytes 0–3 hold a little-endian flag word: ICRNL=1, OPOST=2, ONLCR=4, ICANON=8, ECHO=16 and ISIG=32. Bytes 4–10 hold VINTR, VQUIT, VSUSP, VEOF, VERASE, VKILL and VWERASE, initially `03 1c 1a 04 7f 15 17`. Byte 11 is reserved and must be zero. Read, modify and write the record to retain fields outside a guest's intended change. The ABI uses the six flags and seven control bytes of the inspected AgentOS terminal contract; callers supply this packed record rather than a host libc struct. Other flag bits and nonzero reserved data return EINVAL (`28`). Invalid/closed descriptors return `8`, non-terminals `59`, invalid pointers `21` and exhausted mutation counters EIO (`29`). Failed setters preserve attributes.
 
-Input translation, output translation, canonical reads, echo and signal generation are independent. Canonical editing uses configured EOF/erase/kill/word-erase bytes and also accepts backspace `08`. Echo uses caret notation for control bytes; erase removes their displayed width. Line edits wait for enough room for their entire echo. OPOST and ONLCR together translate output LF while retaining an existing CR before LF within a write. Raw mode disables all six flags and preserves the control bytes; an owned disable or process exit restores the complete inherited record. A later `tcsetattr` supersedes older recovery tokens. Descriptor aliases, spawn, exec and same-build cooperative heap recovery share the existing native ownership rules. Public attribute controls, controlling-terminal acquisition, background-access signals and the remaining POSIX terminal features stay open.
+Input translation, output translation, canonical reads, echo and signal generation are independent. Canonical editing uses configured EOF/erase/kill/word-erase bytes and also accepts backspace `08`. Echo uses caret notation for control bytes; erase removes their displayed width. Line edits wait for enough room for their entire echo. OPOST and ONLCR together translate output LF while retaining an existing CR before LF within a write. Raw mode disables all six flags and preserves the control bytes; an owned disable or process exit restores the complete inherited record. A later `tcsetattr` supersedes older recovery tokens. Descriptor aliases, spawn, exec and same-build cooperative heap recovery share the existing native ownership rules. Controlling-terminal acquisition, background-access signals and the remaining POSIX terminal features stay open.
+
+The source after 0.14.0 exposes attribute controls through the same Effect SDK, service binding and scoped guest tools:
+
+```ts
+const state =
+  yield *
+  boxes.action(sandboxId, {
+    op: "process.terminal.attributes",
+    id: processId,
+    timeoutMs: 2000,
+  });
+const retained =
+  yield *
+  boxes.action(sandboxId, {
+    op: "process.terminal.configure",
+    id: processId,
+    revision: state.desired.revision,
+    attributes: { ...state.observed.attributes, echo: false },
+  });
+```
+
+`attributes` requires `read` and a timeout from 0 through 25,000 milliseconds. It requests a fresh native observation and returns `{ desired, observed, settled }`. The six lowercase flags are booleans; `cc` contains exactly seven integer bytes in VINTR/VQUIT/VSUSP/VEOF/VERASE/VKILL/VWERASE order. Before an explicit configuration, desired attributes are null at revision zero; native Rust owns defaults. Observed revision identifies the last applied API configuration, while observed attributes can include later guest changes. Concurrent readers share a pending observation. A queued or parked process can return 408 until execution acknowledges it; no cached snapshot is presented as a fresh read. Capability expiry returns 401 even during polling.
+
+`configure` requires `execute`, the complete attribute record and the expected desired revision. It returns the new retained desired state. Application is cooperative; read attributes to confirm what the native terminal observed. Every accepted call increments the revision, including identical values, allowing an explicit configuration to supersede later guest changes. Reapplying the same retained revision during recovery preserves those guest changes. A new revision supersedes older raw-mode restore points. Configuration remains available after stdin EOF and while parked; confirmed CAS conflicts return 409 without retrying an uncertain mutation. Geometry, input chunks, EOF and attribute controls share one R2 head. Process settlement seals a final native snapshot; repeated settled reads do not write. Historical or cancelled-before-entry jobs without a native snapshot return 409. Non-PTY processes return 400. These source APIs require matching rebuilt SDK/runtime artifacts and the unconditional input-terminal-v3 migration; 0.14.0 archives do not provide them.
 
 The 0.13.0 API also exposes terminal control through the Effect SDK, native service bindings and scoped guest tools:
 
@@ -130,7 +154,7 @@ yield *
   });
 ```
 
-Status requires `read`; resize requires `execute`. Dimensions must be integers from 1 through 65,535. A successful resize acknowledges retained state; the running guest observes it cooperatively through its existing input watcher, including after stdin EOF. A changed size advances the revision and queues SIGWINCH to the native foreground group, initially the root process group. Same-size requests with the current revision do not write or signal. On 409, inspect status before deciding to retry; input close/write and resize share one conditional R2 publication. Resize after process settlement returns 409. Changes made before entry or while parked are installed before execution resumes. Rapid updates may coalesce to their latest size; a revision change still signals when the final size equals the old one. Foreground-group setters and complete job control remain open. These APIs require the 0.13.0 runtime and its unconditional input-head cutover; publication, deployment and native production proof are separate gates.
+Status requires `read`; resize requires `execute`. Dimensions must be integers from 1 through 65,535. A successful resize acknowledges retained state; the running guest observes it cooperatively through its existing input watcher, including after stdin EOF. A changed size advances the revision and queues SIGWINCH to the native foreground group, initially the root process group. Same-size requests with the current revision do not write or signal. On 409, inspect status before deciding to retry; input close/write and resize share one conditional R2 publication. Resize after process settlement returns 409. Changes made before entry or while parked are installed before execution resumes. Rapid updates may coalesce to their latest size; a revision change still signals when the final size equals the old one. Controlling-terminal ownership and background-access signals remain open. These APIs require the 0.13.0 runtime and its unconditional input-head cutover; publication, deployment and native production proof are separate gates.
 
 Installing the pinned `jq` package alongside `sh` supports `echo '{"value":42}' | jq .value`, `answer=$(jq -n '21*2')`, heredocs and file redirections. The native tests execute these published programs with an 8 MiB guest linear-memory budget; this does not measure total Worker memory. The current published Brush artifact omits the spawn action for `sh -c 'printf err >&2' 2>&1`, leaving stderr separate. Redirecting both streams into a regular file is covered. Sequential child commands, including three jq invocations and a child file write followed by jq reading that file, execute within one process run. Native Effect scheduling yields between guest turns while children remain active. Each WASI process family shares the existing 256 host-request ceiling; sufficiently long compound scripts fail explicitly at that limit. Full shell conformance remains open.
 

@@ -38,12 +38,14 @@ import {
   InputReceipt,
   InputMigrationInput,
   InputMigrationReceipt,
+  TerminalAttributeState,
+  TerminalAttributeStatus,
   TerminalGeometry,
   Status,
   Success,
   TokenResponse,
 } from "./contracts";
-import { input, terminal } from "./input";
+import { input, terminal, terminalAttributes, configureTerminalAttributes } from "./input";
 import { reclaim } from "./reclamation";
 import { HostFailure } from "./host";
 import { AgentProtocol, type HostCallback } from "./rpc-protocol";
@@ -125,7 +127,7 @@ const route = Effect.fn("api.route")(function* (request: Request, env: Env) {
       headers: { "content-type": "application/json", "cache-control": "no-store" },
     });
   }
-  if (url.pathname === "/v1/migrations/input-geometry-v2") {
+  if (url.pathname === "/v1/migrations/input-terminal-v3") {
     yield* administrator(env, token);
     const bytes = yield* readBounded(request.body, 4096);
     const input = yield* Schema.decodeUnknownEffect(Schema.fromJsonString(InputMigrationInput), {
@@ -318,6 +320,20 @@ const route = Effect.fn("api.route")(function* (request: Request, env: Env) {
     Match.whenOr({ op: "process.terminal.status" }, { op: "process.terminal.resize" }, (action) =>
       terminal(env, capability, action).pipe(
         Effect.map((value) => Schema.encodeSync(Schema.fromJsonString(TerminalGeometry))(value)),
+      ),
+    ),
+    Match.when({ op: "process.terminal.attributes" }, (action) =>
+      terminalAttributes(env, capability, action).pipe(
+        Effect.map((value) =>
+          Schema.encodeSync(Schema.fromJsonString(TerminalAttributeStatus))(value),
+        ),
+      ),
+    ),
+    Match.when({ op: "process.terminal.configure" }, (action) =>
+      configureTerminalAttributes(env, capability, action).pipe(
+        Effect.map((value) =>
+          Schema.encodeSync(Schema.fromJsonString(TerminalAttributeState))(value),
+        ),
       ),
     ),
     Match.when({ op: "process.recovery.status" }, (action) =>

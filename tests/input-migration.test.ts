@@ -7,12 +7,16 @@ import { make } from "../src/sdk";
 import { runtime } from "../tooling/worker-test";
 
 const PreviousInput = InputHead.mapFields((fields) => ({
-  ...Struct.omit(fields, ["terminal", "version"]),
+  ...Struct.omit(fields, ["terminal", "attributes", "version"]),
   version: Schema.Literal(1),
+}));
+const GeometryInput = InputHead.mapFields((fields) => ({
+  ...Struct.omit(fields, ["attributes", "version"]),
+  version: Schema.Literal(2),
 }));
 
 test(
-  "input geometry cutover is bounded, restartable and preserves stdin and already resized terminals",
+  "input terminal cutover converts both historical versions and preserves resized and configured state",
   () =>
     Effect.runPromise(
       Effect.scoped(
@@ -57,6 +61,13 @@ test(
               },
             });
           const objects = yield* Effect.promise(() => worker.objects);
+          yield* client.action("cutover", {
+            op: "process.terminal.resize",
+            id: "pty",
+            cols: 120,
+            rows: 40,
+            revision: 0,
+          });
           const before = [];
           for (const id of ["pty", "pipe"]) {
             const key = `process-input/cutover/${id}.json`;
@@ -66,11 +77,23 @@ test(
               yield* Effect.promise(() => object.text()),
             );
             before.push({ id, head });
+            if (id === "pty") {
+              yield* Effect.promise(() =>
+                objects.put(
+                  key,
+                  Schema.encodeSync(Schema.fromJsonString(GeometryInput))({
+                    ...Struct.omit(head, ["attributes", "version"]),
+                    version: 2,
+                  }),
+                ),
+              );
+              continue;
+            }
             yield* Effect.promise(() =>
               objects.put(
                 key,
                 Schema.encodeSync(Schema.fromJsonString(PreviousInput))({
-                  ...Struct.omit(head, ["terminal", "version"]),
+                  ...Struct.omit(head, ["terminal", "attributes", "version"]),
                   version: 1,
                 }),
               ),
@@ -96,7 +119,7 @@ test(
               ),
             { concurrency: 8 },
           );
-          const endpoint = new URL("/v1/migrations/input-geometry-v2", url);
+          const endpoint = new URL("/v1/migrations/input-terminal-v3", url);
           const forbidden = yield* Effect.tryPromise(() =>
             fetch(endpoint, {
               method: "POST",
@@ -155,9 +178,29 @@ test(
             id: "pty",
             cols: 132,
             rows: 45,
-            revision: 0,
+            revision: 1,
           });
-          const resized = yield* Effect.promise(() =>
+          const configured = yield* client.action("cutover", {
+            op: "process.terminal.configure",
+            id: "pty",
+            revision: 0,
+            attributes: {
+              icrnl: false,
+              opost: false,
+              onlcr: false,
+              icanon: false,
+              echo: false,
+              isig: false,
+              cc: [1, 2, 3, 4, 5, 6, 7],
+            },
+          });
+          expect(configured.revision).toBe(1);
+          expect(
+            yield* client
+              .action("cutover", { op: "process.terminal.attributes", id: "pty", timeoutMs: 0 })
+              .pipe(Effect.flip),
+          ).toMatchObject({ status: 408 });
+          const configuredHead = yield* Effect.promise(() =>
             objects.head("process-input/cutover/pty.json"),
           );
           const repeated = yield* migrate(null);
@@ -165,10 +208,10 @@ test(
           if (repeated.cursor !== null) expect((yield* migrate(repeated.cursor)).migrated).toBe(0);
           expect(
             (yield* Effect.promise(() => objects.head("process-input/cutover/pty.json")))?.etag,
-          ).toBe(resized?.etag);
+          ).toBe(configuredHead?.etag);
           expect(
             yield* client.action("cutover", { op: "process.terminal.status", id: "pty" }),
-          ).toEqual({ cols: 132, rows: 45, revision: 1 });
+          ).toEqual({ cols: 132, rows: 45, revision: 2 });
           expect(
             yield* client
               .action("cutover", { op: "process.terminal.status", id: "pipe" })

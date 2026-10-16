@@ -5104,6 +5104,48 @@ impl WasmGuest {
             .map(|pipe| PIPE_BYTES - pipe.bytes.borrow().len())
             .unwrap_or(0)
     }
+
+    pub fn configure_terminal(&mut self, attributes: &str, revision: u32) -> Result<bool, JsValue> {
+        let attributes: pty::Termios = serde_json::from_str(attributes)
+            .map_err(|error| JsValue::from_str(&error.to_string()))?;
+        let state = self.store.data_mut();
+        let attachment = state
+            .terminal
+            .clone()
+            .ok_or_else(|| JsValue::from_str("No attached terminal"))?;
+        let terminal = &attachment.terminal;
+        if revision < terminal.attributes_revision.get() {
+            return Err(JsValue::from_str("Terminal attribute revision mismatch"));
+        }
+        if revision == terminal.attributes_revision.get() {
+            return Ok(false);
+        }
+        terminal.set_attributes(attributes).map_err(|errno| {
+            JsValue::from_str(&format!("Terminal attributes failed with errno {errno}"))
+        })?;
+        terminal.attributes_revision.set(revision);
+        state.readiness_notification = true;
+        Ok(true)
+    }
+
+    pub fn terminal_attributes(&self) -> Result<String, JsValue> {
+        let attachment = self
+            .store
+            .data()
+            .terminal
+            .as_ref()
+            .ok_or_else(|| JsValue::from_str("No attached terminal"))?;
+        serde_json::to_string(&serde_json::json!({
+            "attributes": attachment.terminal.termios.get(),
+            "revision": attachment.terminal.attributes_revision.get(),
+        }))
+        .map_err(|error| JsValue::from_str(&error.to_string()))
+    }
+
+    pub fn close_terminal(&self) -> Result<String, JsValue> {
+        self.release_raw_leases();
+        self.terminal_attributes()
+    }
     pub fn stdin_has_reader(&self) -> bool {
         self.store
             .data()
@@ -5828,6 +5870,65 @@ impl WasmGuest {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn terminal_configuration_revisions_preserve_later_guest_changes_until_reconfigured() {
+        let module = [
+            0, 97, 115, 109, 1, 0, 0, 0, 1, 5, 1, 96, 0, 1, 127, 3, 2, 1, 0, 7, 7, 1, 3, 114, 117,
+            110, 0, 0, 10, 6, 1, 4, 0, 65, 0, 11,
+        ];
+        let mut guest = WasmGuest::create(
+            &module,
+            r#"{"argv":[],"env":{}}"#,
+            GuestInitialization::Fresh(&[]),
+            8_388_608,
+            100_000,
+            1024,
+            None,
+        )
+        .unwrap();
+        guest.enable_terminal().unwrap();
+        let desired = pty::Termios {
+            icanon: false,
+            ..pty::Termios::default()
+        };
+        let text = serde_json::to_string(&desired).unwrap();
+        assert!(guest.configure_terminal(&text, 1).unwrap());
+        let tty = guest
+            .store
+            .data()
+            .terminal
+            .as_ref()
+            .unwrap()
+            .terminal
+            .clone();
+        let changed = pty::Termios {
+            echo: false,
+            ..desired
+        };
+        tty.set_attributes(changed).unwrap();
+        assert!(!guest.configure_terminal(&text, 1).unwrap());
+        assert_eq!(tty.termios.get(), changed);
+        assert!(guest.configure_terminal(&text, 2).unwrap());
+        assert_eq!(tty.termios.get(), desired);
+        let token = tty.set_raw(Some(1), true).unwrap().unwrap();
+        guest
+            .store
+            .data()
+            .raw_leases
+            .borrow_mut()
+            .push((tty.clone(), token));
+        let observed: serde_json::Value =
+            serde_json::from_str(&guest.terminal_attributes().unwrap()).unwrap();
+        assert_eq!(observed["revision"], 2);
+        assert_eq!(observed["attributes"]["echo"], false);
+        assert_eq!(guest.store.data().raw_leases.borrow().len(), 1);
+        let closed: serde_json::Value =
+            serde_json::from_str(&guest.close_terminal().unwrap()).unwrap();
+        assert_eq!(closed["revision"], 2);
+        assert_eq!(closed["attributes"], serde_json::to_value(desired).unwrap());
+        assert!(guest.store.data().raw_leases.borrow().is_empty());
+    }
+
     #[test]
     fn root_raw_ownership_releases_before_guest_drop_and_on_abandonment() {
         let module = [

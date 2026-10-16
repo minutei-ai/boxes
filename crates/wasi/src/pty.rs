@@ -1,4 +1,5 @@
 use super::{PIPE_BYTES, Pipe};
+use serde::{Deserialize, Serialize};
 use std::cell::{Cell, RefCell};
 use std::collections::VecDeque;
 use std::rc::Rc;
@@ -6,7 +7,8 @@ use std::rc::Rc;
 const LINE_BYTES: usize = 4096;
 const MAX_LINES: usize = 4096;
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
 pub(super) struct Termios {
     pub icrnl: bool,
     pub opost: bool,
@@ -98,6 +100,7 @@ pub(super) struct Terminal {
     pub cols: Cell<u16>,
     pub rows: Cell<u16>,
     pub revision: Cell<u32>,
+    pub attributes_revision: Cell<u32>,
     pub foreground: Cell<u32>,
     pub signals: Cell<u64>,
     line: RefCell<Vec<u8>>,
@@ -128,6 +131,7 @@ impl Terminal {
             cols: Cell::new(80),
             rows: Cell::new(24),
             revision: Cell::new(0),
+            attributes_revision: Cell::new(0),
             foreground: Cell::new(0),
             signals: Cell::new(0),
             line: RefCell::new(Vec::new()),

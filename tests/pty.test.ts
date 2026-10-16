@@ -112,6 +112,7 @@ test("queued PTY waits without fake EOF and cancellation retains acknowledged ou
         const client = yield* make({ url, token: Redacted.make(grant.token) });
         yield* client.action("pty-wait", {
           op: "process.spawn",
+          stdinMode: "pty",
           execution: {
             op: "process.run",
             id: "waiting",
@@ -154,6 +155,17 @@ test("queued PTY waits without fake EOF and cancellation retains acknowledged ou
         const record = yield* client.action("pty-wait", { op: "process.get", id: "waiting" });
         expect(record.status).toBe("cancelled");
         expect(record.output?.stdout).toBe("waiting for terminal");
+        expect(
+          yield* client.action("pty-wait", {
+            op: "process.terminal.attributes",
+            id: "waiting",
+            timeoutMs: 0,
+          }),
+        ).toMatchObject({
+          desired: { attributes: null, revision: 0 },
+          observed: { revision: 0, attributes: { icanon: true, echo: true, isig: true } },
+          settled: true,
+        });
       }),
     ).pipe(
       Effect.provide(FetchHttpClient.layer),

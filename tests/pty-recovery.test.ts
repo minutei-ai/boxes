@@ -2,7 +2,13 @@ import { expect, test } from "bun:test";
 import { mkdtemp, rm } from "node:fs/promises";
 import { Clock, Effect, Match, Redacted, Schema } from "effect";
 import { FetchHttpClient } from "effect/http";
-import { ExecutionCheckpoint, HeapSnapshot, ProcessDelivery, StoredRun } from "../src/contracts";
+import {
+  ExecutionCheckpoint,
+  HeapSnapshot,
+  ProcessDelivery,
+  StoredRun,
+  TerminalAttributes,
+} from "../src/contracts";
 import { make } from "../src/sdk";
 import { runtime } from "../tooling/worker-test";
 
@@ -11,6 +17,8 @@ for (const mode of [
   "raw",
   "raw-owner",
   "termios",
+  "attributes",
+  "attributes-updated",
   "family",
   "cancelled",
   "geometry",
@@ -52,7 +60,7 @@ for (const mode of [
                 expiresInSeconds: 3600,
               });
               const client = yield* make({ url, token: Redacted.make(grant.token) });
-              if (mode === "termios") {
+              if (mode === "termios" || mode === "attributes" || mode === "attributes-updated") {
                 yield* client.action("active", {
                   op: "filesystem.writeFile",
                   path: "/tmp/termios-child.wasm",
@@ -127,6 +135,8 @@ for (const mode of [
                 Match.when("family", () => "wasi-recovery-family.wasm"),
                 Match.when("raw-owner", () => "wasi-tty-raw-owner-recovery.wasm"),
                 Match.when("termios", () => "wasi-termios-recovery.wasm"),
+                Match.when("attributes", () => "wasi-termios-recovery.wasm"),
+                Match.when("attributes-updated", () => "wasi-termios-api-recovery.wasm"),
                 Match.when("geometry", () => "wasi-pty-resize-recovery.wasm"),
                 Match.when("geometry-restart", () => "wasi-pty-resize-restart.wasm"),
                 Match.when("signals", () => "wasi-tty-signals-recovery.wasm"),
@@ -152,6 +162,22 @@ for (const mode of [
                   stdin: { content: initial, encoding: "utf8" },
                 },
               });
+              const configuredAttributes = Schema.decodeUnknownSync(TerminalAttributes)({
+                icrnl: false,
+                opost: false,
+                onlcr: false,
+                icanon: false,
+                echo: false,
+                isig: false,
+                cc: Array.from(Buffer.from("!?~@#%&")),
+              });
+              if (mode === "attributes")
+                yield* client.action("active", {
+                  op: "process.terminal.configure",
+                  id: "job",
+                  revision: 0,
+                  attributes: configuredAttributes,
+                });
               const objects = yield* Effect.promise(() => worker.objects);
               const key = "processes/active/job.json";
               const original = yield* Effect.promise(() => objects.head(key));
@@ -194,6 +220,8 @@ for (const mode of [
                 Match.when("family", () => [1, 2]),
                 Match.when("raw-owner", () => [1, 2]),
                 Match.when("termios", () => [1, 2]),
+                Match.when("attributes", () => [1, 2]),
+                Match.when("attributes-updated", () => [1, 2]),
                 Match.when("foreground", () => [1, 2]),
                 Match.orElse(() => [1]),
               );
@@ -206,7 +234,25 @@ for (const mode of [
               if (mode === "cooked") expect(prefix).toBe("hel");
               if (mode === "raw") expect(prefix.endsWith("buffered\n")).toBe(true);
               if (mode === "raw-owner") expect(["raw-ready\n", "helraw-ready\n"]).toContain(prefix);
-              if (mode === "termios") expect(["raw-ready\n", "helraw-ready\n"]).toContain(prefix);
+              if (mode === "termios" || mode === "attributes" || mode === "attributes-updated")
+                expect(["raw-ready\n", "helraw-ready\n"]).toContain(prefix);
+              if (mode === "attributes-updated")
+                yield* client.action("active", {
+                  op: "process.terminal.configure",
+                  id: "job",
+                  revision: 0,
+                  attributes: configuredAttributes,
+                });
+              if (mode === "attributes" || mode === "attributes-updated")
+                expect(
+                  yield* client
+                    .action("active", {
+                      op: "process.terminal.attributes",
+                      id: "job",
+                      timeoutMs: 0,
+                    })
+                    .pipe(Effect.flip),
+                ).toMatchObject({ status: 408 });
               if (mode === "family") {
                 expect(prefix).toContain("hel");
                 expect(prefix.split("ready\r\n").length).toBe(2);
@@ -350,6 +396,39 @@ for (const mode of [
             expect(record.status).toBe("exited");
             expect(record.output?.exitCode).toBe(0);
           }
+          if (mode === "attributes" || mode === "attributes-updated") {
+            const attributes = yield* client.action("active", {
+              op: "process.terminal.attributes",
+              id: "job",
+              timeoutMs: 0,
+            });
+            expect(attributes).toMatchObject({
+              desired: {
+                revision: 1,
+                attributes: {
+                  icrnl: false,
+                  opost: false,
+                  onlcr: false,
+                  icanon: false,
+                  echo: false,
+                  isig: false,
+                },
+              },
+              observed: {
+                revision: 1,
+                attributes: {
+                  icrnl: true,
+                  opost: true,
+                  onlcr: true,
+                  icanon: true,
+                  echo: false,
+                  isig: true,
+                },
+              },
+              settled: true,
+            });
+            expect(attributes.observed.attributes.cc).toEqual([33, 63, 126, 64, 35, 37, 38]);
+          }
           expect(record.output?.stderr).toBe("");
           const output = yield* client.action("active", {
             op: "process.output.read",
@@ -371,6 +450,8 @@ for (const mode of [
             Match.when("foreground", () => Buffer.from("reclaimed\r\ndone\r\n")),
             Match.when("raw-owner", () => Buffer.from("restored\r\n")),
             Match.when("termios", () => Buffer.from("attrs-restored\ntranslated\r\n")),
+            Match.when("attributes", () => Buffer.from("attrs-restored\ntranslated\r\n")),
+            Match.when("attributes-updated", () => Buffer.from("attrs-restored\ntranslated\r\n")),
             Match.when("cooked", () => Buffer.from("lo\r\nread:hello\r\neof\r\n")),
             Match.when("delayed", () => Buffer.from("lo\r\nread:hello\r\neof\r\n")),
             Match.when("family", () => Buffer.from("lo\r\nhello\r\n\r\nbytes=6\r\n")),

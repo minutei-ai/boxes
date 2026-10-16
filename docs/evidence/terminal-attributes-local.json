@@ -1,0 +1,401 @@
+{
+  "status": "Locally verified source after 0.14.0; no matching archive publication, production deployment or Minutei update for these APIs. Full AgentOS parity remains open.",
+  "baseCommit": "92fdf6d2f645b32dc31494bf1125465708a9ac8f",
+  "contracts": {
+    "configure": "process.terminal.configure requires execute, a complete six-flag/seven-byte record and expected desired revision. CAS publishes the new desired state; every accepted call advances revision, including identical attributes.",
+    "observe": "process.terminal.attributes requires read and timeoutMs 0..25000. The native feeder observes through one pending R2 epoch shared by concurrent readers. Queued/parked processes time out without an invented native snapshot.",
+    "state": "One version-3 input head retains desired state, observation epochs and optional final snapshot alongside existing bytes, EOF and geometry. Rust owns current attributes and applied revision.",
+    "recovery": "Same retained revision preserves later guest tcsetattr changes and child restore frames after same-build heap restoration. A new desired revision supersedes older raw restoration.",
+    "settlement": "Actual native completion and active cancellation retain final attributes after raw-owner cleanup. Repeated settled reads do not write; configure rejects settlement. Cancelled-before-entry or historical jobs without native snapshots cannot return fabricated attributes.",
+    "migration": "Alchemy unconditionally runs input-terminal-v3. Both historical versions convert under ETags, retaining bytes, EOF and version-2 geometry. Current heads skip writes."
+  },
+  "verification": {
+    "fullCheck": {
+      "command": "bun run check",
+      "result": "passed",
+      "tests": 398,
+      "files": 79,
+      "assertions": 5388,
+      "seconds": 212.7,
+      "includes": [
+        "runtime and SDK builds",
+        "TypeScript",
+        "workspace Clippy with warnings denied",
+        "workspace Cargo tests including 23 cirro-wasi tests",
+        "native Alchemy workerd/R2/Queue tests"
+      ]
+    },
+    "format": {
+      "command": "bun run format:check",
+      "result": "passed"
+    },
+    "targeted": {
+      "command": "bun test tests/terminal-attributes.test.ts tests/pty-recovery.test.ts",
+      "tests": 15,
+      "assertions": 326,
+      "seconds": 36.65,
+      "failures": 0
+    },
+    "activeCancellation": {
+      "command": "bun test tests/pty.test.ts",
+      "tests": 2,
+      "assertions": 14,
+      "seconds": 3.83,
+      "failures": 0
+    },
+    "coverage": [
+      "Default native attributes; configure acknowledgement and native observation; guest mutation without desired revision change; explicit identical configuration overrides guest change",
+      "Custom control bytes and all independent flags through native binding; configuration after EOF and final output translation",
+      "Eight simultaneous queued readers share exactly one requested epoch with no observed snapshot",
+      "Concurrent same-revision writes yield exactly one success; stale revision rejected; stdin bytes, EOF and geometry retained",
+      "Read-only and execute-only permissions, cross-sandbox denial, non-PTY denial, invalid negative/oversized/short control-byte tuples with unchanged ETag, expiry during observation",
+      "TypeScript guest tools configure another process using scoped authority",
+      "Before-entry desired configuration, same-build active recovery preserving guest mutation and child raw restoration, newer parked configuration superseding the restore point, retained desired versus final observed mismatch",
+      "Active cancellation retains final attributes; before-entry cancellation fails observation; final replay preserves head ETag",
+      "Both input schema migrations, paged retry, resized geometry and later configuration/observation state preserved on migration replay"
+    ]
+  },
+  "artifacts": {
+    "cirro_compiler_bg.wasm": {
+      "bytes": 1943596,
+      "sha256": "27d9b0022a634ed4eef47b6561ad38cafde3522c17e834afed1264440678bf2f"
+    },
+    "cirro_guest_bg.wasm": {
+      "bytes": 1129863,
+      "sha256": "b773b74626b08bd1083860081ccd2a3d0fdff80dcd97b5ec13ed7c6e2148ef22"
+    },
+    "cirro_kernel_bg.wasm": {
+      "bytes": 1139581,
+      "sha256": "1d3d1811805905af3c00e8afedd696c22d585db7538877306c28e7b099725e92"
+    },
+    "cirro_python_bg.wasm": {
+      "bytes": 10719083,
+      "sha256": "8aa6aec5ab6fb0623637e2b6dda7318f4934e4736f4a97e45ca3312bf32e529c"
+    },
+    "cirro_wasi_bg.wasm": {
+      "bytes": 1694774,
+      "sha256": "f313c56d827cc0238dd21a4583e43c745756de0340e1a0994c349b53f66b4f25"
+    },
+    "index.js": {
+      "bytes": 377728,
+      "sha256": "0d0eeef9d4aee187eec6cdc591843519dc2c64b06ccd8a620f3de494a50df71b"
+    }
+  },
+  "performance": {
+    "generalBenchmark": {
+      "measuredAt": "2026-10-16T10:13:45.924Z",
+      "environment": {
+        "runtime": "local workerd via native Alchemy",
+        "alchemy": "2.0.0-beta.83",
+        "production": false,
+        "platform": "linux",
+        "arch": "x64"
+      },
+      "artifactBytes": {
+        "javascript": 377728,
+        "kernelWasm": 1139581,
+        "wasiWasm": 1694774,
+        "pythonWasm": 10719083,
+        "guestWasm": 1129863,
+        "compilerWasm": 1943596
+      },
+      "measurements": {
+        "fullEightMiB": {
+          "count": 25,
+          "p50Ms": 88.37941300000239,
+          "p95Ms": 100.951728,
+          "minMs": 81.85075700000016,
+          "maxMs": 156.08625400000165
+        },
+        "appendToEightMiB": {
+          "count": 25,
+          "p50Ms": 20.35145399999965,
+          "p95Ms": 23.40255099999922,
+          "minMs": 19.62195200000133,
+          "maxMs": 30.971718000000692
+        },
+        "resizeEightMiBTail": {
+          "count": 25,
+          "p50Ms": 11.836276999998518,
+          "p95Ms": 15.572093999999197,
+          "minMs": 9.98661699999866,
+          "maxMs": 18.698520000001736
+        },
+        "rangeFourKiB": {
+          "count": 25,
+          "p50Ms": 4.891654999999446,
+          "p95Ms": 5.31961500000034,
+          "minMs": 4.597147000000405,
+          "maxMs": 5.825504000000365
+        },
+        "patchFourKiB": {
+          "count": 25,
+          "p50Ms": 30.29813699999795,
+          "p95Ms": 33.51194300000134,
+          "minMs": 28.401246000001265,
+          "maxMs": 55.11745900000096
+        },
+        "python": {
+          "count": 25,
+          "p50Ms": 71.18724699999802,
+          "p95Ms": 138.04206200000044,
+          "minMs": 63.04798899999878,
+          "maxMs": 217.27238800000123
+        },
+        "sequentialEightFiles": {
+          "count": 25,
+          "p50Ms": 169.52699500000017,
+          "p95Ms": 191.05241399999977,
+          "minMs": 148.0373150000005,
+          "maxMs": 212.00821899999937
+        },
+        "batchEightFiles": {
+          "count": 25,
+          "p50Ms": 67.40004800000042,
+          "p95Ms": 93.81424399999923,
+          "minMs": 57.52855499999896,
+          "maxMs": 100.44455599999947
+        },
+        "status": {
+          "count": 100,
+          "p50Ms": 4.708682000000181,
+          "p95Ms": 8.334055999999919,
+          "minMs": 3.0555369999999584,
+          "maxMs": 10.1224279999999
+        },
+        "write256KiB": {
+          "count": 25,
+          "p50Ms": 22.187852999999905,
+          "p95Ms": 33.19091500000013,
+          "minMs": 14.65507400000024,
+          "maxMs": 53.77795900000001
+        },
+        "read256KiB": {
+          "count": 25,
+          "p50Ms": 9.71987100000024,
+          "p95Ms": 11.294366000000082,
+          "minMs": 6.626198999999815,
+          "maxMs": 12.416172000000188
+        },
+        "isolatedJavascript": {
+          "count": 25,
+          "p50Ms": 36.52293099999952,
+          "p95Ms": 49.84252200000083,
+          "minMs": 32.057403000000704,
+          "maxMs": 93.40996000000086
+        },
+        "detachedJavascript": {
+          "count": 25,
+          "p50Ms": 132.20436299999892,
+          "p95Ms": 143.8862939999999,
+          "minMs": 86.33648799999901,
+          "maxMs": 150.6392190000006
+        },
+        "wasiFileAndSync": {
+          "count": 25,
+          "p50Ms": 65.05631999999969,
+          "p95Ms": 77.07664900000054,
+          "minMs": 58.162342999999964,
+          "maxMs": 183.3616290000009
+        },
+        "shellPipeline": {
+          "count": 25,
+          "p50Ms": 37.04262299999937,
+          "p95Ms": 42.804731000000174,
+          "minMs": 35.640855999999985,
+          "maxMs": 56.89794100000108
+        }
+      },
+      "wasiPublication": {
+        "samples": 25,
+        "rootPublications": 25
+      },
+      "batchPublication": {
+        "filesPerSample": 8,
+        "samples": 25,
+        "sequentialPublications": 200,
+        "batchPublications": 25
+      },
+      "contentDeduplication": {
+        "singleFileWrites": 25,
+        "uniqueBlocks": 1,
+        "singleFileLogicalBytesWritten": 6553600,
+        "storedBlockBytes": 262144
+      }
+    },
+    "reference": "Frozen runtime built from base commit 92fdf6d2f645b32dc31494bf1125465708a9ac8f, with hashes matching tty-termios-local.json.",
+    "method": "Eight fresh-R2 ABBA/BAAB phases; ten discarded warmups and 25 retained samples per phase, with byte-for-byte workload validation.",
+    "pooledNearestRank": {
+      "reference": {
+        "samples": 100,
+        "p50Ms": 48.44525100000101,
+        "p95Ms": 63.975390999999945
+      },
+      "current": {
+        "samples": 100,
+        "p50Ms": 46.89512900000045,
+        "p95Ms": 53.67761900000005
+      }
+    },
+    "pairedReport": {
+      "measuredAt": "2026-10-16T10:14:09.433Z",
+      "environment": "local native Alchemy workerd; runtime module directories; fresh R2 per phase; sequential ABBA then BAAB",
+      "workload": "16 rounds of 64 plain canonical lines and 64 edited/control lines through native PTY master/slave descriptors; validate all 39936 input bytes and 45056 echoed bytes per request",
+      "fixtureSha256": "9c50b72655b93675346e570eb5e266b0f5c74fb773a38b2dfd5d61c6ace430a4",
+      "artifacts": [
+        {
+          "version": "reference",
+          "workerSha256": "4a8d11f3874bae67b9dd7375331b2e4b8d0e2a7068b6ba826f2435c658ebb9ad",
+          "wasiSha256": "16519c669d3b89c716fe8ba9535b64500c1bed523596aacbbf29463183674be0"
+        },
+        {
+          "version": "current",
+          "workerSha256": "0d0eeef9d4aee187eec6cdc591843519dc2c64b06ccd8a620f3de494a50df71b",
+          "wasiSha256": "f313c56d827cc0238dd21a4583e43c745756de0340e1a0994c349b53f66b4f25"
+        }
+      ],
+      "phases": [
+        {
+          "version": "reference",
+          "phase": 0,
+          "warmups": 10,
+          "samplesMs": [
+            48.886798, 53.48818000000006, 45.035135999999966, 45.47338600000012, 43.505265000000236,
+            46.67906299999959, 44.69433200000003, 48.96018099999992, 44.70422699999972,
+            43.61871000000019, 47.70331699999997, 44.03982499999984, 46.96956399999999,
+            47.79859600000009, 43.68905799999993, 43.41913199999999, 62.601346999999805,
+            44.700852999999825, 44.2991320000001, 44.32351499999959, 44.34609300000011,
+            44.20977600000015, 47.228016000000025, 50.237450999999965, 48.00142400000004
+          ],
+          "p50Ms": 45.035135999999966,
+          "p95Ms": 53.48818000000006
+        },
+        {
+          "version": "current",
+          "phase": 1,
+          "warmups": 10,
+          "samplesMs": [
+            92.31357500000013, 53.67645999999968, 50.81995300000017, 74.61619900000005,
+            50.11581800000022, 51.21380000000045, 51.196162000000186, 50.137955999999576,
+            48.798729000000094, 47.12829000000056, 44.211975000000166, 44.22008900000037,
+            49.02710600000046, 44.382172999999966, 43.17802699999993, 57.58204399999977,
+            44.64159699999982, 43.539959000000636, 43.67165399999976, 50.00435800000014,
+            44.205040000000736, 43.91369500000019, 46.45694099999946, 44.16102499999943, 49.104198
+          ],
+          "p50Ms": 48.798729000000094,
+          "p95Ms": 74.61619900000005
+        },
+        {
+          "version": "current",
+          "phase": 2,
+          "warmups": 10,
+          "samplesMs": [
+            43.53839400000015, 44.60723599999983, 44.69569599999977, 49.56606499999998,
+            44.31405799999993, 44.4335259999998, 44.69713799999954, 45.25293200000033,
+            45.090400999999474, 49.78245100000004, 47.53363899999931, 49.74410900000021,
+            51.036198000000695, 46.209727999999814, 46.047834999999395, 45.30143600000065,
+            44.909412999999404, 44.920750000001135, 47.09780900000078, 46.89512900000045,
+            59.2909180000006, 54.05433400000038, 51.724238000000696, 52.89947100000063,
+            49.458699000000706
+          ],
+          "p50Ms": 46.209727999999814,
+          "p95Ms": 54.05433400000038
+        },
+        {
+          "version": "reference",
+          "phase": 3,
+          "warmups": 10,
+          "samplesMs": [
+            45.34071800000129, 47.684306000001015, 45.394743999999264, 51.17845500000112,
+            44.64752000000044, 45.66495000000032, 44.672771999999895, 50.48369199999979,
+            51.640488999999434, 54.70963599999959, 53.519217999999455, 57.07664299999851,
+            57.95875699999851, 51.35073200000079, 46.370648000000074, 46.8890420000007,
+            46.0180530000016, 51.16404800000055, 45.040703000000576, 50.164246000000276,
+            45.959915000001274, 45.457351999999446, 50.79142900000079, 54.195998999999574,
+            50.04293899999902
+          ],
+          "p50Ms": 50.04293899999902,
+          "p95Ms": 57.07664299999851
+        },
+        {
+          "version": "current",
+          "phase": 4,
+          "warmups": 10,
+          "samplesMs": [
+            47.14574999999968, 45.31136599999991, 45.526278999999704, 51.084859999999026,
+            44.592867999999726, 45.8670089999996, 50.881124000001364, 45.01489700000093,
+            45.376438999999664, 45.06572699999924, 47.2394519999998, 43.88945199999944,
+            53.67761900000005, 45.96520599999894, 44.772571999999855, 46.285846999999194,
+            44.22359099999994, 46.35201899999993, 46.795507000000725, 44.762996999999814,
+            44.75543900000048, 45.189940000000206, 47.033056999998735, 47.80853600000046,
+            44.67807399999947
+          ],
+          "p50Ms": 45.526278999999704,
+          "p95Ms": 51.084859999999026
+        },
+        {
+          "version": "reference",
+          "phase": 5,
+          "warmups": 10,
+          "samplesMs": [
+            59.549573999998756, 44.05457599999863, 45.839734999999564, 46.073904000000766,
+            48.44525100000101, 46.63147000000026, 45.639296999999715, 49.980515999999625,
+            45.28640899999846, 52.00280400000156, 47.09705899999972, 53.60717099999965,
+            51.17652699999962, 66.78050900000017, 66.24893200000042, 62.73953000000074,
+            59.36627100000078, 162.97005999999965, 54.40059400000246, 53.215643999999884,
+            47.369000999999116, 44.72177699999884, 46.02093099999911, 50.56964700000026,
+            44.458724000000075
+          ],
+          "p50Ms": 49.980515999999625,
+          "p95Ms": 66.78050900000017
+        },
+        {
+          "version": "reference",
+          "phase": 6,
+          "warmups": 10,
+          "samplesMs": [
+            55.97855400000117, 52.62034200000198, 47.97319399999833, 57.08321500000238,
+            121.98314799999935, 48.29709300000104, 45.58264499999859, 45.90318699999989,
+            47.49476800000048, 59.905297999997856, 53.88076400000136, 58.80838500000027,
+            56.02897700000176, 63.975390999999945, 48.452626999998756, 55.33372700000109,
+            45.876391999998305, 63.73077099999864, 57.81365499999811, 52.95380799999839,
+            56.939769000000524, 58.65213399999993, 57.28356199999689, 65.27800999999818,
+            60.064824000000954
+          ],
+          "p50Ms": 56.02897700000176,
+          "p95Ms": 65.27800999999818
+        },
+        {
+          "version": "current",
+          "phase": 7,
+          "warmups": 10,
+          "samplesMs": [
+            45.2232299999996, 45.51343700000143, 45.46868499999982, 47.201194000001124,
+            45.5028229999989, 45.12831499999811, 50.05846900000324, 47.80108499999915,
+            51.74281300000075, 52.50031500000114, 51.27005700000154, 44.951765999998315,
+            52.06393300000127, 47.49307100000078, 49.94250899999679, 50.405525999998645,
+            50.28337500000271, 51.97283400000015, 49.150549000001774, 50.00093399999969,
+            51.151723999999376, 50.148614000001544, 46.72055899999759, 51.511768999997,
+            47.35458700000163
+          ],
+          "p50Ms": 49.94250899999679,
+          "p95Ms": 52.06393300000127
+        }
+      ]
+    },
+    "interpretation": "Current pooled elapsed times are lower in this local run, with overlapping and variable phase distributions. No production speedup or cost claim. This PTY ingestion workload does not benchmark public attribute-observation concurrency, memory maximums or R2 billing.",
+    "artifactDeltaBytes": {
+      "javascript": 8219,
+      "wasiWasm": 9938,
+      "otherWasm": 0
+    },
+    "maintainedBenchmark": "The preexisting performance-local.json was restored byte for byte after the general benchmark."
+  },
+  "limits": [
+    "Only the six flags and seven control bytes currently supported by the inspected terminal contract; complete POSIX termios remains open",
+    "Controlling-terminal ownership, background-access signals, terminal-specific listing and richer metadata remain open",
+    "Same-build cooperative recovery only; arbitrary crashes and cross-build heap migration remain open",
+    "No fault injection for ambiguous R2 write results in these new attribute operations; confirmed CAS conflicts are tested",
+    "No new published archive, remote CI result, production deployment or consumer update is established by this local evidence"
+  ]
+}

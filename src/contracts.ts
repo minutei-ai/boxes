@@ -244,7 +244,52 @@ export const TerminalGeometry = Schema.Struct({
   rows: Schema.Int.check(Schema.isBetween({ minimum: 1, maximum: 65535 })),
   revision: Schema.Int.check(Schema.isBetween({ minimum: 0, maximum: 4294967295 })),
 });
-export const TerminalAction = Schema.Union([
+const TerminalControlByte = Schema.Int.check(Schema.isBetween({ minimum: 0, maximum: 255 }));
+export const TerminalAttributes = Schema.Struct({
+  icrnl: Schema.Boolean,
+  opost: Schema.Boolean,
+  onlcr: Schema.Boolean,
+  icanon: Schema.Boolean,
+  echo: Schema.Boolean,
+  isig: Schema.Boolean,
+  cc: Schema.Tuple([
+    TerminalControlByte,
+    TerminalControlByte,
+    TerminalControlByte,
+    TerminalControlByte,
+    TerminalControlByte,
+    TerminalControlByte,
+    TerminalControlByte,
+  ]),
+});
+export const TerminalAttributeState = Schema.Struct({
+  attributes: TerminalAttributes,
+  revision: TerminalGeometry.fields.revision,
+});
+export const TerminalAttributeDesired = TerminalAttributeState.mapFields((fields) => ({
+  ...fields,
+  attributes: Schema.NullOr(fields.attributes),
+}));
+export const TerminalAttributeStatus = Schema.Struct({
+  desired: TerminalAttributeDesired,
+  observed: TerminalAttributeState,
+  settled: Schema.Boolean,
+});
+export const TerminalAttributeControl = Schema.Struct({
+  desired: TerminalAttributeDesired,
+  requested: TerminalGeometry.fields.revision,
+  observed: TerminalGeometry.fields.revision,
+  snapshot: Schema.NullOr(TerminalAttributeState),
+  settled: Schema.Boolean,
+});
+export const initialTerminalControl = Schema.decodeUnknownSync(TerminalAttributeControl)({
+  desired: { attributes: null, revision: 0 },
+  requested: 0,
+  observed: 0,
+  snapshot: null,
+  settled: false,
+});
+export const TerminalGeometryAction = Schema.Union([
   Schema.Struct({ op: Schema.Literal("process.terminal.status"), id: Id }),
   Schema.Struct({
     op: Schema.Literal("process.terminal.resize"),
@@ -252,9 +297,25 @@ export const TerminalAction = Schema.Union([
     ...TerminalGeometry.fields,
   }),
 ]);
+export const TerminalAttributesAction = Schema.Struct({
+  op: Schema.Literal("process.terminal.attributes"),
+  id: Id,
+  timeoutMs: Schema.Int.check(Schema.isBetween({ minimum: 0, maximum: 25000 })),
+});
+export const TerminalConfigureAction = Schema.Struct({
+  op: Schema.Literal("process.terminal.configure"),
+  id: Id,
+  ...TerminalAttributeState.fields,
+});
+export const TerminalAttributeAction = Schema.Union([
+  TerminalAttributesAction,
+  TerminalConfigureAction,
+]);
+export const TerminalAction = Schema.Union([TerminalGeometryAction, TerminalAttributeAction]);
 export const InputHead = Schema.Struct({
-  version: Schema.Literal(2),
+  version: Schema.Literal(3),
   terminal: Schema.NullOr(TerminalGeometry),
+  attributes: Schema.NullOr(TerminalAttributeControl),
   size: Schema.Int.check(Schema.isBetween({ minimum: 0, maximum: 16_777_216 })),
   closed: Schema.Boolean,
   chunks: Schema.Array(
@@ -1094,6 +1155,8 @@ export const ActionResponses = {
   "process.stdin.status": InputReceipt,
   "process.terminal.status": TerminalGeometry,
   "process.terminal.resize": TerminalGeometry,
+  "process.terminal.attributes": TerminalAttributeStatus,
+  "process.terminal.configure": TerminalAttributeState,
   "process.output.read": ProcessOutputPage,
   "process.output.readLive": LiveOutputPage,
   "process.recovery.status": RecoveryStatus,

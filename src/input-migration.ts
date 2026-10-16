@@ -1,15 +1,19 @@
-import { Effect, Schema, Struct } from "effect";
-import { Id, InputHead, StoredRun } from "./contracts";
+import { Effect, Match, Schema, Struct } from "effect";
+import { Id, InputHead, StoredRun, initialTerminalControl } from "./contracts";
 import { StorageFailure } from "./storage";
 import type { Env } from "./resources";
 
-const PreviousInput = InputHead.mapFields((fields) => ({
+const GeometryInput = InputHead.mapFields((fields) => ({
+  ...Struct.omit(fields, ["attributes", "version"]),
+  version: Schema.Literal(2),
+}));
+const PreviousInput = GeometryInput.mapFields((fields) => ({
   ...Struct.omit(fields, ["terminal", "version"]),
   version: Schema.Literal(1),
 }));
-const MigrationHead = Schema.Union([PreviousInput, InputHead]);
+const MigrationHead = Schema.Union([PreviousInput, GeometryInput, InputHead]);
 
-export const migrateInput = Effect.fn("migration.inputGeometry")(function* (
+export const migrateInput = Effect.fn("migration.inputTerminal")(function* (
   env: Env,
   cursor: string | null,
 ) {
@@ -42,7 +46,7 @@ export const migrateInput = Effect.fn("migration.inputGeometry")(function* (
             catch: (cause) => new StorageFailure({ cause }),
           }),
         );
-        if (input.version === 2) return;
+        if (input.version === 3) return;
         if (input.chunks.reduce((total, chunk) => total + chunk.size, 0) !== input.size)
           return yield* new StorageFailure({
             cause: "Input chunk sizes do not match migration head",
@@ -51,7 +55,7 @@ export const migrateInput = Effect.fn("migration.inputGeometry")(function* (
           try: () => env.OBJECTS.get(`processes/${sandboxId}/${id}.json`),
           catch: (cause) => new StorageFailure({ cause }),
         });
-        const geometry = yield* Effect.gen(function* () {
+        const record = yield* Effect.gen(function* () {
           if (process === null) return null;
           if (process.size > 8388608)
             return yield* new StorageFailure({
@@ -67,8 +71,21 @@ export const migrateInput = Effect.fn("migration.inputGeometry")(function* (
             return yield* new StorageFailure({
               cause: "Process identity does not match input migration key",
             });
-          if (record.stdinMode === "pty") return { cols: 80, rows: 24, revision: 0 };
-          return null;
+          return record;
+        });
+        const metadata = yield* Effect.sync(() => {
+          const geometry = Match.value(input).pipe(
+            Match.when({ version: 2 }, (input) => input.terminal),
+            Match.orElse(() => {
+              if (record !== null && record.stdinMode === "pty")
+                return { cols: 80, rows: 24, revision: 0 };
+              return null;
+            }),
+          );
+          if (geometry === null) return { terminal: null, attributes: null };
+          if (record !== null && (record.status === "queued" || record.status === "running"))
+            return { terminal: geometry, attributes: initialTerminalControl };
+          return { terminal: geometry, attributes: { ...initialTerminalControl, settled: true } };
         });
         const saved = yield* Effect.tryPromise({
           try: () =>
@@ -76,8 +93,8 @@ export const migrateInput = Effect.fn("migration.inputGeometry")(function* (
               object.key,
               Schema.encodeSync(Schema.fromJsonString(InputHead))({
                 ...input,
-                version: 2,
-                terminal: geometry,
+                version: 3,
+                ...metadata,
               }),
               { onlyIf: { etagMatches: stored.etag } },
             ),

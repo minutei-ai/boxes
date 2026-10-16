@@ -40,6 +40,7 @@ unsafe extern "C" {
     fn fd_close(fd: u32) -> u32;
     fn fd_fdstat_set_flags(fd: u32, flags: u32) -> u32;
     fn proc_exit(code: u32) -> !;
+    fn poll_oneoff(input: *const u8, output: *mut u8, count: u32, ready: *mut u32) -> u32;
 }
 #[repr(C)]
 struct Io {
@@ -114,6 +115,45 @@ pub extern "C" fn __wasi_signal_trampoline(signal: u32) {
 pub extern "C" fn _start() {
     unsafe {
         let custom = *b"!?~@#%&";
+        if cfg!(case = "api") {
+            let controls = [1, 2, 3, 4, 5, 6, 7];
+            send(1, b"attributes-ready\n");
+            receive(0, b"X");
+            let mut attrs = [0; 12];
+            if tcgetattr(0, attrs.as_mut_ptr()) != 0 || attrs[0] != 0 || attrs[4..11] != controls {
+                proc_exit(97);
+            }
+            send(1, b"raw-ok\n");
+            attributes(0, 16, &controls);
+            send(1, b"guest-changed\n");
+            receive(0, b"Y");
+            if tcgetattr(0, attrs.as_mut_ptr()) != 0 || attrs[0] != 0 {
+                proc_exit(98);
+            }
+            send(1, b"configured-again\n");
+            receive(0, b"");
+            send(1, b"eof-ready\n");
+            for _ in 0..64 {
+                if tcgetattr(0, attrs.as_mut_ptr()) != 0 || attrs[4..11] != controls {
+                    proc_exit(99);
+                }
+                if attrs[0] == 47 {
+                    send(1, b"terminal-done\n");
+                    proc_exit(0);
+                }
+                let mut subscription = [0u8; 48];
+                subscription[16..20].copy_from_slice(&1u32.to_le_bytes());
+                subscription[24..32].copy_from_slice(&250_000_000u64.to_le_bytes());
+                let mut event = [0u8; 32];
+                let mut count = 0;
+                if poll_oneoff(subscription.as_ptr(), event.as_mut_ptr(), 1, &mut count) != 0
+                    || count != 1
+                {
+                    proc_exit(100);
+                }
+            }
+            proc_exit(101);
+        }
         if cfg!(case = "child") {
             let mut attrs = [0; 12];
             if set_raw_mode(1) != 0
@@ -139,8 +179,11 @@ pub extern "C" fn _start() {
             }
             proc_exit(0);
         }
-        if cfg!(case = "recovery") {
-            let configured = attributes(0, 43, &custom);
+        if cfg!(case = "recovery") || cfg!(case = "api-recovery") {
+            let mut configured = attributes(0, 43, &custom);
+            if cfg!(case = "api-recovery") {
+                configured[0] = 0;
+            }
             let path = b"/tmp/termios-child.wasm";
             let mut pid = 0;
             if proc_spawn_v3(
