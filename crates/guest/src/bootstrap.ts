@@ -1,4 +1,5 @@
-const environment = globalThis.__environment;
+const initialEnvironment = globalThis.__environment;
+const environment = {};
 delete globalThis.__environment;
 globalThis.process = Object.freeze({ env: environment });
 const call = globalThis.__call;
@@ -59,21 +60,30 @@ const tools = Object.freeze({
   },
 });
 globalThis.tools = tools;
-Promise.resolve()
-  .then(() => import("program"))
-  .then((namespace) => {
-    if (mode === "function") return namespace.default({ tools, console });
-    if (mode === "evaluate") return namespace.default;
-    return null;
-  })
-  .then(
-    (result) => {
-      if (result !== undefined) output.result = result;
-      finish(JSON.stringify(output));
-    },
-    (error) => {
-      output.exitCode = 1;
-      append("stderr", [String(error)]);
-      finish(JSON.stringify(output));
-    },
-  );
+globalThis.__start = (entry, nextMode, nextEnvironment) => {
+  for (const key of Object.keys(environment)) delete environment[key];
+  Object.defineProperties(environment, Object.getOwnPropertyDescriptors(nextEnvironment));
+  output.stdout = "";
+  output.stderr = "";
+  output.result = null;
+  output.exitCode = 0;
+  return Promise.resolve()
+    .then(() => import(entry))
+    .then((namespace) => {
+      if (nextMode === "function") return namespace.default({ tools, console });
+      if (nextMode === "evaluate") return namespace.default;
+      return null;
+    })
+    .then(
+      (result) => {
+        if (result !== undefined) output.result = result;
+        finish(JSON.stringify(output));
+      },
+      (error) => {
+        output.exitCode = 1;
+        append("stderr", [String(error)]);
+        finish(JSON.stringify(output));
+      },
+    );
+};
+globalThis.__start("program", mode, initialEnvironment);

@@ -34,7 +34,7 @@ impl Mode {
     }
 }
 
-#[derive(Deserialize, Serialize)]
+#[derive(Clone, Deserialize, Serialize)]
 #[serde(deny_unknown_fields)]
 pub(crate) struct Source {
     name: String,
@@ -42,7 +42,7 @@ pub(crate) struct Source {
     imports: Vec<Import>,
 }
 
-#[derive(Deserialize, Serialize)]
+#[derive(Clone, PartialEq, Deserialize, Serialize)]
 #[serde(deny_unknown_fields)]
 struct Import {
     specifier: String,
@@ -152,6 +152,44 @@ impl Registry {
         self.aliases
             .get(&(base.to_string(), specifier.to_string()))
             .cloned()
+    }
+
+    pub(crate) fn begin(&mut self, program: Program) -> std::result::Result<(), String> {
+        let incoming = Self::new(program)?;
+        if self.indices.contains_key(&incoming.program.entry) {
+            return Err("A retained execution requires a new entry module identity".into());
+        }
+        let mut modules = self.program.modules.clone();
+        for source in incoming.program.modules {
+            if let Some(index) = self.indices.get(&source.name) {
+                let cached = &self.program.modules[*index];
+                if cached.source != source.source
+                    || source
+                        .imports
+                        .iter()
+                        .any(|edge| !cached.imports.contains(edge))
+                {
+                    return Err(
+                        "A cached module changed; reset the context before replacing it".into(),
+                    );
+                }
+            } else {
+                modules.push(source);
+            }
+        }
+        let mut updated = Self::new(Program {
+            language: incoming.program.language,
+            env: incoming.program.env,
+            entry: incoming.program.entry,
+            mode: incoming.program.mode,
+            modules,
+        })?;
+        updated.revision = self
+            .revision
+            .checked_add(1)
+            .ok_or("Module revision exhausted")?;
+        *self = updated;
+        Ok(())
     }
 
     pub(crate) fn names(&self) -> Vec<&str> {

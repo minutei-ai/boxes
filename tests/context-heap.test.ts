@@ -183,3 +183,125 @@ test(
     ),
   15000,
 );
+
+const transferContext = Effect.fn("contextTest.transfer")(function* (
+  directory: string,
+  input: typeof ContextCheckpointRequest.Type,
+) {
+  return yield* Effect.scoped(
+    Effect.gen(function* () {
+      const worker = yield* Effect.acquireRelease(
+        Effect.sync(() => runtime(directory, { artifact: "context-checkpoint-worker" })),
+        (worker) => Effect.promise(() => worker.dispose()),
+      );
+      const url = yield* Effect.promise(() => worker.ready);
+      const response = yield* Effect.promise(() =>
+        fetch(url, {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: Schema.encodeSync(Schema.fromJsonString(ContextCheckpointRequest))(input),
+        }),
+      );
+      expect(response.status).toBe(200);
+      return yield* Schema.decodeUnknownEffect(Schema.fromJsonString(ContextCheckpointProof))(
+        yield* Effect.promise(() => response.text()),
+      );
+    }),
+  );
+});
+
+test(
+  "three Workers retain the actual lexical closure across reentry and a second R2 heap transfer",
+  () =>
+    Effect.runPromise(
+      Effect.scoped(
+        Effect.gen(function* () {
+          const directory = yield* Effect.acquireRelease(
+            Effect.promise(() => mkdtemp(join(tmpdir(), "boxes-context-reentry-"))),
+            (path) => Effect.promise(() => rm(path, { recursive: true, force: true })),
+          );
+          const saved = yield* transferContext(directory, {
+            op: "save",
+            program: {
+              language: "javascript",
+              env: { ROUND: "first" },
+              entry: "/first.js",
+              mode: "function",
+              modules: [
+                {
+                  name: "/first.js",
+                  imports: [],
+                  source:
+                    "export default async ({tools,console}) => { console.log(process.env.ROUND); let value = 40; globalThis.next = () => { console.log('closure'); return ++value; }; const reply = await tools.call({op:'host.call',name:'echo',input:2}); return globalThis.next() + reply; }",
+                },
+              ],
+            },
+          });
+          if (saved.op !== "saved") return yield* Effect.die("Initial context was not saved");
+          expect(saved.request).toEqual({ op: "host.call", name: "echo", input: 2 });
+          const second = yield* transferContext(directory, {
+            op: "reenter",
+            hash: saved.hash,
+            reply: 2,
+            program: {
+              language: "javascript",
+              env: { ROUND: "second" },
+              entry: "/second.js",
+              mode: "function",
+              modules: [
+                {
+                  name: "/second.js",
+                  imports: [],
+                  source:
+                    "export default ({console}) => { console.log(process.env.ROUND); return globalThis.next(); }",
+                },
+              ],
+            },
+          });
+          if (second.op !== "reentered")
+            return yield* Effect.die("Second execution did not complete");
+          expect(second.previous).toEqual({
+            stdout: "first\nclosure\n",
+            stderr: "",
+            result: 43,
+            exitCode: 0,
+          });
+          expect(second.output).toEqual({
+            stdout: "second\nclosure\n",
+            stderr: "",
+            result: 42,
+            exitCode: 0,
+          });
+          expect(second.hash).not.toBe(saved.hash);
+          const third = yield* transferContext(directory, {
+            op: "continue",
+            hash: second.hash,
+            program: {
+              language: "javascript",
+              env: { ROUND: "third" },
+              entry: "/third.js",
+              mode: "function",
+              modules: [
+                {
+                  name: "/third.js",
+                  imports: [],
+                  source:
+                    "export default ({console}) => { console.log(process.env.ROUND); return globalThis.next(); }",
+                },
+              ],
+            },
+          });
+          if (third.op !== "continued")
+            return yield* Effect.die("Third execution did not complete");
+          expect(third.output).toEqual({
+            stdout: "third\nclosure\n",
+            stderr: "",
+            result: 43,
+            exitCode: 0,
+          });
+          expect(third.hash).not.toBe(second.hash);
+        }),
+      ),
+    ),
+  15000,
+);

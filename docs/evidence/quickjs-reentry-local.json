@@ -1,0 +1,67 @@
+{
+  "status": "Unreleased native QuickJS execution reentry. Public SDK/runtime and production remain 0.19.2; this is not the public contexts API.",
+  "measuredAt": "2026-10-16T21:03:53.260236+00:00",
+  "baseCommit": "d8c367e364fdb2e201e4b3b7150e37ba049e97a1",
+  "upstreamReference": "https://github.com/rivet-dev/agentos/blob/4d48628304c1ddedafc9d55f60752093fcf6f3d2/crates/native-sidecar/tests/language_execution.rs",
+  "nativeRuntime": {
+    "sha256": "9ae0613643088b52845bebdfd49bd15c1e8217d9eb89fcd658403ccb96265463"
+  },
+  "sourceSha256": {
+    "crates/guest/src/bootstrap.ts": "9de4a0c816bdb3231985b3a762e7fffc606d769b1f0d2e8b1e5ee878d83420e4",
+    "crates/guest/src/lib.rs": "3d76dbb8827e047fd70272a23e2a35af7030822ec0eaf8790ca77c1feff1742e",
+    "crates/guest/src/modules.rs": "a1c68c5536c8f02d8f35779995063fc0e3267b856cb5e0c7674af8f4728b1e82",
+    "tests/fixtures/context-checkpoint-contract.ts": "0045190ac122ab5dca35ea19ee2bab7c8c17ea77ffba6e8ebacfa1434f8151d4",
+    "tests/fixtures/context-checkpoint-worker.ts": "36f10e6ac577f6b661384e3e86bd7c299f5391bc25fbafffb3fd83a81b053110",
+    "tests/context-heap.test.ts": "f3f3c31ddfde6f652e53a56e4f8d7d9831df63450067080f28049bb66583b9e4"
+  },
+  "nativeBoundary": {
+    "reentry": "Guest.begin keeps the original QuickJS runtime, globals, functions and native ESM cache. It accepts a validated next module graph only after the previous execution is quiescent.",
+    "renewed": "Output, supplied process.env fields, interrupt fuel, microtask count and capability/module request count are renewed. Context memory/output ceilings remain fixed at construction.",
+    "cache": "Unchanged module sources and bindings retain their native identity/state. A changed cached source or reused entry identity fails before registry mutation. Incoming and retained sources share the existing 128-module and 8 MiB graph limits.",
+    "authority": "This fixture exposes no production endpoint. Outstanding callbacks and queued microtasks block reentry; public per-execution authorization and exclusive durable ownership remain to be implemented.",
+    "lifetime": "Each fixture Worker owns isolated Wasm bindings. Scoped finalizers free a live Guest; parking consumes its handle and transfers ownership before the memory copy. Earlier Workers are fully disposed before replacement opens their native R2 state."
+  },
+  "replacementProof": [
+    {
+      "worker": 1,
+      "operation": "Save a pending echo callback with a lexical variable initialized to 40 and a global function closing over that variable and the original console."
+    },
+    {
+      "worker": 2,
+      "operation": "Restore from real R2, resolve echo with 2, complete first result 43 and stdout first/closure. Begin a second program in the same context: result 42 and only second/closure output. Save the completed native heap again."
+    },
+    {
+      "worker": 3,
+      "operation": "Restore the second R2 image and begin a third program: result 43 and only third/closure output. No source replay or JSON reconstruction of variables/functions."
+    }
+  ],
+  "checks": [
+    {
+      "command": "cargo test -p cirro-guest",
+      "exitCode": 0,
+      "result": "13 tests passed, 0 failed; native unit tests completed in 0.04 seconds."
+    },
+    {
+      "command": "TMPDIR=<writable-scratch> bun test tests/context-heap.test.ts",
+      "exitCode": 0,
+      "result": "2 tests passed, 0 failed, 21 assertions in 4.29 seconds. This standalone run preceded the fixture save-path scoped cleanup adjustment; the full suite verifies the final source."
+    },
+    {
+      "command": "TMPDIR=<writable-scratch> bun run check",
+      "exitCode": 0,
+      "result": "Build, SDK build, TypeScript, Clippy with warnings denied, all workspace Rust tests and native Alchemy workerd tests passed. Bun: 416 pass, 0 fail, 5954 assertions across 92 files in 224.82 seconds. Guest Rust: 13 pass, 0 fail in 0.02 seconds."
+    },
+    {
+      "command": "bun run format:check",
+      "exitCode": 0,
+      "result": "Oxfmt, cargo fmt and Rust fixture formatting passed."
+    }
+  ],
+  "limits": [
+    "Whole-heap fixture blobs are bounded to 16 MiB; production incremental/paged persistence remains open.",
+    "The exact Rust binary digest must match; cross-build heap migration is unsupported.",
+    "Public contexts.create/get/list/reset/delete, native language operation integration, exclusive leases and sandbox lifetime fencing remain open.",
+    "Entry/file identity semantics, retained Python globals and complete Node/package compatibility remain open.",
+    "No production deployment, SDK publication, production latency, throughput, billing or total-parity claim is made by this local proof."
+  ]
+}

@@ -48,10 +48,12 @@ pub struct Guest {
     active: Option<Request>,
     output: Rc<RefCell<Option<String>>>,
     capture: Persistent<Function<'static>>,
+    start: Persistent<Function<'static>>,
     registry: Rc<RefCell<modules::Registry>>,
     context: Context,
     runtime: Runtime,
     fuel: Rc<Cell<usize>>,
+    requests: Rc<Cell<usize>>,
     jobs: usize,
     max_output: usize,
 }
@@ -109,12 +111,13 @@ impl Guest {
         let queue = Rc::downgrade(&pending);
         let completed = Rc::downgrade(&output);
         let requests = Rc::new(Cell::new(0usize));
+        let action_requests = Rc::clone(&requests);
         let module_requests = Rc::clone(&requests);
         let module_queue = Rc::downgrade(&pending);
         let module_registry = Rc::downgrade(&registry);
-        let capture = context.with(|ctx| {
+        let (capture, start) = context.with(|ctx| {
             let call = Function::new(ctx.clone(), move |ctx: Ctx<'_>, action: String| {
-                if action.len() > 1_048_576 || requests.get() >= 256 {
+                if action.len() > 1_048_576 || action_requests.get() >= 256 {
                     return Err(Exception::throw_message(
                         &ctx,
                         "Capability request budget exceeded",
@@ -123,7 +126,7 @@ impl Guest {
                 let queue = queue
                     .upgrade()
                     .ok_or_else(|| Exception::throw_message(&ctx, "Guest disposed"))?;
-                requests.set(requests.get() + 1);
+                action_requests.set(action_requests.get() + 1);
                 let (promise, resolve, reject) = ctx.promise()?;
                 queue.borrow_mut().push_back(Request {
                     kind: RequestKind::Action(action),
@@ -214,19 +217,64 @@ impl Guest {
             ctx.globals()
                 .remove("__capture")
                 .map_err(|error| failure(&ctx, error))?;
-            Ok::<_, String>(Persistent::save(&ctx, capture))
+            let start = ctx
+                .globals()
+                .get::<_, Function>("__start")
+                .map_err(|error| failure(&ctx, error))?;
+            ctx.globals()
+                .remove("__start")
+                .map_err(|error| failure(&ctx, error))?;
+            Ok::<_, String>((
+                Persistent::save(&ctx, capture),
+                Persistent::save(&ctx, start),
+            ))
         })?;
         Ok(Self {
             pending,
             active: None,
             output,
             capture,
+            start,
             registry,
             context,
             runtime,
             fuel,
+            requests,
             jobs: 0,
             max_output,
+        })
+    }
+
+    fn begin_program(&mut self, program: &str, ticks: usize) -> Result<(), String> {
+        if program.len() > 18_000_000 || ticks == 0 || ticks > 100_000 {
+            return Err("Invalid execution limits".into());
+        }
+        if self.output.borrow().is_none()
+            || self.active.is_some()
+            || !self.pending.borrow().is_empty()
+            || self.runtime.is_job_pending()
+        {
+            return Err("Previous execution is not quiescent".into());
+        }
+        let program = serde_json::from_str(program).map_err(|error| error.to_string())?;
+        self.registry.borrow_mut().begin(program)?;
+        let registry = self.registry.borrow();
+        let mode = registry.mode().name();
+        let environment =
+            serde_json::to_string(registry.environment()).map_err(|error| error.to_string())?;
+        self.fuel.set(ticks);
+        self.jobs = 0;
+        self.requests.set(0);
+        self.output.borrow_mut().take();
+        self.context.with(|ctx| {
+            let environment = ctx
+                .json_parse(environment)
+                .map_err(|error| failure(&ctx, error))?;
+            self.start
+                .clone()
+                .restore(&ctx)
+                .and_then(|start| start.call::<_, ()>(("program", mode, environment)))
+                .map_err(|error| failure(&ctx, error))
         })
     }
 
@@ -407,6 +455,11 @@ impl Guest {
         self.advance().map_err(|error| JsValue::from_str(&error))
     }
 
+    pub fn begin(&mut self, program: &str, ticks: usize) -> Result<(), JsValue> {
+        self.begin_program(program, ticks)
+            .map_err(|error| JsValue::from_str(&error))
+    }
+
     pub fn respond_module(&mut self, value: &str) -> Result<(), JsValue> {
         self.settle_module(value)
             .map_err(|error| JsValue::from_str(&error))
@@ -469,6 +522,172 @@ mod tests {
 
     fn fixture(source: &str) -> String {
         serde_json::json!({"env":{},"language":"javascript","entry":"/main.js","mode":"function","modules":[{"name":"/main.js","source":source,"imports":[]}]}).to_string()
+    }
+
+    fn retained_program(entry: &str, source: &str, round: &str) -> String {
+        serde_json::json!({"env":{"ROUND":round,"__proto__":"literal"},"language":"javascript","entry":entry,"mode":"function","modules":[{"name":entry,"source":source,"imports":[]}]}).to_string()
+    }
+
+    fn completed(guest: &mut Guest) -> serde_json::Value {
+        let step: serde_json::Value = serde_json::from_str(&guest.advance().unwrap()).unwrap();
+        assert_eq!(step["kind"], "done");
+        serde_json::from_str(step["output"].as_str().unwrap()).unwrap()
+    }
+
+    #[test]
+    fn reentry_preserves_closures_but_renews_output_and_environment() {
+        let first = retained_program(
+            "/one.js",
+            "export default ({console}) => { let value = 40; globalThis.bump = () => { console.log(process.env.ROUND); return ++value; }; console.log('first'); return process.env.__proto__; }",
+            "one",
+        );
+        let mut guest = Guest::create(&first, 8_388_608, 1000, 4096).unwrap();
+        let output = completed(&mut guest);
+        assert_eq!(output["stdout"], "first\n");
+        assert_eq!(output["result"], "literal");
+        let second = retained_program("/two.js", "export default () => globalThis.bump()", "two");
+        guest.begin_program(&second, 1000).unwrap();
+        let output = completed(&mut guest);
+        assert_eq!(output["stdout"], "two\n");
+        assert_eq!(output["result"], 41);
+        assert_eq!(output["exitCode"], 0);
+        assert!(guest.begin_program(&second, 1000).is_err());
+        assert_eq!(completed(&mut guest), output);
+        let third = retained_program(
+            "/three.js",
+            "export default () => globalThis.bump()",
+            "three",
+        );
+        guest.begin_program(&third, 1000).unwrap();
+        let output = completed(&mut guest);
+        assert_eq!(output["stdout"], "three\n");
+        assert_eq!(output["result"], 42);
+    }
+
+    #[test]
+    fn reentry_refuses_an_outstanding_callback_without_losing_it() {
+        let first = retained_program(
+            "/one.js",
+            "export default async ({tools}) => await tools.call({op:'host.call',name:'echo',input:2})",
+            "one",
+        );
+        let mut guest = Guest::create(&first, 8_388_608, 1000, 4096).unwrap();
+        assert!(guest.advance().unwrap().contains("host.call"));
+        let second = retained_program("/two.js", "export default () => 3", "two");
+        assert!(guest.begin_program(&second, 1000).is_err());
+        guest.settle("2", false).unwrap();
+        assert_eq!(completed(&mut guest)["result"], 2);
+        guest.begin_program(&second, 1000).unwrap();
+        assert_eq!(completed(&mut guest)["result"], 3);
+    }
+
+    #[test]
+    fn reentry_renews_the_request_budget_and_enforces_the_new_fuel_budget() {
+        let source = "export default async ({tools}) => { for(let i=0;i<200;i++) await tools.call({op:'host.call',name:'echo'}); return 200; }";
+        let mut guest = Guest::create(
+            &retained_program("/one.js", source, "one"),
+            8_388_608,
+            1000,
+            4096,
+        )
+        .unwrap();
+        for entry in ["/one.js", "/two.js"] {
+            if entry != "/one.js" {
+                guest
+                    .begin_program(&retained_program(entry, source, "two"), 1000)
+                    .unwrap();
+            }
+            for _ in 0..200 {
+                assert!(guest.advance().unwrap().contains("host.call"));
+                guest.settle("null", false).unwrap();
+            }
+            assert_eq!(completed(&mut guest)["result"], 200);
+        }
+        guest
+            .begin_program(
+                &retained_program("/loop.js", "export default () => {while(true){}}", "loop"),
+                2,
+            )
+            .unwrap();
+        assert!(guest.advance().is_err());
+    }
+
+    #[test]
+    fn reentry_keeps_cached_module_state_and_rejects_replacement_atomically() {
+        let bundle = |entry: &str, dependency: &str| {
+            serde_json::json!({
+            "env":{},"language":"javascript","entry":entry,"mode":"function",
+            "modules":[
+                {"name":entry,"source":"import {increment} from './counter.js'; export default () => increment();","imports":[{"specifier":"./counter.js","target":"/counter.js"}]},
+                {"name":"/counter.js","source":dependency,"imports":[]}
+            ]
+        }).to_string()
+        };
+        let dependency = "let counter = 0; export const increment = () => ++counter;";
+        let mut guest =
+            Guest::create(&bundle("/one.js", dependency), 8_388_608, 1000, 4096).unwrap();
+        assert_eq!(completed(&mut guest)["result"], 1);
+        guest
+            .begin_program(&bundle("/two.js", dependency), 1000)
+            .unwrap();
+        assert_eq!(completed(&mut guest)["result"], 2);
+        assert!(
+            guest
+                .begin_program(
+                    &bundle("/three.js", "export const increment = () => 100;"),
+                    1000
+                )
+                .is_err()
+        );
+        assert_eq!(completed(&mut guest)["result"], 2);
+        guest
+            .begin_program(&bundle("/three.js", dependency), 1000)
+            .unwrap();
+        assert_eq!(completed(&mut guest)["result"], 3);
+    }
+
+    #[test]
+    fn reentry_has_an_independent_output_budget() {
+        let source = "export default ({console}) => {console.log('x'.repeat(3000)); return 1;}";
+        let mut guest = Guest::create(
+            &retained_program("/one.js", source, "one"),
+            8_388_608,
+            1000,
+            4096,
+        )
+        .unwrap();
+        assert_eq!(
+            completed(&mut guest)["stdout"].as_str().unwrap().len(),
+            3001
+        );
+        guest
+            .begin_program(&retained_program("/two.js", source, "two"), 1000)
+            .unwrap();
+        let output = completed(&mut guest);
+        assert_eq!(output["stdout"].as_str().unwrap().len(), 3001);
+        assert_eq!(output["exitCode"], 0);
+    }
+
+    #[test]
+    fn reentry_refuses_microtasks_left_after_completion() {
+        let source = "export default () => { let task = Promise.resolve(); for(let i=0;i<100;i++) task = task.then(() => 1); return 1; }";
+        let mut guest = Guest::create(
+            &retained_program("/one.js", source, "one"),
+            8_388_608,
+            1000,
+            4096,
+        )
+        .unwrap();
+        assert_eq!(completed(&mut guest)["result"], 1);
+        assert!(guest.runtime.is_job_pending());
+        assert!(
+            guest
+                .begin_program(
+                    &retained_program("/two.js", "export default () => 2", "two"),
+                    1000
+                )
+                .is_err()
+        );
     }
 
     #[test]
