@@ -1,4 +1,4 @@
-import { Clock, Effect, Schema } from "effect";
+import { Clock, Effect, Match, Schema } from "effect";
 import { Runtime, PlatformProxy, type QueueConsumer } from "@alchemy.run/cloudflare-runtime/core";
 import {
   R2Bucket,
@@ -35,7 +35,9 @@ const Options = Schema.Struct({
   clockStart: Schema.optionalKey(Schema.Int),
   consume: Schema.optionalKey(Schema.Boolean),
   controlled: Schema.optionalKey(Schema.Boolean),
-  artifact: Schema.optionalKey(Schema.Literals(["clock-worker", "checkpoint-worker"])),
+  artifact: Schema.optionalKey(
+    Schema.Literals(["clock-worker", "checkpoint-worker", "context-checkpoint-worker"]),
+  ),
   softwareBase: Schema.optionalKey(Digest),
 });
 export const runtime = (persist: string, options: typeof Options.Type = {}) => {
@@ -66,8 +68,12 @@ export const runtime = (persist: string, options: typeof Options.Type = {}) => {
     Service.self("SELF"),
   ];
   const artifact = options.artifact ?? "clock-worker";
-  const engines = ["kernel", "wasi"];
-  if (artifact === "clock-worker") engines.push("guest", "compiler", "python");
+  const engines = Match.value(artifact).pipe(
+    Match.when("clock-worker", () => ["kernel", "wasi", "guest", "compiler", "python"]),
+    Match.when("checkpoint-worker", () => ["kernel", "wasi"]),
+    Match.when("context-checkpoint-worker", () => ["guest"]),
+    Match.exhaustive,
+  );
   const modules = [
     {
       name: "index.js",

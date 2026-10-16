@@ -54,6 +54,8 @@ The [0.19.0](evidence/sdk-0.19.0-delivery.json) and [0.19.1](evidence/sdk-0.19.1
 
 Implemented shell commands: `pwd`, `whoami`, `cd`, `ls`, `mkdir`, `rm`, `mv`, `cp`, `echo`, `cat`, `true`, `false`, `head`, `tail`, `wc`, `sort`, `uniq`, `grep`. Options and input modes are limited. `grep` uses bounded Rust regular expressions. Native parameter/assignment/HOME expansion and conditional pipeline lists are bounded as recorded below. Unsupported compound constructs and background shell syntax fail explicitly; durable background work uses `process.spawn`.
 
+The unreleased [QuickJS heap foundation](evidence/quickjs-heap-local.json) demonstrates native R2 transfer of a lexical closure, global counter and pending Promise after closing the original Worker. The native freshness guard rejects a reused runtime. This is a prerequisite for persistent language state; the five public `contexts` operations, execution reentry and Python retained globals remain open. Production stays on the published 0.19.2 runtime.
+
 ## Completion gates
 
 1. Port the missing process/terminal and language contracts with real native-runtime tests. QuickJS does not provide Node compatibility.

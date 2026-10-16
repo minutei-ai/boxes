@@ -1,6 +1,6 @@
 import { Effect, Result, Schema } from "effect";
 import guestWasm from "cirro:guest";
-import { initSync, Guest } from "../dist/guest/cirro_guest";
+import { createBindings } from "../dist/guest/bindings";
 import {
   Capability,
   Policy,
@@ -26,7 +26,8 @@ import type { open } from "./storage";
 import type { OutputCapture } from "./output";
 import type { Env } from "./resources";
 
-initSync({ module: guestWasm });
+const bindings = createBindings();
+bindings.initSync({ module: guestWasm });
 
 class InterpreterFailure extends Schema.TaggedError<InterpreterFailure>()("InterpreterFailure", {
   cause: Schema.Unknown,
@@ -84,7 +85,7 @@ export const execute = Effect.fn("execution.run")(function* (
   const guest = yield* Effect.acquireRelease(
     Effect.try({
       try: () =>
-        new Guest(
+        new bindings.Guest(
           Schema.encodeSync(Schema.fromJsonString(ScriptProgram))(program),
           Math.min(policy.memoryBytes, memoryLimitBytes ?? policy.memoryBytes),
           policy.interruptBudget,

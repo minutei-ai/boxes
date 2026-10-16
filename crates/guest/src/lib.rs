@@ -2,7 +2,7 @@ use rquickjs::function::This;
 use rquickjs::{Context, Ctx, Exception, Function, Module, Persistent, Runtime};
 use serde::{Deserialize, Serialize};
 use std::cell::{Cell, RefCell};
-use std::collections::VecDeque;
+use std::collections::{BTreeMap, VecDeque};
 use std::rc::Rc;
 use wasm_bindgen::prelude::*;
 
@@ -56,6 +56,12 @@ pub struct Guest {
     max_output: usize,
 }
 
+thread_local! {
+    static PARKED_CONTEXTS: RefCell<BTreeMap<u32, Guest>> = const { RefCell::new(BTreeMap::new()) };
+    static NEXT_CONTEXT: Cell<u32> = const { Cell::new(1) };
+    static CREATED_GUESTS: Cell<u32> = const { Cell::new(0) };
+}
+
 fn failure(ctx: &Ctx<'_>, error: rquickjs::Error) -> String {
     if error.is_exception() {
         return format!("Guest exception: {:?}", ctx.catch());
@@ -70,6 +76,7 @@ impl Guest {
         ticks: usize,
         max_output: usize,
     ) -> Result<Self, String> {
+        CREATED_GUESTS.with(|created| created.set(created.get().saturating_add(1)));
         if program.len() > 18_000_000
             || !(4_194_304..=33_554_432).contains(&memory)
             || ticks == 0
@@ -353,6 +360,39 @@ fn finish_import(ctx: &Ctx<'_>, request: Request, target: String) -> Result<(), 
 
 #[wasm_bindgen]
 impl Guest {
+    pub fn park(self) -> Result<u32, JsValue> {
+        if !CREATED_GUESTS.with(|created| created.get() == 1) {
+            return Err(JsValue::from_str(
+                "Context snapshot requires a fresh isolated runtime",
+            ));
+        }
+        PARKED_CONTEXTS.with(|contexts| {
+            let mut contexts = contexts.borrow_mut();
+            if !contexts.is_empty() {
+                return Err(JsValue::from_str("An isolated context is already parked"));
+            }
+            let handle = NEXT_CONTEXT
+                .with(|next| {
+                    let handle = next.get();
+                    let following = handle.checked_add(1).ok_or("Context handle exhausted")?;
+                    next.set(following);
+                    Ok::<_, &str>(handle)
+                })
+                .map_err(JsValue::from_str)?;
+            contexts.insert(handle, self);
+            Ok(handle)
+        })
+    }
+
+    pub fn resume(handle: u32) -> Result<Guest, JsValue> {
+        PARKED_CONTEXTS.with(|contexts| {
+            contexts
+                .borrow_mut()
+                .remove(&handle)
+                .ok_or_else(|| JsValue::from_str("Context handle does not exist"))
+        })
+    }
+
     #[wasm_bindgen(constructor)]
     pub fn new(
         source: &str,

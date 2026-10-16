@@ -139,7 +139,7 @@ await Effect.runPromise(
     ]);
     const targets = {
       kernel: ["--target", "web"],
-      guest: ["--target", "web"],
+      guest: ["--target", "no-modules", "--no-modules-global", "cirroGuest"],
       compiler: ["--target", "no-modules"],
       wasi: ["--target", "no-modules", "--no-modules-global", "cirroWasi"],
       python: [
@@ -159,6 +159,43 @@ await Effect.runPromise(
         "--out-dir",
         `dist/${name}`,
       ]),
+    );
+    const guest = yield* Effect.promise(() =>
+      Bun.file(join(root, "dist/guest/cirro_guest.js")).text(),
+    );
+    const guestTypes = yield* Effect.promise(() =>
+      Bun.file(join(root, "dist/guest/cirro_guest.d.ts")).text(),
+    );
+    const guestDigest = new Bun.CryptoHasher("sha256")
+      .update(
+        yield* Effect.promise(() =>
+          Bun.file(join(root, "dist/guest/cirro_guest_bg.wasm")).arrayBuffer(),
+        ),
+      )
+      .digest("hex");
+    yield* Effect.promise(() =>
+      Bun.write(join(root, "dist/guest/revision.json"), JSON.stringify({ sha256: guestDigest })),
+    );
+    yield* Effect.promise(() =>
+      Bun.write(
+        join(root, "dist/guest/cirro_guest.d.ts"),
+        "export {};\n" +
+          guestTypes
+            .replaceAll("declare namespace cirroGuest", "export declare namespace cirroGuest")
+            .replaceAll("declare function cirroGuest", "export declare function cirroGuest"),
+      ),
+    );
+    yield* Effect.promise(() =>
+      Bun.write(
+        join(root, "dist/guest/bindings.js"),
+        `export const createBindings = () => {\n${guest}\nreturn cirroGuest;\n};\n`,
+      ),
+    );
+    yield* Effect.promise(() =>
+      Bun.write(
+        join(root, "dist/guest/bindings.d.ts"),
+        'import { cirroGuest } from "./cirro_guest";\nexport declare const createBindings: () => typeof cirroGuest;\n',
+      ),
     );
     yield* run([
       "cargo",
@@ -1214,6 +1251,7 @@ await Effect.runPromise(
     for (const [entry, directory] of [
       ["src/index.ts", "dist/worker"],
       ["tests/fixtures/checkpoint-worker.ts", "dist/checkpoint-worker"],
+      ["tests/fixtures/context-checkpoint-worker.ts", "dist/context-checkpoint-worker"],
       ["tests/fixtures/clock-worker.ts", "dist/clock-worker"],
       ["tests/fixtures/origin-worker.ts", "dist/origin-worker"],
       ["tests/fixtures/sdk-binding-worker.ts", "dist/sdk-binding-worker"],

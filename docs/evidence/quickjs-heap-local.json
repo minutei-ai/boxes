@@ -1,0 +1,88 @@
+{
+  "status": "Unreleased QuickJS heap-transfer foundation. Public SDK/runtime 0.19.2 and production deployment are unchanged; contexts.create/get/list/reset/delete remain unimplemented.",
+  "measuredAt": "2026-10-16T20:34:33.724687+00:00",
+  "baseCommit": "8f65abe50f82c7e51b7cf808f6d614c463a1df9d",
+  "upstreamReference": "https://github.com/rivet-dev/agentos/blob/4d48628304c1ddedafc9d55f60752093fcf6f3d2/crates/native-sidecar/tests/language_execution.rs",
+  "runtime": "Native Alchemy workerd and R2; original Worker closed before replacement. No JSON reconstruction of globals or program replay.",
+  "nativeChecks": [
+    "A Rust QuickJS Guest pauses at a real host callback and transfers its opaque heap through content-addressed native R2 objects.",
+    "A fresh Worker restores the pending Promise, lexical closure, global counter and captured output; one entered marker, result 43 and exit 0.",
+    "A corrupted heap fails integrity validation before native resume.",
+    "A different Rust binary revision fails with CHECKPOINT_RUNTIME_MISMATCH.",
+    "A runtime that previously created and freed another Guest cannot park a new Guest; Rust checks the total constructor-attempt count."
+  ],
+  "focused": {
+    "passed": 2,
+    "failed": 0,
+    "files": 2,
+    "assertions": 19,
+    "seconds": 3.19
+  },
+  "fullCheck": {
+    "command": "bun run check",
+    "exitCode": 0,
+    "tests": 415,
+    "files": 92,
+    "failed": 0,
+    "assertions": 5946,
+    "testSeconds": 221.97,
+    "buildSdkTypecheckClippyCargoTests": "passed"
+  },
+  "formatCheck": "passed",
+  "environment": {
+    "bun": "1.4.3",
+    "rustc": "1.97.0-nightly (37d85e592 2026-04-28)"
+  },
+  "guestWasm": {
+    "sha256": "04aea6b3362082dd0de3565dea305836b67e50537983ed3c65dc23b1904ef8d4",
+    "bytes": 1139900
+  },
+  "unpublishedRuntimeCandidate": {
+    "version": "0.19.2",
+    "bytes": 5555212,
+    "sha256": "aea893835f396300ab12666012ced8b350443d5cfe761a3c1d08a0732cbf6b75",
+    "scope": "Private candidate archives for local compatibility checks only. They do not replace the published 0.19.2 assets.",
+    "packageProof": {
+      "exitCode": 0,
+      "transport": "native Alchemy workerd service binding and Agent RPC; local R2 and Queue",
+      "proof": "SDK archive exports and consumer declarations; runtime archive; filesystem snapshot restore; hard-link metadata; RPC callbacks and cooperative disposal; ephemeral context disposal with 1024 files and concurrent closes; persistent driver contexts and cancellation; scoped authority"
+    },
+    "minuteiProof": {
+      "clientVersion": "0.19.2",
+      "runtimeVersion": "0.19.2",
+      "runtimeArchiveSha256": "aea893835f396300ab12666012ced8b350443d5cfe761a3c1d08a0732cbf6b75",
+      "consumerCommit": "d7a785202da474b0cc72f498d84ad42d3249ddad",
+      "consumerBundleSha256": "c9c18fa2b66916d0a4e3db37b930ddebe0d3cc8457a15c96e48ba8422c8c9443",
+      "transport": "native workerd Agent service binding; actual Minutei Code Mode and tenant SQLite; local R2, KV and Queue",
+      "retention": true,
+      "isolatedRegistry": true,
+      "capabilities": true,
+      "consumerFixturesSha256": {
+        "boxes-retention.ts": "ab69256069295b3e155a6e47ebc916e23f4ae760eb4a7ae7afebd9bbc37b050f",
+        "boxes-code.worker.ts": "c3d6f06ea5f5afe322076052267468c4702fe79aff596fa847d68bdc3045e5f4"
+      }
+    }
+  },
+  "sourceFilesSha256": {
+    "crates/guest/src/lib.rs": "a58fb04c414d497df7480905f676947b897aa6eee1d64ea11a9820265a1d24dc",
+    "src/execution.ts": "604205de00e2e4633174234e8f127fbfbc2737b0ae643595ea4d3d9a33b24651",
+    "tooling/build.ts": "56933beb2795c0786386f300e05b144cb2f165a207cefdf3c89d50ba3417554c",
+    "tooling/worker-test.ts": "f771c45555cea61ddfc3829940990f80cbcaeccded23285b3657f0fa2c6e1315",
+    "tests/context-heap.test.ts": "c2166a27ec04a9e7d2053b4833f0a8702dca5eeeb628e4a3d04530d06b054fb7",
+    "tests/fixtures/context-checkpoint-contract.ts": "43e5c60c03da585a98a7b35f61e3edac7f0845710021abeb4ccdc8f0ba7d22ec",
+    "tests/fixtures/context-checkpoint-worker.ts": "b61ce3468a7d7200eb7fc54ec307be4b1ec50067344f3020e9497af789bd5ef1"
+  },
+  "openBoundaries": [
+    "Context API admission and concurrent-operation ownership.",
+    "Reentry for another operation in the retained language context, including module/cache semantics.",
+    "Reset/delete, interruption, expiry and current-authority enforcement.",
+    "Python retained globals and heap restoration.",
+    "Paged production persistence, migration/runtime-upgrade policy and garbage collection.",
+    "Real production proof and performance/billing measurements."
+  ],
+  "limits": [
+    "The native fixture uses one bounded whole-heap R2 blob to establish transfer feasibility, not a production checkpoint algorithm.",
+    "Only same-binary cooperative QuickJS continuation is proved; arbitrary crash, external-effect replay and cross-build migration are not proved.",
+    "The public Context API is not implemented by this checkpoint primitive."
+  ]
+}
