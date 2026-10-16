@@ -1,0 +1,249 @@
+{
+  "status": "Locally verified source increment after published SDK/runtime 0.13.0. No new release or deployment in this increment. Full parity remains open.",
+  "baseCommit": "c9698e29c7709b950ea91df06ec9b3d0c7fd5da2",
+  "upstream": {
+    "commit": "4d48628304c1ddedafc9d55f60752093fcf6f3d2",
+    "source": "https://github.com/rivet-dev/agentos/blob/4d48628304c1ddedafc9d55f60752093fcf6f3d2/crates/kernel/src/pty.rs",
+    "contract": "Default cooked VINTR/VQUIT/VSUSP signal the foreground group without input bytes or caret echo. With no foreground group, caret echo and an empty line wake the reader. Raw mode preserves bytes."
+  },
+  "implementation": {
+    "owner": "crates/wasi/src/pty.rs",
+    "routing": "Existing queue_signal process-family scheduler, signal masks/dispositions, wait statuses and restart frames. A bounded three-signal bitset is drained at accepted native input writes. The no-signal path returns immediately.",
+    "persistence": "The existing R2 input head/chunks retain accepted control bytes and offsets. Terminal and process state live in the existing same-build native heap checkpoint. No new external operation, storage namespace, migration or infrastructure resource."
+  },
+  "verification": {
+    "fullNativeCheck": {
+      "command": "bun run check",
+      "tests": 380,
+      "files": 75,
+      "assertions": 5151,
+      "seconds": 165.06,
+      "failures": 0,
+      "includes": [
+        "Runtime/SDK build",
+        "TypeScript",
+        "Workspace Clippy",
+        "Cargo tests",
+        "Native workerd/R2/Queue tests"
+      ]
+    },
+    "rustFocused": {
+      "command": "cargo test -p cirro-wasi pty::tests -- --nocapture",
+      "tests": 5,
+      "failed": 0,
+      "newTests": 2
+    },
+    "focusedFirstRun": {
+      "command": "bun test tests/tty-signals.test.ts tests/pty-recovery.test.ts tests/pty.test.ts tests/pty-session.test.ts",
+      "passed": 17,
+      "failed": 1,
+      "assertions": 205,
+      "seconds": 26.77,
+      "failure": "The new recovery fixture expected initial echo before its ready marker. Native execution emits ready before its first blocking read, then accepts initial input. Only the expected prefix was corrected; no product change, assertion removal or timeout increase."
+    },
+    "focusedRecoveryAfterCorrection": {
+      "tests": 1,
+      "failed": 0,
+      "assertions": 19,
+      "seconds": 2.6
+    },
+    "format": "bun run format:check passed.",
+    "cases": [
+      "Handled SIGINT/SIGQUIT/SIGTSTP interrupt tty reads; exact input retries do not duplicate handlers.",
+      "SA_RESTART keeps the pending tty read until a later complete line.",
+      "Default SIGINT and SIGQUIT exit with 130 and 131.",
+      "Raw mode preserves 03 1c 1a ff exactly with no signals.",
+      "Ignored and blocked signals consume control bytes and clear the unfinished line; unblocking invokes retained handlers.",
+      "Read-only and wrong-sandbox capabilities fail before control input publication.",
+      "Ctrl-Z stops the foreground child; a native parent observes WUNTRACED, SIGCONT and WCONTINUED, then Ctrl-C exits that child. A child in another group remains active until explicit cleanup.",
+      "Same-build R2 checkpoint/replacement retains the partial line and pending read. A later Ctrl-C clears the old line once; later bytes/EOF and duplicate Queue delivery retain exact output and offsets."
+    ]
+  },
+  "benchmark": {
+    "command": "bun run bench",
+    "environment": {
+      "runtime": "local workerd via native Alchemy",
+      "alchemy": "2.0.0-beta.83",
+      "production": false,
+      "platform": "linux",
+      "arch": "x64"
+    },
+    "artifactBytes": {
+      "javascript": 369402,
+      "kernelWasm": 1139581,
+      "wasiWasm": 1673950,
+      "pythonWasm": 10719083,
+      "guestWasm": 1129863,
+      "compilerWasm": 1943596
+    },
+    "wasiPublication": {
+      "samples": 25,
+      "rootPublications": 25
+    },
+    "contentDeduplication": {
+      "singleFileWrites": 25,
+      "uniqueBlocks": 1,
+      "singleFileLogicalBytesWritten": 6553600,
+      "storedBlockBytes": 262144
+    },
+    "measurements": {
+      "fullEightMiB": {
+        "count": 25,
+        "p50Ms": 102.07174699999996,
+        "p95Ms": 124.83571900000061,
+        "minMs": 84.2730100000008,
+        "maxMs": 169.05997600000046
+      },
+      "appendToEightMiB": {
+        "count": 25,
+        "p50Ms": 7.602436999999554,
+        "p95Ms": 9.480546000000686,
+        "minMs": 7.071970000000874,
+        "maxMs": 17.04170999999951
+      },
+      "resizeEightMiBTail": {
+        "count": 25,
+        "p50Ms": 5.888073000000077,
+        "p95Ms": 6.621798000000126,
+        "minMs": 4.585624000001189,
+        "maxMs": 6.658016999999745
+      },
+      "rangeFourKiB": {
+        "count": 25,
+        "p50Ms": 5.649547000000894,
+        "p95Ms": 6.9187739999997575,
+        "minMs": 5.376997000001211,
+        "maxMs": 7.571082000000388
+      },
+      "patchFourKiB": {
+        "count": 25,
+        "p50Ms": 18.63749899999857,
+        "p95Ms": 26.843708000000333,
+        "minMs": 15.85973600000034,
+        "maxMs": 39.390793999999005
+      },
+      "python": {
+        "count": 25,
+        "p50Ms": 52.81026800000109,
+        "p95Ms": 73.67307199999959,
+        "minMs": 47.4672589999991,
+        "maxMs": 228.0348950000007
+      },
+      "sequentialEightFiles": {
+        "count": 25,
+        "p50Ms": 77.88995100000011,
+        "p95Ms": 83.43529599999965,
+        "minMs": 71.24408799999992,
+        "maxMs": 94.38386199999968
+      },
+      "batchEightFiles": {
+        "count": 25,
+        "p50Ms": 48.13358100000005,
+        "p95Ms": 62.194188999999824,
+        "minMs": 40.47836999999981,
+        "maxMs": 65.67517499999985
+      },
+      "status": {
+        "count": 100,
+        "p50Ms": 3.1223979999999756,
+        "p95Ms": 4.979675000000043,
+        "minMs": 2.646146999999928,
+        "maxMs": 6.33991200000014
+      },
+      "write256KiB": {
+        "count": 25,
+        "p50Ms": 12.430299999999988,
+        "p95Ms": 16.8025990000001,
+        "minMs": 9.505105999999842,
+        "maxMs": 27.29966000000013
+      },
+      "read256KiB": {
+        "count": 25,
+        "p50Ms": 6.223079999999982,
+        "p95Ms": 7.642923999999994,
+        "minMs": 5.4924680000001445,
+        "maxMs": 8.661841999999979
+      },
+      "isolatedJavascript": {
+        "count": 25,
+        "p50Ms": 16.52873500000078,
+        "p95Ms": 24.06988099999944,
+        "minMs": 14.271212999999989,
+        "maxMs": 75.03256299999975
+      },
+      "detachedJavascript": {
+        "count": 25,
+        "p50Ms": 132.9281489999994,
+        "p95Ms": 142.1677609999997,
+        "minMs": 121.67016299999977,
+        "maxMs": 145.9182719999999
+      },
+      "wasiFileAndSync": {
+        "count": 25,
+        "p50Ms": 43.951396000000386,
+        "p95Ms": 52.06581399999959,
+        "minMs": 35.942943000000014,
+        "maxMs": 158.42537099999936
+      },
+      "shellPipeline": {
+        "count": 25,
+        "p50Ms": 17.290414000000965,
+        "p95Ms": 23.724847999999838,
+        "minMs": 15.903612999998586,
+        "maxMs": 27.13291500000014
+      }
+    },
+    "limits": "Maintained local workerd regression workload, without a paired reference run. It is not a PTY-specific latency, cold-start, peak memory, production billing or AgentOS comparison. The prior maintained performance evidence was preserved."
+  },
+  "runtimeAssetsAgainstPublished0130": [
+    {
+      "name": "cirro_compiler_bg.wasm",
+      "referenceBytes": 1943596,
+      "currentBytes": 1943596,
+      "sha256": "27d9b0022a634ed4eef47b6561ad38cafde3522c17e834afed1264440678bf2f",
+      "unchanged": true
+    },
+    {
+      "name": "cirro_guest_bg.wasm",
+      "referenceBytes": 1129863,
+      "currentBytes": 1129863,
+      "sha256": "b773b74626b08bd1083860081ccd2a3d0fdff80dcd97b5ec13ed7c6e2148ef22",
+      "unchanged": true
+    },
+    {
+      "name": "cirro_kernel_bg.wasm",
+      "referenceBytes": 1139581,
+      "currentBytes": 1139581,
+      "sha256": "1d3d1811805905af3c00e8afedd696c22d585db7538877306c28e7b099725e92",
+      "unchanged": true
+    },
+    {
+      "name": "cirro_python_bg.wasm",
+      "referenceBytes": 10719083,
+      "currentBytes": 10719083,
+      "sha256": "8aa6aec5ab6fb0623637e2b6dda7318f4934e4736f4a97e45ca3312bf32e529c",
+      "unchanged": true
+    },
+    {
+      "name": "cirro_wasi_bg.wasm",
+      "referenceBytes": 1672610,
+      "currentBytes": 1673950,
+      "sha256": "99b421a06627fdf373ab26fc377eada6033ac4c400083685e2d871c0eaf04ef7",
+      "unchanged": false
+    },
+    {
+      "name": "index.js",
+      "referenceBytes": 369402,
+      "currentBytes": 369402,
+      "sha256": "cd32d4e4e4b3ac4cff1ab65928cd9c1219027d937b768aae921f9e001ced485c",
+      "unchanged": false
+    }
+  ],
+  "remaining": [
+    "Guest foreground-group setters, configurable termios/control characters and richer terminal metadata/listing",
+    "Published interactive-shell stop/continue and rendered terminal behavior",
+    "Arbitrary-crash and cross-build native heap recovery",
+    "Remote CI, versioned archives and production delivery of this source increment",
+    "All remaining inventory and completion gates in docs/parity.md"
+  ]
+}

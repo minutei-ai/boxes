@@ -1129,6 +1129,26 @@ fn queue_signal(state: &State, pid: i32, signal: u32) -> Result<(), Failure> {
     Ok(())
 }
 
+fn terminal_signals(state: &State, terminal: &pty::Terminal) -> Result<(), Failure> {
+    if terminal.signals.get() == 0 {
+        return Ok(());
+    }
+    for signal in [2, 3, 20] {
+        let bit = 1 << (signal - 1);
+        if terminal.signals.get() & bit == 0 {
+            continue;
+        }
+        if terminal.foreground.get() != 0 {
+            match queue_signal(state, -(terminal.foreground.get() as i32), signal) {
+                Ok(()) | Err(Failure::Errno(71)) => {}
+                Err(failure) => return Err(failure),
+            }
+        }
+        terminal.signals.set(terminal.signals.get() & !bit);
+    }
+    Ok(())
+}
+
 fn dispatch(caller: &mut Caller<'_, State>, name: &str, args: &[u64]) -> Result<i32, Failure> {
     let a: Vec<usize> = args.iter().map(|arg| *arg as usize).collect();
     if name.starts_with("fd_")
@@ -2387,6 +2407,9 @@ fn dispatch(caller: &mut Caller<'_, State>, name: &str, args: &[u64]) -> Result<
                         );
                     }
                     let count = pipe.write_data(&data).map_err(Failure::Errno)?;
+                    if let Some(side) = &pipe.terminal {
+                        terminal_signals(state, &side.terminal)?;
+                    }
                     if count != 0 {
                         state.readiness_notification = true;
                     }
@@ -4999,6 +5022,11 @@ impl WasmGuest {
             data.len()
         };
         state.stdin_offset.set(state.stdin_offset.get() + count);
+        if let Some(attachment) = &state.terminal {
+            terminal_signals(state, &attachment.terminal).map_err(|failure| {
+                JsValue::from_str(&format!("Terminal input signal failed: {failure:?}"))
+            })?;
+        }
         if closed
             && count == data.len()
             && state
@@ -5201,6 +5229,11 @@ impl WasmGuest {
                             .ok_or_else(|| JsValue::from_str("Missing memory"))?
                             .write(&mut self.store, output, &(count as u32).to_le_bytes())
                             .map_err(|error| JsValue::from_str(&error.to_string()))?,
+                    }
+                    if let Some(side) = &pipe.terminal {
+                        terminal_signals(self.store.data(), &side.terminal).map_err(|failure| {
+                            JsValue::from_str(&format!("Terminal input signal failed: {failure:?}"))
+                        })?;
                     }
                 }
                 Completion::Spawn { pointer, .. } => {

@@ -13,6 +13,7 @@ for (const mode of [
   "cancelled",
   "geometry",
   "geometry-restart",
+  "signals",
 ] as const) {
   test(`active ${mode} PTY preserves its checkpointed state across Worker replacement`, () =>
     Effect.runPromise(
@@ -66,6 +67,7 @@ for (const mode of [
                 Match.when("family", () => "wasi-recovery-family.wasm"),
                 Match.when("geometry", () => "wasi-pty-resize-recovery.wasm"),
                 Match.when("geometry-restart", () => "wasi-pty-resize-restart.wasm"),
+                Match.when("signals", () => "wasi-tty-signals-recovery.wasm"),
                 Match.when("cancelled", () => "wasi-pty-recovery-cooked.wasm"),
                 Match.orElse((mode) => `wasi-pty-recovery-${mode}.wasm`),
               );
@@ -139,6 +141,7 @@ for (const mode of [
                 expect(prefix.split("ready\r\n").length).toBe(2);
               }
               if (mode === "cancelled") expect(prefix).toBe("hel");
+              if (mode === "signals") expect(prefix).toBe("ready\r\nhel");
               if (mode === "raw")
                 expect(
                   yield* client.action("active", {
@@ -168,6 +171,7 @@ for (const mode of [
               }
               const tail = Match.value(mode).pipe(
                 Match.when("raw", () => Buffer.from([0, 3, 4, 13, 10, 127, 255])),
+                Match.when("signals", () => Buffer.from("\x03kept\n")),
                 Match.orElse(() => Buffer.from("lo\r")),
               );
               expect(
@@ -282,6 +286,7 @@ for (const mode of [
             Match.when("cancelled", () => Buffer.alloc(0)),
             Match.when("geometry", () => Buffer.from("winch\r\ndone\r\n")),
             Match.when("geometry-restart", () => Buffer.from("winch\r\ndone\r\n")),
+            Match.when("signals", () => Buffer.from("kept\r\ninterrupt\r\ndone\r\n")),
             Match.when("cooked", () => Buffer.from("lo\r\nread:hello\r\neof\r\n")),
             Match.when("family", () => Buffer.from("lo\r\nhello\r\n\r\nbytes=6\r\n")),
             Match.orElse(() =>

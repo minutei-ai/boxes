@@ -14,6 +14,7 @@ pub(super) struct Terminal {
     pub rows: Cell<u16>,
     pub revision: Cell<u32>,
     pub foreground: Cell<u32>,
+    pub signals: Cell<u64>,
     line: RefCell<Vec<u8>>,
     lines: RefCell<VecDeque<usize>>,
 }
@@ -40,6 +41,7 @@ impl Terminal {
             rows: Cell::new(24),
             revision: Cell::new(0),
             foreground: Cell::new(0),
+            signals: Cell::new(0),
             line: RefCell::new(Vec::new()),
             lines: RefCell::new(VecDeque::new()),
         })
@@ -121,7 +123,8 @@ impl Terminal {
             127 if !self.line.borrow().is_empty() => b"\x08 \x08".to_vec(),
             127 => Vec::new(),
             21 => b"^U\r\n".to_vec(),
-            3 | 28 => vec![b'^', byte + 64, b'\r', b'\n'],
+            3 | 26 | 28 if self.foreground.get() != 0 => Vec::new(),
+            3 | 26 | 28 => vec![b'^', byte + 64, b'\r', b'\n'],
             b'\r' | b'\n' => b"\r\n".to_vec(),
             b'\t' => vec![byte],
             0..=31 => vec![b'^', byte + 64],
@@ -142,16 +145,25 @@ impl Terminal {
             return self.input.bytes.borrow().len() < PIPE_BYTES;
         }
         let size = self.line.borrow().len();
-        if size == LINE_BYTES && !matches!(byte, 3 | 4 | 10 | 13 | 21 | 28 | 127) {
+        if size == LINE_BYTES && !matches!(byte, 3 | 4 | 10 | 13 | 21 | 26 | 28 | 127) {
             return true;
         }
         if self.output.bytes.borrow().len() + self.echo(byte).len() > PIPE_BYTES {
             return false;
         }
-        if matches!(byte, 4 | 10 | 13) && self.lines.borrow().len() >= MAX_LINES {
+        if (matches!(byte, 4 | 10 | 13)
+            || (matches!(byte, 3 | 26 | 28) && self.foreground.get() == 0))
+            && self.lines.borrow().len() >= MAX_LINES
+        {
             return false;
         }
-        if matches!(byte, 3 | 4 | 21 | 28 | 127) {
+        if matches!(byte, 3 | 26 | 28)
+            && self.foreground.get() == 0
+            && self.input.bytes.borrow().len() == PIPE_BYTES
+        {
+            return false;
+        }
+        if matches!(byte, 3 | 4 | 21 | 26 | 28 | 127) {
             return true;
         }
         self.input.bytes.borrow().len() + size < PIPE_BYTES
@@ -173,7 +185,7 @@ impl Terminal {
                 self.input.bytes.borrow_mut().push_back(byte);
             } else {
                 if self.line.borrow().len() == LINE_BYTES
-                    && !matches!(byte, 3 | 4 | 10 | 13 | 21 | 28 | 127)
+                    && !matches!(byte, 3 | 4 | 10 | 13 | 21 | 26 | 28 | 127)
                 {
                     if count == 0 {
                         return Err(22);
@@ -185,7 +197,21 @@ impl Terminal {
                     127 => {
                         self.line.borrow_mut().pop();
                     }
-                    3 | 21 | 28 => {
+                    3 | 26 | 28 => {
+                        self.line.borrow_mut().clear();
+                        if self.foreground.get() == 0 {
+                            self.input.bytes.borrow_mut().push_back(b'\n');
+                            self.lines.borrow_mut().push_back(1);
+                        } else {
+                            let signal = match byte {
+                                3 => 2,
+                                28 => 3,
+                                _ => 20,
+                            };
+                            self.signals.set(self.signals.get() | (1 << (signal - 1)));
+                        }
+                    }
+                    21 => {
                         self.line.borrow_mut().clear();
                     }
                     4 => {
@@ -287,5 +313,63 @@ mod tests {
         let eof = Terminal::new();
         assert_eq!(eof.write(true, &vec![4; MAX_LINES + 1]), Ok(MAX_LINES));
         assert_eq!(eof.write(true, b"\x04"), Err(6));
+    }
+
+    #[test]
+    fn cooked_control_keys_target_foreground_without_echo_or_input_bytes() {
+        let tty = Terminal::new();
+        tty.foreground.set(1);
+        assert_eq!(tty.write(true, b"discard\x03\x1c\x1akept\n"), Ok(15));
+        assert_eq!(tty.signals.get(), (1 << 1) | (1 << 2) | (1 << 19));
+        assert_eq!(tty.available(), 5);
+        assert_eq!(
+            tty.input.bytes.borrow().iter().copied().collect::<Vec<_>>(),
+            b"kept\n"
+        );
+        assert_eq!(
+            tty.output
+                .bytes
+                .borrow()
+                .iter()
+                .copied()
+                .collect::<Vec<_>>(),
+            b"discardkept\r\n"
+        );
+        tty.set_raw(true);
+        tty.signals.set(0);
+        assert_eq!(tty.write(true, b"\x03\x1c\x1a"), Ok(3));
+        assert_eq!(tty.signals.get(), 0);
+        assert!(
+            tty.input
+                .bytes
+                .borrow()
+                .iter()
+                .copied()
+                .collect::<Vec<_>>()
+                .ends_with(b"\x03\x1c\x1a")
+        );
+    }
+
+    #[test]
+    fn unowned_signal_keys_wake_the_reader_with_a_bounded_empty_line() {
+        let tty = Terminal::new();
+        assert_eq!(tty.write(true, b"discard\x03\x1c\x1a"), Ok(10));
+        assert_eq!(tty.signals.get(), 0);
+        assert_eq!(
+            tty.input.bytes.borrow().iter().copied().collect::<Vec<_>>(),
+            b"\n\n\n"
+        );
+        assert_eq!(
+            tty.output
+                .bytes
+                .borrow()
+                .iter()
+                .copied()
+                .collect::<Vec<_>>(),
+            b"discard^C\r\n^\\\r\n^Z\r\n"
+        );
+        tty.input.bytes.borrow_mut().resize(PIPE_BYTES, b'x');
+        assert_eq!(tty.write(true, b"\x03"), Err(6));
+        assert_eq!(tty.input.bytes.borrow().len(), PIPE_BYTES);
     }
 }
