@@ -1,0 +1,692 @@
+{
+  "status": "Experimental SDK/runtime 0.11.0 published, deployed and verified through authenticated software execution and native Cloudflare service bindings; full parity remains open.",
+  "version": "0.11.0",
+  "sourceCommit": "fc12361fec3cd63dbb6974a559d7495aa2467965",
+  "runtimeSourceCommit": "e97498f1f2f1e908207ce2828c883df6de75feb3",
+  "archiveAudit": [
+    {
+      "name": "minutei-ai-boxes-0.11.0.tgz",
+      "entries": 16,
+      "bytes": 71293,
+      "sha256": "f3074e46ce1a841e7c7c71e83bd9faa54152d0668b62120b086ef6b7f47cebc6",
+      "configuredCredentialAbsent": true,
+      "licenseMatches": true
+    },
+    {
+      "name": "minutei-ai-boxes-runtime-0.11.0.tgz",
+      "entries": 8,
+      "bytes": 5522569,
+      "sha256": "4811cfef20a7f156ce918cab59c168e5b60223350c9c1f7f8399985545138a15",
+      "configuredCredentialAbsent": true,
+      "licenseMatches": true,
+      "deployableAssetsMatch": true
+    }
+  ],
+  "verification": {
+    "local": {
+      "command": "bun run check",
+      "tests": 350,
+      "files": 65,
+      "assertions": 4742,
+      "seconds": 134.14,
+      "result": "passed"
+    },
+    "runtimeCI": {
+      "url": "https://github.com/minutei-ai/boxes/actions/runs/38827873433",
+      "conclusion": "success"
+    },
+    "deploymentCI": {
+      "url": "https://github.com/minutei-ai/boxes/actions/runs/38829869101",
+      "conclusion": "success"
+    },
+    "exactArchives": "Passed native package binding/RPC, declarations, exports, filesystem, persistent context and scoped authority proof; clean Bun installation passed. Uploaded draft assets downloaded and both attached SHA256SUMS verified.",
+    "minutei": {
+      "clientVersion": "0.10.1",
+      "runtimeVersion": "0.11.0",
+      "runtimeArchiveSha256": "4811cfef20a7f156ce918cab59c168e5b60223350c9c1f7f8399985545138a15",
+      "consumerCommit": "cccd63326b4288023939acd04f05b5c2321f1b18",
+      "consumerBundleSha256": "15f383865ec42db9bbcabab8869aa653b0597efa712fdb9b6ad056ad33c1d2bc",
+      "transport": "native workerd Agent service binding; actual Minutei Code Mode and tenant SQLite; local R2, KV and Queue",
+      "retention": true,
+      "isolatedRegistry": true,
+      "capabilities": true,
+      "consumerFixturesSha256": {
+        "boxes-retention.ts": "ab69256069295b3e155a6e47ebc916e23f4ae760eb4a7ae7afebd9bbc37b050f",
+        "boxes-code.worker.ts": "c3d6f06ea5f5afe322076052267468c4702fe79aff596fa847d68bdc3045e5f4"
+      }
+    },
+    "minuteiDelivery": "Compatibility proof only against the actual local consumer with its installed SDK 0.10.1 and exact runtime 0.11.0 archive. No Minutei push or deployment.",
+    "deployment": {
+      "profile": "minutei",
+      "stack": "cirro",
+      "stage": "prod",
+      "worker": "cirro-sandbox-prod-rs7wexxow56rmsoz",
+      "runtime": "ordinary Cloudflare Worker; native R2 and Queue; no Dynamic Workers",
+      "firstAttempt": "Worker update succeeded; unconditional migration action failed at filesystem-v4 page 30 with ECONNRESET. Earlier effects were preserved.",
+      "resume": "Native persisted plan retained Worker and bindings as noop; migration action completed in 464.8 seconds. Effect HttpClient owns connections and retries only native transport failures on the same page, at most twice, within a whole-page 120 second deadline. No sandbox mutation retry was added.",
+      "migrationPages": {
+        "environment-v1": 67,
+        "process-input-v4": 30,
+        "filesystem-v4": 67,
+        "process-deadlines-v1": 30
+      }
+    },
+    "productionSoftware": {
+      "target": "https://cirro-sandbox-prod-rs7wexxow56rmsoz.manoel-carvalhoneto.workers.dev",
+      "measuredAt": 1792111391995,
+      "sandboxId": "software-proof-abf68d6f-9dfd-44ff-b2d7-6c39e6455eaf",
+      "reclaimed": true,
+      "packages": [
+        {
+          "packageId": "f606cc4caa9ba50f7022d681269ca0ea98ccffc0d29f3106a0f18ab593c59412",
+          "digest": "sha256:f606cc4caa9ba50f7022d681269ca0ea98ccffc0d29f3106a0f18ab593c59412",
+          "sizeBytes": 3104428,
+          "manifest": {
+            "name": "sh",
+            "version": "0.0.1",
+            "provides": null,
+            "commands": [
+              {
+                "command": "sh",
+                "entry": "bin/sh"
+              }
+            ],
+            "man_pages": []
+          }
+        },
+        {
+          "packageId": "edb1cf0bbcf663d177916592d2f1b4361a02966dbf2eb44e3e61ea2a399bb43a",
+          "digest": "sha256:edb1cf0bbcf663d177916592d2f1b4361a02966dbf2eb44e3e61ea2a399bb43a",
+          "sizeBytes": 716972,
+          "manifest": {
+            "name": "jq",
+            "version": "0.3.3",
+            "provides": null,
+            "commands": [
+              {
+                "command": "jq",
+                "entry": "bin/jq"
+              }
+            ],
+            "man_pages": []
+          }
+        }
+      ],
+      "runs": [
+        {
+          "id": "shebang-direct",
+          "status": "exited",
+          "sourceHash": "f5e4811863745bdfc31f16d80d52709092f75c79868efbc17ac04fad88e21b2e",
+          "language": "wasm",
+          "startedAt": 1792111249160,
+          "finishedAt": 1792111253916,
+          "output": {
+            "stdout": "/tmp/installed-script|a b|shebang-direct|input line\n",
+            "stderr": "",
+            "result": null,
+            "exitCode": 0
+          }
+        },
+        {
+          "id": "shebang-spawn",
+          "status": "exited",
+          "sourceHash": "7a9f385e9364edfd053d787448f7fdf458b86522b613f38fa743f14ba160a102",
+          "language": "wasm",
+          "startedAt": 1792111256421,
+          "finishedAt": 1792111263327,
+          "output": {
+            "stdout": "/tmp/installed-script|a b|shebang-spawn|input line\nafter",
+            "stderr": "",
+            "result": null,
+            "exitCode": 0
+          }
+        },
+        {
+          "id": "shebang-exec",
+          "status": "exited",
+          "sourceHash": "0f27692c74a018d722b8e7ab72e24d55b2bff8f1fc755a65aa4376a88207e98f",
+          "language": "wasm",
+          "startedAt": 1792111265648,
+          "finishedAt": 1792111270977,
+          "output": {
+            "stdout": "/tmp/installed-script|a b|shebang-exec|input line\n",
+            "stderr": "",
+            "result": null,
+            "exitCode": 0
+          }
+        },
+        {
+          "id": "jq-0",
+          "status": "exited",
+          "sourceHash": "0f4c3e26b488ce3d9ac7e4bbd4eb8e41d85f5cda439e58a461ad382db2b59a0d",
+          "language": "wasm",
+          "startedAt": 1792111274126,
+          "finishedAt": 1792111276697,
+          "output": {
+            "stdout": "jq-jaq-0.1.0\n",
+            "stderr": "",
+            "result": null,
+            "exitCode": 0
+          }
+        },
+        {
+          "id": "jq-1",
+          "status": "exited",
+          "sourceHash": "f85bdeb7bc5ccfbd4984eaa5d3d8291d7a6c52c68759746f05b9164077b914c2",
+          "language": "wasm",
+          "startedAt": 1792111277931,
+          "finishedAt": 1792111281410,
+          "output": {
+            "stdout": "42\n",
+            "stderr": "",
+            "result": null,
+            "exitCode": 0
+          }
+        },
+        {
+          "id": "jq-2",
+          "status": "exited",
+          "sourceHash": "c433e8dd81d5e420551ce6d2ac57efebe3b85ab20ea7b6900f410ecd09ced7b3",
+          "language": "wasm",
+          "startedAt": 1792111282741,
+          "finishedAt": 1792111285198,
+          "output": {
+            "stdout": "45\n",
+            "stderr": "",
+            "result": null,
+            "exitCode": 0
+          }
+        },
+        {
+          "id": "jq-3",
+          "status": "exited",
+          "sourceHash": "dba7b0361b8089927f6645e9f1ed1e3f943aec054258079084cd4b4932b9c040",
+          "language": "wasm",
+          "startedAt": 1792111286537,
+          "finishedAt": 1792111290741,
+          "output": {
+            "stdout": "73\n",
+            "stderr": "",
+            "result": null,
+            "exitCode": 0
+          }
+        },
+        {
+          "id": "sh-0",
+          "status": "exited",
+          "sourceHash": "e0bb9baa9eecd25891f56b0a51edbf9b0c5d33cf65f94b555e2b9feb413d0a35",
+          "language": "wasm",
+          "startedAt": 1792111292260,
+          "finishedAt": 1792111296209,
+          "output": {
+            "stdout": "one\ntwo\n",
+            "stderr": "",
+            "result": null,
+            "exitCode": 0
+          }
+        },
+        {
+          "id": "sh-1",
+          "status": "exited",
+          "sourceHash": "41b812ea30d049c717df6d7e671f2561392d67c354745e677b0050f8e08cc38b",
+          "language": "wasm",
+          "startedAt": 1792111297703,
+          "finishedAt": 1792111300641,
+          "output": {
+            "stdout": "function\n",
+            "stderr": "",
+            "result": null,
+            "exitCode": 0
+          }
+        },
+        {
+          "id": "sh-2",
+          "status": "exited",
+          "sourceHash": "4e0db22e675fa7193356b3121d7c8877b8405f67e2c9966da18118aab816f496",
+          "language": "wasm",
+          "startedAt": 1792111302134,
+          "finishedAt": 1792111307227,
+          "output": {
+            "stdout": "0\n1\n2\n",
+            "stderr": "",
+            "result": null,
+            "exitCode": 0
+          }
+        },
+        {
+          "id": "sh-3",
+          "status": "exited",
+          "sourceHash": "7e387215c605d48410b897c2db3c7bafb23b11b7b4528e6592f9a8e268052568",
+          "language": "wasm",
+          "startedAt": 1792111308695,
+          "finishedAt": 1792111312914,
+          "output": {
+            "stdout": "default\nmatched\n",
+            "stderr": "",
+            "result": null,
+            "exitCode": 0
+          }
+        },
+        {
+          "id": "sh-4",
+          "status": "exited",
+          "sourceHash": "9be95ebd1581d773197d03ddb17e0d713b2b2d430896e03bbf22f5ced12d5df0",
+          "language": "wasm",
+          "startedAt": 1792111314737,
+          "finishedAt": 1792111319530,
+          "output": {
+            "stdout": "0077\n",
+            "stderr": "",
+            "result": null,
+            "exitCode": 0
+          }
+        },
+        {
+          "id": "sh-5",
+          "status": "exited",
+          "sourceHash": "79ddae80a3eaeef6759bd4868a70d661d5be58fe7756962306ef82e777c6aa73",
+          "language": "wasm",
+          "startedAt": 1792111321428,
+          "finishedAt": 1792111324706,
+          "output": {
+            "stdout": "0022\n",
+            "stderr": "",
+            "result": null,
+            "exitCode": 0
+          }
+        },
+        {
+          "id": "sh-6",
+          "status": "exited",
+          "sourceHash": "40c275b8ea52aa1000641b69b95a634ab155e50de2770df4c1a548f92f27f853",
+          "language": "wasm",
+          "startedAt": 1792111326247,
+          "finishedAt": 1792111330820,
+          "output": {
+            "stdout": "0077\n0077\n",
+            "stderr": "",
+            "result": null,
+            "exitCode": 0
+          }
+        },
+        {
+          "id": "sh-7",
+          "status": "exited",
+          "sourceHash": "db575d6414d41152d3dab9128946a45f2b2bfb626921222c37236cc07d815d80",
+          "language": "wasm",
+          "startedAt": 1792111332255,
+          "finishedAt": 1792111335643,
+          "output": {
+            "stdout": "0077\n",
+            "stderr": "",
+            "result": null,
+            "exitCode": 0
+          }
+        },
+        {
+          "id": "sh-8",
+          "status": "exited",
+          "sourceHash": "7e08df717a774067a4c4a5742fc499b0bae06537307261f934a2be0d03177016",
+          "language": "wasm",
+          "startedAt": 1792111337265,
+          "finishedAt": 1792111340569,
+          "output": {
+            "stdout": "0077\n",
+            "stderr": "",
+            "result": null,
+            "exitCode": 0
+          }
+        },
+        {
+          "id": "sh-9",
+          "status": "exited",
+          "sourceHash": "9e40c43c492c5163277009c056e57d3101a55017760afe8e9b1e278b8f3d3714",
+          "language": "wasm",
+          "startedAt": 1792111342108,
+          "finishedAt": 1792111344718,
+          "output": {
+            "stdout": "42\n",
+            "stderr": "",
+            "result": null,
+            "exitCode": 0
+          }
+        },
+        {
+          "id": "sh-10",
+          "status": "exited",
+          "sourceHash": "be51dfd2f9af5f6fa503993c99aa26d7ed876a1c773afee8fb913c5ac309ac89",
+          "language": "wasm",
+          "startedAt": 1792111346244,
+          "finishedAt": 1792111349049,
+          "output": {
+            "stdout": "42\n",
+            "stderr": "",
+            "result": null,
+            "exitCode": 0
+          }
+        },
+        {
+          "id": "sh-11",
+          "status": "exited",
+          "sourceHash": "15dfac7a355de73dc466e777835bca5f3c583f9caffb693bd527c6494015a0ca",
+          "language": "wasm",
+          "startedAt": 1792111350944,
+          "finishedAt": 1792111353526,
+          "output": {
+            "stdout": "73\n",
+            "stderr": "",
+            "result": null,
+            "exitCode": 0
+          }
+        },
+        {
+          "id": "sh-12",
+          "status": "exited",
+          "sourceHash": "8a1281c568389beb5cbf60392dc6b3e72093706e9ccea7d46a81a3f46d3349a0",
+          "language": "wasm",
+          "startedAt": 1792111355172,
+          "finishedAt": 1792111359421,
+          "output": {
+            "stdout": "first\nsecond\n",
+            "stderr": "",
+            "result": null,
+            "exitCode": 0
+          }
+        },
+        {
+          "id": "sh-13",
+          "status": "exited",
+          "sourceHash": "2954c1398c088477b2ade378d5012c0d03a170026fd5cb22335faf43588c38d3",
+          "language": "wasm",
+          "startedAt": 1792111360897,
+          "finishedAt": 1792111368032,
+          "output": {
+            "stdout": "\"outerr\"\n",
+            "stderr": "",
+            "result": null,
+            "exitCode": 0
+          }
+        },
+        {
+          "id": "sh-14",
+          "status": "exited",
+          "sourceHash": "0b0c1eeafe28903baa32af5fca429db4b912facc9b3c704a1fc487f38f971d46",
+          "language": "wasm",
+          "startedAt": 1792111369508,
+          "finishedAt": 1792111372825,
+          "output": {
+            "stdout": "1\n",
+            "stderr": "",
+            "result": null,
+            "exitCode": 0
+          }
+        },
+        {
+          "id": "sh-15",
+          "status": "exited",
+          "sourceHash": "59ff2467151ab422f753e5f8d98c7512efcccb724722914b1fd03686d8baafb2",
+          "language": "wasm",
+          "startedAt": 1792111374297,
+          "finishedAt": 1792111379927,
+          "output": {
+            "stdout": "1\n2\n3\n",
+            "stderr": "",
+            "result": null,
+            "exitCode": 0
+          }
+        },
+        {
+          "id": "sh-16",
+          "status": "exited",
+          "sourceHash": "f82db8cf49f1218e5ba0e04e567a679f4e5f0e2a95ab18eceb6118aa83813cc1",
+          "language": "wasm",
+          "startedAt": 1792111381568,
+          "finishedAt": 1792111385193,
+          "output": {
+            "stdout": "",
+            "stderr": "",
+            "result": null,
+            "exitCode": 0
+          }
+        },
+        {
+          "id": "pipeline",
+          "status": "exited",
+          "sourceHash": "f80a8287545608f9df43163350753cf00c9a8ce365d4221ed9f929ac9d547726",
+          "language": "shell",
+          "startedAt": 1792111386539,
+          "finishedAt": 1792111391261,
+          "output": {
+            "stdout": "91\n",
+            "stderr": "",
+            "result": null,
+            "exitCode": 0
+          }
+        }
+      ]
+    },
+    "productionBinding": {
+      "measuredAt": 1792111324934,
+      "profile": "minutei",
+      "targetWorker": "cirro-sandbox-prod-rs7wexxow56rmsoz",
+      "sandboxId": "remote-binding-7d2ce181-8bf1-4288-9f9a-ffab2c5f3220",
+      "previewOrigin": "https://boxes-binding-7d2ce181-8bf1-4288-9f9a-ffab2c5f3220.manoel-carvalhoneto.workers.dev",
+      "replacementPreviewOrigin": "https://boxes-replacement-7d2ce181-8bf1-4288-9f9a-ffab2c5f3220.manoel-carvalhoneto.workers.dev",
+      "consumerBundleSha256": "d1e1c073b5ab669823572bafe6f603014b2f35c1a9d74837b84f0ad2f28fd421",
+      "sdkVersion": "0.11.0",
+      "sdkModulesSha256": {
+        "../../src/sdk": "ef83eed1563a34d060e8c86fba584359914ab73c4653babaeebfc63b36683ca6",
+        "../../src/sdk-rpc": "4a7bfd49874b3053ca0c6782d524b11a642be7723b3e585952c2c615cf277035",
+        "../../src/sdk-tanstack": "837e1b0b08db4f87ab8a35a362e7d3b3129287907006bdf6fbff163f2ebd6aa0",
+        "../../src/contracts": "875496158b9435808c462a2b038e47b5a1be52a3ba24169ebb17c2b83dd48e38"
+      },
+      "inlineDeadline": {
+        "requestedMs": 15000,
+        "startedAt": 1792111267855,
+        "recovery": {
+          "state": "running",
+          "checkpoints": 0,
+          "resumable": false,
+          "deadlineAt": 1792111282855
+        }
+      },
+      "proof": {
+        "measuredAt": 1792111287829,
+        "callback": {
+          "id": "rpc-callback",
+          "status": "exited",
+          "sourceHash": "75090090f42e508d6542184bce91b43c775c128d2ccfc04977bc226f5980cf7d",
+          "language": "typescript",
+          "startedAt": 1792111267855,
+          "finishedAt": 1792111271435,
+          "output": {
+            "stdout": "",
+            "stderr": "",
+            "result": {
+              "answer": 42,
+              "transport": "native RPC"
+            },
+            "exitCode": 0
+          }
+        },
+        "voidCallback": {
+          "id": "rpc-void",
+          "status": "exited",
+          "sourceHash": "0216a3fc5e53bcf477f59bda2cb4dc00f2f8f938fc8658ed498f019dcfbca5fa",
+          "language": "typescript",
+          "startedAt": 1792111271838,
+          "finishedAt": 1792111272299,
+          "output": {
+            "stdout": "",
+            "stderr": "",
+            "result": {
+              "wasUndefined": true,
+              "freshGlobals": true
+            },
+            "exitCode": 0
+          }
+        },
+        "interpreters": [
+          {
+            "id": "shebang-direct",
+            "status": "exited",
+            "sourceHash": "f5e4811863745bdfc31f16d80d52709092f75c79868efbc17ac04fad88e21b2e",
+            "language": "wasm",
+            "startedAt": 1792111274115,
+            "finishedAt": 1792111277390,
+            "output": {
+              "stdout": "/tmp/installed-script|a b|shebang-direct|input line\n",
+              "stderr": "",
+              "result": null,
+              "exitCode": 0
+            }
+          },
+          {
+            "id": "shebang-spawn",
+            "status": "exited",
+            "sourceHash": "7a9f385e9364edfd053d787448f7fdf458b86522b613f38fa743f14ba160a102",
+            "language": "wasm",
+            "startedAt": 1792111278554,
+            "finishedAt": 1792111282753,
+            "output": {
+              "stdout": "/tmp/installed-script|a b|shebang-spawn|input line\nafter",
+              "stderr": "",
+              "result": null,
+              "exitCode": 0
+            }
+          },
+          {
+            "id": "shebang-exec",
+            "status": "exited",
+            "sourceHash": "0f27692c74a018d722b8e7ab72e24d55b2bff8f1fc755a65aa4376a88207e98f",
+            "language": "wasm",
+            "startedAt": 1792111283700,
+            "finishedAt": 1792111286999,
+            "output": {
+              "stdout": "/tmp/installed-script|a b|shebang-exec|input line\n",
+              "stderr": "",
+              "result": null,
+              "exitCode": 0
+            }
+          }
+        ],
+        "interpreterFile": {
+          "content": "c2hlYmFuZy1leGVj",
+          "encoding": "base64",
+          "size": 12
+        },
+        "file": {
+          "content": "bmF0aXZlIENsb3VkZmxhcmUgYmluZGluZw==",
+          "encoding": "base64",
+          "size": 25
+        },
+        "calls": [
+          {
+            "op": "host.call",
+            "name": "answer",
+            "input": {
+              "value": 21
+            }
+          },
+          {
+            "op": "host.call",
+            "name": "void"
+          }
+        ],
+        "managementDenied": 403,
+        "wrongSandboxDenied": 401
+      },
+      "persistent": {
+        "created": {
+          "phase": "create",
+          "value": {
+            "content": "cGVyc2lzdGVudCBuYXRpdmUgYmluZGluZw==",
+            "encoding": "base64",
+            "freshGlobals": true,
+            "label": "create"
+          },
+          "callbacks": ["create"],
+          "closedContextDenied": true,
+          "writeDenied": null,
+          "lowMemoryDenied": true,
+          "policyMemoryDenied": true,
+          "allowedAllocation": 6000000
+        },
+        "resumed": {
+          "phase": "resume",
+          "value": {
+            "content": "cGVyc2lzdGVudCBuYXRpdmUgYmluZGluZw==",
+            "encoding": "base64",
+            "freshGlobals": true,
+            "label": "resume"
+          },
+          "callbacks": ["resume"],
+          "closedContextDenied": true,
+          "writeDenied": true,
+          "lowMemoryDenied": true,
+          "policyMemoryDenied": true,
+          "allowedAllocation": 6000000
+        },
+        "previousReceiptRetained": true
+      }
+    }
+  },
+  "limits": [
+    "AgentOS parity remains incomplete; see docs/parity.md.",
+    "Descriptor fexec scripts, direct libc cd/exec cwd synchronization, PTY and broader runtime gates remain open.",
+    "No AgentOS performance or production cost comparison is claimed.",
+    "Local archive assets match the deployment input; production behavior is verified without claiming remote cryptographic commit attestation.",
+    "Minutei production, authenticated browser and model quality remain unverified; local history Queue has no consumer."
+  ],
+  "release": {
+    "assets": [
+      {
+        "apiUrl": "https://api.github.com/repos/minutei-ai/boxes/releases/assets/645585761",
+        "contentType": "application/x-gtar",
+        "createdAt": "2026-10-16T00:12:29Z",
+        "digest": "sha256:f3074e46ce1a841e7c7c71e83bd9faa54152d0668b62120b086ef6b7f47cebc6",
+        "downloadCount": 1,
+        "id": "RA_kwDOVHG00M4metth",
+        "label": "",
+        "name": "minutei-ai-boxes-0.11.0.tgz",
+        "size": 71293,
+        "state": "uploaded",
+        "updatedAt": "2026-10-16T00:12:29Z",
+        "url": "https://github.com/minutei-ai/boxes/releases/download/sdk-v0.11.0/minutei-ai-boxes-0.11.0.tgz"
+      },
+      {
+        "apiUrl": "https://api.github.com/repos/minutei-ai/boxes/releases/assets/645585762",
+        "contentType": "application/x-gtar",
+        "createdAt": "2026-10-16T00:12:29Z",
+        "digest": "sha256:4811cfef20a7f156ce918cab59c168e5b60223350c9c1f7f8399985545138a15",
+        "downloadCount": 1,
+        "id": "RA_kwDOVHG00M4metti",
+        "label": "",
+        "name": "minutei-ai-boxes-runtime-0.11.0.tgz",
+        "size": 5522569,
+        "state": "uploaded",
+        "updatedAt": "2026-10-16T00:12:30Z",
+        "url": "https://github.com/minutei-ai/boxes/releases/download/sdk-v0.11.0/minutei-ai-boxes-runtime-0.11.0.tgz"
+      },
+      {
+        "apiUrl": "https://api.github.com/repos/minutei-ai/boxes/releases/assets/645585763",
+        "contentType": "application/octet-stream",
+        "createdAt": "2026-10-16T00:12:29Z",
+        "digest": "sha256:c252dd5c4b40f72807b1699e16ba18274cffb22109cb0c8bbee3c569db575539",
+        "downloadCount": 1,
+        "id": "RA_kwDOVHG00M4mettj",
+        "label": "",
+        "name": "SHA256SUMS",
+        "size": 196,
+        "state": "uploaded",
+        "updatedAt": "2026-10-16T00:12:29Z",
+        "url": "https://github.com/minutei-ai/boxes/releases/download/sdk-v0.11.0/SHA256SUMS"
+      }
+    ],
+    "isDraft": false,
+    "isPrerelease": true,
+    "tagName": "sdk-v0.11.0",
+    "targetCommitish": "fc12361fec3cd63dbb6974a559d7495aa2467965",
+    "url": "https://github.com/minutei-ai/boxes/releases/tag/sdk-v0.11.0"
+  }
+}
