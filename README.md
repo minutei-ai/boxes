@@ -15,10 +15,11 @@ Licensed under [Apache 2.0](LICENSE). Maintained by [Minutei AI](https://github.
 - Capability tokens scoped to one sandbox, permission set and expiration.
 - Guest RPC for authorized filesystem operations, process inspection and HTTPS GET to explicitly authorized hosts.
 - Persistent execution IDs, code digests, completed or failed results, and paginated process summaries.
+- R2-backed queued WASI processes with pipe/PTY input, byte replay, cooperative same-build checkpoints and revision-checked terminal resize.
 - Conditional R2 publication: concurrent filesystem changes either commit together or report a conflict.
 - Explicit reclamation of disposed sandboxes in bounded R2 batches, with persisted progress and management-only authority.
 
-Boxes does not currently provide Linux compatibility, a complete POSIX shell, npm/pip installation, interactive terminals or reliable background processes. Python runs in a fresh RustPython Wasm instance with native instruction and memory limits. JavaScript uses QuickJS without Node modules; use `tools.call` for durable files. Python uses `await tools.call(...)`; synchronous filesystem imports and pip remain pending.
+Boxes does not currently provide Linux compatibility, a complete POSIX shell, npm/pip installation, indefinite processes or complete terminal job control. Python runs in a fresh RustPython Wasm instance with native instruction and memory limits. JavaScript uses QuickJS without Node modules; use `tools.call` for durable files. Python uses `await tools.call(...)`; synchronous filesystem imports and pip remain pending.
 
 ## Effect SDK
 
@@ -26,11 +27,11 @@ Use [`@minutei-ai/boxes`](docs/sdk.md) from Effect 4 applications and Cloudflare
 
 ## Install and verify
 
-Requires Bun, clang, llvm-ar, Rust with the `wasm32-unknown-unknown` target, and the matching wasm-bindgen CLI:
+Requires Bun, clang, llvm-ar, Rust with the `wasm32-unknown-unknown` and `wasm32-wasip1` targets, and the matching wasm-bindgen CLI:
 
 ```sh
 bun install --frozen-lockfile
-rustup target add wasm32-unknown-unknown
+rustup target add wasm32-unknown-unknown wasm32-wasip1
 cargo install wasm-bindgen-cli --version 0.2.129 --locked
 bun run check
 bun run bench

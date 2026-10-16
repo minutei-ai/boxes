@@ -1,9 +1,10 @@
+import { bindingConsumer } from "./binding-consumer";
+import { TerminalProof, TerminalProofInput } from "../tests/fixtures/terminal-proof";
 import { DescriptorProof } from "../tests/fixtures/descriptor-proof";
 import { prepareDescriptorProof } from "../tests/fixtures/descriptor-proof-inputs";
 import { downloadPublished } from "../tests/fixtures/published-package";
 import { publishedPackages } from "../tests/fixtures/published-software";
 import { Clock, Config, Crypto, Effect, Fiber, Redacted, Schedule, Schema } from "effect";
-import { join } from "node:path";
 import * as BunServices from "@effect/platform-bun/BunServices";
 import { FetchHttpClient } from "effect/http";
 import { CloudflareApiLive, createEdgeSession } from "alchemy/Cloudflare";
@@ -41,6 +42,7 @@ const Report = Schema.Struct({
   }),
   proof: VerifiedRemoteBindingProof,
   descriptors: DescriptorProof,
+  terminal: TerminalProof,
   persistent: Schema.Struct({
     created: VerifiedPersistentBindingProof,
     resumed: VerifiedPersistentBindingProof,
@@ -57,65 +59,13 @@ const report = await Effect.runPromise(
       const url = yield* Config.String("CIRRO_URL");
       const token = yield* Config.Redacted("CIRRO_API_KEY");
       const sdkDirectory = yield* Config.String("CIRRO_SDK_DIRECTORY");
-      const sdkPackage = yield* Schema.decodeUnknownEffect(
-        Schema.Struct({ name: Schema.Literal("@minutei-ai/boxes"), version: Schema.String }),
-      )(yield* Effect.promise(() => Bun.file(join(sdkDirectory, "package.json")).json()));
-      const sdkModules = new Map([
-        ["../../src/sdk", Bun.resolveSync("@minutei-ai/boxes", sdkDirectory)],
-        ["../../src/sdk-rpc", Bun.resolveSync("@minutei-ai/boxes/rpc", sdkDirectory)],
-        ["../../src/sdk-tanstack", Bun.resolveSync("@minutei-ai/boxes/tanstack", sdkDirectory)],
-        ["../../src/contracts", Bun.resolveSync("@minutei-ai/boxes/contracts", sdkDirectory)],
-      ]);
-      const sdkModulesSha256 = Object.fromEntries(
-        yield* Effect.forEach(sdkModules, ([name, path]) =>
-          Effect.gen(function* () {
-            const bytes = yield* Effect.promise(() => Bun.file(path).arrayBuffer());
-            const digest = Buffer.from(
-              yield* Effect.promise(() => crypto.subtle.digest("SHA-256", bytes)),
-            ).toString("hex");
-            return [name, digest] as const;
-          }),
-        ),
-      );
-      const built = yield* Effect.promise(() =>
-        Bun.build({
-          entrypoints: ["tests/fixtures/remote-binding-worker.ts"],
-          target: "browser",
-          format: "esm",
-          minify: true,
-          external: ["cloudflare:workers"],
-          plugins: [
-            {
-              name: "installed-boxes-sdk",
-              setup(builder) {
-                builder.onResolve(
-                  { filter: /^\.\.\/\.\.\/src\/(sdk|sdk-rpc|sdk-tanstack|contracts)$/ },
-                  (args) => {
-                    const path = sdkModules.get(args.path);
-                    if (path === undefined) return;
-                    return { path };
-                  },
-                );
-                builder.onResolve({ filter: /^effect($|\/)/ }, (args) => ({
-                  path: Bun.resolveSync(args.path, sdkDirectory),
-                }));
-              },
-            },
-          ],
-        }),
-      );
-      const module = built.outputs[0];
-      if (!built.success || module === undefined || built.outputs.length !== 1)
-        return yield* Effect.die({ message: "Binding consumer bundle failed", logs: built.logs });
-      const bytes = yield* Effect.promise(() => module.arrayBuffer());
-      const consumerBundleSha256 = Buffer.from(
-        yield* Effect.promise(() => crypto.subtle.digest("SHA-256", bytes)),
-      ).toString("hex");
+      const { bytes, version, sdkModulesSha256, consumerBundleSha256 } =
+        yield* bindingConsumer(sdkDirectory);
       const cryptoService = yield* Crypto.Crypto;
       const nonce = yield* cryptoService.randomUUIDv4();
       const id = `remote-binding-${nonce}`;
       const admin = yield* make({ url, token });
-      yield* Effect.logInfo({ phase: "selected", sandboxId: id, sdkVersion: sdkPackage.version });
+      yield* Effect.logInfo({ phase: "selected", sandboxId: id, sdkVersion: version });
       yield* admin.create({
         id,
         policy: {
@@ -339,6 +289,30 @@ const report = await Effect.runPromise(
       });
       if (retained.content !== proof.file.content || retained.encoding !== proof.file.encoding)
         return yield* Effect.die("Binding write was not retained by the deployed sandbox");
+      const terminalSource = yield* Effect.promise(() =>
+        Bun.file("dist/wasi-pty-resize.wasm").arrayBuffer(),
+      );
+      const terminalResponse = yield* Effect.tryPromise(() =>
+        fetch(new URL("/terminal", session.url), {
+          method: "POST",
+          keepalive: false,
+          headers: { ...session.headers, "content-type": "application/json" },
+          signal: AbortSignal.timeout(120000),
+          body: Schema.encodeSync(Schema.fromJsonString(TerminalProofInput))({
+            sandboxId: id,
+            token: grant.token,
+            source: Buffer.from(terminalSource).toString("base64"),
+          }),
+        }),
+      );
+      if (terminalResponse.status !== 200)
+        return yield* Effect.die({
+          status: terminalResponse.status,
+          body: yield* Effect.promise(() => terminalResponse.text()),
+        });
+      const terminal = yield* Schema.decodeUnknownEffect(TerminalProof)(
+        yield* Effect.tryPromise(() => terminalResponse.json()),
+      );
       return {
         measuredAt: yield* Clock.currentTimeMillis,
         profile,
@@ -347,11 +321,12 @@ const report = await Effect.runPromise(
         previewOrigin: session.url,
         replacementPreviewOrigin: replacement.url,
         consumerBundleSha256,
-        sdkVersion: sdkPackage.version,
+        sdkVersion: version,
         sdkModulesSha256,
         inlineDeadline,
         proof,
         descriptors,
+        terminal,
         persistent: { created, resumed, previousReceiptRetained: true as const },
       };
     }),

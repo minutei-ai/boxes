@@ -1,3 +1,4 @@
+import { TerminalProof, TerminalProofInput, terminalProof } from "./terminal-proof";
 import { DescriptorProof, descriptorProof } from "./descriptor-proof";
 import { Cause, Clock, Effect, Redacted, Schedule, Schema } from "effect";
 import { makeBinding } from "../../src/sdk";
@@ -20,6 +21,17 @@ export default {
       Effect.gen(function* () {
         if (new URL(request.url).pathname === "/persistent")
           return yield* persistentBindingProof(request, env.BOXES_AGENT);
+        if (new URL(request.url).pathname === "/terminal") {
+          const input = yield* Schema.decodeUnknownEffect(
+            Schema.fromJsonString(TerminalProofInput),
+            { onExcessProperty: "error" },
+          )(yield* Effect.promise(() => request.text()));
+          const client = yield* makeBinding(env.BOXES, Redacted.make(input.token));
+          const proof = yield* terminalProof(client, input.sandboxId, input.source);
+          return new Response(Schema.encodeSync(Schema.fromJsonString(TerminalProof))(proof), {
+            headers: { "content-type": "application/json", "cache-control": "no-store" },
+          });
+        }
         const input = yield* Schema.decodeUnknownEffect(Schema.fromJsonString(RemoteBindingInput), {
           onExcessProperty: "error",
         })(yield* Effect.promise(() => request.text()));

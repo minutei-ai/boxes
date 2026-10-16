@@ -2,7 +2,7 @@ import { execFileSync } from "node:child_process";
 import { mkdtemp, mkdir, readFile, readdir, rm, symlink, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { basename, dirname, join, resolve } from "node:path";
-import { Effect, Schema } from "effect";
+import { Effect, Schema, Redacted } from "effect";
 import { Runtime, PlatformProxy } from "@alchemy.run/cloudflare-runtime/core";
 import {
   Json,
@@ -11,6 +11,10 @@ import {
   Service,
   Text,
 } from "@alchemy.run/cloudflare-runtime/core/bindings";
+import { make } from "../src/sdk";
+import { FetchHttpClient } from "effect/http";
+import { bindingConsumer } from "./binding-consumer";
+import { TerminalProof, TerminalProofInput } from "../tests/fixtures/terminal-proof";
 import { Id } from "../src/contracts";
 import {
   BindingProof,
@@ -24,7 +28,13 @@ const Package = Schema.Struct({
   version: Schema.String,
   license: Schema.Literal("Apache-2.0"),
 });
-const Endpoints = Schema.Struct({ ORIGIN: Schema.String });
+const Endpoints = Schema.Struct({
+  ORIGINS: Schema.Struct({
+    standard: Schema.String,
+    terminal: Schema.String,
+    runtime: Schema.String,
+  }),
+});
 const archives = Schema.decodeUnknownSync(Schema.Tuple([Schema.String, Schema.String]))(
   Bun.argv.slice(2),
 );
@@ -80,6 +90,14 @@ await Effect.runPromise(
         .replaceAll('"../../src/sdk-tanstack"', '"@minutei-ai/boxes/tanstack"')
         .replaceAll('"../../src/contracts"', '"@minutei-ai/boxes/contracts"')
         .replaceAll('"../../src/rpc-protocol"', '"@minutei-ai/boxes/rpc"');
+      const terminalFixture = (yield* Effect.promise(() =>
+        readFile("tests/fixtures/terminal-proof.ts", "utf8"),
+      ))
+        .replaceAll('"../../src/sdk"', '"@minutei-ai/boxes"')
+        .replaceAll('"../../src/contracts"', '"@minutei-ai/boxes/contracts"');
+      yield* Effect.promise(() =>
+        writeFile(join(directory, "terminal-consumer.ts"), terminalFixture),
+      );
       const entry = join(directory, "consumer.ts");
       yield* Effect.promise(() => writeFile(entry, fixture));
       yield* Effect.promise(() =>
@@ -95,7 +113,7 @@ await Effect.runPromise(
               noEmit: true,
               types: ["@cloudflare/workers-types", "bun"],
             },
-            include: ["consumer.ts"],
+            include: ["consumer.ts", "terminal-consumer.ts"],
           }),
         ),
       );
@@ -120,6 +138,9 @@ await Effect.runPromise(
       );
       if (!bundle.success) return yield* Effect.die(bundle.logs);
       const consumer = yield* Effect.promise(() => bundle.outputs[0].text());
+      const terminalConsumer = yield* bindingConsumer(
+        join(directory, "node_modules/@minutei-ai/boxes"),
+      );
       const artifact = dirname(Bun.resolveSync("@minutei-ai/boxes-runtime/worker", directory));
       const files = yield* Effect.promise(() => readdir(artifact));
       const modules = [
@@ -165,7 +186,46 @@ await Effect.runPromise(
             ],
             modules: [{ name: "index.js", type: "ESModule", content: consumer }],
           });
-          return yield* Json.local("ORIGIN", origin.href);
+          const terminalName = `${name}-terminal`;
+          const terminalRuntime = yield* runtime.start({
+            name: terminalName,
+            compatibilityDate: "2026-10-06",
+            compatibilityFlags: ["nodejs_compat", "enable_request_signal"],
+            modules,
+            queueConsumers: [
+              { queueName: terminalName, maxBatchSize: 1, maxBatchTimeout: 0, maxRetries: 100 },
+            ],
+            bindings: [
+              R2Bucket.local({ binding: "OBJECTS", id: terminalName }),
+              Text.local("API_KEY", "cirro-local-test-credential"),
+              Queue.local({ binding: "EVENTS", queueName: terminalName, deliveryDelay: 0 }),
+            ],
+          });
+          const terminalOrigin = yield* runtime.start({
+            name: `${terminalName}-consumer`,
+            compatibilityDate: "2026-10-06",
+            compatibilityFlags: ["nodejs_compat", "enable_request_signal"],
+            bindings: [
+              Service.local({ binding: "BOXES", scriptName: terminalName }),
+              Service.local({
+                binding: "BOXES_AGENT",
+                scriptName: terminalName,
+                entrypoint: "Agent",
+              }),
+            ],
+            modules: [
+              {
+                name: "index.js",
+                type: "ESModule",
+                content: Buffer.from(terminalConsumer.bytes).toString("utf8"),
+              },
+            ],
+          });
+          return yield* Json.local("ORIGINS", {
+            standard: origin.href,
+            terminal: terminalOrigin.href,
+            runtime: terminalRuntime.href,
+          });
         }).pipe(Effect.orDie),
       ];
       const proxy = yield* Effect.acquireRelease(
@@ -180,7 +240,7 @@ await Effect.runPromise(
       );
       const request = Effect.fn("packageProof.request")(function* (query: string, id: string) {
         const response = yield* Effect.promise(() =>
-          fetch(new URL(query, proxy.env.ORIGIN), {
+          fetch(new URL(query, proxy.env.ORIGINS.standard), {
             method: "POST",
             body: Schema.encodeSync(Schema.fromJsonString(Id))(id),
           }),
@@ -248,6 +308,65 @@ await Effect.runPromise(
         )
           return yield* Effect.die("Packaged persistent driver proof mismatch");
       }
+      const admin = yield* make({
+        url: proxy.env.ORIGINS.runtime,
+        token: Redacted.make("cirro-local-test-credential"),
+      });
+      yield* admin.create({
+        id: "package-terminal",
+        policy: {
+          networkHosts: [],
+          interruptBudget: 100000,
+          memoryBytes: 8388608,
+          maxOutputBytes: 1048576,
+        },
+      });
+      const ownership = yield* admin.mintCapability("package-terminal", {
+        permissions: ["read", "write", "execute", "manage"],
+        expiresInSeconds: 60,
+      });
+      const terminal = yield* Effect.scoped(
+        Effect.gen(function* () {
+          yield* Effect.acquireRelease(
+            make({ url: proxy.env.ORIGINS.runtime, token: Redacted.make(ownership.token) }),
+            (client) =>
+              Effect.gen(function* () {
+                yield* client.action("package-terminal", { op: "vm.dispose" });
+                const reclaimed = yield* client
+                  .action("package-terminal", { op: "vm.reclaim", limit: 1000 })
+                  .pipe(
+                    Effect.repeat({ until: (progress) => progress.status !== "pending", times: 7 }),
+                  );
+                if (reclaimed.status !== "complete") return yield* Effect.die(reclaimed);
+              }).pipe(Effect.orDie),
+          );
+          const grant = yield* admin.mintCapability("package-terminal", {
+            permissions: ["read", "write", "execute"],
+            expiresInSeconds: 60,
+          });
+          const source = Buffer.from(
+            yield* Effect.promise(() => Bun.file("dist/wasi-pty-resize.wasm").arrayBuffer()),
+          ).toString("base64");
+          const response = yield* Effect.tryPromise(() =>
+            fetch(new URL("/terminal", proxy.env.ORIGINS.terminal), {
+              method: "POST",
+              body: Schema.encodeSync(Schema.fromJsonString(TerminalProofInput))({
+                sandboxId: "package-terminal",
+                token: grant.token,
+                source,
+              }),
+            }),
+          );
+          if (response.status !== 200)
+            return yield* Effect.die({
+              status: response.status,
+              body: yield* Effect.promise(() => response.text()),
+            });
+          return yield* Schema.decodeUnknownEffect(TerminalProof)(
+            yield* Effect.tryPromise(() => response.json()),
+          );
+        }),
+      );
       console.log(
         Schema.encodeSync(
           Schema.fromJsonString(
@@ -255,14 +374,16 @@ await Effect.runPromise(
               version: Package.fields.version,
               transport: Schema.String,
               proof: Schema.String,
+              terminal: TerminalProof,
             }),
           ),
         )({
           version: sdk.version,
+          terminal,
           transport: "native Alchemy workerd service binding and Agent RPC; local R2 and Queue",
           proof: `SDK archive exports and consumer declarations; runtime archive; filesystem snapshot restore; hard-link metadata; RPC callbacks and cooperative disposal; ephemeral context disposal with ${collected} files and concurrent closes; persistent driver contexts and cancellation; scoped authority`,
         }),
       );
     }),
-  ).pipe(Effect.timeout("60 seconds")),
+  ).pipe(Effect.timeout("60 seconds"), Effect.provide(FetchHttpClient.layer)),
 );
