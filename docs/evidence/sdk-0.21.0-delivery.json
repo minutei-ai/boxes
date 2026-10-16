@@ -1,0 +1,226 @@
+{
+  "status": "Experimental 0.21.0 candidate validated with exact SDK/runtime archives and native bindings; publication, deployment, migration continuation and Minutei upgrade pending.",
+  "version": "0.21.0",
+  "sourceBase": "0a4ad2e4e5e0a0c46b2f67e1ccaf18f65f09f2d6",
+  "previousDelivery": "sdk-0.20.0-delivery.json",
+  "localEvidence": "python-contexts-api-local.json",
+  "change": "Retained native Python contexts, explicit context language and unconditional paginated R2 language migration. The existing QuickJS runtime binary is unchanged.",
+  "artifacts": [
+    {
+      "file": "minutei-ai-boxes-0.21.0.tgz",
+      "bytes": 84076,
+      "sha256": "da7a02d1e4f4bb5cc37020bcb4abc8bc8154b22e72d6826af8160c21f7cf74e0"
+    },
+    {
+      "file": "minutei-ai-boxes-runtime-0.21.0.tgz",
+      "bytes": 5570955,
+      "sha256": "cf2cb6be0517b9afcbf6be9d2ec30cd6a2a0d23f1489036bda9175de1e848c15"
+    }
+  ],
+  "local": {
+    "typecheck": "passed",
+    "exactArchiveProof": {
+      "exitCode": 0,
+      "transport": "native Alchemy workerd service binding and Agent RPC; local R2 and Queue",
+      "consumerWorkers": 2,
+      "retainedContexts": [
+        {
+          "phase": "create",
+          "context": {
+            "id": "retained",
+            "language": "javascript",
+            "generation": 0,
+            "state": "idle",
+            "createdAt": 1792193680929,
+            "updatedAt": 1792193681060,
+            "executionId": "retained-first",
+            "deadlineAt": null
+          },
+          "driver": {
+            "value": 41,
+            "closedDenied": true
+          },
+          "python": {
+            "context": {
+              "id": "retained-python",
+              "language": "python",
+              "generation": 0,
+              "state": "idle",
+              "createdAt": 1792193680222,
+              "updatedAt": 1792193680781,
+              "executionId": "python-seed",
+              "deadlineAt": null
+            },
+            "records": [
+              {
+                "id": "python-seed",
+                "status": "exited",
+                "sourceHash": "b36a19bc809458761e72970d5f55678978f882c1fe1fdf2b9180fdbd7ddfb8f3",
+                "language": "python",
+                "startedAt": 1792193680250,
+                "finishedAt": 1792193680788,
+                "output": {
+                  "stdout": "",
+                  "stderr": "",
+                  "result": 41,
+                  "exitCode": 0
+                }
+              }
+            ],
+            "deleted": false
+          },
+          "callbacks": 1,
+          "deleted": false
+        },
+        {
+          "phase": "resume",
+          "context": {
+            "id": "retained",
+            "language": "javascript",
+            "generation": 1,
+            "state": "idle",
+            "createdAt": 1792193680929,
+            "updatedAt": 1792193682256,
+            "executionId": "retained-cleared",
+            "deadlineAt": null
+          },
+          "driver": {
+            "value": 42,
+            "closedDenied": true
+          },
+          "python": {
+            "context": {
+              "id": "retained-python",
+              "language": "python",
+              "generation": 1,
+              "state": "idle",
+              "createdAt": 1792193680222,
+              "updatedAt": 1792193681951,
+              "executionId": "python-cleared",
+              "deadlineAt": null
+            },
+            "records": [
+              {
+                "id": "python-resume",
+                "status": "exited",
+                "sourceHash": "d53d0edc996c5cc129de4a56fff2599f3a5166f2f440c1619089cb9f78871967",
+                "language": "python",
+                "startedAt": 1792193681111,
+                "finishedAt": 1792193681327,
+                "output": {
+                  "stdout": "",
+                  "stderr": "",
+                  "result": [42, "current", "c2VlZA=="],
+                  "exitCode": 0
+                }
+              },
+              {
+                "id": "python-denied",
+                "status": "exited",
+                "sourceHash": "63a2b8d98ae2c0e392ad6454615067f431ba23fa09b8fec01604a03de4b0cb06",
+                "language": "python",
+                "startedAt": 1792193681343,
+                "finishedAt": 1792193681555,
+                "output": {
+                  "stdout": "",
+                  "stderr": "",
+                  "result": "FORBIDDEN",
+                  "exitCode": 0
+                }
+              },
+              {
+                "id": "python-cleared",
+                "status": "exited",
+                "sourceHash": "703d590e2831eb0a587bb76aa83bf423dbd948db3193606373ad9255c295fe15",
+                "language": "python",
+                "startedAt": 1792193681578,
+                "finishedAt": 1792193681955,
+                "output": {
+                  "stdout": "",
+                  "stderr": "",
+                  "result": false,
+                  "exitCode": 0
+                }
+              }
+            ],
+            "deleted": true
+          },
+          "callbacks": 1,
+          "deleted": true
+        }
+      ],
+      "otherRegressionChecks": "SDK archive exports and consumer declarations; runtime archive; filesystem snapshot restore; hard-link metadata; RPC callbacks and cooperative disposal; ephemeral context disposal with 1024 files and concurrent closes; persistent driver contexts and cancellation; retained native heaps and current callback authority; scoped authority",
+      "completeReportSha256": "caf2226c9f97db6d8da63219e7661d63c215483b4ef684ca1fad1ed8dadf21ef"
+    },
+    "archiveComparison": {
+      "files": 24,
+      "result": "All SDK/source/docs and runtime bytes match their owners; Bun-normalized manifests match semantically."
+    }
+  },
+  "predeployment": {
+    "inventory": {
+      "measuredAt": 1792193575156,
+      "profile": "minutei",
+      "worker": "cirro-sandbox-prod-rs7wexxow56rmsoz",
+      "bucket": "cirro-objects-prod-vbk2p6ruhs2m645y",
+      "placement": {
+        "mode": "smart"
+      },
+      "pages": 5,
+      "objects": 4144,
+      "contexts": 0,
+      "records": [],
+      "complete": true
+    },
+    "legacyProbe": {
+      "id": "language-cutover-5d9b023b-f075-4ae9-9262-8a56c21107cb",
+      "phase": "seeded",
+      "measuredAt": 1792193723322,
+      "version": "0.20.0",
+      "value": 41,
+      "context": {
+        "id": "retained",
+        "generation": 0,
+        "state": "idle",
+        "createdAt": 1792193716158,
+        "updatedAt": 1792193720844,
+        "executionId": "before",
+        "deadlineAt": null
+      },
+      "deleted": true
+    },
+    "guestRuntimeSha256": "dcf1a9d66b4c3a11106076c3e9d5fa1f596b8846a811dfeec9ecf3a8744af01f",
+    "guestRuntimeMatchesReleased020": true,
+    "limits": [
+      "The inventory is a point-in-time listing, not proof of all concurrent or future writers.",
+      "The owned legacy probe has an idle 0.20.0 closure and a tombstone. Both remain pending actual migration verification and cleanup."
+    ]
+  },
+  "publication": {
+    "status": "pending",
+    "tag": "sdk-v0.21.0",
+    "prerelease": true,
+    "latest": false
+  },
+  "deployment": {
+    "status": "pending; production remains 0.20.0",
+    "profile": "minutei",
+    "worker": "cirro-sandbox-prod-rs7wexxow56rmsoz"
+  },
+  "minutei": {
+    "status": "pending; local SDK/runtime remain 0.20.0; retained JS/TS enabled locally. No Minutei push or deployment performed."
+  },
+  "openGates": [
+    "Publication and deployment, real old-context migration continuation/cleanup, production native Python binding proof and local Minutei consumer upgrade.",
+    "Queued/cron retained contexts; broader Python stdlib/import/filesystem and process/network/terminal parity.",
+    "Production latency, request billing and AgentOS cost comparison."
+  ],
+  "ci": {
+    "apiSource": {
+      "run": 38981753060,
+      "commit": "0a4ad2e4e5e0a0c46b2f67e1ccaf18f65f09f2d6",
+      "status": "success",
+      "url": "https://github.com/minutei-ai/boxes/actions/runs/38981753060"
+    }
+  }
+}

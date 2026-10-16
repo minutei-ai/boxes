@@ -352,6 +352,10 @@ await Effect.runPromise(
         },
       });
       const retainedGrant = yield* admin.mintCapability("package-terminal", {
+        permissions: ["read", "write", "execute"],
+        expiresInSeconds: 120,
+      });
+      const retainedReadonly = yield* admin.mintCapability("package-terminal", {
         permissions: ["read", "execute"],
         expiresInSeconds: 120,
       });
@@ -361,12 +365,16 @@ await Effect.runPromise(
             if (phase === "resume") return proxy.env.ORIGINS.replacement;
             return proxy.env.ORIGINS.terminal;
           });
+          const token = yield* Effect.sync(() => {
+            if (phase === "resume") return retainedReadonly.token;
+            return retainedGrant.token;
+          });
           const response = yield* Effect.promise(() =>
             fetch(new URL("/retained", origin), {
               method: "POST",
               body: Schema.encodeSync(Schema.fromJsonString(RetainedBindingInput))({
                 sandboxId: "package-terminal",
-                token: retainedGrant.token,
+                token,
                 phase,
               }),
             }),

@@ -15,6 +15,11 @@ export const RetainedBindingProof = Schema.Struct({
   callbacks: Schema.Int,
   deleted: Schema.Boolean,
   driver: Schema.Struct({ value: Schema.Json, closedDenied: Schema.Boolean }),
+  python: Schema.Struct({
+    context: ContextRecord,
+    records: Schema.Array(RunRecord),
+    deleted: Schema.Boolean,
+  }),
 });
 export const VerifiedRetainedBindingProof = RetainedBindingProof.check(
   Schema.makeFilter((proof) => {
@@ -22,12 +27,21 @@ export const VerifiedRetainedBindingProof = RetainedBindingProof.check(
       !proof.driver.closedDenied ||
       proof.callbacks !== 1 ||
       proof.context.state !== "idle" ||
+      proof.python.context.language !== "python" ||
+      proof.python.context.state !== "idle" ||
+      proof.python.records.some(
+        (record) => record.status !== "exited" || record.output?.exitCode !== 0,
+      ) ||
       proof.records.some((record) => record.status !== "exited" || record.output?.exitCode !== 0)
     )
       return false;
     if (proof.phase === "create")
       return (
         proof.driver.value === 41 &&
+        proof.python.records.length === 1 &&
+        proof.python.records[0]?.output?.result === 41 &&
+        !proof.python.deleted &&
+        proof.python.context.generation === 0 &&
         !proof.deleted &&
         proof.context.generation === 0 &&
         proof.records.length === 2 &&
@@ -37,6 +51,14 @@ export const VerifiedRetainedBindingProof = RetainedBindingProof.check(
       );
     return (
       proof.driver.value === 42 &&
+      proof.python.records.length === 3 &&
+      Schema.is(
+        Schema.Tuple([Schema.Literal(42), Schema.Literal("current"), Schema.Literal("c2VlZA==")]),
+      )(proof.python.records[0]?.output?.result) &&
+      proof.python.records[1]?.output?.result === "FORBIDDEN" &&
+      proof.python.records[2]?.output?.result === false &&
+      proof.python.deleted &&
+      proof.python.context.generation === 1 &&
       proof.deleted &&
       proof.context.generation === 1 &&
       proof.records.length === 3 &&
@@ -58,6 +80,62 @@ export const retainedBindingProof = Effect.fn("fixture.retainedBindingProof")(fu
     onExcessProperty: "error",
   })(yield* Effect.promise(() => request.text()));
   const client = yield* makeAgentBinding(binding, Redacted.make(input.token));
+  const python = yield* Effect.gen(function* () {
+    if (input.phase === "create") {
+      yield* client.action(input.sandboxId, {
+        op: "contexts.create",
+        id: "retained-python",
+        language: "python",
+      });
+      const record = yield* client.action(input.sandboxId, {
+        op: "python.execute",
+        id: "python-seed",
+        contextId: "retained-python",
+        env: { MODE: "seed" },
+        source:
+          "import os\ndef factory():\n n=40\n def next():\n  nonlocal n\n  n+=1\n  return n\n return next\nnext_value=factory()\nasync def saved_write(value):\n return await tools.call({'op':'filesystem.writeFile','path':'/tmp/python-grant','content':value,'encoding':'utf8'})\nawait saved_write('seed')\nnext_value()",
+      });
+      return {
+        context: yield* client.action(input.sandboxId, {
+          op: "contexts.get",
+          id: "retained-python",
+        }),
+        records: [record],
+        deleted: false,
+      };
+    }
+    const next = yield* client.action(input.sandboxId, {
+      op: "python.execute",
+      id: "python-resume",
+      contextId: "retained-python",
+      env: { MODE: "current" },
+      source:
+        "content=await tools.call({'op':'filesystem.readFile','path':'/tmp/python-grant'})\n[next_value(),os.getenv('MODE'),content['content']]",
+    });
+    const denied = yield* client.action(input.sandboxId, {
+      op: "python.execute",
+      id: "python-denied",
+      contextId: "retained-python",
+      source:
+        "try:\n await saved_write('bad')\nexcept RuntimeError as error:\n denied=error.error\ndenied",
+    });
+    yield* client.action(input.sandboxId, { op: "contexts.reset", id: "retained-python" });
+    const cleared = yield* client.action(input.sandboxId, {
+      op: "python.evaluate",
+      id: "python-cleared",
+      contextId: "retained-python",
+      expression: "'next_value' in globals()",
+    });
+    const context = yield* client.action(input.sandboxId, {
+      op: "contexts.get",
+      id: "retained-python",
+    });
+    const deleted = yield* client.action(input.sandboxId, {
+      op: "contexts.delete",
+      id: "retained-python",
+    });
+    return { context, records: [next, denied, cleared], deleted: deleted.ok };
+  });
   const callbacks = { count: 0 };
   if (input.phase === "create")
     yield* client.action(input.sandboxId, { op: "contexts.create", id: "retained-driver" });
@@ -119,6 +197,7 @@ export const retainedBindingProof = Effect.fn("fixture.retainedBindingProof")(fu
       callbacks: callbacks.count,
       deleted: false,
       driver,
+      python,
     });
   }
   const record = yield* client.runWithTools(
@@ -168,5 +247,6 @@ export const retainedBindingProof = Effect.fn("fixture.retainedBindingProof")(fu
     callbacks: callbacks.count,
     deleted: deleted.ok,
     driver,
+    python,
   });
 });
