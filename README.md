@@ -12,6 +12,7 @@ Licensed under [Apache 2.0](LICENSE). Maintained by [Minutei AI](https://github.
 - Rust QuickJS for JavaScript, Oxc for TypeScript and Wasmi for Wasm/WASI, inside one ordinary Worker.
 - JavaScript/TypeScript script execution, expression evaluation and execution of files with sandbox imports, reexports, cycles and symlinks.
 - A bounded shell with pipes, redirection, conditionals and initial commands.
+- Alchemy-provisioned default software in shared immutable R2 blocks, with copy-on-write and a separate private-byte quota. The [image evidence](docs/evidence/default-software-full-local.json) records the tested commands and remaining gaps.
 - Capability tokens scoped to one sandbox, permission set and expiration.
 - Guest RPC for authorized filesystem operations, process inspection and HTTPS GET to explicitly authorized hosts.
 - Persistent execution IDs, code digests, completed or failed results, and paginated process summaries.

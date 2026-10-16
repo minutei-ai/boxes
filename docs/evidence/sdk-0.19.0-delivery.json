@@ -1,0 +1,323 @@
+{
+  "status": "Experimental 0.19.0 delivery prepared; public release, tag and production deployment are not yet confirmed. Full AgentOS parity remains open.",
+  "version": "0.19.0",
+  "runtimeSourceCommit": "f1bbf039598d8ffb6766e1bb4a0ce56b14203468",
+  "measuredAt": "2026-10-16T18:01:44.709236+00:00",
+  "artifacts": [
+    {
+      "file": "minutei-ai-boxes-0.19.0.tgz",
+      "bytes": 78165,
+      "sha256": "aa9b30d74ebd44c9cae438efcb640126562390cf6cfe37c435251a54193c15c6"
+    },
+    {
+      "file": "minutei-ai-boxes-runtime-0.19.0.tgz",
+      "bytes": 5549633,
+      "sha256": "e29f2ed45a1d3a8a4c386279629ed0abc0367b8760cfbb8b7a0bc92ef58241c3"
+    }
+  ],
+  "local": {
+    "fullDefaultImage": "default-software-full-local.json",
+    "fullCheckBeforeFinalQuotaPredictor": {
+      "tests": 411,
+      "failed": 0,
+      "files": 89,
+      "assertions": 5914,
+      "seconds": 216.43
+    },
+    "finalQuotaAndNativeR2Focused": {
+      "tests": 12,
+      "failed": 0,
+      "files": 3,
+      "assertions": 108,
+      "seconds": 7.5
+    },
+    "kernelRust": {
+      "tests": 46,
+      "failed": 0,
+      "seconds": 3.28
+    },
+    "minuteiInteroperability": {
+      "clientVersion": "0.18.0",
+      "runtimeVersion": "0.19.0",
+      "runtimeArchiveSha256": "e29f2ed45a1d3a8a4c386279629ed0abc0367b8760cfbb8b7a0bc92ef58241c3",
+      "consumerCommit": "af0214e595b015f98d98bab59c0674d2aa08f73e",
+      "consumerBundleSha256": "12afc7623f59d4f79c78f53de39b474a0678dece00410558b733a3adb289b362",
+      "transport": "native workerd Agent service binding; actual Minutei Code Mode and tenant SQLite; local R2, KV and Queue",
+      "retention": true,
+      "isolatedRegistry": true,
+      "capabilities": true,
+      "consumerFixturesSha256": {
+        "boxes-retention.ts": "ab69256069295b3e155a6e47ebc916e23f4ae760eb4a7ae7afebd9bbc37b050f",
+        "boxes-code.worker.ts": "c3d6f06ea5f5afe322076052267468c4702fe79aff596fa847d68bdc3045e5f4"
+      }
+    },
+    "minuteiInteroperabilityScope": "Actual SDK 0.18.0 consumer against 0.19.0 runtime via Agent service binding, Code Mode and tenant SQLite. Cleanup constraint failures are deliberately injected by the fixture. History Queue consumption, browser authentication and models are not proved.",
+    "exactReleasePackageProof": {
+      "exitCode": 0,
+      "report": {
+        "version": "0.19.0",
+        "transport": "native Alchemy workerd service binding and Agent RPC; local R2 and Queue",
+        "proof": "SDK archive exports and consumer declarations; runtime archive; filesystem snapshot restore; hard-link metadata; RPC callbacks and cooperative disposal; ephemeral context disposal with 1024 files and concurrent closes; persistent driver contexts and cancellation; scoped authority",
+        "terminal": {
+          "inventory": {
+            "running": {
+              "id": "terminal-live",
+              "status": "running",
+              "sourceHash": "a8a6480394435899e061e452f41d433ae5dcff92bcf00e197b8faea415137b28",
+              "language": "wasm",
+              "startedAt": 1792173685857,
+              "finishedAt": null,
+              "stdinMode": "pty"
+            },
+            "settled": {
+              "id": "terminal-live",
+              "status": "exited",
+              "sourceHash": "a8a6480394435899e061e452f41d433ae5dcff92bcf00e197b8faea415137b28",
+              "language": "wasm",
+              "startedAt": 1792173685857,
+              "finishedAt": 1792173686282,
+              "stdinMode": "pty"
+            }
+          },
+          "initial": {
+            "cols": 80,
+            "rows": 24,
+            "revision": 0
+          },
+          "resized": {
+            "cols": 100,
+            "rows": 30,
+            "revision": 2
+          },
+          "terminal": {
+            "id": "terminal-live",
+            "status": "exited",
+            "sourceHash": "a8a6480394435899e061e452f41d433ae5dcff92bcf00e197b8faea415137b28",
+            "language": "wasm",
+            "startedAt": 1792173685857,
+            "finishedAt": 1792173686282,
+            "output": {
+              "stdout": "ready\neof-ready\nwinch\nafter-one\nwinch\ndone\n",
+              "stderr": "",
+              "result": null,
+              "exitCode": 0
+            }
+          },
+          "agent": {
+            "id": "terminal-agent",
+            "status": "exited",
+            "sourceHash": "0bc9adff0ae13ee1bef54d4ae1ab07254e340a996cec8b6a418fe919151d4056",
+            "language": "typescript",
+            "startedAt": 1792173686174,
+            "finishedAt": 1792173686242,
+            "output": {
+              "stdout": "",
+              "stderr": "",
+              "result": {
+                "cols": 100,
+                "rows": 30,
+                "revision": 2
+              },
+              "exitCode": 0
+            }
+          },
+          "input": {
+            "offset": 0,
+            "total": 0,
+            "closed": true
+          },
+          "staleRevision": 409,
+          "foreignSandbox": 401,
+          "foreground": {
+            "id": "terminal-foreground",
+            "status": "exited",
+            "sourceHash": "ba142b7baf1b3995c8c0c79e34cbbaa5a5918c22842d94de6aaed64be41b3dc3",
+            "language": "wasm",
+            "startedAt": 1792173686320,
+            "finishedAt": 1792173686364,
+            "output": {
+              "stdout": "interrupt\npair-done\n",
+              "stderr": "",
+              "result": null,
+              "exitCode": 0
+            }
+          },
+          "rawOwners": {
+            "id": "terminal-raw-owners",
+            "status": "exited",
+            "sourceHash": "47334effdf47f9cd168641c5b517244045a26912fab8c5f7dd63d11088783fc2",
+            "language": "wasm",
+            "startedAt": 1792173686585,
+            "finishedAt": 1792173686750,
+            "output": {
+              "stdout": "raw-owners-restored\n",
+              "stderr": "",
+              "result": null,
+              "exitCode": 0
+            }
+          },
+          "termios": {
+            "id": "terminal-termios",
+            "status": "exited",
+            "sourceHash": "10c8332bd7f638de1770e1493da38074a0b06d618c198f589d69c36c835c641f",
+            "language": "wasm",
+            "startedAt": 1792173686764,
+            "finishedAt": 1792173686807,
+            "output": {
+              "stdout": "termios-verified\n",
+              "stderr": "",
+              "result": null,
+              "exitCode": 0
+            }
+          },
+          "attributes": {
+            "initial": {
+              "desired": {
+                "attributes": null,
+                "revision": 0
+              },
+              "observed": {
+                "attributes": {
+                  "icrnl": true,
+                  "opost": true,
+                  "onlcr": true,
+                  "icanon": true,
+                  "echo": true,
+                  "isig": true,
+                  "cc": [3, 28, 26, 4, 127, 21, 23]
+                },
+                "revision": 0
+              },
+              "settled": false
+            },
+            "guest": {
+              "desired": {
+                "attributes": {
+                  "icrnl": false,
+                  "opost": false,
+                  "onlcr": false,
+                  "icanon": false,
+                  "echo": false,
+                  "isig": false,
+                  "cc": [1, 2, 3, 4, 5, 6, 7]
+                },
+                "revision": 1
+              },
+              "observed": {
+                "attributes": {
+                  "icrnl": false,
+                  "opost": false,
+                  "onlcr": false,
+                  "icanon": false,
+                  "echo": true,
+                  "isig": false,
+                  "cc": [1, 2, 3, 4, 5, 6, 7]
+                },
+                "revision": 1
+              },
+              "settled": false
+            },
+            "final": {
+              "desired": {
+                "attributes": {
+                  "icrnl": true,
+                  "opost": true,
+                  "onlcr": true,
+                  "icanon": true,
+                  "echo": false,
+                  "isig": true,
+                  "cc": [1, 2, 3, 4, 5, 6, 7]
+                },
+                "revision": 3
+              },
+              "observed": {
+                "attributes": {
+                  "icrnl": true,
+                  "opost": true,
+                  "onlcr": true,
+                  "icanon": true,
+                  "echo": false,
+                  "isig": true,
+                  "cc": [1, 2, 3, 4, 5, 6, 7]
+                },
+                "revision": 3
+              },
+              "settled": true
+            },
+            "process": {
+              "id": "terminal-attributes",
+              "status": "exited",
+              "sourceHash": "631b044078fbac8a03ddea47e5b1ef2185f919c6289a76ec7112a84ab6c8b3b0",
+              "language": "wasm",
+              "startedAt": 1792173686847,
+              "finishedAt": 1792173687548,
+              "output": {
+                "stdout": "attributes-ready\r\nraw-ok\nguest-changed\nconfigured-again\neof-ready\nterminal-done\r\n",
+                "stderr": "",
+                "result": null,
+                "exitCode": 0
+              }
+            },
+            "staleRevision": 409,
+            "foreignSandbox": 401
+          }
+        }
+      }
+    }
+  },
+  "publication": {
+    "status": "not published",
+    "plannedRelease": "https://github.com/minutei-ai/boxes/releases/tag/sdk-v0.19.0",
+    "prerelease": true,
+    "latest": false,
+    "anonymousDownloads": "not verified"
+  },
+  "ci": {
+    "source": {
+      "runId": 38943636350,
+      "url": "https://github.com/minutei-ai/boxes/actions/runs/38943636350",
+      "status": "completed",
+      "conclusion": "success",
+      "commit": "f1bbf039598d8ffb6766e1bb4a0ce56b14203468",
+      "tests": 412,
+      "failed": 0,
+      "files": 89,
+      "assertions": 5942,
+      "seconds": 143.31
+    }
+  },
+  "deployment": {
+    "status": "not deployed",
+    "profile": "minutei",
+    "worker": "cirro-sandbox-prod-rs7wexxow56rmsoz",
+    "bucket": "cirro-objects-prod-vbk2p6ruhs2m645y",
+    "format": "filesystem-v5",
+    "currentProductionVersion": "0.18.0",
+    "plan": {
+      "exitCode": 0,
+      "seconds": 4.8,
+      "workerUpdates": 1,
+      "bindingChanges": 1,
+      "actions": 2,
+      "unchanged": ["Objects", "Executions", "ExecutionConsumer"],
+      "newBinding": "SOFTWARE_BASE"
+    }
+  },
+  "minutei": {
+    "status": "SDK/runtime 0.19.0 upgrade pending public publication. No Minutei push or deployment authorized.",
+    "currentCommit": "af0214e595b015f98d98bab59c0674d2aa08f73e",
+    "currentVersion": "0.18.0"
+  },
+  "openGates": [
+    "Remaining coreutils imports and full command/option behavior, including account transitions.",
+    "Cross-process record locks; valid descriptors currently return ENOTSUP rather than success.",
+    "Global shared-image garbage collection and large private-package streaming.",
+    "Full process, terminal, network and language parity from docs/parity.md.",
+    "Minutei production authentication, model behavior and History Queue consumption.",
+    "Production latency, maximum-memory and billing comparison against AgentOS."
+  ],
+  "archiveComparison": {
+    "files": 24,
+    "result": "Exact source/build bytes match, with native Bun package.json formatting compared as JSON values."
+  }
+}
