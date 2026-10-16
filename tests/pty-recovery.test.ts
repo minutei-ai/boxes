@@ -14,6 +14,7 @@ for (const mode of [
   "geometry",
   "geometry-restart",
   "signals",
+  "foreground",
 ] as const) {
   test(`active ${mode} PTY preserves its checkpointed state across Worker replacement`, () =>
     Effect.runPromise(
@@ -26,7 +27,17 @@ for (const mode of [
           const retained = yield* Effect.scoped(
             Effect.gen(function* () {
               const worker = yield* Effect.acquireRelease(
-                Effect.sync(() => runtime(directory, { advance: 30000 })),
+                Effect.sync(() =>
+                  runtime(directory, {
+                    advance: 30000,
+                    advanceAfterBytes: Match.value(mode).pipe(
+                      Match.when("foreground", () =>
+                        Buffer.byteLength("child-ready\r\nhelowned\r\n"),
+                      ),
+                      Match.orElse(() => 0),
+                    ),
+                  }),
+                ),
                 (worker) => Effect.promise(() => worker.dispose()),
               );
               const url = (yield* Effect.promise(() => worker.ready)).toString();
@@ -48,6 +59,28 @@ for (const mode of [
                 expiresInSeconds: 3600,
               });
               const client = yield* make({ url, token: Redacted.make(grant.token) });
+              if (mode === "foreground") {
+                for (const [name, artifact] of [
+                  ["owned", "child"],
+                  ["foreign", "foreign"],
+                ] as const) {
+                  yield* client.action("active", {
+                    op: "filesystem.writeFile",
+                    path: `/tmp/tty-${name}.wasm`,
+                    encoding: "base64",
+                    content: Buffer.from(
+                      yield* Effect.promise(() =>
+                        Bun.file(`dist/wasi-tty-foreground-${artifact}.wasm`).arrayBuffer(),
+                      ),
+                    ).toString("base64"),
+                  });
+                  yield* client.action("active", {
+                    op: "filesystem.chmod",
+                    path: `/tmp/tty-${name}.wasm`,
+                    mode: 493,
+                  });
+                }
+              }
               if (mode === "family") {
                 yield* client.action("active", {
                   op: "filesystem.writeFile",
@@ -68,6 +101,7 @@ for (const mode of [
                 Match.when("geometry", () => "wasi-pty-resize-recovery.wasm"),
                 Match.when("geometry-restart", () => "wasi-pty-resize-restart.wasm"),
                 Match.when("signals", () => "wasi-tty-signals-recovery.wasm"),
+                Match.when("foreground", () => "wasi-tty-foreground-recovery.wasm"),
                 Match.when("cancelled", () => "wasi-pty-recovery-cooked.wasm"),
                 Match.orElse((mode) => `wasi-pty-recovery-${mode}.wasm`),
               );
@@ -99,12 +133,13 @@ for (const mode of [
                 body: Schema.encodeSync(ProcessDelivery)({ key, eTag: original.etag }),
               };
               const control = yield* Effect.promise(() => worker.control);
-              yield* Effect.promise(() => control.deliver("executions", [event]));
+              const delivered = yield* Effect.promise(() => control.deliver("executions", [event]));
               const object = yield* Effect.promise(() => objects.get(key));
               if (object === null) return yield* Effect.die("Missing checkpointed receipt");
               const paused = yield* Schema.decodeUnknownEffect(Schema.fromJsonString(StoredRun))(
                 yield* Effect.promise(() => object.text()),
               );
+              expect(delivered.outcome).toBe("ok");
               expect(paused.status).toBe("queued");
               expect(paused.stdinMode).toBe("pty");
               expect(paused.checkpointCount).toBe(1);
@@ -126,6 +161,7 @@ for (const mode of [
               );
               const pids = Match.value(mode).pipe(
                 Match.when("family", () => [1, 2]),
+                Match.when("foreground", () => [1, 2]),
                 Match.orElse(() => [1]),
               );
               expect(heap.handles.map((handle) => handle.pid).sort()).toEqual(pids);
@@ -142,6 +178,11 @@ for (const mode of [
               }
               if (mode === "cancelled") expect(prefix).toBe("hel");
               if (mode === "signals") expect(prefix).toBe("ready\r\nhel");
+              if (mode === "foreground") {
+                expect(prefix).toContain("hel");
+                expect(prefix.split("owned\r\n").length).toBe(2);
+                expect(prefix.split("child-ready\r\n").length).toBe(2);
+              }
               if (mode === "raw")
                 expect(
                   yield* client.action("active", {
@@ -172,6 +213,7 @@ for (const mode of [
               const tail = Match.value(mode).pipe(
                 Match.when("raw", () => Buffer.from([0, 3, 4, 13, 10, 127, 255])),
                 Match.when("signals", () => Buffer.from("\x03kept\n")),
+                Match.when("foreground", () => Buffer.from([3])),
                 Match.orElse(() => Buffer.from("lo\r")),
               );
               expect(
@@ -287,6 +329,7 @@ for (const mode of [
             Match.when("geometry", () => Buffer.from("winch\r\ndone\r\n")),
             Match.when("geometry-restart", () => Buffer.from("winch\r\ndone\r\n")),
             Match.when("signals", () => Buffer.from("kept\r\ninterrupt\r\ndone\r\n")),
+            Match.when("foreground", () => Buffer.from("reclaimed\r\ndone\r\n")),
             Match.when("cooked", () => Buffer.from("lo\r\nread:hello\r\neof\r\n")),
             Match.when("family", () => Buffer.from("lo\r\nhello\r\n\r\nbytes=6\r\n")),
             Match.orElse(() =>

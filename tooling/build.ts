@@ -328,6 +328,23 @@ await Effect.runPromise(
         `dist/wasi-tty-signals-${fixture}.wasm`,
       ]);
     }
+    for (const fixture of ["parent", "child", "foreign", "pair", "recovery"]) {
+      yield* run([
+        "rustc",
+        "--crate-type",
+        "cdylib",
+        "--target",
+        "wasm32-unknown-unknown",
+        "-O",
+        "-C",
+        "strip=symbols",
+        "--cfg",
+        `case="${fixture}"`,
+        "tests/fixtures/wasi-tty-foreground.rs",
+        "-o",
+        `dist/wasi-tty-foreground-${fixture}.wasm`,
+      ]);
+    }
     for (const fixture of ["normal", "blocked"]) {
       yield* run([
         "rustc",

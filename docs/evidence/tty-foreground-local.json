@@ -1,0 +1,125 @@
+{
+  "status": "Locally verified source extension after published 0.13.0. No new release, archives or production deployment. Full AgentOS parity remains open.",
+  "baseCommit": "bc60c108c0fd794c41cfeac4ec35abaf98052c00",
+  "baseCI": {
+    "url": "https://github.com/minutei-ai/boxes/actions/runs/38864227262",
+    "status": "completed",
+    "conclusion": "success"
+  },
+  "contract": {
+    "module": "host_tty",
+    "get_foreground": "(fd: u32, group_ptr: u32) -> WASI errno; writes a little-endian u32 group.",
+    "set_foreground": "(fd: u32, group: u32) -> WASI errno; accepts a live group in the caller session, including a stopped group.",
+    "ownership": "The existing native descriptor grants access to its terminal. Group lookup is confined to the current virtual process family. Caller/target session matching follows the inspected upstream kernel policy; controlling-terminal session acquisition is not implemented.",
+    "errors": {
+      "8": "Invalid/closed descriptor",
+      "21": "Invalid output memory",
+      "28": "Zero or out-of-range group",
+      "59": "Non-terminal descriptor",
+      "63": "Target group belongs to another session",
+      "71": "No live target group"
+    },
+    "upstreamPolicyReference": "https://github.com/rivet-dev/agentos/blob/4d48628304c1ddedafc9d55f60752093fcf6f3d2/crates/kernel/src/kernel.rs",
+    "abiScope": "These two host_tty imports are explicit Boxes extensions for compiled guest programs, not a claim that stock upstream WASI packages import them."
+  },
+  "persistence": "The existing shared native Terminal.foreground cell is the single owner. Aliases and master/slave ends see the same cell. The current native heap checkpoint retains the selected group and process table. No input-head shape, R2 namespace, data migration or infrastructure resource changes.",
+  "verification": {
+    "fullNativeCheck": {
+      "command": "bun run check",
+      "tests": 383,
+      "files": 76,
+      "assertions": 5187,
+      "seconds": 187.84,
+      "failures": 0,
+      "includes": [
+        "Runtime and SDK build",
+        "TypeScript",
+        "Workspace Clippy",
+        "Cargo tests",
+        "Native workerd/R2/Queue tests"
+      ]
+    },
+    "format": "bun run format:check passed.",
+    "nativeParent": "A parent in group 1 gives its attached terminal to child group 2 through a duplicated descriptor. A separate-session group is rejected. Resize sends SIGWINCH to child 2; the parent trampoline would fail on a misrouted resize. Ctrl-Z stops the child, the parent observes WUNTRACED, changes foreground away and back while the child is stopped, sends SIGCONT and observes WCONTINUED. Ctrl-C exits the child with raw wait status 2. The exited group is rejected, group 1 reclaims foreground, and a later Ctrl-C reaches the parent handler. Three input bytes are retained exactly.",
+    "nativePair": "An internal PTY starts with foreground zero. Setting the slave to group 1 is visible through its master. Native master fd_write of Ctrl-C invokes the root handler once through the shared signal scheduler; the interrupted tty read completes and the guest exits zero.",
+    "errorChecks": "Invalid pointers, closed aliases, missing/invalid groups, non-terminal descriptors, cross-session selection and exited groups return their declared errno. Failed mutations retain the previous group.",
+    "replacement": "A real R2 checkpoint retains native handles 1 and 2, foreground 2, the parent wait frame and the child read with partial canonical input. After replacement, a later Ctrl-C targets child 2, clears the partial line once and allows the parent to reclaim group 1. Exact output, accepted offsets and complete replay survive duplicate Queue delivery without reentry.",
+    "initialFocusedRun": {
+      "passed": 9,
+      "failed": 1,
+      "assertions": 148,
+      "seconds": 19.31,
+      "finding": "Live parent/pair cases passed. Advancing the virtual clock on the first output during multi-child setup produced native Queue outcome exception and left the receipt running, before any checkpoint. Cause instrumentation did not expose a typed Effect failure."
+    },
+    "steadyStateRecoveryProbe": {
+      "passed": 1,
+      "failed": 0,
+      "assertions": 21,
+      "seconds": 2.76,
+      "change": "Only the clock-advance readiness predicate changed for this probe: wait for the completed setup messages before advancing the same 30 seconds. No checkpoint/status/output assertion was removed and no timeout increased."
+    },
+    "clockHarness": "The test helper now accepts advanceAfterBytes, validated with StdioRef.size. The foreground fixture supplies the exact byte count of child-ready, initial input echo and owned messages. Other workloads retain the default any-output predicate. Every recovery case verifies the native Queue outcome before checking its persisted checkpoint. Diagnostic logs and temporary fixed thresholds were removed.",
+    "generalBenchmark": {
+      "command": "bun run bench",
+      "result": "passed",
+      "environment": {
+        "runtime": "local workerd via native Alchemy",
+        "alchemy": "2.0.0-beta.83",
+        "production": false,
+        "platform": "linux",
+        "arch": "x64"
+      },
+      "artifactBytes": {
+        "javascript": 369402,
+        "kernelWasm": 1139581,
+        "wasiWasm": 1676510,
+        "pythonWasm": 10719083,
+        "guestWasm": 1129863,
+        "compilerWasm": 1943596
+      },
+      "wasiPublication": {
+        "samples": 25,
+        "rootPublications": 25
+      },
+      "contentDeduplication": {
+        "singleFileWrites": 25,
+        "uniqueBlocks": 1,
+        "singleFileLogicalBytesWritten": 6553600,
+        "storedBlockBytes": 262144
+      },
+      "limits": "Maintained local regression smoke only; no paired baseline or production performance claim. Existing performance evidence was preserved."
+    }
+  },
+  "limits": [
+    "The successful recovery proof covers completed setup. Immediate virtual-time handover during in-flight multi-child initialization still produced an exception; no production diagnosis or runtime fix for that phase is claimed. Admission/handover overlap remains an explicit open gate.",
+    "Controlling-terminal acquisition/session ownership, SIGTTIN/SIGTTOU background-access policy, raw-mode recovery leases, full termios and richer public terminal metadata/listing remain open.",
+    "Arbitrary-crash and cross-build native heap recovery remain open.",
+    "Remote CI and production delivery of this source increment are separate gates; no new performance or cost advantage is claimed."
+  ],
+  "runtimeAssets": {
+    "cirro_compiler_bg.wasm": {
+      "bytes": 1943596,
+      "sha256": "27d9b0022a634ed4eef47b6561ad38cafde3522c17e834afed1264440678bf2f"
+    },
+    "cirro_guest_bg.wasm": {
+      "bytes": 1129863,
+      "sha256": "b773b74626b08bd1083860081ccd2a3d0fdff80dcd97b5ec13ed7c6e2148ef22"
+    },
+    "cirro_kernel_bg.wasm": {
+      "bytes": 1139581,
+      "sha256": "1d3d1811805905af3c00e8afedd696c22d585db7538877306c28e7b099725e92"
+    },
+    "cirro_python_bg.wasm": {
+      "bytes": 10719083,
+      "sha256": "8aa6aec5ab6fb0623637e2b6dda7318f4934e4736f4a97e45ca3312bf32e529c"
+    },
+    "cirro_wasi_bg.wasm": {
+      "bytes": 1676510,
+      "sha256": "ec69d42567efcb741aa978559f66ac5b1d849a686a7b173c3678495d0b0c90ef"
+    },
+    "index.js": {
+      "bytes": 369402,
+      "sha256": "c08bf2dbc14dd2a315d53c1fad03adc253fadf62d16da763826bdff829223dc7"
+    }
+  }
+}

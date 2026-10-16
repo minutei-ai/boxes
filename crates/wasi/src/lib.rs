@@ -2987,6 +2987,52 @@ fn dispatch(caller: &mut Caller<'_, State>, name: &str, args: &[u64]) -> Result<
                 caller.data_mut().umask = a[0] as u32 & 0o777;
             }
         }
+        "get_foreground" | "set_foreground" => {
+            let descriptor = caller
+                .data()
+                .descriptors
+                .get(&(a[0] as u32))
+                .ok_or(Failure::Errno(8))?;
+            let terminal = descriptor
+                .pipe
+                .as_ref()
+                .and_then(|pipe| pipe.terminal.as_ref())
+                .ok_or(Failure::Errno(59))?
+                .terminal
+                .clone();
+            if name == "get_foreground" {
+                put(caller, a[1], &terminal.foreground.get().to_le_bytes())?;
+            } else {
+                let group = a[1] as u32;
+                if group == 0 || group > i32::MAX as u32 {
+                    return Err(Failure::Errno(28));
+                }
+                let table = caller.data().processes.borrow();
+                let requester_session = if caller.data().pid == 1 {
+                    table.root_session
+                } else {
+                    table
+                        .children
+                        .get(&caller.data().pid)
+                        .ok_or(Failure::Errno(71))?
+                        .session
+                };
+                let group_session = if group == table.root_group {
+                    table.root_session
+                } else {
+                    table
+                        .children
+                        .values()
+                        .find(|child| child.group == group && child.code.is_none() && !child.failed)
+                        .ok_or(Failure::Errno(71))?
+                        .session
+                };
+                if requester_session != group_session {
+                    return Err(Failure::Errno(63));
+                }
+                terminal.foreground.set(group);
+            }
+        }
         "set_raw_mode" => {
             if a[0] > 1 {
                 return Err(Failure::Errno(28));
@@ -3408,6 +3454,8 @@ fn linker(engine: &Engine) -> Result<Linker<State>, String> {
     bind!("host_process","proc_umask",a:i32,b:i32);
     bind!("host_tty","set_raw_mode",a:i32);
     bind!("host_tty","get_size",a:i32,b:i32,c:i32);
+    bind!("host_tty","get_foreground",a:i32,b:i32);
+    bind!("host_tty","set_foreground",a:i32,b:i32);
     linker
         .func_wrap(
             "host_tty",
