@@ -110,6 +110,32 @@
         "boxes-retention.ts": "ab69256069295b3e155a6e47ebc916e23f4ae760eb4a7ae7afebd9bbc37b050f",
         "boxes-code.worker.ts": "c3d6f06ea5f5afe322076052267468c4702fe79aff596fa847d68bdc3045e5f4"
       }
+    },
+    "testBudgetRepair": {
+      "failedCI": "https://github.com/minutei-ai/boxes/actions/runs/38872905736",
+      "failure": "The combined five-runtime spawn/duplicate-ID case exceeded Bun default 5000 ms; Bun then killed the shared runtime and three following cases failed with closed connections. Runtime and SDK source were unchanged from the preceding green implementation CI.",
+      "change": "Each runtime has its own native Queue admission case and sandbox; duplicate-ID contention has a separate case. The same shared native Worker and existing default deadlines remain. Every previous assertion is retained and each runtime additionally asserts an exited receipt.",
+      "beforeLocal": {
+        "tests": 13,
+        "failures": 0,
+        "seconds": 16.09,
+        "combinedCaseMs": 1388.54
+      },
+      "afterLocal": {
+        "tests": 18,
+        "failures": 0,
+        "assertions": 161,
+        "seconds": 16.33,
+        "runtimeMs": {
+          "javascript": 120.15,
+          "typescript": 114.01,
+          "python": 279.82,
+          "shell": 84.68,
+          "wasm": 96.52
+        },
+        "duplicateContentionMs": 797.66
+      },
+      "limits": "One focused local run before and after; no throughput improvement claim. The change gives each independent behavior its own unchanged native test deadline rather than increasing timeouts."
     }
   },
   "archives": [

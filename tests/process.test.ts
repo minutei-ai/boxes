@@ -120,19 +120,20 @@ test("spawn survives the initiating request and wait reports a real exit after a
   expect(repeated).toEqual(completed);
 });
 
-test("spawn executes every existing runtime and reserves duplicate IDs exactly once", async () => {
-  const token = await setup("spawn-runtimes");
-  const programs = {
-    javascript: "export default () => 42;",
-    typescript: "export default (): number => 42;",
-    python: "6 * 7",
-    shell: "echo native-background",
-    wasm: Buffer.from(
-      await Bun.file(join(import.meta.dir, "../dist/guest-test.wasm")).arrayBuffer(),
-    ).toString("base64"),
-  };
-  for (const [language, source] of Object.entries(programs)) {
-    const response = await action("spawn-runtimes", token, {
+const programs = {
+  javascript: "export default () => 42;",
+  typescript: "export default (): number => 42;",
+  python: "6 * 7",
+  shell: "echo native-background",
+  wasm: Buffer.from(
+    await Bun.file(join(import.meta.dir, "../dist/guest-test.wasm")).arrayBuffer(),
+  ).toString("base64"),
+};
+for (const [language, source] of Object.entries(programs)) {
+  test(`spawn executes the ${language} runtime through the native Queue`, async () => {
+    const sandbox = `spawn-${language}`;
+    const token = await setup(sandbox);
+    const response = await action(sandbox, token, {
       op: "process.spawn",
       execution: { op: "process.run", id: language, language, source },
     });
@@ -140,13 +141,17 @@ test("spawn executes every existing runtime and reserves duplicate IDs exactly o
     const reserved = Schema.decodeUnknownSync(RunRecord)(await response.json());
     expect(reserved.status).toBe("queued");
     expect(reserved.output).toBeNull();
-    const finished = await observed("spawn-runtimes", token, language);
+    const finished = await observed(sandbox, token, language);
+    expect(finished.status).toBe("exited");
     expect(finished.output?.exitCode).toBe(0);
     expect(language).toBe(finished.language);
-  }
+  });
+}
+test("concurrent spawn reserves duplicate IDs exactly once", async () => {
+  const token = await setup("spawn-reservation");
   const attempts = await Promise.all(
     Array.from({ length: 4 }, () =>
-      action("spawn-runtimes", token, {
+      action("spawn-reservation", token, {
         op: "process.spawn",
         execution: {
           op: "process.run",
@@ -159,7 +164,7 @@ test("spawn executes every existing runtime and reserves duplicate IDs exactly o
   );
   expect(attempts.filter((response) => response.status === 200)).toHaveLength(1);
   expect(attempts.filter((response) => response.status === 409)).toHaveLength(3);
-  expect((await observed("spawn-runtimes", token, "once")).output?.result).toBe(42);
+  expect((await observed("spawn-reservation", token, "once")).output?.result).toBe(42);
 });
 
 test("file entry preparation, permissions and sandbox isolation remain authoritative for spawn and wait", async () => {
