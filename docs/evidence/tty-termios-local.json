@@ -1,5 +1,5 @@
 {
-  "status": "Locally verified Rust source after published 0.14.0. No new matching archive, release or production deployment. Full AgentOS parity remains open.",
+  "status": "Local verification of earlier native guest-attribute source after 0.14.0, retaining its original artifact hashes and performance samples. Later matching 0.15.0 archive and production delivery are tracked in sdk-0.15.0-delivery.json. Full AgentOS parity remains open.",
   "baseCommit": "0d2b612638f7737df020abc5c2cf9fac1b7fd206",
   "baseCI": {
     "url": "https://github.com/minutei-ai/boxes/actions/runs/38875607930",
@@ -274,5 +274,6 @@
     "The packed ABI contains the six flags and seven controls of the inspected reference; other libc termios fields and modes are not accepted.",
     "Cooperative same-build R2 recovery is tested. Arbitrary-crash recovery, cross-build heap migration and production published-shell recovery remain open.",
     "Matching archive delivery, remote CI and production proof of this source increment remain separate gates."
-  ]
+  ],
+  "deliveryEvidence": "docs/evidence/sdk-0.15.0-delivery.json"
 }

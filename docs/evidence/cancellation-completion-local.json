@@ -1,5 +1,5 @@
 {
-  "status": "Locally verified native cancellation reconciliation. No production deployment yet.",
+  "status": "Locally verified native cancellation reconciliation. Matching 0.15.0 production delivery is tracked separately in sdk-0.15.0-delivery.json.",
   "baseCommit": "0b652dfea146a17f9b2d47043f1563c1e00fa5b2",
   "reproduction": {
     "archiveFailure": "Initial 0.15.0 package proof failed with BoxesError: Execution changed during cancellation. Five subsequent ordinary proofs passed; the concentrated persistent-context run reproduced the same error at its third read phase.",
@@ -28,5 +28,6 @@
   "limits": [
     "Still-active conflicts remain explicit 409 responses. This is not an unconditional retry or suppression policy.",
     "No ambiguous-write fault injection or production claim."
-  ]
+  ],
+  "deliveryEvidence": "docs/evidence/sdk-0.15.0-delivery.json"
 }

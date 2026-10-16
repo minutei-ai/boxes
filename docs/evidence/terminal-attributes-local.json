@@ -1,5 +1,5 @@
 {
-  "status": "Locally verified source after 0.14.0; no matching archive publication, production deployment or Minutei update for these APIs. Full AgentOS parity remains open.",
+  "status": "Local verification of the public attribute-control source, with its original artifacts and measurements retained. Matching 0.15.0 publication, deployment and consumer delivery are tracked in sdk-0.15.0-delivery.json. Full AgentOS parity remains open.",
   "baseCommit": "92fdf6d2f645b32dc31494bf1125465708a9ac8f",
   "contracts": {
     "configure": "process.terminal.configure requires execute, a complete six-flag/seven-byte record and expected desired revision. CAS publishes the new desired state; every accepted call advances revision, including identical attributes.",
@@ -397,5 +397,6 @@
     "Same-build cooperative recovery only; arbitrary crashes and cross-build heap migration remain open",
     "No fault injection for ambiguous R2 write results in these new attribute operations; confirmed CAS conflicts are tested",
     "No new published archive, remote CI result, production deployment or consumer update is established by this local evidence"
-  ]
+  ],
+  "deliveryEvidence": "docs/evidence/sdk-0.15.0-delivery.json"
 }
