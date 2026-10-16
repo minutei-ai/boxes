@@ -14,6 +14,7 @@ import {
 import { make } from "../src/sdk";
 import { FetchHttpClient } from "effect/http";
 import { bindingConsumer } from "./binding-consumer";
+import { terminalProofSources } from "./terminal-proof-inputs";
 import { TerminalProof, TerminalProofInput } from "../tests/fixtures/terminal-proof";
 import { Id } from "../src/contracts";
 import {
@@ -344,16 +345,14 @@ await Effect.runPromise(
             permissions: ["read", "write", "execute"],
             expiresInSeconds: 60,
           });
-          const source = Buffer.from(
-            yield* Effect.promise(() => Bun.file("dist/wasi-pty-resize.wasm").arrayBuffer()),
-          ).toString("base64");
+          const sources = yield* terminalProofSources();
           const response = yield* Effect.tryPromise(() =>
             fetch(new URL("/terminal", proxy.env.ORIGINS.terminal), {
               method: "POST",
               body: Schema.encodeSync(Schema.fromJsonString(TerminalProofInput))({
                 sandboxId: "package-terminal",
                 token: grant.token,
-                source,
+                ...sources,
               }),
             }),
           );

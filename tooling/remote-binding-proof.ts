@@ -1,4 +1,5 @@
 import { bindingConsumer } from "./binding-consumer";
+import { terminalProofSources } from "./terminal-proof-inputs";
 import { TerminalProof, TerminalProofInput } from "../tests/fixtures/terminal-proof";
 import { DescriptorProof } from "../tests/fixtures/descriptor-proof";
 import { prepareDescriptorProof } from "../tests/fixtures/descriptor-proof-inputs";
@@ -289,9 +290,7 @@ const report = await Effect.runPromise(
       });
       if (retained.content !== proof.file.content || retained.encoding !== proof.file.encoding)
         return yield* Effect.die("Binding write was not retained by the deployed sandbox");
-      const terminalSource = yield* Effect.promise(() =>
-        Bun.file("dist/wasi-pty-resize.wasm").arrayBuffer(),
-      );
+      const terminalSources = yield* terminalProofSources();
       const terminalResponse = yield* Effect.tryPromise(() =>
         fetch(new URL("/terminal", session.url), {
           method: "POST",
@@ -301,7 +300,7 @@ const report = await Effect.runPromise(
           body: Schema.encodeSync(Schema.fromJsonString(TerminalProofInput))({
             sandboxId: id,
             token: grant.token,
-            source: Buffer.from(terminalSource).toString("base64"),
+            ...terminalSources,
           }),
         }),
       );

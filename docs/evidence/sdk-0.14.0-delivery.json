@@ -1,0 +1,5 @@
+{
+  "status": "Experimental 0.14.0 delivery pending. Exact archive and consumer evidence is recorded in sdk-0.14.0-local.json; publication and production have not been established.",
+  "version": "0.14.0",
+  "localEvidence": "docs/evidence/sdk-0.14.0-local.json"
+}

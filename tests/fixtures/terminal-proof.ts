@@ -11,6 +11,20 @@ import {
 export const TerminalProofInput = AgentRequest.mapFields((fields) => ({
   ...Struct.pick(fields, ["sandboxId", "token"]),
   source: WasmProgram.fields.source,
+  foregroundSource: WasmProgram.fields.source,
+  rawOwners: Schema.Struct({
+    parent: WasmProgram.fields.source,
+    children: Schema.Struct({
+      normal: WasmProgram.fields.source,
+      closed: WasmProgram.fields.source,
+      trap: WasmProgram.fields.source,
+      signal: WasmProgram.fields.source,
+      exec: WasmProgram.fields.source,
+      failed: WasmProgram.fields.source,
+      background: WasmProgram.fields.source,
+      replacement: WasmProgram.fields.source,
+    }),
+  }),
 }));
 export const TerminalProof = Schema.Struct({
   initial: TerminalGeometry,
@@ -20,12 +34,16 @@ export const TerminalProof = Schema.Struct({
   input: InputReceipt,
   staleRevision: Schema.Literal(409),
   foreignSandbox: Schema.Literal(401),
+  foreground: RunRecord,
+  rawOwners: RunRecord,
 });
 
 export const terminalProof = Effect.fn("proof.terminal")(function* (
   client: Effect.Success<ReturnType<typeof make>>,
   sandboxId: typeof TerminalProofInput.Type.sandboxId,
   source: typeof TerminalProofInput.Type.source,
+  foregroundSource: typeof TerminalProofInput.Type.foregroundSource,
+  owners: typeof TerminalProofInput.Type.rawOwners,
 ) {
   yield* client.action(sandboxId, {
     op: "process.spawn",
@@ -136,6 +154,45 @@ export const terminalProof = Effect.fn("proof.terminal")(function* (
   });
   if (!input.closed || input.offset !== 0 || input.total !== 0)
     return yield* Effect.die("Terminal EOF did not remain retained");
+  const foreground = yield* client.action(sandboxId, {
+    op: "process.run",
+    id: "terminal-foreground",
+    language: "wasm",
+    source: foregroundSource,
+  });
+  if (
+    foreground.status !== "exited" ||
+    foreground.output?.exitCode !== 0 ||
+    foreground.output.stdout !== "interrupt\npair-done\n" ||
+    foreground.output.stderr !== ""
+  )
+    return yield* Effect.die("Foreground alias and terminal-key signal proof failed");
+  const written = yield* client.action(sandboxId, {
+    op: "filesystem.writeFiles",
+    entries: Object.entries(owners.children).map(([mode, content]) => ({
+      path: `/tmp/raw-${mode}.wasm`,
+      content,
+      encoding: "base64" as const,
+    })),
+  });
+  if (written.some((entry) => !entry.success))
+    return yield* Effect.die("Raw owner fixtures were not installed");
+  yield* Effect.forEach(Struct.keys(owners.children), (mode) =>
+    client.action(sandboxId, { op: "filesystem.chmod", path: `/tmp/raw-${mode}.wasm`, mode: 493 }),
+  );
+  const rawOwners = yield* client.action(sandboxId, {
+    op: "process.run",
+    id: "terminal-raw-owners",
+    language: "wasm",
+    source: owners.parent,
+  });
+  if (
+    rawOwners.status !== "exited" ||
+    rawOwners.output?.exitCode !== 0 ||
+    rawOwners.output.stdout !== "raw-owners-restored\n" ||
+    rawOwners.output.stderr !== ""
+  )
+    return yield* Effect.die("Raw owner exit/exec recovery proof failed");
   return {
     initial,
     resized,
@@ -144,5 +201,7 @@ export const terminalProof = Effect.fn("proof.terminal")(function* (
     input,
     staleRevision: stale.failure.status,
     foreignSandbox: foreign.failure.status,
+    foreground,
+    rawOwners,
   } as const;
 });

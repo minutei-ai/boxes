@@ -27,7 +27,13 @@ export default {
             { onExcessProperty: "error" },
           )(yield* Effect.promise(() => request.text()));
           const client = yield* makeBinding(env.BOXES, Redacted.make(input.token));
-          const proof = yield* terminalProof(client, input.sandboxId, input.source);
+          const proof = yield* terminalProof(
+            client,
+            input.sandboxId,
+            input.source,
+            input.foregroundSource,
+            input.rawOwners,
+          );
           return new Response(Schema.encodeSync(Schema.fromJsonString(TerminalProof))(proof), {
             headers: { "content-type": "application/json", "cache-control": "no-store" },
           });
