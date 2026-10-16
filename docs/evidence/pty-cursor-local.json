@@ -1,5 +1,5 @@
 {
-  "status": "Local scheduling regression fixed; production Reedline validation remains open.",
+  "status": "Local scheduling regression fixed and delivered in experimental 0.19.1; see sdk-0.19.1-delivery.json for passing production binding and the remaining HTTP cursor failure.",
   "measuredAt": "2026-10-16T19:02:45.411005+00:00",
   "baselineCommit": "43b33b710e33a61d48894cbe04233b5ed9edf152",
   "runtime": "Native Alchemy workerd, R2 and Queue with real Effect Clock; no mocked bindings, frozen time or altered guest timeout.",
@@ -60,7 +60,7 @@
   },
   "limits": [
     "The controlled delay reproduces the feeder scheduling defect, not the complete production network path.",
-    "Production Reedline, rendered terminal behavior and production latency/billing comparisons remain unproved.",
+    "This local gate does not prove transport-wide interactive reliability, rendered terminals or production latency/billing. Production transport results belong to sdk-0.19.1-delivery.json.",
     "The activity window increases R2 polling while terminal output is active; actual production request counts and cost are not measured."
   ],
   "benchmark": {

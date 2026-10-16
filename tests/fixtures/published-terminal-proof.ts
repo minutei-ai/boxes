@@ -14,6 +14,11 @@ export const PublishedTerminalInput = AgentRequest.mapFields((fields) => ({
   ...Struct.pick(fields, ["sandboxId", "token"]),
   backend: TerminalBackend,
 }));
+const TerminalObservation = Schema.Struct({
+  operation: Schema.Literals(["read", "input.write"]),
+  startedAt: Schema.Int,
+  finishedAt: Schema.Int,
+});
 export const PublishedTerminalProof = Schema.Struct({
   backend: TerminalBackend,
   milliseconds: Schema.Int,
@@ -21,11 +26,8 @@ export const PublishedTerminalProof = Schema.Struct({
   geometry: TerminalGeometry,
   record: RunRecord,
   file: FileContent,
-});
-const TerminalObservation = Schema.Struct({
-  operation: Schema.Literals(["read", "input.write"]),
-  startedAt: Schema.Int,
-  finishedAt: Schema.Int,
+  queries: Schema.Int,
+  observations: Schema.Array(TerminalObservation),
 });
 export class TerminalObservationFailure extends Schema.TaggedError<TerminalObservationFailure>()(
   "TerminalObservationFailure",
@@ -214,7 +216,13 @@ export const publishedTerminalProof = Effect.fn("proof.software.terminal")(funct
     !record.output.stdout.includes("retained:kept") ||
     !record.output.stdout.includes("completed:kept")
   )
-    return yield* Effect.die({ backend, record, recovery });
+    return yield* new TerminalObservationFailure({
+      marker: "completed:kept and exit 7",
+      observed: observed.text,
+      queries: observed.queries,
+      record,
+      observations,
+    });
   const file = yield* client.action(id, { op: "filesystem.readFile", path: filePath });
   if (Buffer.from(file.content, file.encoding).toString() !== "once")
     return yield* Effect.die({ backend, file });
@@ -231,5 +239,7 @@ export const publishedTerminalProof = Effect.fn("proof.software.terminal")(funct
     geometry,
     record,
     file,
+    queries: observed.queries,
+    observations,
   };
 }, Effect.timeout("110 seconds"));

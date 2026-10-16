@@ -15,6 +15,7 @@ import {
   PublishedTerminalProof,
   publishedTerminalProof,
   TerminalBackend,
+  TerminalObservationFailure,
 } from "../tests/fixtures/published-terminal-proof";
 
 const Transport = Schema.Literals(["binding", "http"]);
@@ -95,7 +96,13 @@ const report = await Effect.runPromise(
       const proof = yield* Effect.gen(function* () {
         if (transport === "http")
           return {
-            proof: yield* publishedTerminalProof(manager, id, backend),
+            proof: yield* publishedTerminalProof(manager, id, backend).pipe(
+              Effect.tapErrorTag("TerminalObservationFailure", (failure) =>
+                Effect.logError(
+                  Schema.encodeSync(Schema.fromJsonString(TerminalObservationFailure))(failure),
+                ),
+              ),
+            ),
             previewOrigin: null,
             consumerBundleSha256: null,
           };

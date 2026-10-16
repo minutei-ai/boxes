@@ -1,21 +1,150 @@
 {
-  "status": "Experimental 0.19.1 source candidate; exact archive, publication, CI and production gates pending. Full AgentOS parity remains open.",
+  "status": "Experimental 0.19.1 published and deployed. Native binding Reedline checkpoint proof passed; HTTP Reedline failed a later cursor query after checkpoint resume. Full parity remains open.",
   "version": "0.19.1",
   "localEvidence": "pty-cursor-local.json",
   "change": "Output-driven native Effect PTY feeder polling; unchanged R2 format, guest clocks and guest deadlines.",
   "previousDelivery": "sdk-0.19.0-delivery.json",
   "publication": {
-    "status": "pending",
-    "release": "https://github.com/minutei-ai/boxes/releases/tag/sdk-v0.19.1"
+    "status": "published",
+    "release": "https://github.com/minutei-ai/boxes/releases/tag/sdk-v0.19.1",
+    "prerelease": true,
+    "latest": false,
+    "tag": "sdk-v0.19.1",
+    "tagCommit": "3c7ee5e32378fe5e87688a9aa70b90088a5718f2",
+    "publishedAt": "2026-10-16T19:15:02Z",
+    "anonymousDownloads": [
+      {
+        "file": "minutei-ai-boxes-0.19.1.tgz",
+        "bytes": 78439,
+        "sha256": "a5622b1ea21e1240c6fafd93861cd625de955e65c65af2bc3bb05a6ef7e53f8a"
+      },
+      {
+        "file": "minutei-ai-boxes-runtime-0.19.1.tgz",
+        "bytes": 5549698,
+        "sha256": "a7b52270d61299ca96698b45c16dec6eebf9b96c0b8f1e568ad2eb3de91d5483"
+      },
+      {
+        "file": "SHA256SUMS",
+        "bytes": 196,
+        "sha256": "2c82ddb7e728efdaf50d578aac57bdae11018daea2cced0815c2e0d81ddc2397"
+      }
+    ],
+    "annotatedTagObject": "02603c362b66f01e5cb021e7d66c2e93f68e574f"
   },
   "deployment": {
-    "status": "pending",
+    "status": "Alchemy deploy and unconditional migrations completed",
     "profile": "minutei",
-    "worker": "cirro-sandbox-prod-rs7wexxow56rmsoz"
+    "worker": "cirro-sandbox-prod-rs7wexxow56rmsoz",
+    "exitCode": 0,
+    "seconds": 222.5,
+    "directActionSeconds": {
+      "Worker": 12.9,
+      "Migrations": 208.4
+    },
+    "defaultSoftware": "skipped; existing shared image unchanged",
+    "migrations": {
+      "environment-v1": {
+        "pages": 68,
+        "migrated": 0
+      },
+      "process-index-v6": {
+        "pages": 30,
+        "migrated": 0
+      },
+      "input-terminal-v3": {
+        "pages": 1,
+        "migrated": 0
+      },
+      "filesystem-v5": {
+        "pages": 68,
+        "migrated": 0
+      },
+      "process-deadlines-v1": {
+        "pages": 30,
+        "migrated": 0
+      },
+      "wasm-inputs-v1": {
+        "status": "done",
+        "migrated": 0
+      },
+      "process-receipts-v2": {
+        "status": "done",
+        "migrated": 0
+      }
+    },
+    "placement": {
+      "measuredAt": 1792177867980,
+      "profile": "minutei",
+      "worker": "cirro-sandbox-prod-rs7wexxow56rmsoz",
+      "placement": {
+        "mode": "smart"
+      }
+    },
+    "placementScope": "Fetch handlers; named Agent RPC, Queue and cron are outside Smart Placement. No production latency or billing claim.",
+    "storage": {
+      "measuredAt": 1792178209950,
+      "profile": "minutei",
+      "worker": "cirro-sandbox-prod-rs7wexxow56rmsoz",
+      "bucket": "cirro-objects-prod-vbk2p6ruhs2m645y",
+      "sandboxId": "software-storage-4083a219-b019-451f-b341-487d2d803d53",
+      "baseDigest": "e81f7f0e7a269a467614cbab3ccc0b18ff692f478219caff4b44bf3ea425aab3",
+      "placementMode": "smart",
+      "status": {
+        "id": "software-storage-4083a219-b019-451f-b341-487d2d803d53",
+        "generation": 0,
+        "filesystemBytes": 77754575,
+        "policy": {
+          "networkHosts": [],
+          "interruptBudget": 100000,
+          "memoryBytes": 8388608,
+          "maxOutputBytes": 1048576
+        }
+      },
+      "catalogPackages": 10,
+      "objectsAfterCreate": 1,
+      "privateSoftwareBlobsAfterCreate": 0,
+      "sharedObjectsBefore": 354,
+      "sharedObjectsAfterCollection": 354,
+      "reclaimed": true
+    }
   },
-  "minutei": "No additional consumer push or deployment authorized.",
+  "minutei": {
+    "status": "SDK/runtime upgraded and committed locally; no Minutei push or deployment performed.",
+    "commit": "714c8256398322c3bd71e851b89df7923176eefc",
+    "version": "0.19.1",
+    "installedFilesComparedWithAnonymousRelease": 24,
+    "checks": {
+      "webTypecheck": "passed with 29 dependencies",
+      "codeMode": {
+        "passed": 1,
+        "testSeconds": 7.89,
+        "totalSeconds": 9.53
+      },
+      "nxSync": "passed",
+      "format": "passed"
+    },
+    "nativeProof": {
+      "clientVersion": "0.19.1",
+      "runtimeVersion": "0.19.1",
+      "runtimeArchiveSha256": "a7b52270d61299ca96698b45c16dec6eebf9b96c0b8f1e568ad2eb3de91d5483",
+      "consumerCommit": "780014cbc566a5a9c8b3d7aeb4eebc833e6f02d5",
+      "consumerBundleSha256": "de4229dd4b0a2e1da3d300f20162bdd2581c9acd5f3bd8f076317ee8a57c7de7",
+      "transport": "native workerd Agent service binding; actual Minutei Code Mode and tenant SQLite; local R2, KV and Queue",
+      "retention": true,
+      "isolatedRegistry": true,
+      "capabilities": true,
+      "consumerFixturesSha256": {
+        "boxes-retention.ts": "ab69256069295b3e155a6e47ebc916e23f4ae760eb4a7ae7afebd9bbc37b050f",
+        "boxes-code.worker.ts": "c3d6f06ea5f5afe322076052267468c4702fe79aff596fa847d68bdc3045e5f4"
+      }
+    },
+    "limits": [
+      "History Queue messages were accepted and dropped by the local harness; History consumption is not proved.",
+      "Browser authentication, model behavior and Minutei production are not proved."
+    ]
+  },
   "openGates": [
-    "Production Reedline cursor negotiation and real checkpoint/resume with the fixed feeder.",
+    "HTTP Reedline cursor-position timeout after checkpoint resume; binding proof passes but transport-wide terminal reliability remains open.",
     "Full parity gates in docs/parity.md, rendered terminals, crash recovery and production performance/cost comparison."
   ],
   "artifacts": [
@@ -245,7 +374,198 @@
     },
     "archiveComparison": {
       "files": 22,
-      "result": "Exact source/build bytes match; native Bun package.json formatting compared as JSON values."
+      "result": "Exact source/build bytes match; native Bun package.json formatting compared as JSON values.",
+      "sourceCommit": "3c7ee5e32378fe5e87688a9aa70b90088a5718f2"
+    }
+  },
+  "runtimeSourceCommit": "3c7ee5e32378fe5e87688a9aa70b90088a5718f2",
+  "ci": {
+    "source": {
+      "runId": 38952530403,
+      "url": "https://github.com/minutei-ai/boxes/actions/runs/38952530403",
+      "status": "completed",
+      "conclusion": "success",
+      "commit": "3c7ee5e32378fe5e87688a9aa70b90088a5718f2",
+      "tests": 413,
+      "files": 90,
+      "seconds": 147.96,
+      "failed": 0
+    },
+    "tag": {
+      "runId": 38953502776,
+      "url": "https://github.com/minutei-ai/boxes/actions/runs/38953502776",
+      "status": "completed",
+      "conclusion": "success",
+      "commit": "3c7ee5e32378fe5e87688a9aa70b90088a5718f2"
+    }
+  },
+  "production": {
+    "bindingReedline": {
+      "measuredAt": 1792178015972,
+      "profile": "minutei",
+      "targetWorker": "cirro-sandbox-prod-rs7wexxow56rmsoz",
+      "transport": "binding",
+      "sandboxId": "terminal-proof-acada773-dcb6-4d60-be9c-b87bc695c7e5",
+      "sdkVersion": "0.19.1",
+      "package": {
+        "packageId": "1922d7987e34c080abe1c8edf85e0d01c4f5dccaefafe1dada5735c6e64eb2ec",
+        "digest": "sha256:1922d7987e34c080abe1c8edf85e0d01c4f5dccaefafe1dada5735c6e64eb2ec",
+        "sizeBytes": 4349290,
+        "manifest": {
+          "name": "sh",
+          "version": "0.17.0",
+          "provides": null,
+          "commands": [
+            {
+              "command": "sh",
+              "entry": "bin/sh"
+            }
+          ],
+          "man_pages": []
+        }
+      },
+      "previewOrigin": "https://boxes-terminal-6c86a96b-b4b7-440e-8d19-aff0d6d4e723.manoel-carvalhoneto.workers.dev",
+      "consumerBundleSha256": "e2ab9cf1a0e3fc3b58daa5c43dd6f79c48436e51251fae0cbaa9b9bc4db33c8f",
+      "proof": {
+        "backend": "reedline",
+        "milliseconds": 72821,
+        "recovery": {
+          "state": "queued",
+          "checkpoints": 1,
+          "resumable": true,
+          "deadlineAt": 1792178845411
+        },
+        "geometry": {
+          "cols": 120,
+          "rows": 40,
+          "revision": 1
+        },
+        "record": {
+          "id": "terminal-reedline",
+          "status": "exited",
+          "sourceHash": "7d7732582b4a0d20ea479c54576b2281a61301211f554a33f68b8d00b62468d9",
+          "language": "wasm",
+          "startedAt": 1792177945411,
+          "finishedAt": 1792178014191,
+          "output": {
+            "stdout": "\u001b[?2004h\u001b[6n\u001b[6n\u001b[?25l\u001b[1;1H\u001b[J\u001b[39mBOXES$ \u001b[38;5;14m\u001b[38;5;5m\u001b7\u001b[1;81H\u001b8\u001b[0m\u001b[0m\u001b7\u001b[37m\u001b[0m\u001b8\u001b[?25h\u001b[6n\u001b[?25l\u001b[1;1H\u001b[J\u001b[39mBOXES$ \u001b[38;5;14m\u001b[38;5;5m\u001b7\u001b[1;81H\u001b8\u001b[0m\u001b[0m\u001b[37mp\u001b[0m\u001b7\u001b8\u001b[?25h\u001b[6n\u001b[?25l\u001b[1;1H\u001b[J\u001b[39mBOXES$ \u001b[38;5;14m\u001b[38;5;5m\u001b7\u001b[1;81H\u001b8\u001b[0m\u001b[0m\u001b[37mprintf '\\nRUN\\n'; printf once >> /tmp/once-reedline\u001b[0m\u001b7\u001b8\u001b[?25h\r\n\u001b[?2004l\r\nRUN\r\n\u001b[?2004h\u001b[6n\u001b[6n\u001b[?25l\u001b[1;1H\u001b[J\u001b[39mBOXES$ \u001b[38;5;14m\u001b[38;5;5m\u001b7\u001b[1;81H\u001b8\u001b[0m\u001b[0m\u001b7\u001b[37m\u001b[0m\u001b8\u001b[?25h\u001b[6n\u001b[?25l\u001b[1;1H\u001b[J\u001b[39mBOXES$ \u001b[38;5;14m\u001b[38;5;5m\u001b7\u001b[1;81H\u001b8\u001b[0m\u001b[0m\u001b[37mprintf 'retained:%s\\n' kept\u001b[0m\u001b7\u001b8\u001b[?25h\u001b[6n\u001b[?25l\u001b[1;1H\u001b[J\u001b[39mBOXES$ \u001b[38;5;14m\u001b[38;5;5m\u001b7\u001b[1;81H\u001b8\u001b[0m\u001b[0m\u001b[37mprintf 'retained:%s\\n' kept\u001b[0m\u001b7\u001b8\u001b[?25h\r\n\u001b[?2004lretained:kept\r\n\u001b[?2004h\u001b[6n\u001b[6n\u001b[?25l\u001b[1;1H\u001b[J\u001b[39mBOXES$ \u001b[38;5;14m\u001b[38;5;5m\u001b7\u001b[1;81H\u001b8\u001b[0m\u001b[0m\u001b7\u001b[37m\u001b[0m\u001b8\u001b[?25h\u001b[6n\u001b[?25l\u001b[1;1H\u001b[J\u001b[39mBOXES$ \u001b[38;5;14m\u001b[38;5;5m\u001b7\u001b[1;81H\u001b8\u001b[0m\u001b[0m\u001b[37mprintf 'completed:%s\\n' kept; exit 7\u001b[0m\u001b7\u001b8\u001b[?25h\r\n\u001b[?2004lcompleted:kept\r\nexit\r\n",
+            "stderr": "",
+            "result": null,
+            "exitCode": 7
+          }
+        },
+        "file": {
+          "content": "b25jZQ==",
+          "encoding": "base64",
+          "size": 4
+        }
+      },
+      "reclaimed": true
+    },
+    "httpReedline": {
+      "exitCode": 1,
+      "guestExitCode": 1,
+      "stage": "After a real checkpoint/resume and retained:kept, the next cursor-position query timed out.",
+      "stdout": "\u001b[?2004h\u001b[6n\u001b[6n\u001b[?25l\u001b[1;1H\u001b[J\u001b[39mBOXES$ \u001b[38;5;14m\u001b[38;5;5m\u001b7\u001b[1;81H\u001b8\u001b[0m\u001b[0m\u001b7\u001b[37m\u001b[0m\u001b8\u001b[?25h\u001b[6n\u001b[?25l\u001b[1;1H\u001b[J\u001b[39mBOXES$ \u001b[38;5;14m\u001b[38;5;5m\u001b7\u001b[1;81H\u001b8\u001b[0m\u001b[0m\u001b[37mp\u001b[0m\u001b7\u001b8\u001b[?25h\u001b[6n\u001b[?25l\u001b[1;1H\u001b[J\u001b[39mBOXES$ \u001b[38;5;14m\u001b[38;5;5m\u001b7\u001b[1;81H\u001b8\u001b[0m\u001b[0m\u001b[37mprintf '\\nRUN\\n'; printf once >> /tmp/once-reedline\u001b[0m\u001b7\u001b8\u001b[?25h\r\n\u001b[?2004l\r\nRUN\r\n\u001b[?2004h\u001b[6n\u001b[6n\u001b[?25l\u001b[1;1H\u001b[J\u001b[39mBOXES$ \u001b[38;5;14m\u001b[38;5;5m\u001b7\u001b[1;81H\u001b8\u001b[0m\u001b[0m\u001b7\u001b[37m\u001b[0m\u001b8\u001b[?25h\u001b[6n\u001b[?25l\u001b[1;1H\u001b[J\u001b[39mBOXES$ \u001b[38;5;14m\u001b[38;5;5m\u001b7\u001b[1;81H\u001b8\u001b[0m\u001b[0m\u001b[37mprintf 'retained:%s\\n' kept\u001b[0m\u001b7\u001b8\u001b[?25h\u001b[6n\u001b[?25l\u001b[1;1H\u001b[J\u001b[39mBOXES$ \u001b[38;5;14m\u001b[38;5;5m\u001b7\u001b[1;81H\u001b8\u001b[0m\u001b[0m\u001b[37mprintf 'retained:%s\\n' kept\u001b[0m\u001b7\u001b8\u001b[?25h\r\n\u001b[?2004lretained:kept\r\n\u001b[?2004h\u001b[6n\u001b[?2004l\u001b[31mERROR\u001b[0m error: I/O error: The cursor position could not be read within a normal duration\r\n",
+      "reclaimed": true,
+      "observedCheckpoints": 1,
+      "inputTimingCoverage": "Final completion mismatch did not retain operation timings; further diagnosis requires that observation seam."
+    },
+    "httpDiagnosticRepeat": {
+      "measuredAt": 1792178433889,
+      "profile": "minutei",
+      "targetWorker": "cirro-sandbox-prod-rs7wexxow56rmsoz",
+      "transport": "http",
+      "sandboxId": "terminal-proof-9b157a9a-000c-42ca-b321-122fe924dbe3",
+      "sdkVersion": "0.19.1",
+      "package": {
+        "packageId": "1922d7987e34c080abe1c8edf85e0d01c4f5dccaefafe1dada5735c6e64eb2ec",
+        "digest": "sha256:1922d7987e34c080abe1c8edf85e0d01c4f5dccaefafe1dada5735c6e64eb2ec",
+        "sizeBytes": 4349290,
+        "manifest": {
+          "name": "sh",
+          "version": "0.17.0",
+          "provides": null,
+          "commands": [
+            {
+              "command": "sh",
+              "entry": "bin/sh"
+            }
+          ],
+          "man_pages": []
+        }
+      },
+      "previewOrigin": null,
+      "consumerBundleSha256": null,
+      "proof": {
+        "backend": "reedline",
+        "milliseconds": 72470,
+        "recovery": {
+          "state": "queued",
+          "checkpoints": 1,
+          "resumable": true,
+          "deadlineAt": 1792179264273
+        },
+        "geometry": {
+          "cols": 120,
+          "rows": 40,
+          "revision": 1
+        },
+        "record": {
+          "id": "terminal-reedline",
+          "status": "exited",
+          "sourceHash": "7d7732582b4a0d20ea479c54576b2281a61301211f554a33f68b8d00b62468d9",
+          "language": "wasm",
+          "startedAt": 1792178364273,
+          "finishedAt": 1792178431151,
+          "output": {
+            "stdout": "\u001b[?2004h\u001b[6n\u001b[6n\u001b[?25l\u001b[1;1H\u001b[J\u001b[39mBOXES$ \u001b[38;5;14m\u001b[38;5;5m\u001b7\u001b[1;81H\u001b8\u001b[0m\u001b[0m\u001b7\u001b[37m\u001b[0m\u001b8\u001b[?25h\u001b[6n\u001b[?25l\u001b[1;1H\u001b[J\u001b[39mBOXES$ \u001b[38;5;14m\u001b[38;5;5m\u001b7\u001b[1;81H\u001b8\u001b[0m\u001b[0m\u001b[37mp\u001b[0m\u001b7\u001b8\u001b[?25h\u001b[6n\u001b[?25l\u001b[1;1H\u001b[J\u001b[39mBOXES$ \u001b[38;5;14m\u001b[38;5;5m\u001b7\u001b[1;81H\u001b8\u001b[0m\u001b[0m\u001b[37mprintf '\\nRUN\\n'; printf once >> /tmp/once-reedline\u001b[0m\u001b7\u001b8\u001b[?25h\r\n\u001b[?2004l\r\nRUN\r\n\u001b[?2004h\u001b[6n\u001b[6n\u001b[?25l\u001b[1;1H\u001b[J\u001b[39mBOXES$ \u001b[38;5;14m\u001b[38;5;5m\u001b7\u001b[1;81H\u001b8\u001b[0m\u001b[0m\u001b7\u001b[37m\u001b[0m\u001b8\u001b[?25h\u001b[6n\u001b[?25l\u001b[1;1H\u001b[J\u001b[39mBOXES$ \u001b[38;5;14m\u001b[38;5;5m\u001b7\u001b[1;81H\u001b8\u001b[0m\u001b[0m\u001b[37mprintf 'retained:%s\\n' kept\u001b[0m\u001b7\u001b8\u001b[?25h\u001b[6n\u001b[?25l\u001b[1;1H\u001b[J\u001b[39mBOXES$ \u001b[38;5;14m\u001b[38;5;5m\u001b7\u001b[1;81H\u001b8\u001b[0m\u001b[0m\u001b[37mprintf 'retained:%s\\n' kept\u001b[0m\u001b7\u001b8\u001b[?25h\r\n\u001b[?2004lretained:kept\r\n\u001b[?2004h\u001b[6n\u001b[6n\u001b[?25l\u001b[1;1H\u001b[J\u001b[39mBOXES$ \u001b[38;5;14m\u001b[38;5;5m\u001b7\u001b[1;81H\u001b8\u001b[0m\u001b[0m\u001b7\u001b[37m\u001b[0m\u001b8\u001b[?25h\u001b[6n\u001b[?25l\u001b[1;1H\u001b[J\u001b[39mBOXES$ \u001b[38;5;14m\u001b[38;5;5m\u001b7\u001b[1;81H\u001b8\u001b[0m\u001b[0m\u001b[37mprintf 'completed:%s\\n' kept; exit 7\u001b[0m\u001b7\u001b8\u001b[?25h\r\n\u001b[?2004lcompleted:kept\r\nexit\r\n",
+            "stderr": "",
+            "result": null,
+            "exitCode": 7
+          }
+        },
+        "file": {
+          "content": "b25jZQ==",
+          "encoding": "base64",
+          "size": 4
+        }
+      },
+      "reclaimed": true
+    },
+    "httpScope": "Of three HTTP attempts, the original failed after checkpoint resume, the diagnostic repeat passed, and the timed attempt failed its first cursor query. The latter observed a 416 ms read and 1140 ms acknowledged reply write. No transport-wide reliability guarantee.",
+    "httpTimedFailure": {
+      "exitCode": 1,
+      "marker": "BOXES\\$ ",
+      "queries": 1,
+      "record": {
+        "id": "terminal-reedline",
+        "status": "exited",
+        "sourceHash": "7d7732582b4a0d20ea479c54576b2281a61301211f554a33f68b8d00b62468d9",
+        "language": "wasm",
+        "startedAt": 1792178581507,
+        "finishedAt": 1792178587255,
+        "output": {
+          "stdout": "\u001b[?2004h\u001b[6n\u001b[?2004l\u001b[31mERROR\u001b[0m error: I/O error: The cursor position could not be read within a normal duration\r\n",
+          "stderr": "",
+          "result": null,
+          "exitCode": 1
+        }
+      },
+      "inputWrites": [
+        {
+          "startedAt": 1792178584669,
+          "finishedAt": 1792178585809,
+          "milliseconds": 1140
+        }
+      ],
+      "observationImmediatelyBeforeInputWrite": {
+        "operation": "read",
+        "startedAt": 1792178584252,
+        "finishedAt": 1792178584668
+      },
+      "observationCount": 27,
+      "reclaimed": true
     }
   }
 }
