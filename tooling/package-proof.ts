@@ -18,6 +18,10 @@ import { terminalProofSources } from "./terminal-proof-inputs";
 import { TerminalProof, TerminalProofInput } from "../tests/fixtures/terminal-proof";
 import { Id } from "../src/contracts";
 import {
+  RetainedBindingInput,
+  VerifiedRetainedBindingProof,
+} from "../tests/fixtures/retained-binding-proof";
+import {
   BindingProof,
   DriverProof,
   PersistentDriverProof,
@@ -33,6 +37,7 @@ const Endpoints = Schema.Struct({
   ORIGINS: Schema.Struct({
     standard: Schema.String,
     terminal: Schema.String,
+    replacement: Schema.String,
     runtime: Schema.String,
   }),
 });
@@ -224,9 +229,30 @@ await Effect.runPromise(
               },
             ],
           });
+          const replacementOrigin = yield* runtime.start({
+            name: `${terminalName}-replacement`,
+            compatibilityDate: "2026-10-06",
+            compatibilityFlags: ["nodejs_compat", "enable_request_signal"],
+            bindings: [
+              Service.local({ binding: "BOXES", scriptName: terminalName }),
+              Service.local({
+                binding: "BOXES_AGENT",
+                scriptName: terminalName,
+                entrypoint: "Agent",
+              }),
+            ],
+            modules: [
+              {
+                name: "index.js",
+                type: "ESModule",
+                content: Buffer.from(terminalConsumer.bytes).toString("utf8"),
+              },
+            ],
+          });
           return yield* Json.local("ORIGINS", {
             standard: origin.href,
             terminal: terminalOrigin.href,
+            replacement: replacementOrigin.href,
             runtime: terminalRuntime.href,
           });
         }).pipe(Effect.orDie),
@@ -325,6 +351,36 @@ await Effect.runPromise(
           maxOutputBytes: 1048576,
         },
       });
+      const retainedGrant = yield* admin.mintCapability("package-terminal", {
+        permissions: ["read", "execute"],
+        expiresInSeconds: 120,
+      });
+      const retainedContexts = yield* Effect.forEach(["create", "resume"] as const, (phase) =>
+        Effect.gen(function* () {
+          const origin = yield* Effect.sync(() => {
+            if (phase === "resume") return proxy.env.ORIGINS.replacement;
+            return proxy.env.ORIGINS.terminal;
+          });
+          const response = yield* Effect.promise(() =>
+            fetch(new URL("/retained", origin), {
+              method: "POST",
+              body: Schema.encodeSync(Schema.fromJsonString(RetainedBindingInput))({
+                sandboxId: "package-terminal",
+                token: retainedGrant.token,
+                phase,
+              }),
+            }),
+          );
+          if (response.status !== 200)
+            return yield* Effect.die({
+              status: response.status,
+              body: yield* Effect.promise(() => response.text()),
+            });
+          return yield* Schema.decodeUnknownEffect(
+            Schema.fromJsonString(VerifiedRetainedBindingProof),
+          )(yield* Effect.promise(() => response.text()));
+        }),
+      );
       const ownership = yield* admin.mintCapability("package-terminal", {
         permissions: ["read", "write", "execute", "manage"],
         expiresInSeconds: 60,
@@ -377,13 +433,15 @@ await Effect.runPromise(
               transport: Schema.String,
               proof: Schema.String,
               terminal: TerminalProof,
+              retainedContexts: Schema.Array(VerifiedRetainedBindingProof),
             }),
           ),
         )({
           version: sdk.version,
           terminal,
+          retainedContexts,
           transport: "native Alchemy workerd service binding and Agent RPC; local R2 and Queue",
-          proof: `SDK archive exports and consumer declarations; runtime archive; filesystem snapshot restore; hard-link metadata; RPC callbacks and cooperative disposal; ephemeral context disposal with ${collected} files and concurrent closes; persistent driver contexts and cancellation; scoped authority`,
+          proof: `SDK archive exports and consumer declarations; runtime archive; filesystem snapshot restore; hard-link metadata; RPC callbacks and cooperative disposal; ephemeral context disposal with ${collected} files and concurrent closes; persistent driver contexts and cancellation; retained native heaps and current callback authority; scoped authority`,
         }),
       );
     }),

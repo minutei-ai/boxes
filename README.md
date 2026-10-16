@@ -1,6 +1,6 @@
 # Boxes
 
-Rust/Wasm agent sandboxes inside Cloudflare Workers. Effect owns validated requests and operation lifetimes; Alchemy owns infrastructure. R2, through its native Worker binding, owns persistent files, code, configuration and execution receipts. The object layout is compatible with S3 storage; an arbitrary external S3 transport is not implemented.
+Rust/Wasm agent sandboxes inside Cloudflare Workers. Effect owns validated requests and operation lifetimes; Alchemy owns infrastructure. R2, through its native Worker binding, owns persistent files, code, configuration, native interpreter heaps and execution receipts. The object layout is compatible with S3 storage; an arbitrary external S3 transport is not implemented.
 
 **Experimental. AgentOS parity is the target and is not achieved.** See [the operation inventory](docs/parity.md) before choosing this runtime for a workload.
 
@@ -11,6 +11,7 @@ Licensed under [Apache 2.0](LICENSE). Maintained by [Minutei AI](https://github.
 - Rust filesystem kernel with directories, files, modes, relative symlinks, rename, append and truncate.
 - Rust QuickJS for JavaScript, Oxc for TypeScript and Wasmi for Wasm/WASI, inside one ordinary Worker.
 - JavaScript/TypeScript script execution, expression evaluation and execution of files with sandbox imports, reexports, cycles and symlinks.
+- Retained JavaScript/TypeScript contexts through `contextId`, native Rust heaps, R2 pages and the `Agent` service binding.
 - A bounded shell with pipes, redirection, conditionals and initial commands.
 - Alchemy-provisioned default software in shared immutable R2 blocks, with copy-on-write and a separate private-byte quota. The [image evidence](docs/evidence/default-software-full-local.json) records the tested commands and remaining gaps.
 - Capability tokens scoped to one sandbox, permission set and expiration.

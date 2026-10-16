@@ -1,0 +1,400 @@
+{
+  "status": "Experimental 0.20.0 candidate validated locally; publication, backend deployment and Minutei adoption pending. Full AgentOS parity remains open.",
+  "version": "0.20.0",
+  "sourceBase": "237a6a5a0a4510276289cd8ef64b3bed3dadef0b",
+  "previousDelivery": "sdk-0.19.2-delivery.json",
+  "localEvidence": "contexts-api-local.json",
+  "change": "Native retained JavaScript/TypeScript heaps in R2, fenced context ownership and caller-owned contextId support in the Effect Code Mode driver.",
+  "artifacts": [
+    {
+      "file": "minutei-ai-boxes-0.20.0.tgz",
+      "bytes": 82481,
+      "sha256": "0b8ecc30bd90964e591ba9a5f0611c183a8a42916d120c7f4d4c0f14112fd630"
+    },
+    {
+      "file": "minutei-ai-boxes-runtime-0.20.0.tgz",
+      "bytes": 5561974,
+      "sha256": "9e0b9d4c1d253a64365ebb76e93c94a1726f3b76d2b93e61927b6c98f5d4bef1"
+    }
+  ],
+  "local": {
+    "check": {
+      "exitCode": 0,
+      "tests": 423,
+      "failed": 0,
+      "assertions": 6044,
+      "testSeconds": 230.91,
+      "includes": [
+        "Worker/Wasm build",
+        "SDK build",
+        "TypeScript",
+        "Clippy",
+        "Rust tests",
+        "native workerd tests"
+      ]
+    },
+    "exactPackageProof": {
+      "exitCode": 0,
+      "consumerWorkers": 2,
+      "report": {
+        "version": "0.20.0",
+        "transport": "native Alchemy workerd service binding and Agent RPC; local R2 and Queue",
+        "proof": "SDK archive exports and consumer declarations; runtime archive; filesystem snapshot restore; hard-link metadata; RPC callbacks and cooperative disposal; ephemeral context disposal with 1024 files and concurrent closes; persistent driver contexts and cancellation; retained native heaps and current callback authority; scoped authority",
+        "terminal": {
+          "inventory": {
+            "running": {
+              "id": "terminal-live",
+              "status": "running",
+              "sourceHash": "a8a6480394435899e061e452f41d433ae5dcff92bcf00e197b8faea415137b28",
+              "language": "wasm",
+              "startedAt": 1792190220636,
+              "finishedAt": null,
+              "stdinMode": "pty"
+            },
+            "settled": {
+              "id": "terminal-live",
+              "status": "exited",
+              "sourceHash": "a8a6480394435899e061e452f41d433ae5dcff92bcf00e197b8faea415137b28",
+              "language": "wasm",
+              "startedAt": 1792190220636,
+              "finishedAt": 1792190221135,
+              "stdinMode": "pty"
+            }
+          },
+          "initial": {
+            "cols": 80,
+            "rows": 24,
+            "revision": 0
+          },
+          "resized": {
+            "cols": 100,
+            "rows": 30,
+            "revision": 2
+          },
+          "terminal": {
+            "id": "terminal-live",
+            "status": "exited",
+            "sourceHash": "a8a6480394435899e061e452f41d433ae5dcff92bcf00e197b8faea415137b28",
+            "language": "wasm",
+            "startedAt": 1792190220636,
+            "finishedAt": 1792190221135,
+            "output": {
+              "stdout": "ready\neof-ready\nwinch\nafter-one\nwinch\ndone\n",
+              "stderr": "",
+              "result": null,
+              "exitCode": 0
+            }
+          },
+          "agent": {
+            "id": "terminal-agent",
+            "status": "exited",
+            "sourceHash": "0bc9adff0ae13ee1bef54d4ae1ab07254e340a996cec8b6a418fe919151d4056",
+            "language": "typescript",
+            "startedAt": 1792190221066,
+            "finishedAt": 1792190221104,
+            "output": {
+              "stdout": "",
+              "stderr": "",
+              "result": {
+                "cols": 100,
+                "rows": 30,
+                "revision": 2
+              },
+              "exitCode": 0
+            }
+          },
+          "input": {
+            "offset": 0,
+            "total": 0,
+            "closed": true
+          },
+          "staleRevision": 409,
+          "foreignSandbox": 401,
+          "foreground": {
+            "id": "terminal-foreground",
+            "status": "exited",
+            "sourceHash": "ba142b7baf1b3995c8c0c79e34cbbaa5a5918c22842d94de6aaed64be41b3dc3",
+            "language": "wasm",
+            "startedAt": 1792190221237,
+            "finishedAt": 1792190221257,
+            "output": {
+              "stdout": "interrupt\npair-done\n",
+              "stderr": "",
+              "result": null,
+              "exitCode": 0
+            }
+          },
+          "rawOwners": {
+            "id": "terminal-raw-owners",
+            "status": "exited",
+            "sourceHash": "47334effdf47f9cd168641c5b517244045a26912fab8c5f7dd63d11088783fc2",
+            "language": "wasm",
+            "startedAt": 1792190221349,
+            "finishedAt": 1792190221481,
+            "output": {
+              "stdout": "raw-owners-restored\n",
+              "stderr": "",
+              "result": null,
+              "exitCode": 0
+            }
+          },
+          "termios": {
+            "id": "terminal-termios",
+            "status": "exited",
+            "sourceHash": "10c8332bd7f638de1770e1493da38074a0b06d618c198f589d69c36c835c641f",
+            "language": "wasm",
+            "startedAt": 1792190221490,
+            "finishedAt": 1792190221508,
+            "output": {
+              "stdout": "termios-verified\n",
+              "stderr": "",
+              "result": null,
+              "exitCode": 0
+            }
+          },
+          "attributes": {
+            "initial": {
+              "desired": {
+                "attributes": null,
+                "revision": 0
+              },
+              "observed": {
+                "attributes": {
+                  "icrnl": true,
+                  "opost": true,
+                  "onlcr": true,
+                  "icanon": true,
+                  "echo": true,
+                  "isig": true,
+                  "cc": [3, 28, 26, 4, 127, 21, 23]
+                },
+                "revision": 0
+              },
+              "settled": false
+            },
+            "guest": {
+              "desired": {
+                "attributes": {
+                  "icrnl": false,
+                  "opost": false,
+                  "onlcr": false,
+                  "icanon": false,
+                  "echo": false,
+                  "isig": false,
+                  "cc": [1, 2, 3, 4, 5, 6, 7]
+                },
+                "revision": 1
+              },
+              "observed": {
+                "attributes": {
+                  "icrnl": false,
+                  "opost": false,
+                  "onlcr": false,
+                  "icanon": false,
+                  "echo": true,
+                  "isig": false,
+                  "cc": [1, 2, 3, 4, 5, 6, 7]
+                },
+                "revision": 1
+              },
+              "settled": false
+            },
+            "final": {
+              "desired": {
+                "attributes": {
+                  "icrnl": true,
+                  "opost": true,
+                  "onlcr": true,
+                  "icanon": true,
+                  "echo": false,
+                  "isig": true,
+                  "cc": [1, 2, 3, 4, 5, 6, 7]
+                },
+                "revision": 3
+              },
+              "observed": {
+                "attributes": {
+                  "icrnl": true,
+                  "opost": true,
+                  "onlcr": true,
+                  "icanon": true,
+                  "echo": false,
+                  "isig": true,
+                  "cc": [1, 2, 3, 4, 5, 6, 7]
+                },
+                "revision": 3
+              },
+              "settled": true
+            },
+            "process": {
+              "id": "terminal-attributes",
+              "status": "exited",
+              "sourceHash": "631b044078fbac8a03ddea47e5b1ef2185f919c6289a76ec7112a84ab6c8b3b0",
+              "language": "wasm",
+              "startedAt": 1792190221535,
+              "finishedAt": 1792190222187,
+              "output": {
+                "stdout": "attributes-ready\r\nraw-ok\nguest-changed\nconfigured-again\neof-ready\nterminal-done\r\n",
+                "stderr": "",
+                "result": null,
+                "exitCode": 0
+              }
+            },
+            "staleRevision": 409,
+            "foreignSandbox": 401
+          }
+        },
+        "retainedContexts": [
+          {
+            "phase": "create",
+            "context": {
+              "id": "retained",
+              "generation": 0,
+              "state": "idle",
+              "createdAt": 1792190220079,
+              "updatedAt": 1792190220237,
+              "executionId": "retained-first",
+              "deadlineAt": null
+            },
+            "records": [
+              {
+                "id": "retained-seed",
+                "status": "exited",
+                "sourceHash": "488ea9e6613986c876e109697e04010a3e6d16a8b89107feef55c722cbf3cdc0",
+                "language": "javascript",
+                "startedAt": 1792190220099,
+                "finishedAt": 1792190220175,
+                "output": {
+                  "stdout": "",
+                  "stderr": "",
+                  "result": null,
+                  "exitCode": 0
+                }
+              },
+              {
+                "id": "retained-first",
+                "status": "exited",
+                "sourceHash": "c737d8cb92926ce3263c827bacf2533abd4d84128402215f8854442f180ee25e",
+                "language": "typescript",
+                "startedAt": 1792190220187,
+                "finishedAt": 1792190220242,
+                "output": {
+                  "stdout": "",
+                  "stderr": "",
+                  "result": {
+                    "counter": 41,
+                    "tool": 11
+                  },
+                  "exitCode": 0
+                }
+              }
+            ],
+            "callbacks": 1,
+            "deleted": false,
+            "driver": {
+              "value": 41,
+              "closedDenied": true
+            }
+          },
+          {
+            "phase": "resume",
+            "context": {
+              "id": "retained",
+              "generation": 1,
+              "state": "idle",
+              "createdAt": 1792190220079,
+              "updatedAt": 1792190220578,
+              "executionId": "retained-cleared",
+              "deadlineAt": null
+            },
+            "records": [
+              {
+                "id": "retained-next",
+                "status": "exited",
+                "sourceHash": "3c22822d46020f61fe10c63a93980c727ad77aed61725d9db04ecb258923c2e9",
+                "language": "typescript",
+                "startedAt": 1792190220379,
+                "finishedAt": 1792190220434,
+                "output": {
+                  "stdout": "resumed\n",
+                  "stderr": "",
+                  "result": {
+                    "counter": 42,
+                    "tool": 42
+                  },
+                  "exitCode": 0
+                }
+              },
+              {
+                "id": "retained-denied",
+                "status": "exited",
+                "sourceHash": "f50b5c5b802ebe9743e9168ae29de3e0d7f4f086af80941aeda60afff8280ca6",
+                "language": "typescript",
+                "startedAt": 1792190220448,
+                "finishedAt": 1792190220497,
+                "output": {
+                  "stdout": "",
+                  "stderr": "",
+                  "result": "FORBIDDEN",
+                  "exitCode": 0
+                }
+              },
+              {
+                "id": "retained-cleared",
+                "status": "exited",
+                "sourceHash": "f8bd8ff550ea459186702ffdcb169dc0e5b5076958ff032c59e77c248c01a345",
+                "language": "javascript",
+                "startedAt": 1792190220524,
+                "finishedAt": 1792190220582,
+                "output": {
+                  "stdout": "",
+                  "stderr": "",
+                  "result": "undefined",
+                  "exitCode": 0
+                }
+              }
+            ],
+            "callbacks": 1,
+            "deleted": true,
+            "driver": {
+              "value": 42,
+              "closedDenied": true
+            }
+          }
+        ]
+      }
+    },
+    "archiveComparison": {
+      "files": 24,
+      "result": "Archived source, documentation and runtime bytes match their current owners; Bun-normalized package manifests match semantically."
+    },
+    "sourcesSha256": {
+      "src/sdk-tanstack.ts": "0bc0b2484019a135a42f68492a41365b051fb7efff359caebf3a9d30c7f3886b",
+      "tests/fixtures/retained-binding-proof.ts": "1f9f7ca6270773790ac668fc9f2837ee05561e7a196a32af81467e1f889ac2db",
+      "tests/fixtures/remote-binding-worker.ts": "5e78fc6f560f7e7eac6633867ed823aee74d8244f3cad231ae8cbe874442ff8e",
+      "tooling/package-proof.ts": "63c5661b01100516a6460a49da477e3b1f151695a60978dad6ff742e575f642a",
+      "tooling/remote-binding-proof.ts": "509fabef430df61c1a84f208c8fcea06d7ec9a308aad3ab4661e6fb19c680ea9"
+    },
+    "resolvedRegression": "An initial proof failed because the driver sent an explicit undefined contextId to a strict optional schema. The driver now omits that key for ephemeral calls; the final full suite and exact archive proof pass."
+  },
+  "publication": {
+    "status": "pending",
+    "tag": "sdk-v0.20.0",
+    "prerelease": true,
+    "latest": false
+  },
+  "deployment": {
+    "status": "pending; production remains 0.19.2",
+    "profile": "minutei",
+    "worker": "cirro-sandbox-prod-rs7wexxow56rmsoz"
+  },
+  "minutei": {
+    "status": "pending; local consumer remains 0.19.2; no Minutei push or deploy performed"
+  },
+  "openGates": [
+    "Python retained contexts; queued and cron retained contexts.",
+    "Full process, terminal, network and language parity in docs/parity.md.",
+    "Production retained-context binding proof and actual Minutei caller adoption.",
+    "Production latency, request billing and cost comparison against AgentOS."
+  ]
+}

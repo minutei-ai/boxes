@@ -11,6 +11,7 @@ import { makeAgentBinding } from "../../src/sdk-rpc";
 import type { AgentProtocol } from "../../src/rpc-protocol";
 import type { HostCall } from "../../src/contracts";
 import { persistentBindingProof } from "./remote-persistent-binding";
+import { retainedBindingProof, RetainedBindingProof } from "./retained-binding-proof";
 import { publishedInterpreterFile, publishedInterpreterCases } from "./published-software";
 import { shellCwdProof } from "./shell-cwd-proof";
 import {
@@ -52,6 +53,13 @@ export default {
           const proof = yield* publishedTerminalProof(client, input.sandboxId, input.backend);
           return new Response(
             Schema.encodeSync(Schema.fromJsonString(PublishedTerminalProof))(proof),
+            { headers: { "content-type": "application/json", "cache-control": "no-store" } },
+          );
+        }
+        if (new URL(request.url).pathname === "/retained") {
+          const proof = yield* retainedBindingProof(request, env.BOXES_AGENT);
+          return new Response(
+            Schema.encodeSync(Schema.fromJsonString(RetainedBindingProof))(proof),
             { headers: { "content-type": "application/json", "cache-control": "no-store" } },
           );
         }

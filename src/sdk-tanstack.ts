@@ -23,6 +23,7 @@ export const BoxesIsolateTarget = Schema.Union([
   Schema.Struct({
     kind: Schema.Literal("persistent"),
     sandboxId: Id,
+    contextId: AgentRequest.fields.contextId,
     capabilityToken: Schema.Redacted(AgentRequest.fields.token),
   }),
 ]);
@@ -44,6 +45,10 @@ export const createBoxesIsolateDriver = (
         const id = Match.value(target).pipe(
           Match.when({ kind: "persistent" }, (target) => target.sandboxId),
           Match.orElse(() => `context-${crypto.randomUUID()}`),
+        );
+        const contextId = Match.value(target).pipe(
+          Match.when({ kind: "persistent" }, (target) => target.contextId),
+          Match.orElse(() => undefined),
         );
         const memoryBytes = yield* Schema.decodeUnknownEffect(Policy.fields.memoryBytes)(
           (configuration.memoryLimit ?? 16) * 1048576,
@@ -142,6 +147,10 @@ export const createBoxesIsolateDriver = (
             }).pipe(Effect.orDie),
           );
           if (target.kind === "persistent") {
+            if (contextId !== undefined) {
+              yield* control.action(id, { op: "contexts.get", id: contextId });
+              return control;
+            }
             yield* control.action(id, { op: "vm.status" });
             return control;
           }
@@ -175,44 +184,46 @@ export const createBoxesIsolateDriver = (
                   )
                   .join("\n");
                 const source = `export default async ({tools}) => { ${declarations}\nconst value = await (async () => { ${code}\n})(); if (value === undefined) return {kind:"undefined"}; return {kind:"value",value}; }`;
-                const execution = boxes.runWithTools(
-                  id,
-                  {
+                const input = yield* Effect.sync(() => {
+                  const request = {
                     id: runId,
                     source,
                     tools: names,
                     maxToolCalls: 256,
                     timeoutMs: configuration.timeout ?? 30000,
                     memoryBytes,
-                  },
-                  (call) =>
-                    Effect.runPromise(
-                      Effect.gen(function* () {
-                        if (state.closed || configuration.abortSignal?.aborted)
-                          return {
-                            ok: false as const,
-                            message: "Execução cancelada.",
-                          };
-                        const binding = configuration.bindings[call.name];
-                        if (binding === undefined)
-                          return {
-                            ok: false as const,
-                            message: "Ferramenta indisponível.",
-                          };
-                        const value = yield* Effect.tryPromise(() =>
-                          binding.execute(call.input),
-                        ).pipe(Effect.result);
-                        if (value._tag === "Failure")
-                          return {
-                            ok: false as const,
-                            message: Cause.pretty(Cause.fail(value.failure)),
-                          };
-                        const decoded = yield* Schema.decodeUnknownEffect(
-                          Schema.UndefinedOr(Schema.Json),
-                        )(value.success);
-                        return { ok: true as const, value: decoded };
-                      }),
-                    ),
+                  };
+                  if (contextId === undefined) return request;
+                  return { ...request, contextId };
+                });
+                const execution = boxes.runWithTools(id, input, (call) =>
+                  Effect.runPromise(
+                    Effect.gen(function* () {
+                      if (state.closed || configuration.abortSignal?.aborted)
+                        return {
+                          ok: false as const,
+                          message: "Execução cancelada.",
+                        };
+                      const binding = configuration.bindings[call.name];
+                      if (binding === undefined)
+                        return {
+                          ok: false as const,
+                          message: "Ferramenta indisponível.",
+                        };
+                      const value = yield* Effect.tryPromise(() =>
+                        binding.execute(call.input),
+                      ).pipe(Effect.result);
+                      if (value._tag === "Failure")
+                        return {
+                          ok: false as const,
+                          message: Cause.pretty(Cause.fail(value.failure)),
+                        };
+                      const decoded = yield* Schema.decodeUnknownEffect(
+                        Schema.UndefinedOr(Schema.Json),
+                      )(value.success);
+                      return { ok: true as const, value: decoded };
+                    }),
+                  ),
                 );
                 const outcome = yield* execution.pipe(
                   Effect.onInterrupt(() =>

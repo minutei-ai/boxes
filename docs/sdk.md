@@ -12,10 +12,12 @@ Native exec/fexec retains validated cwd, and native clock reads preserve the I/O
 
 Version 0.19.2 overlaps native R2 reads during stdin admission and decodes the acquired input body without a redundant HEAD. A fresh append uses six native R2 requests instead of seven, while preserving the input ETag and the final expiry/lifetime checks. See the [admission evidence](evidence/input-admission-local.json) and [0.19.2 delivery](evidence/sdk-0.19.2-delivery.json); local request counts do not establish production latency or billing.
 
-Install the SDK archive from the [experimental 0.19.2 release](https://github.com/minutei-ai/boxes/releases/tag/sdk-v0.19.2):
+Version 0.20.0 introduces retained native JavaScript/TypeScript contexts through `contextId`, R2 pages and the native Agent binding. Use the [0.20.0 delivery record](https://github.com/minutei-ai/boxes/blob/main/docs/evidence/sdk-0.20.0-delivery.json) to check publication, production and Minutei verification separately.
+
+Install the matching SDK archive from the [experimental 0.20.0 release](https://github.com/minutei-ai/boxes/releases/tag/sdk-v0.20.0):
 
 ```sh
-bun add https://github.com/minutei-ai/boxes/releases/download/sdk-v0.19.2/minutei-ai-boxes-0.19.2.tgz
+bun add https://github.com/minutei-ai/boxes/releases/download/sdk-v0.20.0/minutei-ai-boxes-0.20.0.tgz
 ```
 
 Use the service binding from the Minutei Worker environment:
@@ -265,9 +267,11 @@ const driver = createBoxesIsolateDriver(env.BOXES, {
 
 The target contract is exported as `BoxesIsolateTarget`. The caller creates the sandbox and supplies a scoped token with `read` and `execute`, plus `write` for file mutations. The driver never mints authority in persistent mode. Closing one context cancels its outstanding process IDs, waits up to the native 25-second observation deadline for terminal receipts and releases callbacks; the sandbox, files and other processes remain under the caller's lifecycle. New contexts and replacement Workers can attach with the same ID and valid authority. The caller owns final sandbox disposal and token renewal. Keep this driver scoped to its authorized actor/run.
 
-`memoryLimit` is sent as a per-execution byte ceiling to RPC. Rust applies the smaller of that ceiling and the current sandbox policy, without changing the persisted policy. The optional `memoryBytes` field of `runWithTools` has the same behavior for JavaScript/TypeScript executions; omission uses the sandbox policy. Files, policy and process receipts persist. Published 0.19.2 executions use fresh JavaScript heaps; the retained language contexts below are unreleased. Host callback implementations remain request-local in both modes. The existing timeout and token expiry still apply.
+Starting with 0.20.0, a persistent target may also supply `contextId` for a caller-created language context. The driver validates that context and sends its ID on each native execution. Its local `dispose()` closes callbacks and cancels owned work while preserving the caller's language context, so a replacement driver/Worker can resume retained globals and closures. The caller owns `contexts.create/reset/delete` and must use matching memory/output ceilings. Omitting `contextId` keeps fresh language heaps with durable files. Scope each driver to its authorized actor/run; retained guest functions receive the next execution's current callback grants.
 
-Retained language contexts are available on unreleased `main`; published SDK/runtime 0.19.2 does not expose them. Use matching SDK/runtime builds. Create a context inside a sandbox, then supply `contextId` to JavaScript/TypeScript `execute`, `evaluate`, `executeFile`, `process.run`, or native `runWithTools`:
+`memoryLimit` is sent as a per-execution byte ceiling to RPC. Rust applies the smaller of that ceiling and the current sandbox policy, without changing the persisted policy. The optional `memoryBytes` field of `runWithTools` has the same behavior for JavaScript/TypeScript executions; omission uses the sandbox policy. Files, policy and process receipts persist. Version 0.19.2 uses fresh JavaScript heaps; `contextId` enables retained language state starting with 0.20.0. Host callback implementations remain request-local in both modes. The existing timeout and token expiry still apply.
+
+Retained language contexts require matching SDK/runtime builds of 0.20.0 or later. Create a context inside a sandbox, then supply `contextId` to JavaScript/TypeScript `execute`, `evaluate`, `executeFile`, `process.run`, or native `runWithTools`:
 
 ```ts
 yield * boxes.action(sandboxId, { op: "contexts.create", id: "analysis" });
@@ -296,7 +300,7 @@ The native QuickJS heap, closures and module cache survive replacement Workers t
 
 Failed preflight or duplicate execution admission preserves the previous context. A timeout, interruption or leftover asynchronous work after entry marks it `failed`; later execution returns `CONTEXT_FAILED` until explicit reset. A running context left by an uncertain or interrupted request remains inspectable and can be reset/deleted after its recorded deadline. Reads do not replay it. Inspect both context and process records after an uncertain response: context publication and terminal process-receipt publication are separate R2 writes. Already accepted host effects retain their existing lifetime.
 
-Reset drops retained interpreter state and increments its generation; delete conditionally writes a tombstone, and recreating the ID creates a new generation. Immutable pages stay within the sandbox storage lifecycle and are reclaimed by disposal/collection. Runtime binary, memory and output ceilings must match the retained heap; reset before changing them. Python, queued and cron retained contexts remain unsupported. The [local API evidence](evidence/contexts-api-local.json) covers actual HTTP, native Agent bindings, replacement Workers, permission renewal and collection; production delivery and Minutei opt-in remain open.
+Reset drops retained interpreter state and increments its generation; delete conditionally writes a tombstone, and recreating the ID creates a new generation. Immutable pages stay within the sandbox storage lifecycle and are reclaimed by disposal/collection. Runtime binary, memory and output ceilings must match the retained heap; reset before changing them. Python, queued and cron retained contexts remain unsupported. The [local API evidence](evidence/contexts-api-local.json) covers actual HTTP, native Agent bindings, replacement Workers, permission renewal and collection; the [delivery record](https://github.com/minutei-ai/boxes/blob/main/docs/evidence/sdk-0.20.0-delivery.json) tracks production validation and Minutei adoption.
 
 SDK 0.9 replaces the driver's former credential argument with the explicit target. Existing ephemeral callers pass `{ kind: "ephemeral", administratorToken }`; persistent callers pass `{ kind: "persistent", sandboxId, capabilityToken }`.
 

@@ -20,6 +20,10 @@ import { make } from "../dist/sdk/sdk.js";
 import { RecoveryStatus, RunRecord } from "../dist/sdk/contracts.js";
 import { PublicPreviewAccess } from "./preview-access";
 import {
+  RetainedBindingInput,
+  VerifiedRetainedBindingProof,
+} from "../tests/fixtures/retained-binding-proof";
+import {
   RemoteBindingInput,
   VerifiedRemoteBindingProof,
   remoteRpcTimeoutMs,
@@ -50,6 +54,10 @@ const Report = Schema.Struct({
   proof: VerifiedRemoteBindingProof,
   descriptors: DescriptorProof,
   terminal: TerminalProof,
+  retainedContexts: Schema.Struct({
+    created: VerifiedRetainedBindingProof,
+    resumed: VerifiedRetainedBindingProof,
+  }),
   persistent: Schema.Struct({
     created: VerifiedPersistentBindingProof,
     resumed: VerifiedPersistentBindingProof,
@@ -60,7 +68,7 @@ const report = await Effect.runPromise(
   Effect.scoped(
     Effect.gen(function* () {
       const profile = yield* Config.String("ALCHEMY_PROFILE");
-      if ((yield* currentProfileName) !== profile)
+      if (profile !== "minutei" || (yield* currentProfileName) !== profile)
         return yield* Effect.die("Alchemy profile selection did not match the requested profile");
       const targetWorker = yield* Config.String("CIRRO_WORKER");
       const url = yield* Config.String("CIRRO_URL");
@@ -250,6 +258,28 @@ const report = await Effect.runPromise(
       )(createdBody);
       if (created.phase !== "create")
         return yield* Effect.die("Persistent binding writer returned the wrong phase");
+      const retainedCreatedResponse = yield* Effect.promise(() =>
+        fetch(new URL("/retained", session.url), {
+          method: "POST",
+          keepalive: false,
+          headers: { ...session.headers, "content-type": "application/json" },
+          body: Schema.encodeSync(Schema.fromJsonString(RetainedBindingInput))({
+            phase: "create",
+            sandboxId: id,
+            token: grant.token,
+          }),
+          signal: AbortSignal.timeout(120000),
+        }),
+      );
+      const retainedCreatedBody = yield* Effect.promise(() => retainedCreatedResponse.text());
+      if (retainedCreatedResponse.status !== 200)
+        return yield* Effect.die({
+          status: retainedCreatedResponse.status,
+          body: retainedCreatedBody,
+        });
+      const retainedCreated = yield* Schema.decodeUnknownEffect(
+        Schema.fromJsonString(VerifiedRetainedBindingProof),
+      )(retainedCreatedBody);
       const readonly = yield* admin.mintCapability(id, {
         permissions: ["read", "execute"],
         expiresInSeconds: 600,
@@ -288,6 +318,28 @@ const report = await Effect.runPromise(
       )(resumedBody);
       if (resumed.phase !== "resume")
         return yield* Effect.die("Persistent binding reader returned the wrong phase");
+      const retainedResumedResponse = yield* Effect.promise(() =>
+        fetch(new URL("/retained", replacement.url), {
+          method: "POST",
+          keepalive: false,
+          headers: { ...replacement.headers, "content-type": "application/json" },
+          body: Schema.encodeSync(Schema.fromJsonString(RetainedBindingInput))({
+            phase: "resume",
+            sandboxId: id,
+            token: readonly.token,
+          }),
+          signal: AbortSignal.timeout(120000),
+        }),
+      );
+      const retainedResumedBody = yield* Effect.promise(() => retainedResumedResponse.text());
+      if (retainedResumedResponse.status !== 200)
+        return yield* Effect.die({
+          status: retainedResumedResponse.status,
+          body: retainedResumedBody,
+        });
+      const retainedResumed = yield* Schema.decodeUnknownEffect(
+        Schema.fromJsonString(VerifiedRetainedBindingProof),
+      )(retainedResumedBody);
       const persistentFile = yield* manager.action(id, {
         op: "filesystem.readFile",
         path: "/persistent.txt",
@@ -346,6 +398,7 @@ const report = await Effect.runPromise(
         proof,
         descriptors,
         terminal,
+        retainedContexts: { created: retainedCreated, resumed: retainedResumed },
         persistent: { created, resumed, previousReceiptRetained: true as const },
       };
     }),
