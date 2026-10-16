@@ -1,0 +1,403 @@
+{
+  "status": "Minimal and Reedline passed against deployed 0.18.0 through native service bindings, including real cooperative checkpoint recovery and scoped reclamation.",
+  "runtimeSourceCommit": "e6e550f14f625f9ef18c696a03355eed4c6d8c5c",
+  "runtimeWasiSha256": "5ac447f28c3fff0f61fd3bfe64fbbf86f0b6acafae6f61a65224fec0fd90ac8a",
+  "sourceInputsSha256": {
+    "tests/fixtures/published-terminal-proof.ts": "f7a0c298acb57515b59f18e52ad49ed0fe3e5f6b6735e59fb3352d26ed243925",
+    "tests/fixtures/remote-binding-worker.ts": "3c868c73993ce1721807dd92af6c6fcf7568a21a1285a417402f70043dd047f8",
+    "tests/fixtures/published-package.ts": "21fa1ccc7f0140faf479e77f30d6534dbb7316bcb2186e6a68c6364a3e9775ee",
+    "tooling/published-terminal-proof.ts": "6e75f0783115058b656fd03d6f017aaffbaf052d7e6565b6f6828091103bf552"
+  },
+  "diagnosis": {
+    "baseline": {
+      "_tag": "TerminalObservationFailure",
+      "marker": "BOXES\\$ ",
+      "observed": "\u001b[?2004h\u001b[6n\u001b[?2004l\u001b[31mERROR\u001b[0m error: I/O error: The cursor position could not be read within a normal duration\r\n",
+      "queries": 1,
+      "record": {
+        "id": "terminal-reedline",
+        "status": "exited",
+        "sourceHash": "7d7732582b4a0d20ea479c54576b2281a61301211f554a33f68b8d00b62468d9",
+        "language": "wasm",
+        "startedAt": 1792164932464,
+        "finishedAt": 1792164940424,
+        "output": {
+          "stdout": "\u001b[?2004h\u001b[6n\u001b[?2004l\u001b[31mERROR\u001b[0m error: I/O error: The cursor position could not be read within a normal duration\r\n",
+          "stderr": "",
+          "result": null,
+          "exitCode": 1
+        }
+      },
+      "observations": [
+        {
+          "operation": "read",
+          "startedAt": 1792164930068,
+          "finishedAt": 1792164930275
+        },
+        {
+          "operation": "read",
+          "startedAt": 1792164930375,
+          "finishedAt": 1792164931057
+        },
+        {
+          "operation": "read",
+          "startedAt": 1792164931157,
+          "finishedAt": 1792164931789
+        },
+        {
+          "operation": "read",
+          "startedAt": 1792164931889,
+          "finishedAt": 1792164932267
+        },
+        {
+          "operation": "read",
+          "startedAt": 1792164932367,
+          "finishedAt": 1792164932578
+        },
+        {
+          "operation": "read",
+          "startedAt": 1792164932678,
+          "finishedAt": 1792164932915
+        },
+        {
+          "operation": "read",
+          "startedAt": 1792164933015,
+          "finishedAt": 1792164933192
+        },
+        {
+          "operation": "read",
+          "startedAt": 1792164933292,
+          "finishedAt": 1792164933785
+        },
+        {
+          "operation": "read",
+          "startedAt": 1792164933885,
+          "finishedAt": 1792164934124
+        },
+        {
+          "operation": "read",
+          "startedAt": 1792164934224,
+          "finishedAt": 1792164934473
+        },
+        {
+          "operation": "read",
+          "startedAt": 1792164934573,
+          "finishedAt": 1792164934853
+        },
+        {
+          "operation": "read",
+          "startedAt": 1792164934953,
+          "finishedAt": 1792164935149
+        },
+        {
+          "operation": "read",
+          "startedAt": 1792164935249,
+          "finishedAt": 1792164935501
+        },
+        {
+          "operation": "read",
+          "startedAt": 1792164935601,
+          "finishedAt": 1792164936171
+        },
+        {
+          "operation": "read",
+          "startedAt": 1792164936271,
+          "finishedAt": 1792164936485
+        },
+        {
+          "operation": "read",
+          "startedAt": 1792164936585,
+          "finishedAt": 1792164936838
+        },
+        {
+          "operation": "read",
+          "startedAt": 1792164936938,
+          "finishedAt": 1792164937437
+        },
+        {
+          "operation": "input.status",
+          "startedAt": 1792164937437,
+          "finishedAt": 1792164937756
+        },
+        {
+          "operation": "input.write",
+          "startedAt": 1792164937756,
+          "finishedAt": 1792164938427
+        },
+        {
+          "operation": "read",
+          "startedAt": 1792164938527,
+          "finishedAt": 1792164938715
+        },
+        {
+          "operation": "read",
+          "startedAt": 1792164938815,
+          "finishedAt": 1792164939010
+        },
+        {
+          "operation": "read",
+          "startedAt": 1792164939110,
+          "finishedAt": 1792164939324
+        },
+        {
+          "operation": "read",
+          "startedAt": 1792164939424,
+          "finishedAt": 1792164939610
+        },
+        {
+          "operation": "read",
+          "startedAt": 1792164939710,
+          "finishedAt": 1792164940061
+        },
+        {
+          "operation": "read",
+          "startedAt": 1792164940161,
+          "finishedAt": 1792164940380
+        },
+        {
+          "operation": "read",
+          "startedAt": 1792164940480,
+          "finishedAt": 1792164940676
+        },
+        {
+          "operation": "read",
+          "startedAt": 1792164940776,
+          "finishedAt": 1792164940994
+        },
+        {
+          "operation": "read",
+          "startedAt": 1792164941094,
+          "finishedAt": 1792164941338
+        },
+        {
+          "operation": "read",
+          "startedAt": 1792164941438,
+          "finishedAt": 1792164941640
+        },
+        {
+          "operation": "read",
+          "startedAt": 1792164941740,
+          "finishedAt": 1792164941929
+        },
+        {
+          "operation": "read",
+          "startedAt": 1792164942029,
+          "finishedAt": 1792164942220
+        },
+        {
+          "operation": "read",
+          "startedAt": 1792164942320,
+          "finishedAt": 1792164942529
+        },
+        {
+          "operation": "read",
+          "startedAt": 1792164942629,
+          "finishedAt": 1792164942829
+        },
+        {
+          "operation": "read",
+          "startedAt": 1792164942929,
+          "finishedAt": 1792164943139
+        },
+        {
+          "operation": "read",
+          "startedAt": 1792164943239,
+          "finishedAt": 1792164943444
+        },
+        {
+          "operation": "read",
+          "startedAt": 1792164943544,
+          "finishedAt": 1792164943760
+        },
+        {
+          "operation": "read",
+          "startedAt": 1792164943860,
+          "finishedAt": 1792164944094
+        },
+        {
+          "operation": "read",
+          "startedAt": 1792164944194,
+          "finishedAt": 1792164944388
+        },
+        {
+          "operation": "read",
+          "startedAt": 1792164944488,
+          "finishedAt": 1792164944677
+        },
+        {
+          "operation": "read",
+          "startedAt": 1792164944777,
+          "finishedAt": 1792164944988
+        }
+      ]
+    },
+    "change": "The proof has one input writer. It now advances its next offset from each confirmed native write receipt instead of making a status request before every write. Failed or uncertain writes propagate without replay. Guest deadlines, R2 persistence and runtime budgets are unchanged.",
+    "interpretation": "The baseline failed cursor negotiation before checkpoint recovery. The revised binding sequence passed. This does not prove a latency bound or rule out future network-induced cursor timeouts.",
+    "http": "The initial external HTTP Reedline sequence also exited 1 during cursor negotiation. The revised receipt-based HTTP sequence has not been validated."
+  },
+  "production": [
+    {
+      "measuredAt": 1792165218946,
+      "profile": "minutei",
+      "targetWorker": "cirro-sandbox-prod-rs7wexxow56rmsoz",
+      "transport": "binding",
+      "sandboxId": "terminal-proof-2a8cae6a-89f8-4581-99e6-b754efe8e11d",
+      "sdkVersion": "0.18.0",
+      "package": {
+        "packageId": "1922d7987e34c080abe1c8edf85e0d01c4f5dccaefafe1dada5735c6e64eb2ec",
+        "digest": "sha256:1922d7987e34c080abe1c8edf85e0d01c4f5dccaefafe1dada5735c6e64eb2ec",
+        "sizeBytes": 4349290,
+        "manifest": {
+          "name": "sh",
+          "version": "0.17.0",
+          "provides": null,
+          "commands": [
+            {
+              "command": "sh",
+              "entry": "bin/sh"
+            }
+          ],
+          "man_pages": []
+        }
+      },
+      "previewOrigin": "https://boxes-terminal-7d487873-d80f-485d-93ce-b1e9c3bd84e1.manoel-carvalhoneto.workers.dev",
+      "consumerBundleSha256": "60a773be7d2e976080ae884f211d1ff6d6bab7b86af0a93327c5404a31a34912",
+      "proof": {
+        "backend": "reedline",
+        "milliseconds": 82738,
+        "recovery": {
+          "state": "queued",
+          "checkpoints": 1,
+          "resumable": true,
+          "deadlineAt": 1792166041803
+        },
+        "geometry": {
+          "cols": 120,
+          "rows": 40,
+          "revision": 1
+        },
+        "record": {
+          "id": "terminal-reedline",
+          "status": "exited",
+          "sourceHash": "7d7732582b4a0d20ea479c54576b2281a61301211f554a33f68b8d00b62468d9",
+          "language": "wasm",
+          "startedAt": 1792165141803,
+          "finishedAt": 1792165216968,
+          "output": {
+            "stdout": "\u001b[?2004h\u001b[6n\u001b[6n\u001b[?25l\u001b[1;1H\u001b[J\u001b[39mBOXES$ \u001b[38;5;14m\u001b[38;5;5m\u001b7\u001b[1;81H\u001b8\u001b[0m\u001b[0m\u001b7\u001b[37m\u001b[0m\u001b8\u001b[?25h\u001b[6n\u001b[?25l\u001b[1;1H\u001b[J\u001b[39mBOXES$ \u001b[38;5;14m\u001b[38;5;5m\u001b7\u001b[1;81H\u001b8\u001b[0m\u001b[0m\u001b[37mp\u001b[0m\u001b7\u001b8\u001b[?25h\u001b[6n\u001b[?25l\u001b[1;1H\u001b[J\u001b[39mBOXES$ \u001b[38;5;14m\u001b[38;5;5m\u001b7\u001b[1;81H\u001b8\u001b[0m\u001b[0m\u001b[37mprintf '\\nRUN\\n'; printf once >> /tmp/once-reedline\u001b[0m\u001b7\u001b8\u001b[?25h\r\n\u001b[?2004l\r\nRUN\r\n\u001b[?2004h\u001b[6n\u001b[6n\u001b[?25l\u001b[1;1H\u001b[J\u001b[39mBOXES$ \u001b[38;5;14m\u001b[38;5;5m\u001b7\u001b[1;81H\u001b8\u001b[0m\u001b[0m\u001b7\u001b[37m\u001b[0m\u001b8\u001b[?25h\u001b[6n\u001b[?25l\u001b[1;1H\u001b[J\u001b[39mBOXES$ \u001b[38;5;14m\u001b[38;5;5m\u001b7\u001b[1;81H\u001b8\u001b[0m\u001b[0m\u001b[37mprintf 'retained:%s\\n' kept\u001b[0m\u001b7\u001b8\u001b[?25h\u001b[6n\u001b[?25l\u001b[1;1H\u001b[J\u001b[39mBOXES$ \u001b[38;5;14m\u001b[38;5;5m\u001b7\u001b[1;81H\u001b8\u001b[0m\u001b[0m\u001b[37mprintf 'retained:%s\\n' kept\u001b[0m\u001b7\u001b8\u001b[?25h\r\n\u001b[?2004lretained:kept\r\n\u001b[?2004h\u001b[6n\u001b[6n\u001b[?25l\u001b[1;1H\u001b[J\u001b[39mBOXES$ \u001b[38;5;14m\u001b[38;5;5m\u001b7\u001b[1;81H\u001b8\u001b[0m\u001b[0m\u001b7\u001b[37m\u001b[0m\u001b8\u001b[?25h\u001b[6n\u001b[?25l\u001b[1;1H\u001b[J\u001b[39mBOXES$ \u001b[38;5;14m\u001b[38;5;5m\u001b7\u001b[1;81H\u001b8\u001b[0m\u001b[0m\u001b[37mprintf 'completed:%s\\n' kept; exit 7\u001b[0m\u001b7\u001b8\u001b[?25h\r\n\u001b[?2004lcompleted:kept\r\nexit\r\n",
+            "stderr": "",
+            "result": null,
+            "exitCode": 7
+          }
+        },
+        "file": {
+          "content": "b25jZQ==",
+          "encoding": "base64",
+          "size": 4
+        }
+      },
+      "reclaimed": true
+    },
+    {
+      "measuredAt": 1792165321678,
+      "profile": "minutei",
+      "targetWorker": "cirro-sandbox-prod-rs7wexxow56rmsoz",
+      "transport": "binding",
+      "sandboxId": "terminal-proof-1f6f9bd4-3134-48c3-abe5-2ef0607d6b47",
+      "sdkVersion": "0.18.0",
+      "package": {
+        "packageId": "1922d7987e34c080abe1c8edf85e0d01c4f5dccaefafe1dada5735c6e64eb2ec",
+        "digest": "sha256:1922d7987e34c080abe1c8edf85e0d01c4f5dccaefafe1dada5735c6e64eb2ec",
+        "sizeBytes": 4349290,
+        "manifest": {
+          "name": "sh",
+          "version": "0.17.0",
+          "provides": null,
+          "commands": [
+            {
+              "command": "sh",
+              "entry": "bin/sh"
+            }
+          ],
+          "man_pages": []
+        }
+      },
+      "previewOrigin": "https://boxes-terminal-ba09fb7e-b9c0-4681-b7d0-12980d9d6d5e.manoel-carvalhoneto.workers.dev",
+      "consumerBundleSha256": "60a773be7d2e976080ae884f211d1ff6d6bab7b86af0a93327c5404a31a34912",
+      "proof": {
+        "backend": "minimal",
+        "milliseconds": 68834,
+        "recovery": {
+          "state": "queued",
+          "checkpoints": 1,
+          "resumable": true,
+          "deadlineAt": 1792166158081
+        },
+        "geometry": {
+          "cols": 120,
+          "rows": 40,
+          "revision": 1
+        },
+        "record": {
+          "id": "terminal-minimal",
+          "status": "exited",
+          "sourceHash": "10510f100dd72e37cdee32e1f8cbd8410e94166cbd2abc8a427e7e9dcd91792b",
+          "language": "wasm",
+          "startedAt": 1792165258081,
+          "finishedAt": 1792165319601,
+          "output": {
+            "stdout": "BOXES$ printf '\\nRUN\\n'; printf once >> /tmp/once-minimal\r\n\r\nRUN\r\nBOXES$ printf 'retained:%s\\n' kept\r\nprintf 'completed:%s\\n' kept; exit 7\r\nretained:kept\r\nBOXES$ completed:kept\r\nexit\r\n",
+            "stderr": "",
+            "result": null,
+            "exitCode": 7
+          }
+        },
+        "file": {
+          "content": "b25jZQ==",
+          "encoding": "base64",
+          "size": 4
+        }
+      },
+      "reclaimed": true
+    }
+  ],
+  "local": {
+    "command": "bun test tests/remote-binding.test.ts tests/published-shell-recovery.test.ts tests/wasi-clock-budget.test.ts",
+    "passed": 4,
+    "failed": 0,
+    "assertions": 54,
+    "seconds": 23.23,
+    "bindingConsumerMilliseconds": 8658.6,
+    "minimalRecoveryMilliseconds": 5716.3,
+    "reedlineRecoveryMilliseconds": 7092.13,
+    "clockBudgetMilliseconds": 1342.02,
+    "fullSuite": {
+      "command": "TMPDIR=<writable native scratch> bun run test",
+      "passed": 406,
+      "failed": 0,
+      "files": 86,
+      "assertions": 5856,
+      "seconds": 226.6
+    },
+    "additionalChecks": [
+      "bun run build passed",
+      "bun run typecheck passed",
+      "bun run format:check passed",
+      "git diff --check passed"
+    ],
+    "priorAttempt": "Before fixture caching, the focused native binding test timed out at its existing 20-second bound. That log did not localize the timeout; the separate proof downloads produced explicit HttpFailure errors. The subsequent cached focused and full runs passed without changing test timeouts."
+  },
+  "packageAcquisition": {
+    "owner": "tests/fixtures/published-package.ts",
+    "cache": "Native temporary directory, one entry per immutable pinned SHA-256. Full size and digest checked every read; verified downloads published by atomic rename.",
+    "localSeed": "The local shell cache was seeded from the previously anonymous-downloaded 0.17.0 release asset after checking its 4349290-byte size and pinned SHA-256.",
+    "limits": "These local elapsed observations do not establish a comparative speedup, CI timing guarantee, production latency or billing."
+  },
+  "limits": [
+    "The terminal replies use synthetic cursor position 1;1, not a rendered screen or full terminal emulator.",
+    "Production checkpoint and subsequent completion prove cooperative native handover/resume, not physical Cloudflare isolate replacement. The local test closes the original Worker before opening its replacement.",
+    "Only same-build heap recovery is supported. Arbitrary crash and cross-build restoration remain open.",
+    "No automatic shell provisioning or Minutei deployment is established by these proofs.",
+    "Full AgentOS parity and comparative production performance/cost remain open."
+  ]
+}

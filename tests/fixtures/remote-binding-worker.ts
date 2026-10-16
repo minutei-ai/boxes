@@ -8,6 +8,12 @@ import type { HostCall } from "../../src/contracts";
 import { persistentBindingProof } from "./remote-persistent-binding";
 import { publishedInterpreterFile, publishedInterpreterCases } from "./published-software";
 import { shellCwdProof } from "./shell-cwd-proof";
+import {
+  PublishedTerminalInput,
+  PublishedTerminalProof,
+  publishedTerminalProof,
+  TerminalObservationFailure,
+} from "./published-terminal-proof";
 
 import {
   RemoteBindingInput,
@@ -20,6 +26,18 @@ export default {
   fetch(request: Request, env: { BOXES: Fetcher; BOXES_AGENT: Fetcher<AgentProtocol> }) {
     return Effect.runPromise(
       Effect.gen(function* () {
+        if (new URL(request.url).pathname === "/published-terminal") {
+          const input = yield* Schema.decodeUnknownEffect(
+            Schema.fromJsonString(PublishedTerminalInput),
+            { onExcessProperty: "error" },
+          )(yield* Effect.promise(() => request.text()));
+          const client = yield* makeBinding(env.BOXES, Redacted.make(input.token));
+          const proof = yield* publishedTerminalProof(client, input.sandboxId, input.backend);
+          return new Response(
+            Schema.encodeSync(Schema.fromJsonString(PublishedTerminalProof))(proof),
+            { headers: { "content-type": "application/json", "cache-control": "no-store" } },
+          );
+        }
         if (new URL(request.url).pathname === "/persistent")
           return yield* persistentBindingProof(request, env.BOXES_AGENT);
         if (new URL(request.url).pathname === "/terminal") {
@@ -168,6 +186,17 @@ export default {
           { headers: { "content-type": "application/json", "cache-control": "no-store" } },
         );
       }).pipe(
+        Effect.catchTag("TerminalObservationFailure", (failure) =>
+          Effect.succeed(
+            new Response(
+              Schema.encodeSync(Schema.fromJsonString(TerminalObservationFailure))(failure),
+              {
+                status: 500,
+                headers: { "content-type": "application/json", "cache-control": "no-store" },
+              },
+            ),
+          ),
+        ),
         Effect.catchCause((cause) =>
           Effect.succeed(
             new Response(Cause.pretty(cause), {
