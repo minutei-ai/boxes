@@ -1,3 +1,5 @@
+import { downloadPublished } from "./fixtures/published-package";
+import { publishedPackages, publishedInterpreterCases } from "./fixtures/published-software";
 import { expect, test } from "bun:test";
 import { mkdtemp, rm } from "node:fs/promises";
 import { join } from "node:path";
@@ -40,7 +42,7 @@ test(
             id,
             policy: {
               networkHosts: [],
-              interruptBudget: 10000,
+              interruptBudget: 100000,
               memoryBytes: 8388608,
               maxOutputBytes: 1048576,
             },
@@ -53,6 +55,19 @@ test(
             make({ url, token: Redacted.make(management.token) }),
             (client) => client.action(id, { op: "vm.dispose" }).pipe(Effect.orDie),
           );
+          const software = publishedPackages.find((entry) => entry.name === "sh");
+          if (software === undefined) return yield* Effect.die("Missing pinned shell package");
+          const packageBytes = yield* downloadPublished(software);
+          yield* manager.action(id, {
+            op: "filesystem.writeFile",
+            path: "/tmp/binding-sh.aospkg",
+            content: packageBytes.toString("base64"),
+            encoding: "base64",
+          });
+          yield* manager.action(id, {
+            op: "software.install",
+            source: { path: "/tmp/binding-sh.aospkg", digest: `sha256:${software.digest}` },
+          });
           const grant = yield* admin.mintCapability(id, {
             permissions: ["read", "write", "execute"],
             expiresInSeconds: 600,
@@ -149,6 +164,7 @@ test(
           expect(processes.items.map((run) => run.id).toSorted()).toEqual([
             "rpc-callback",
             "rpc-void",
+            ...publishedInterpreterCases.map((probe) => probe.id).toSorted(),
           ]);
           const readonly = yield* admin.mintCapability(id, {
             permissions: ["read", "execute"],

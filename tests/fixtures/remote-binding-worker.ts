@@ -4,6 +4,7 @@ import { makeAgentBinding } from "../../src/sdk-rpc";
 import type { AgentProtocol } from "../../src/rpc-protocol";
 import type { HostCall } from "../../src/contracts";
 import { persistentBindingProof } from "./remote-persistent-binding";
+import { publishedInterpreterFile, publishedInterpreterCases } from "./published-software";
 
 import {
   RemoteBindingInput,
@@ -100,11 +101,36 @@ export default {
           op: "filesystem.readFile",
           path: "/binding.txt",
         });
+        yield* client.action(input.sandboxId, {
+          op: "filesystem.writeFile",
+          ...publishedInterpreterFile,
+        });
+        yield* client.action(input.sandboxId, {
+          op: "filesystem.chmod",
+          path: publishedInterpreterFile.path,
+          mode: 493,
+        });
+        const interpreters = yield* Effect.forEach(publishedInterpreterCases, (probe) =>
+          client.action(input.sandboxId, {
+            op: "process.execFile",
+            id: probe.id,
+            command: probe.command,
+            args: probe.args,
+            env: { CIRRO_MARKER: probe.id },
+            stdin: { content: "input line\n", encoding: "utf8" },
+          }),
+        );
+        const interpreterFile = yield* client.action(input.sandboxId, {
+          op: "filesystem.readFile",
+          path: "/tmp/from-script",
+        });
         return new Response(
           Schema.encodeSync(Schema.fromJsonString(RemoteBindingProof))({
             measuredAt: yield* Clock.currentTimeMillis,
             callback,
             voidCallback,
+            interpreters,
+            interpreterFile,
             file,
             calls,
             managementDenied: denied.failure.status,

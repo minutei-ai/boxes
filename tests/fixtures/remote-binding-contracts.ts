@@ -1,5 +1,6 @@
 import { Schema, Struct } from "effect";
 import { AgentRequest, FileContent, HostCall, RunRecord } from "../../src/contracts";
+import { publishedInterpreterCases } from "./published-software";
 
 export const remoteRpcTimeoutMs = 15000;
 export const remoteDeadlinePath = "/deadline-observed";
@@ -11,6 +12,11 @@ export const RemoteBindingProof = Schema.Struct({
   measuredAt: Schema.Int,
   callback: RunRecord,
   voidCallback: RunRecord,
+  interpreters: Schema.Array(RunRecord).check(
+    Schema.isMinLength(publishedInterpreterCases.length),
+    Schema.isMaxLength(publishedInterpreterCases.length),
+  ),
+  interpreterFile: FileContent,
   file: FileContent,
   calls: Schema.Array(HostCall),
   managementDenied: Schema.Int,
@@ -25,6 +31,19 @@ const VoidValue = Schema.Struct({
   freshGlobals: Schema.Literal(true),
 });
 export const VerifiedRemoteBindingProof = RemoteBindingProof.check(
+  Schema.makeFilter(
+    (proof) =>
+      proof.interpreters.every(
+        (run, index) =>
+          run.status === "exited" &&
+          run.output?.exitCode === 0 &&
+          run.output.stderr === "" &&
+          run.output.stdout === publishedInterpreterCases[index]?.stdout,
+      ) &&
+      Buffer.from(proof.interpreterFile.content, proof.interpreterFile.encoding).toString(
+        "utf8",
+      ) === publishedInterpreterCases.at(-1)?.id,
+  ),
   Schema.makeFilter(
     (proof) =>
       proof.callback.status === "exited" &&

@@ -11,6 +11,34 @@ export const publishedPackages = [
   },
 ];
 
+export const publishedInterpreterFile = {
+  path: "/tmp/installed-script",
+  content:
+    '#!/opt/cirro/bin/sh\nread line; printf "%s|%s|%s|%s\\n" "$0" "$1" "$CIRRO_MARKER" "$line"; printf "%s" "$CIRRO_MARKER" > /tmp/from-script',
+  encoding: "utf8",
+} as const;
+
+export const publishedInterpreterCases = [
+  {
+    id: "shebang-direct",
+    command: "/tmp/installed-script",
+    args: ["a b"],
+    stdout: "/tmp/installed-script|a b|shebang-direct|input line\n",
+  },
+  {
+    id: "shebang-spawn",
+    command: "sh",
+    args: ["-c", "/tmp/installed-script 'a b'; printf after"],
+    stdout: "/tmp/installed-script|a b|shebang-spawn|input line\nafter",
+  },
+  {
+    id: "shebang-exec",
+    command: "sh",
+    args: ["-c", "exec /tmp/installed-script 'a b'"],
+    stdout: "/tmp/installed-script|a b|shebang-exec|input line\n",
+  },
+];
+
 export const publishedShellCases = [
   { source: "for x in one two; do echo $x; done", stdout: "one\ntwo\n" },
   { source: "f() { echo function; }; if true; then f; fi", stdout: "function\n" },

@@ -1,3 +1,4 @@
+import { downloadPublished } from "./fixtures/published-package";
 import { afterAll, expect, test } from "bun:test";
 import { mkdtemp, rm } from "node:fs/promises";
 import { Effect, Redacted, Schema } from "effect";
@@ -5,7 +6,12 @@ import { FetchHttpClient } from "effect/http";
 import { make } from "../src/sdk";
 import { runtime } from "../tooling/worker-test";
 import { ProcessDelivery, StoredRun } from "../src/contracts";
-import { publishedPackages, publishedShellCases } from "./fixtures/published-software";
+import {
+  publishedPackages,
+  publishedShellCases,
+  publishedInterpreterFile,
+  publishedInterpreterCases,
+} from "./fixtures/published-software";
 
 const directory = await mkdtemp("/tmp/boxes-published-shell-test-");
 const worker = runtime(directory, { controlled: false });
@@ -38,20 +44,7 @@ test(
         const client = yield* make({ url, token: Redacted.make(grant.token) });
         yield* Effect.forEach(publishedPackages, (software) =>
           Effect.gen(function* () {
-            const response = yield* Effect.promise(() =>
-              fetch(
-                `https://releases.rivet.dev/agent-os/latest/software/packages/${software.name}/${software.digest}.aospkg`,
-                { signal: AbortSignal.timeout(30000) },
-              ),
-            );
-            expect(response.status).toBe(200);
-            const bytes = yield* Effect.promise(() => response.arrayBuffer());
-            expect(bytes.byteLength).toBe(software.size);
-            expect(
-              Buffer.from(
-                yield* Effect.promise(() => crypto.subtle.digest("SHA-256", bytes)),
-              ).toString("hex"),
-            ).toBe(software.digest);
+            const bytes = yield* downloadPublished(software);
             const path = `/tmp/${software.name}.aospkg`;
             yield* client.action(id, {
               op: "filesystem.writeFile",
@@ -66,59 +59,31 @@ test(
           }),
         );
 
-        yield* client.action(id, {
-          op: "filesystem.writeFile",
-          path: "/tmp/installed-script",
-          content:
-            '#!/opt/cirro/bin/sh\nread line; printf "%s|%s|%s|%s\\n" "$0" "$1" "$CIRRO_MARKER" "$line"; printf persisted > /tmp/from-script',
-          encoding: "utf8",
-        });
+        yield* client.action(id, { op: "filesystem.writeFile", ...publishedInterpreterFile });
         yield* client.action(id, {
           op: "filesystem.chmod",
-          path: "/tmp/installed-script",
+          path: publishedInterpreterFile.path,
           mode: 493,
         });
-        const interpreted = yield* client.action(id, {
-          op: "process.execFile",
-          id: "installed-script",
-          command: "/tmp/installed-script",
-          args: ["a b"],
-          env: { CIRRO_MARKER: "script-environment" },
-          stdin: { content: "input line\n", encoding: "utf8" },
-        });
-        expect(interpreted.status).toBe("exited");
-        expect(interpreted.output?.exitCode).toBe(0);
-        expect(interpreted.output?.stderr).toBe("");
-        expect(interpreted.output?.stdout).toBe(
-          "/tmp/installed-script|a b|script-environment|input line\n",
-        );
-        const scriptFile = yield* client.action(id, {
-          op: "filesystem.readFile",
-          path: "/tmp/from-script",
-        });
-        expect(Buffer.from(scriptFile.content, scriptFile.encoding).toString("utf8")).toBe(
-          "persisted",
-        );
-        for (const probe of [
-          {
-            id: "spawn-script",
-            source: "/tmp/installed-script 'a b'; printf after",
-            suffix: "after",
-          },
-          { id: "exec-script", source: "exec /tmp/installed-script 'a b'", suffix: "" },
-        ]) {
+        for (const probe of publishedInterpreterCases) {
           const run = yield* client.action(id, {
             op: "process.execFile",
             id: probe.id,
-            command: "sh",
-            args: ["-c", probe.source],
-            env: { CIRRO_MARKER: "child-environment" },
-            stdin: { content: "child input\n", encoding: "utf8" },
+            command: probe.command,
+            args: probe.args,
+            env: { CIRRO_MARKER: probe.id },
+            stdin: { content: "input line\n", encoding: "utf8" },
           });
+          expect(run.status).toBe("exited");
           expect(run.output?.exitCode).toBe(0);
           expect(run.output?.stderr).toBe("");
-          expect(run.output?.stdout).toBe(
-            `/tmp/installed-script|a b|child-environment|child input\n${probe.suffix}`,
+          expect(run.output?.stdout).toBe(probe.stdout);
+          const scriptFile = yield* client.action(id, {
+            op: "filesystem.readFile",
+            path: "/tmp/from-script",
+          });
+          expect(Buffer.from(scriptFile.content, scriptFile.encoding).toString("utf8")).toBe(
+            probe.id,
           );
         }
         yield* client.action(id, {

@@ -1,3 +1,5 @@
+import { downloadPublished } from "../tests/fixtures/published-package";
+import { publishedPackages } from "../tests/fixtures/published-software";
 import { Clock, Config, Crypto, Effect, Fiber, Redacted, Schedule, Schema } from "effect";
 import { join } from "node:path";
 import * as BunServices from "@effect/platform-bun/BunServices";
@@ -115,7 +117,7 @@ const report = await Effect.runPromise(
         id,
         policy: {
           networkHosts: [],
-          interruptBudget: 10000,
+          interruptBudget: 100000,
           memoryBytes: 8388608,
           maxOutputBytes: 1048576,
         },
@@ -139,8 +141,27 @@ const report = await Effect.runPromise(
               denied.failure.status !== 404
             )
               return yield* Effect.die("Disposed binding sandbox remained publicly readable");
-          }),
+            const reclaimed = yield* client
+              .action(id, { op: "vm.reclaim", limit: 1000 })
+              .pipe(
+                Effect.repeat({ until: (progress) => progress.status !== "pending", times: 7 }),
+              );
+            if (reclaimed.status !== "complete") return yield* Effect.die(reclaimed);
+          }).pipe(Effect.orDie),
       );
+      const software = publishedPackages.find((entry) => entry.name === "sh");
+      if (software === undefined) return yield* Effect.die("Missing pinned shell package");
+      const packageBytes = yield* downloadPublished(software);
+      yield* manager.action(id, {
+        op: "filesystem.writeFile",
+        path: "/tmp/binding-sh.aospkg",
+        content: packageBytes.toString("base64"),
+        encoding: "base64",
+      });
+      yield* manager.action(id, {
+        op: "software.install",
+        source: { path: "/tmp/binding-sh.aospkg", digest: `sha256:${software.digest}` },
+      });
       const grant = yield* admin.mintCapability(id, {
         permissions: ["read", "write", "execute"],
         expiresInSeconds: 600,

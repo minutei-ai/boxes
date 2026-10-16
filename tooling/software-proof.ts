@@ -1,13 +1,21 @@
+import { downloadPublished } from "../tests/fixtures/published-package";
 import { Clock, Config, Crypto, Effect, Redacted, Schema } from "effect";
 import { BunCrypto } from "@effect/platform-bun";
 import { FetchHttpClient } from "effect/http";
 import { make } from "../dist/sdk/sdk.js";
-import { PackagePreparation, RunRecord } from "../src/contracts";
-import { publishedPackages, publishedShellCases } from "../tests/fixtures/published-software";
+import { Id, PackagePreparation, RunRecord } from "../src/contracts";
+import {
+  publishedPackages,
+  publishedShellCases,
+  publishedInterpreterFile,
+  publishedInterpreterCases,
+} from "../tests/fixtures/published-software";
 
 const Report = Schema.Struct({
   target: Schema.String,
   measuredAt: Schema.Int,
+  sandboxId: Id,
+  reclaimed: Schema.Literal(true),
   packages: Schema.Array(PackagePreparation.fields.installed),
   runs: Schema.Array(RunRecord),
 });
@@ -34,24 +42,20 @@ const report = await Effect.runPromise(
       });
       const client = yield* Effect.acquireRelease(
         make({ url, token: Redacted.make(grant.token) }),
-        (client) => client.action(id, { op: "vm.dispose" }).pipe(Effect.orDie),
+        (client) =>
+          Effect.gen(function* () {
+            yield* client.action(id, { op: "vm.dispose" });
+            const collected = yield* client
+              .action(id, { op: "vm.reclaim", limit: 1000 })
+              .pipe(
+                Effect.repeat({ until: (progress) => progress.status !== "pending", times: 7 }),
+              );
+            if (collected.status !== "complete") return yield* Effect.die(collected);
+          }).pipe(Effect.orDie),
       );
       const packages = yield* Effect.forEach(publishedPackages, (software) =>
         Effect.gen(function* () {
-          const response = yield* Effect.promise(() =>
-            fetch(
-              `https://releases.rivet.dev/agent-os/latest/software/packages/${software.name}/${software.digest}.aospkg`,
-              { signal: AbortSignal.timeout(30000) },
-            ),
-          );
-          if (response.status !== 200)
-            return yield* Effect.die("Published package download failed");
-          const bytes = yield* Effect.promise(() => response.arrayBuffer());
-          const digest = Buffer.from(
-            yield* Effect.promise(() => crypto.subtle.digest("SHA-256", bytes)),
-          ).toString("hex");
-          if (digest !== software.digest || bytes.byteLength !== software.size)
-            return yield* Effect.die("Published package digest or size mismatch");
+          const bytes = yield* downloadPublished(software);
           const path = `/tmp/${software.name}.aospkg`;
           yield* client.action(id, {
             op: "filesystem.writeFile",
@@ -61,11 +65,43 @@ const report = await Effect.runPromise(
           });
           const installed = yield* client.action(id, {
             op: "software.install",
-            source: { path, digest: `sha256:${digest}` },
+            source: { path, digest: `sha256:${software.digest}` },
           });
-          if (installed.digest !== `sha256:${digest}`)
+          if (installed.digest !== `sha256:${software.digest}`)
             return yield* Effect.die("Installed package digest mismatch");
           return installed;
+        }),
+      );
+      yield* client.action(id, { op: "filesystem.writeFile", ...publishedInterpreterFile });
+      yield* client.action(id, {
+        op: "filesystem.chmod",
+        path: publishedInterpreterFile.path,
+        mode: 493,
+      });
+      const interpreted = yield* Effect.forEach(publishedInterpreterCases, (probe) =>
+        Effect.gen(function* () {
+          const run = yield* client.action(id, {
+            op: "process.execFile",
+            id: probe.id,
+            command: probe.command,
+            args: probe.args,
+            env: { CIRRO_MARKER: probe.id },
+            stdin: { content: "input line\n", encoding: "utf8" },
+          });
+          if (
+            run.status !== "exited" ||
+            run.output?.exitCode !== 0 ||
+            run.output.stdout !== probe.stdout ||
+            run.output.stderr !== ""
+          )
+            return yield* Effect.die({ probe, run });
+          const file = yield* client.action(id, {
+            op: "filesystem.readFile",
+            path: "/tmp/from-script",
+          });
+          if (Buffer.from(file.content, file.encoding).toString("utf8") !== probe.id)
+            return yield* Effect.die("Interpreter file effect was not retained");
+          return run;
         }),
       );
       yield* client.action(id, {
@@ -141,11 +177,15 @@ const report = await Effect.runPromise(
         return yield* Effect.die({ pipeline });
       return {
         target: url,
+        sandboxId: id,
         measuredAt: yield* Clock.currentTimeMillis,
         packages,
-        runs: [...jq, ...shell, pipeline],
+        runs: [...interpreted, ...jq, ...shell, pipeline],
       };
     }),
-  ).pipe(Effect.provide([FetchHttpClient.layer, BunCrypto.layer])),
+  ).pipe(
+    Effect.map((proof) => ({ ...proof, reclaimed: true as const })),
+    Effect.provide([FetchHttpClient.layer, BunCrypto.layer]),
+  ),
 );
 console.log(Schema.encodeSync(Schema.fromJsonString(Report))(report));
