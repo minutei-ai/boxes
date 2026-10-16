@@ -376,6 +376,45 @@ pub extern "C" fn run() -> i32 {
         if pty_open(&mut master, &mut slave) != 0 {
             return 1;
         }
+        #[cfg(case = "throughput")]
+        {
+            let patterns: [(&[u8], &[u8], &[u8]); 2] = [
+                (
+                    b"abcdefghijklmnopqrstuvwxyzABCD\r",
+                    b"abcdefghijklmnopqrstuvwxyzABCD\n",
+                    b"abcdefghijklmnopqrstuvwxyzABCD\r\n",
+                ),
+                (
+                    b"abX\x7fc\t\x01\r",
+                    b"abc\t\x01\n",
+                    b"abX\x08 \x08c\t^A\r\n",
+                ),
+            ];
+            let chunks =
+                patterns.map(|(input, line, echo)| (input.repeat(64), line, echo.repeat(64)));
+            let mut buffer = [0u8; 4096];
+            for _ in 0..16 {
+                for (input, line, echo) in &chunks {
+                    if send(master, input) != (0, input.len() as u32)
+                        || receive(master, &mut buffer) != (0, echo.len() as u32)
+                        || &buffer[..echo.len()] != echo
+                    {
+                        return 110;
+                    }
+                    for _ in 0..64 {
+                        if receive(slave, &mut buffer) != (0, line.len() as u32)
+                            || &buffer[..line.len()] != *line
+                        {
+                            return 111;
+                        }
+                    }
+                }
+            }
+            if fd_close(master) != 0 || fd_close(slave) != 0 {
+                return 112;
+            }
+            return 0;
+        }
         if cfg!(case = "parent") {
             let mut actions = [0u8; 120];
             for (index, (op, fd, source)) in [

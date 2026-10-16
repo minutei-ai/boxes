@@ -1,0 +1,473 @@
+{
+  "status": "Locally verified source increment after 0.13.0. No new archives, release or production deployment. Full AgentOS parity remains open.",
+  "baseCommit": "44a2692a521915496ab0901ca63c07b738c262a8",
+  "baseCI": {
+    "url": "https://github.com/minutei-ai/boxes/actions/runs/38862420191",
+    "status": "completed",
+    "conclusion": "success"
+  },
+  "change": "Temporary cooked-echo vectors become a fixed four-byte stack buffer. Ordinary canonical bytes copy in contiguous runs bounded by the remaining canonical-line, input and output capacities. Controls and raw/slave behavior retain the existing per-byte path. No data format, external contract, resource or cache is introduced.",
+  "environment": {
+    "runtime": "native Alchemy workerd",
+    "platform": "linux",
+    "arch": "x64",
+    "bun": "1.4.3",
+    "effect": "4.0.4",
+    "alchemy": "2.0.0-beta.83",
+    "cloudflareRuntime": "2.0.0-beta.83",
+    "workerd": "1.20261002.1",
+    "production": false,
+    "temporaryStorage": "Private writable native TMPDIR under the user cache; separate native R2/runtime per benchmark phase."
+  },
+  "workload": {
+    "source": "tests/fixtures/wasi-pty.rs, throughput Cargo recipe",
+    "command": "bun tooling/benchmark-pty.ts <reference-runtime-directory> <current-runtime-directory> <output.json>",
+    "roundsPerRequest": 16,
+    "plainLinesPerRound": 64,
+    "editedLinesPerRound": 64,
+    "acceptedBytesPerRequest": 39936,
+    "deliveredCanonicalBytesPerRequest": 37888,
+    "echoedBytesPerRequest": 45056,
+    "verification": "Every write count, delivered canonical line, echo byte, descriptor closure and result/exit status is checked. Both runtimes run the identical compiled guest fixture. 280 checked requests per complete run, including warmups."
+  },
+  "measurements": {
+    "quantiles": "Nearest rank on 100 retained samples per variant pooled from its four phases. All eight raw phases are retained; no outliers removed.",
+    "stackBufferOnly": {
+      "summary": {
+        "reference": {
+          "samples": 100,
+          "p50Ms": 50.77743499999997,
+          "p95Ms": 61.37516700000015
+        },
+        "current": {
+          "samples": 100,
+          "p50Ms": 51.36113600000044,
+          "p95Ms": 57.85720200000105
+        },
+        "pooledP50ReductionPercent": -1.1495283288737834,
+        "pooledP95ReductionPercent": 5.7319029372239205
+      },
+      "report": {
+        "measuredAt": "2026-10-16T06:47:28.408Z",
+        "environment": "local native Alchemy workerd; runtime module directories; fresh R2 per phase; sequential ABBA then BAAB",
+        "workload": "16 rounds of 64 plain canonical lines and 64 edited/control lines through native PTY master/slave descriptors; validate all 39936 input bytes and 45056 echoed bytes per request",
+        "fixtureSha256": "25addadce0792def5ad2aecec949de730c0d8f8f4c3a00947e552e80bcedee17",
+        "artifacts": [
+          {
+            "version": "reference",
+            "workerSha256": "cd32d4e4e4b3ac4cff1ab65928cd9c1219027d937b768aae921f9e001ced485c",
+            "wasiSha256": "99b421a06627fdf373ab26fc377eada6033ac4c400083685e2d871c0eaf04ef7"
+          },
+          {
+            "version": "current",
+            "workerSha256": "c4668b5193c3abc151c7274a026f69a538e24dbd1b808210be073261c20c1e65",
+            "wasiSha256": "bf8cf902f27c5f2f52f905b672be915cf64080aba10b3d8b9df2275525217ee6"
+          }
+        ],
+        "phases": [
+          {
+            "version": "reference",
+            "phase": 0,
+            "warmups": 10,
+            "samplesMs": [
+              52.88017600000012, 48.39790200000016, 71.20974799999976, 58.16257899999982,
+              49.438958000000184, 49.08060599999999, 49.77778500000022, 49.603701,
+              49.69766400000026, 53.03652299999976, 49.599027000000206, 48.09816499999988,
+              55.19167399999969, 50.80358599999954, 48.3664060000001, 49.11516300000039,
+              48.60541999999987, 48.58418299999994, 48.40308399999958, 48.97622000000047,
+              52.516983999999866, 49.49225800000022, 48.812753999999586, 48.64917999999943,
+              51.270125999999436
+            ],
+            "p50Ms": 49.49225800000022,
+            "p95Ms": 58.16257899999982
+          },
+          {
+            "version": "current",
+            "phase": 1,
+            "warmups": 10,
+            "samplesMs": [
+              66.21757100000013, 51.37354500000038, 51.778651999999965, 56.00727800000004,
+              51.38431000000037, 51.58115599999928, 51.62834399999974, 51.36113600000044,
+              50.449531999999635, 49.33526600000005, 46.93098900000041, 45.819038999999975,
+              48.40609399999994, 50.84122000000025, 45.79454900000019, 44.75453199999993,
+              45.628420000000006, 45.22649799999999, 52.0503319999998, 51.270464000000175,
+              57.239865000000464, 51.63639299999977, 51.42000499999995, 54.7192500000001,
+              50.349059999999554
+            ],
+            "p50Ms": 51.36113600000044,
+            "p95Ms": 57.239865000000464
+          },
+          {
+            "version": "current",
+            "phase": 2,
+            "warmups": 10,
+            "samplesMs": [
+              55.66174900000078, 52.88047699999879, 52.04615600000034, 53.395950000000084,
+              51.978289999999106, 50.871178999999756, 46.14782600000035, 51.426118999999744,
+              46.0856160000003, 51.39707500000077, 54.13393900000119, 51.63020200000028,
+              54.7206929999993, 57.17409399999997, 51.34538700000121, 52.45788200000061,
+              50.73387399999956, 51.280391000000236, 51.20289600000069, 46.376266000001124,
+              46.427771000000575, 46.49209400000109, 48.2723500000011, 52.66043999999965,
+              46.621666999999434
+            ],
+            "p50Ms": 51.39707500000077,
+            "p95Ms": 55.66174900000078
+          },
+          {
+            "version": "reference",
+            "phase": 3,
+            "warmups": 10,
+            "samplesMs": [
+              53.69072199999937, 52.95244900000034, 47.91606299999876, 49.627338999998756,
+              49.52664499999992, 47.90277199999946, 58.86445300000014, 61.37516700000015,
+              60.12261900000158, 51.395613000000594, 51.38810800000101, 52.448419000000285,
+              56.55523899999935, 51.60094200000094, 47.58375100000012, 52.745004999998855,
+              48.33570899999904, 48.41341800000009, 47.86483100000078, 48.34182900000087,
+              48.286277999999584, 48.91510600000038, 48.81227899999976, 51.057002999999895,
+              47.9171580000002
+            ],
+            "p50Ms": 49.627338999998756,
+            "p95Ms": 60.12261900000158
+          },
+          {
+            "version": "current",
+            "phase": 4,
+            "warmups": 10,
+            "samplesMs": [
+              52.159811999999874, 56.312818000000334, 51.43775300000016, 49.63509499999964,
+              52.600564000000304, 51.13486600000033, 57.2368690000003, 51.790452999999616,
+              47.09334300000046, 48.84498600000006, 50.738618999999744, 51.085635999999795,
+              53.94525500000054, 47.060356000001775, 46.619956999998976, 55.10186000000067,
+              55.29558299999917, 57.85720200000105, 52.49187600000005, 53.40322399999968,
+              58.158871999999974, 76.74693499999921, 62.52650799999901, 56.53454199999942,
+              47.05047399999967
+            ],
+            "p50Ms": 52.49187600000005,
+            "p95Ms": 62.52650799999901
+          },
+          {
+            "version": "reference",
+            "phase": 5,
+            "warmups": 10,
+            "samplesMs": [
+              50.32462999999916, 51.029599000001326, 49.56646399999954, 56.894602000000305,
+              48.65483700000186, 48.67448299999887, 47.59081399999923, 48.28585999999996,
+              47.9997489999987, 51.53056700000161, 56.567785999999614, 56.38196400000015,
+              57.77653800000189, 54.718832999998995, 55.07687900000019, 56.6360480000003,
+              50.77743499999997, 56.25727999999799, 60.21861699999863, 64.82582999999795,
+              59.40643600000112, 54.64943300000232, 56.33653400000185, 54.68480100000306,
+              57.97763399999894
+            ],
+            "p50Ms": 54.718832999998995,
+            "p95Ms": 60.21861699999863
+          },
+          {
+            "version": "reference",
+            "phase": 6,
+            "warmups": 10,
+            "samplesMs": [
+              54.855483000003005, 54.566595000000234, 54.62768599999981, 59.50470900000073,
+              48.44794299999921, 49.04293099999995, 47.9099669999996, 48.145361000002595,
+              48.00774799999999, 95.83247499999925, 54.79164300000048, 58.04663300000175,
+              57.74767900000006, 54.27096099999835, 53.73821900000257, 47.31571800000165,
+              47.79169899999761, 50.32293700000082, 47.487365999997564, 47.534693000001425,
+              52.41654800000106, 49.698035000001255, 50.1830639999971, 62.491885000003094,
+              85.95766600000206
+            ],
+            "p50Ms": 52.41654800000106,
+            "p95Ms": 85.95766600000206
+          },
+          {
+            "version": "current",
+            "phase": 7,
+            "warmups": 10,
+            "samplesMs": [
+              53.053953000002366, 54.506390999998985, 53.4488620000011, 58.859935000000405,
+              52.094411999998556, 52.51090099999783, 46.894845999999234, 46.34579599999779,
+              45.4986220000028, 47.78448099999878, 47.47141600000032, 49.99970299999768,
+              48.451952999999776, 45.87902100000065, 44.11128199999803, 46.48632300000099,
+              46.65212099999917, 54.96262999999817, 54.17583200000081, 52.92850199999884,
+              48.997190000001865, 45.9924949999986, 45.69248499999958, 48.81699099999969,
+              50.25159300000087
+            ],
+            "p50Ms": 48.81699099999969,
+            "p95Ms": 54.96262999999817
+          }
+        ]
+      },
+      "finding": "Removing temporary vectors alone did not improve pooled median elapsed time; retained as the first candidate rather than claiming a speedup."
+    },
+    "boundedCanonicalRuns": {
+      "summary": {
+        "reference": {
+          "samples": 100,
+          "p50Ms": 54.76042299999972,
+          "p95Ms": 66.63003700000081
+        },
+        "current": {
+          "samples": 100,
+          "p50Ms": 52.72482099999979,
+          "p95Ms": 61.066445999998905
+        },
+        "pooledP50ReductionPercent": 3.717286844186607,
+        "pooledP95ReductionPercent": 8.349974351660405
+      },
+      "report": {
+        "measuredAt": "2026-10-16T06:50:25.074Z",
+        "environment": "local native Alchemy workerd; runtime module directories; fresh R2 per phase; sequential ABBA then BAAB",
+        "workload": "16 rounds of 64 plain canonical lines and 64 edited/control lines through native PTY master/slave descriptors; validate all 39936 input bytes and 45056 echoed bytes per request",
+        "fixtureSha256": "25addadce0792def5ad2aecec949de730c0d8f8f4c3a00947e552e80bcedee17",
+        "artifacts": [
+          {
+            "version": "reference",
+            "workerSha256": "cd32d4e4e4b3ac4cff1ab65928cd9c1219027d937b768aae921f9e001ced485c",
+            "wasiSha256": "99b421a06627fdf373ab26fc377eada6033ac4c400083685e2d871c0eaf04ef7"
+          },
+          {
+            "version": "current",
+            "workerSha256": "5178a4804dd69cda27c636a5cdc4045c1a059109196f81154c7d35f08bf1686b",
+            "wasiSha256": "eb84069b62a546c01fd8baa8498fac7d54004d697b623d43977a500d4e3f3881"
+          }
+        ],
+        "phases": [
+          {
+            "version": "reference",
+            "phase": 0,
+            "warmups": 10,
+            "samplesMs": [
+              54.35732199999984, 52.30780999999979, 53.970458000000235, 58.299887000000126,
+              51.68274499999961, 51.70263000000023, 51.22142100000019, 54.544014999999945,
+              51.56540300000006, 65.76935900000035, 57.98139500000025, 52.06451300000026,
+              58.94591300000002, 56.703104999999596, 56.39819599999964, 53.84089100000028,
+              50.96626500000002, 51.13922700000012, 49.01049299999977, 53.57419800000025,
+              55.88414700000021, 53.66300000000001, 55.10142799999994, 57.78168400000004,
+              52.88990100000001
+            ],
+            "p50Ms": 53.84089100000028,
+            "p95Ms": 58.94591300000002
+          },
+          {
+            "version": "current",
+            "phase": 1,
+            "warmups": 10,
+            "samplesMs": [
+              56.85397499999999, 53.76795200000015, 57.56106, 56.68842600000062, 48.06129400000009,
+              53.6715920000006, 47.25380300000052, 49.5802590000003, 46.68878500000028,
+              48.907655999999406, 47.64506699999947, 45.47281900000053, 52.04512599999998,
+              48.81736600000022, 50.84025500000007, 51.33817799999997, 53.110649000000194,
+              55.489056999999775, 53.60082499999953, 54.819055000000844, 56.14141500000005,
+              274.37662099999943, 69.0630799999999, 61.860780999999406, 54.310834000000796
+            ],
+            "p50Ms": 53.60082499999953,
+            "p95Ms": 69.0630799999999
+          },
+          {
+            "version": "current",
+            "phase": 2,
+            "warmups": 10,
+            "samplesMs": [
+              58.29608200000075, 51.954868000000715, 52.30855899999915, 61.066445999998905,
+              55.369715000000724, 57.50104499999907, 51.63786599999912, 55.584576999999626,
+              52.660830000000715, 55.755661000001055, 55.230601999999635, 53.99381900000117,
+              60.60522700000001, 56.00578300000052, 52.746210000001156, 49.878917,
+              48.57638399999996, 50.96140800000103, 63.834374000000025, 54.81117799999993,
+              49.336451000001034, 49.48211599999922, 52.01275499999974, 50.633215999998356,
+              49.37670699999944
+            ],
+            "p50Ms": 52.746210000001156,
+            "p95Ms": 61.066445999998905
+          },
+          {
+            "version": "reference",
+            "phase": 3,
+            "warmups": 10,
+            "samplesMs": [
+              66.25164099999893, 60.979896999999255, 67.61459600000126, 67.54768300000069,
+              58.734010000000126, 68.45676500000081, 66.63003700000081, 69.97571500000049,
+              68.69039599999996, 61.48748899999919, 61.894389000000956, 61.46184699999867,
+              65.32674000000043, 61.45491999999831, 61.686760000000504, 60.74519400000099,
+              57.830439999999726, 52.193999999999505, 48.23778200000015, 54.721809000000576,
+              59.97163100000034, 48.42320099999961, 54.177909, 59.829445999999734,
+              55.526073999999426
+            ],
+            "p50Ms": 61.45491999999831,
+            "p95Ms": 68.69039599999996
+          },
+          {
+            "version": "current",
+            "phase": 4,
+            "warmups": 10,
+            "samplesMs": [
+              53.32452800000101, 50.64269499999864, 47.946371, 52.82179300000098, 48.72820200000024,
+              47.58261700000003, 44.99641399999928, 44.6017410000004, 45.52721500000007,
+              47.96132700000089, 53.52016999999978, 52.257031999999526, 51.63108300000022,
+              56.83401500000036, 48.72728499999903, 48.82993699999861, 53.65404000000126,
+              56.932700999999724, 56.82331499999964, 47.085282999998526, 46.17526800000087,
+              43.28635000000031, 46.83966999999939, 50.71987900000022, 54.96262899999965
+            ],
+            "p50Ms": 48.82993699999861,
+            "p95Ms": 56.83401500000036
+          },
+          {
+            "version": "reference",
+            "phase": 5,
+            "warmups": 10,
+            "samplesMs": [
+              63.719937000001664, 57.3591579999993, 55.10887500000172, 59.31767300000138,
+              53.59951400000136, 54.76042299999972, 54.03765099999873, 54.265189000001556,
+              51.85246499999994, 50.915679000001546, 49.65630700000111, 51.12047099999836,
+              50.32442199999787, 62.474340000000666, 60.39245800000208, 53.51190900000074,
+              53.654405000001134, 53.407821000000695, 52.96529400000145, 55.37309099999766,
+              57.96473299999707, 57.493139999998675, 61.01521499999944, 55.21147000000201,
+              53.768575000001874
+            ],
+            "p50Ms": 54.265189000001556,
+            "p95Ms": 62.474340000000666
+          },
+          {
+            "version": "reference",
+            "phase": 6,
+            "warmups": 10,
+            "samplesMs": [
+              56.65863800000079, 55.26588500000071, 54.255958000001556, 60.106870999999956,
+              55.13504499999908, 62.6035609999999, 54.07970799999748, 51.03299699999843,
+              48.33076799999981, 50.69379399999889, 49.165117000000464, 48.37040700000216,
+              50.400094000000536, 49.57144300000073, 47.5428639999991, 47.135018000000855,
+              48.00387299999784, 49.51815300000089, 59.179095999999845, 58.006524000000354,
+              56.754165999998804, 55.882032999998046, 49.25217200000043, 56.02785800000129,
+              52.67893600000025
+            ],
+            "p50Ms": 52.67893600000025,
+            "p95Ms": 60.106870999999956
+          },
+          {
+            "version": "current",
+            "phase": 7,
+            "warmups": 10,
+            "samplesMs": [
+              56.509360000000015, 51.967186999998376, 57.542216999998345, 48.38537200000064,
+              45.46793400000024, 59.708096000002115, 57.897704999999405, 59.93396500000017,
+              45.51795100000163, 46.34165500000017, 59.22484700000132, 53.48814399999901,
+              55.261069000000134, 53.11678599999868, 51.38122999999905, 56.47690800000055,
+              55.5443180000002, 52.72482099999979, 48.14223899999706, 47.63875700000062,
+              48.47063200000048, 55.50937300000078, 62.51060900000084, 53.84748200000104,
+              52.94953800000076
+            ],
+            "p50Ms": 53.48814399999901,
+            "p95Ms": 59.93396500000017
+          }
+        ]
+      },
+      "finding": "The final local workload has a lower pooled median and p95. One adjacent reference/current pair has a slower current phase median. Host variation and this workload do not establish statistical significance, uniform improvement or production latency."
+    },
+    "preflight": "The frozen reference ran all eight phases against itself before engine changes, validating the workload. This preflight overlapped fixture compilation and is not used for performance conclusions."
+  },
+  "verification": {
+    "fullNativeCheck": {
+      "command": "bun run check",
+      "tests": 380,
+      "files": 75,
+      "assertions": 5148,
+      "seconds": 190.49,
+      "failures": 0,
+      "includes": [
+        "Runtime and SDK build",
+        "TypeScript",
+        "Workspace Clippy",
+        "Cargo tests",
+        "Native workerd/R2/Queue tests"
+      ]
+    },
+    "format": "bun run format:check passed.",
+    "generalBenchmark": {
+      "command": "bun run bench",
+      "result": "passed",
+      "artifactBytes": {
+        "javascript": 369402,
+        "kernelWasm": 1139581,
+        "wasiWasm": 1673840,
+        "pythonWasm": 10719083,
+        "guestWasm": 1129863,
+        "compilerWasm": 1943596
+      },
+      "wasiPublication": {
+        "samples": 25,
+        "rootPublications": 25
+      },
+      "batchPublication": {
+        "filesPerSample": 8,
+        "samples": 25,
+        "sequentialPublications": 200,
+        "batchPublications": 25
+      },
+      "contentDeduplication": {
+        "singleFileWrites": 25,
+        "uniqueBlocks": 1,
+        "singleFileLogicalBytesWritten": 6553600,
+        "storedBlockBytes": 262144
+      },
+      "limits": "Maintained local smoke workload; no paired baseline for these general measurements. Existing maintained performance evidence was preserved."
+    },
+    "preservedBehavior": [
+      "Canonical line, input/output and pending-line ceilings and partial writes",
+      "CR/LF and caret echo, DEL editing, raw invalid UTF-8 and transient EOF",
+      "Default/handled/ignored/masked input-key signals and SA_RESTART",
+      "Foreground-child stop/continue while a separate group remains active",
+      "Same-build R2 checkpoints, partial canonical state, Worker replacement and duplicate Queue delivery",
+      "Digest-pinned published Brush minimal/Reedline sessions and scoped SDK/service bindings"
+    ],
+    "initialEnvironmentFailure": "Build output truncated with native exit 1; the first benchmark attempt exited before measurement. Direct workerd invocation exposed SQLITE_IOERR_WRITE, and a shell temporary write reported disk quota exceeded for /tmp. Repeating the same native build/workload with a private writable TMPDIR passed. No runtime fallback, storage handler change or assertion suppression.",
+    "initialLintFailure": "The stack-buffer candidate stopped at native Clippy byte_char_slices. Its constant byte array was changed to a byte-string array; no lint suppression. The final full check passed."
+  },
+  "runtimeAssetsAgainstReference": [
+    {
+      "name": "cirro_compiler_bg.wasm",
+      "referenceBytes": 1943596,
+      "currentBytes": 1943596,
+      "sha256": "27d9b0022a634ed4eef47b6561ad38cafde3522c17e834afed1264440678bf2f",
+      "unchanged": true
+    },
+    {
+      "name": "cirro_guest_bg.wasm",
+      "referenceBytes": 1129863,
+      "currentBytes": 1129863,
+      "sha256": "b773b74626b08bd1083860081ccd2a3d0fdff80dcd97b5ec13ed7c6e2148ef22",
+      "unchanged": true
+    },
+    {
+      "name": "cirro_kernel_bg.wasm",
+      "referenceBytes": 1139581,
+      "currentBytes": 1139581,
+      "sha256": "1d3d1811805905af3c00e8afedd696c22d585db7538877306c28e7b099725e92",
+      "unchanged": true
+    },
+    {
+      "name": "cirro_python_bg.wasm",
+      "referenceBytes": 10719083,
+      "currentBytes": 10719083,
+      "sha256": "8aa6aec5ab6fb0623637e2b6dda7318f4934e4736f4a97e45ca3312bf32e529c",
+      "unchanged": true
+    },
+    {
+      "name": "cirro_wasi_bg.wasm",
+      "referenceBytes": 1673950,
+      "currentBytes": 1673840,
+      "sha256": "eb84069b62a546c01fd8baa8498fac7d54004d697b623d43977a500d4e3f3881",
+      "unchanged": false
+    },
+    {
+      "name": "index.js",
+      "referenceBytes": 369402,
+      "currentBytes": 369402,
+      "sha256": "5178a4804dd69cda27c636a5cdc4045c1a059109196f81154c7d35f08bf1686b",
+      "unchanged": false
+    }
+  ],
+  "limits": [
+    "These measurements are local elapsed time, not CPU billing, production latency, peak memory or an AgentOS comparison.",
+    "No paired raw-terminal throughput workload is claimed; raw behavior is verified by the native semantic suites.",
+    "Native heaps still require the same build; this optimization does not provide cross-build checkpoint recovery.",
+    "Remote CI, archives and deployment of this source increment remain separate gates.",
+    "The terminal/termios/process and other completion gates in docs/parity.md remain open."
+  ]
+}

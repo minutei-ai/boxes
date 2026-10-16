@@ -268,6 +268,7 @@ await Effect.runPromise(
     );
     for (const fixture of [
       "normal",
+      "throughput",
       "blocked",
       "parent",
       "child",

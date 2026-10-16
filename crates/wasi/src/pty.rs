@@ -117,18 +117,18 @@ impl Terminal {
         }
     }
 
-    fn echo(&self, byte: u8) -> Vec<u8> {
+    fn echo(&self, byte: u8) -> ([u8; 4], usize) {
         match byte {
-            4 => Vec::new(),
-            127 if !self.line.borrow().is_empty() => b"\x08 \x08".to_vec(),
-            127 => Vec::new(),
-            21 => b"^U\r\n".to_vec(),
-            3 | 26 | 28 if self.foreground.get() != 0 => Vec::new(),
-            3 | 26 | 28 => vec![b'^', byte + 64, b'\r', b'\n'],
-            b'\r' | b'\n' => b"\r\n".to_vec(),
-            b'\t' => vec![byte],
-            0..=31 => vec![b'^', byte + 64],
-            _ => vec![byte],
+            4 => ([0; 4], 0),
+            127 if !self.line.borrow().is_empty() => ([8, b' ', 8, 0], 3),
+            127 => ([0; 4], 0),
+            21 => (*b"^U\r\n", 4),
+            3 | 26 | 28 if self.foreground.get() != 0 => ([0; 4], 0),
+            3 | 26 | 28 => ([b'^', byte + 64, b'\r', b'\n'], 4),
+            b'\r' | b'\n' => ([b'\r', b'\n', 0, 0], 2),
+            b'\t' => ([byte, 0, 0, 0], 1),
+            0..=31 => ([b'^', byte + 64, 0, 0], 2),
+            _ => ([byte, 0, 0, 0], 1),
         }
     }
 
@@ -148,7 +148,7 @@ impl Terminal {
         if size == LINE_BYTES && !matches!(byte, 3 | 4 | 10 | 13 | 21 | 26 | 28 | 127) {
             return true;
         }
-        if self.output.bytes.borrow().len() + self.echo(byte).len() > PIPE_BYTES {
+        if self.output.bytes.borrow().len() + self.echo(byte).1 > PIPE_BYTES {
             return false;
         }
         if (matches!(byte, 4 | 10 | 13)
@@ -171,7 +171,26 @@ impl Terminal {
 
     pub fn write(&self, master: bool, data: &[u8]) -> Result<usize, i32> {
         let mut count = 0;
-        for &byte in data {
+        while count < data.len() {
+            if master && !self.raw.get() {
+                let length = self.line.borrow().len();
+                let available = (LINE_BYTES - length)
+                    .min(PIPE_BYTES - self.input.bytes.borrow().len() - length)
+                    .min(PIPE_BYTES - self.output.bytes.borrow().len());
+                let ordinary = data[count..]
+                    .iter()
+                    .take(available)
+                    .take_while(|&&byte| byte >= 32 && byte != 127)
+                    .count();
+                if ordinary != 0 {
+                    let bytes = &data[count..count + ordinary];
+                    self.line.borrow_mut().extend_from_slice(bytes);
+                    self.output.bytes.borrow_mut().extend(bytes);
+                    count += ordinary;
+                    continue;
+                }
+            }
+            let byte = data[count];
             if !self.writable(master, byte) {
                 break;
             }
@@ -192,7 +211,8 @@ impl Terminal {
                     }
                     break;
                 }
-                self.output.bytes.borrow_mut().extend(self.echo(byte));
+                let (echo, length) = self.echo(byte);
+                self.output.bytes.borrow_mut().extend(&echo[..length]);
                 match byte {
                     127 => {
                         self.line.borrow_mut().pop();
