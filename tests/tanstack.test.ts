@@ -49,5 +49,35 @@ test("native driver preserves callbacks, void values, context reuse and disposal
     expect(Schema.decodeUnknownSync(Schema.fromJsonString(Head))(await object.text()).deleted).toBe(
       true,
     );
+    const id = root.key.split("/")[1];
+    const data = await objects.list({ prefix: `sandboxes/${id}/` });
+    expect(data.objects.map((object) => object.key)).toEqual([root.key]);
+    for (const prefix of [`processes/${id}/`, `process-input/${id}/`, `schedules/${id}/`]) {
+      expect((await objects.list({ prefix })).objects).toEqual([]);
+    }
   }
 });
+
+test("ephemeral disposal collects more than one R2 page and tolerates concurrent closes", async () => {
+  const url = await worker.binding();
+  url.searchParams.set("driver", "bulk");
+  const response = await fetch(url, {
+    method: "POST",
+    body: Schema.encodeSync(Schema.fromJsonString(Id))("driver-bulk"),
+  });
+  expect(response.status).toBe(200);
+  expect(Schema.decodeUnknownSync(Schema.Int)(await response.json())).toBe(1024);
+  const objects = await worker.objects;
+  const roots = (await objects.list({ prefix: "sandboxes/context-" })).objects.filter((object) =>
+    object.key.endsWith("/head.json"),
+  );
+  expect(roots.length).toBeGreaterThan(0);
+  for (const root of roots) {
+    const id = root.key.split("/")[1];
+    expect(
+      (await objects.list({ prefix: `sandboxes/${id}/` })).objects.map((object) => object.key),
+    ).toEqual([root.key]);
+    for (const prefix of [`processes/${id}/`, `process-input/${id}/`, `schedules/${id}/`])
+      expect((await objects.list({ prefix })).objects).toEqual([]);
+  }
+}, 15000);

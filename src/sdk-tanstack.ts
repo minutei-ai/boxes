@@ -1,8 +1,13 @@
 import { makeAgentBinding } from "./sdk-rpc";
 import type { AgentProtocol } from "./rpc-protocol";
-import { AgentRequest, HostCall, Id, Policy } from "./contracts";
+import { AgentRequest, HostCall, Id, Policy, ReclamationProgress } from "./contracts";
 import type { IsolateConfig, ExecutionResult } from "@tanstack/ai-code-mode";
-import { Cause, Effect, Exit, Match, Redacted, Schema, Scope } from "effect";
+import { Cause, Effect, Exit, Match, Option, Redacted, Schema, Scope, Semaphore } from "effect";
+
+export class BoxesContextCleanupError extends Schema.TaggedError<BoxesContextCleanupError>()(
+  "BoxesContextCleanupError",
+  { sandboxId: Id, progress: ReclamationProgress },
+) {}
 
 const BindingName = HostCall.fields.name.check(Schema.isPattern(/^external_[a-zA-Z0-9_$]+$/));
 const ReturnedValue = Schema.Union([
@@ -47,7 +52,46 @@ export const createBoxesIsolateDriver = (
           Object.keys(configuration.bindings),
         );
         const scope = yield* Scope.make();
-        const state = { closed: false };
+        const state = { closed: false, reclaimed: false };
+        const closing = yield* Semaphore.make(1);
+        const close = Effect.fn("boxes.context.dispose")(function* (
+          exit: Exit.Exit<unknown, unknown>,
+        ) {
+          state.closed = true;
+          yield* Scope.close(scope, exit).pipe(
+            Effect.ensuring(
+              Effect.gen(function* () {
+                if (target.kind === "persistent" || state.reclaimed) return;
+                const grant = yield* control
+                  .mintCapability(id, {
+                    permissions: ["manage"],
+                    expiresInSeconds: 600,
+                  })
+                  .pipe(
+                    Effect.asSome,
+                    Effect.catchTag("BoxesError", (failure) => {
+                      if (failure.status === 404 && failure.error === "ENOENT")
+                        return Effect.succeed(Option.none());
+                      return Effect.fail(failure);
+                    }),
+                  );
+                if (Option.isNone(grant)) return;
+                const cleanup = yield* makeAgentBinding(binding, Redacted.make(grant.value.token));
+                yield* cleanup.action(id, { op: "vm.dispose" });
+                const progress = yield* cleanup
+                  .action(id, { op: "vm.reclaim", limit: 1000 })
+                  .pipe(
+                    Effect.repeat({ until: (progress) => progress.status !== "pending" }),
+                    Effect.interruptible,
+                    Effect.timeout("60 seconds"),
+                  );
+                if (progress.status !== "complete")
+                  return yield* new BoxesContextCleanupError({ sandboxId: id, progress });
+                state.reclaimed = true;
+              }).pipe(Effect.orDie),
+            ),
+          );
+        }, closing.withPermit);
         const active = new Set<string>();
         const acquisition = Effect.gen(function* () {
           if (target.kind === "ephemeral")
@@ -63,6 +107,7 @@ export const createBoxesIsolateDriver = (
           yield* Effect.addFinalizer(() =>
             Effect.gen(function* () {
               state.closed = true;
+              if (active.size === 0) return;
               const cleanup = yield* Effect.gen(function* () {
                 if (target.kind === "persistent") return control;
                 const grant = yield* control.mintCapability(id, {
@@ -93,13 +138,6 @@ export const createBoxesIsolateDriver = (
                     }),
                   ),
                 { concurrency: 3 },
-              ).pipe(
-                Effect.ensuring(
-                  Effect.gen(function* () {
-                    if (target.kind === "ephemeral")
-                      yield* cleanup.action(id, { op: "vm.dispose" });
-                  }).pipe(Effect.orDie),
-                ),
               );
             }).pipe(Effect.orDie),
           );
@@ -114,7 +152,7 @@ export const createBoxesIsolateDriver = (
           return yield* makeAgentBinding(binding, Redacted.make(grant.token));
         }).pipe(Effect.provideService(Scope.Scope, scope));
         const boxes = yield* acquisition.pipe(
-          Effect.onError((cause) => Scope.close(scope, Exit.failCause(cause))),
+          Effect.onError((cause) => close(Exit.failCause(cause))),
         );
         return {
           execute: (code: string): Promise<ExecutionResult> =>
@@ -231,7 +269,7 @@ export const createBoxesIsolateDriver = (
                 };
               return Promise.reject(cause);
             }),
-          dispose: () => Effect.runPromise(Scope.close(scope, Exit.succeed(undefined))),
+          dispose: () => Effect.runPromise(close(Exit.void)),
         };
       }),
     );

@@ -325,6 +325,28 @@ export default {
               }),
             );
           }
+          if (new URL(request.url).searchParams.get("driver") === "bulk") {
+            const context = yield* Effect.tryPromise(() =>
+              driver.createContext({
+                memoryLimit: 16,
+                timeout: 10000,
+                bindings: {},
+              }),
+            );
+            const result = yield* Effect.tryPromise(() =>
+              context.execute(
+                'for (let batch = 0; batch < 8; batch++) { const entries = Array.from({length:128}, (_, offset) => ({path:`/tmp/gc-${batch*128+offset}`,content:`payload-${batch*128+offset}`,encoding:"utf8"})); const writes = await tools.call({op:"filesystem.writeFiles",entries}); if (writes.some(write => !write.success)) return -1; } return (await tools.call({op:"filesystem.readdir",path:"/tmp"})).length;',
+              ),
+            );
+            yield* Effect.tryPromise(() => Promise.all([context.dispose(), context.dispose()]));
+            yield* Effect.tryPromise(() => context.dispose());
+            yield* boxes.action(id, { op: "vm.dispose" });
+            return new Response(
+              Schema.encodeSync(Schema.fromJsonString(Schema.Int))(
+                Schema.decodeUnknownSync(Schema.Int)(result.value),
+              ),
+            );
+          }
           const writes: string[] = [];
           const context = yield* Effect.tryPromise(() =>
             driver.createContext({
@@ -364,6 +386,7 @@ export default {
             ),
           );
           const empty = yield* Effect.tryPromise(() => context.execute("await external_void();"));
+          yield* Effect.tryPromise(() => Promise.all([context.dispose(), context.dispose()]));
           yield* Effect.tryPromise(() => context.dispose());
           const closed = yield* Effect.tryPromise(() =>
             context.execute('return external_save("late");'),
