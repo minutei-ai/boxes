@@ -9,6 +9,7 @@ import { runtime } from "../tooling/worker-test";
 for (const mode of [
   "cooked",
   "raw",
+  "raw-owner",
   "family",
   "cancelled",
   "geometry",
@@ -50,6 +51,23 @@ for (const mode of [
                 expiresInSeconds: 3600,
               });
               const client = yield* make({ url, token: Redacted.make(grant.token) });
+              if (mode === "raw-owner") {
+                yield* client.action("active", {
+                  op: "filesystem.writeFile",
+                  path: "/tmp/raw-recovery-child.wasm",
+                  encoding: "base64",
+                  content: Buffer.from(
+                    yield* Effect.promise(() =>
+                      Bun.file("dist/wasi-tty-raw-owner-recovery-child.wasm").arrayBuffer(),
+                    ),
+                  ).toString("base64"),
+                });
+                yield* client.action("active", {
+                  op: "filesystem.chmod",
+                  path: "/tmp/raw-recovery-child.wasm",
+                  mode: 493,
+                });
+              }
               if (mode === "foreground") {
                 for (const [name, artifact] of [
                   ["owned", "child"],
@@ -89,6 +107,7 @@ for (const mode of [
               }
               const artifact = Match.value(mode).pipe(
                 Match.when("family", () => "wasi-recovery-family.wasm"),
+                Match.when("raw-owner", () => "wasi-tty-raw-owner-recovery.wasm"),
                 Match.when("geometry", () => "wasi-pty-resize-recovery.wasm"),
                 Match.when("geometry-restart", () => "wasi-pty-resize-restart.wasm"),
                 Match.when("signals", () => "wasi-tty-signals-recovery.wasm"),
@@ -154,6 +173,7 @@ for (const mode of [
               );
               const pids = Match.value(mode).pipe(
                 Match.when("family", () => [1, 2]),
+                Match.when("raw-owner", () => [1, 2]),
                 Match.when("foreground", () => [1, 2]),
                 Match.orElse(() => [1]),
               );
@@ -165,6 +185,7 @@ for (const mode of [
               const prefix = preview.output.stdout;
               if (mode === "cooked") expect(prefix).toBe("hel");
               if (mode === "raw") expect(prefix.endsWith("buffered\n")).toBe(true);
+              if (mode === "raw-owner") expect(["raw-ready\n", "helraw-ready\n"]).toContain(prefix);
               if (mode === "family") {
                 expect(prefix).toContain("hel");
                 expect(prefix.split("ready\r\n").length).toBe(2);
@@ -327,6 +348,7 @@ for (const mode of [
             Match.when("geometry-restart", () => Buffer.from("winch\r\ndone\r\n")),
             Match.when("signals", () => Buffer.from("kept\r\ninterrupt\r\ndone\r\n")),
             Match.when("foreground", () => Buffer.from("reclaimed\r\ndone\r\n")),
+            Match.when("raw-owner", () => Buffer.from("restored\r\n")),
             Match.when("cooked", () => Buffer.from("lo\r\nread:hello\r\neof\r\n")),
             Match.when("delayed", () => Buffer.from("lo\r\nread:hello\r\neof\r\n")),
             Match.when("family", () => Buffer.from("lo\r\nhello\r\n\r\nbytes=6\r\n")),

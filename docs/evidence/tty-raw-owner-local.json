@@ -1,0 +1,95 @@
+{
+  "status": "Local source increment after experimental 0.13.0. Matching archive publication, production deployment and full AgentOS parity remain separate gates.",
+  "baseCommit": "c53d2bd077a1f4b99cd636c35804f4351009ff37",
+  "baseCI": {
+    "url": "https://github.com/minutei-ai/boxes/actions/runs/38869727920",
+    "status": "completed",
+    "conclusion": "success"
+  },
+  "problem": "Raw/canonical mode was shared by a terminal but had no process-owned recovery. A child exiting without explicitly disabling raw mode left its parent in that mode, including after a same-build checkpoint resumed in another Worker.",
+  "change": {
+    "terminal": "A bounded stack retains owner PID, unique acquisition token, prior Boolean discipline and applied mutation generation. Repeated top-owner acquisition preserves the restore point. Non-top release splices its restore point into the next owner. Top release restores only if no subsequent mutation superseded it.",
+    "admission": "Foreground-group callers and terminals with no foreground group acquire a recovery lease. A background caller applies raw mode without acquiring a lease. Explicit disable releases its owned lease or selects canonical mode when it owns none.",
+    "lifetime": "Native State retains terminal references independently of descriptor lifetime. Completion releases before done/wait publication; finish_child and Drop are idempotent fallbacks. Successful exec moves ownership; failed exec retains it; children do not inherit ownership tokens. Parked handles retain their tokens in the existing heap checkpoint.",
+    "limits": "Existing family pipe/live-process ceilings bound retained terminals and lease frames. New mutations fail EIO on generation/token exhaustion; cleanup can still unwind at the maximum generation, after which new mutations remain rejected."
+  },
+  "verification": {
+    "before": {
+      "source": "Original Rust lib.rs and pty.rs from c53d2bd, with the identical new fixtures and tests.",
+      "command": "bun test tests/tty-raw-owner.test.ts tests/pty-recovery.test.ts --test-name-pattern 'raw owners|raw-owner'",
+      "passed": 0,
+      "failed": 2,
+      "assertions": 19,
+      "seconds": 5.16,
+      "failures": [
+        "The first child exited but the native PTY still emitted LF instead of canonical CRLF; the fixture exited 91.",
+        "After R2 checkpoint/replacement, the child exited but the parent's restored marker lacked its expected carriage return."
+      ]
+    },
+    "targetedCandidate": {
+      "command": "bun test tests/tty-raw-owner.test.ts tests/pty-recovery.test.ts --test-name-pattern 'raw owners|raw-owner'",
+      "passed": 2,
+      "failed": 0,
+      "assertions": 23,
+      "seconds": 4.07,
+      "scope": "Before adding the final background-owner case; the full check covers the final fixture."
+    },
+    "rust": "16 native WASI tests and Clippy with warnings denied passed before the full workspace check. New tests cover nested/out-of-order exit, repeated acquisition, stale tokens, re-acquisition, later unowned mutation, counter exhaustion, root completion before Drop and abandoned-handle cleanup.",
+    "nativeBinding": "A real WASI parent runs normal exit, closed stdin, trap, termination signal, successful exec and failed exec children, both with and without a parent raw lease. It checks bytes through the native master/slave pair. A separate background-group child changes raw mode without automatic restoration; its parent explicitly selects canonical mode.",
+    "checkpoint": "The child consumes hel in raw mode and acknowledges raw-ready before blocking. Parent and child handles checkpoint at the original 30-second lease. The old Worker closes before a replacement opens the same native R2 store. Appended lo-CR and EOF resume the child; it closes stdin and exits. The parent observes status zero and emits restored-CRLF. Exact byte replay and stale Queue delivery retain the result. Initial hel is echoed only if the feeder delivered it before raw acquisition; both admitted scheduling orders are checked explicitly.",
+    "fullNativeCheck": {
+      "command": "bun run test",
+      "passed": 387,
+      "failed": 0,
+      "assertions": 5254,
+      "files": 77,
+      "seconds": 193.55,
+      "bulkCleanupMs": 8781.61,
+      "blockedCleanupMs": 306.01,
+      "rawOwnerMs": 1516.27,
+      "rawOwnerCheckpointMs": 2651.33,
+      "scope": "Full unchanged two-worker native suite repeated after the isolated cleanup suite passed. Runtime/SDK build, TypeScript, workspace Clippy and Cargo had passed in the initial check. The initial full check itself returned exit 1; its timeout and follow-on connection failure are retained above."
+    },
+    "firstFullNativeCheck": {
+      "command": "bun run check",
+      "buildAndSdk": "passed",
+      "typeScript": "passed",
+      "workspaceClippy": "passed",
+      "cargoTests": "passed",
+      "nativeTests": {
+        "passed": 385,
+        "failed": 2,
+        "errors": 2,
+        "assertions": 5240,
+        "files": 77,
+        "seconds": 217.88
+      },
+      "failure": "The existing 1024-object ephemeral disposal test exceeded 15 seconds; Bun killed its dangling runtime, after which the following cleanup case encountered a closed connection. Both new raw-owner cases passed.",
+      "scope": "The bulk fixture executes TypeScript writeFiles/readdir and context disposal, not WASI terminal operations. No cleanup or timeout code was changed."
+    },
+    "cleanupRepeat": {
+      "command": "bun test tests/tanstack.test.ts",
+      "passed": 4,
+      "failed": 0,
+      "assertions": 45,
+      "seconds": 11.29,
+      "bulkMs": 8657,
+      "changesBeforeRetry": "none"
+    },
+    "format": "bun run format:check passed with the final evidence."
+  },
+  "limits": [
+    "The restored discipline is the existing raw/canonical Boolean state, not full termios or configurable control characters.",
+    "Foreground admission does not establish controlling-terminal ownership or SIGTTIN/SIGTTOU background-access enforcement.",
+    "The checkpoint proof covers cooperative same-build heap recovery, not arbitrary crashes, cross-build heap migration or published-shell resumption.",
+    "These are local native Alchemy workerd/R2/Queue tests; production latency, memory and billing are unmeasured."
+  ],
+  "runtimeArtifact": {
+    "name": "cirro_wasi_bg.wasm",
+    "bytes": 1680236,
+    "sha256": "2f8ab400160da165ea5d2bc5255d95f35cb869500d29847521b1083e8e2f8208",
+    "baseBytes": 1676510,
+    "sizeDeltaBytes": 3726,
+    "performanceClaim": false
+  }
+}

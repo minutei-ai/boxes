@@ -6,6 +6,13 @@ use std::rc::Rc;
 const LINE_BYTES: usize = 4096;
 const MAX_LINES: usize = 4096;
 
+struct RawLease {
+    owner: u32,
+    token: u64,
+    applied: u64,
+    restore: bool,
+}
+
 pub(super) struct Terminal {
     pub input: Rc<Pipe>,
     pub output: Rc<Pipe>,
@@ -17,6 +24,9 @@ pub(super) struct Terminal {
     pub signals: Cell<u64>,
     line: RefCell<Vec<u8>>,
     lines: RefCell<VecDeque<usize>>,
+    raw_leases: RefCell<Vec<RawLease>>,
+    raw_generation: Cell<u64>,
+    raw_token: Cell<u64>,
 }
 
 pub(super) struct Side {
@@ -44,10 +54,77 @@ impl Terminal {
             signals: Cell::new(0),
             line: RefCell::new(Vec::new()),
             lines: RefCell::new(VecDeque::new()),
+            raw_leases: RefCell::new(Vec::new()),
+            raw_generation: Cell::new(0),
+            raw_token: Cell::new(0),
         })
     }
 
-    pub fn set_raw(&self, enabled: bool) {
+    pub fn set_raw(&self, owner: Option<u32>, enabled: bool) -> Result<Option<u64>, i32> {
+        let generation = self.raw_generation.get().checked_add(1).ok_or(29)?;
+        if !enabled {
+            if let Some(owner) = owner
+                && self.release_raw(owner, None)
+            {
+                return Ok(None);
+            }
+            self.raw_generation.set(generation);
+            self.apply_raw(false);
+            return Ok(None);
+        }
+        let Some(owner) = owner else {
+            self.raw_generation.set(generation);
+            self.apply_raw(true);
+            return Ok(None);
+        };
+        let mut leases = self.raw_leases.borrow_mut();
+        if let Some(index) = leases.iter().position(|lease| lease.owner == owner)
+            && index + 1 == leases.len()
+        {
+            self.raw_generation.set(generation);
+            self.apply_raw(true);
+            leases[index].applied = generation;
+            return Ok(Some(leases[index].token));
+        }
+        let token = self.raw_token.get().checked_add(1).ok_or(29)?;
+        if let Some(index) = leases.iter().position(|lease| lease.owner == owner) {
+            let lease = leases.remove(index);
+            leases[index].restore = lease.restore;
+        }
+        leases.push(RawLease {
+            owner,
+            token,
+            applied: generation,
+            restore: self.raw.get(),
+        });
+        self.raw_token.set(token);
+        self.raw_generation.set(generation);
+        self.apply_raw(true);
+        Ok(Some(token))
+    }
+
+    pub fn release_raw(&self, owner: u32, token: Option<u64>) -> bool {
+        let mut leases = self.raw_leases.borrow_mut();
+        let Some(index) = leases.iter().position(|lease| {
+            lease.owner == owner && token.is_none_or(|token| token == lease.token)
+        }) else {
+            return false;
+        };
+        let lease = leases.remove(index);
+        if index < leases.len() {
+            leases[index].restore = lease.restore;
+        } else if lease.applied == self.raw_generation.get() {
+            let generation = self.raw_generation.get().saturating_add(1);
+            self.raw_generation.set(generation);
+            self.apply_raw(lease.restore);
+            if let Some(previous) = leases.last_mut() {
+                previous.applied = generation;
+            }
+        }
+        true
+    }
+
+    fn apply_raw(&self, enabled: bool) {
         if self.raw.replace(enabled) == enabled {
             return;
         }
@@ -295,11 +372,74 @@ mod tests {
     }
 
     #[test]
+    fn raw_owners_unwind_nested_and_out_of_order_exits() {
+        let tty = Terminal::new();
+        let first = tty.set_raw(Some(1), true).unwrap().unwrap();
+        assert_eq!(tty.set_raw(Some(1), true), Ok(Some(first)));
+        let second = tty.set_raw(Some(2), true).unwrap().unwrap();
+        assert!(tty.release_raw(1, Some(first)));
+        assert!(tty.raw.get());
+        assert!(tty.release_raw(2, Some(second)));
+        assert!(!tty.raw.get());
+        assert!(!tty.release_raw(1, Some(first)));
+
+        let first = tty.set_raw(Some(1), true).unwrap().unwrap();
+        tty.set_raw(Some(2), true).unwrap();
+        tty.set_raw(Some(2), false).unwrap();
+        assert!(tty.raw.get());
+        assert!(tty.release_raw(1, Some(first)));
+        assert!(!tty.raw.get());
+    }
+
+    #[test]
+    fn raw_reacquisition_invalidates_old_tokens_and_preserves_restore_point() {
+        let tty = Terminal::new();
+        let old = tty.set_raw(Some(1), true).unwrap().unwrap();
+        let second = tty.set_raw(Some(2), true).unwrap().unwrap();
+        let new = tty.set_raw(Some(1), true).unwrap().unwrap();
+        assert_ne!(old, new);
+        assert!(!tty.release_raw(1, Some(old)));
+        assert!(tty.release_raw(2, Some(second)));
+        assert!(tty.raw.get());
+        assert!(tty.release_raw(1, Some(new)));
+        assert!(!tty.raw.get());
+    }
+
+    #[test]
+    fn raw_cleanup_does_not_override_a_later_unowned_change() {
+        let tty = Terminal::new();
+        let token = tty.set_raw(Some(1), true).unwrap().unwrap();
+        tty.set_raw(None, false).unwrap();
+        tty.set_raw(None, true).unwrap();
+        assert!(tty.release_raw(1, Some(token)));
+        assert!(tty.raw.get());
+        assert!(tty.raw_leases.borrow().is_empty());
+    }
+
+    #[test]
+    fn raw_counter_exhaustion_is_atomic_and_cleanup_still_unwinds() {
+        let tty = Terminal::new();
+        tty.raw_token.set(u64::MAX);
+        assert_eq!(tty.set_raw(Some(1), true), Err(29));
+        assert!(!tty.raw.get());
+        assert_eq!(tty.raw_generation.get(), 0);
+        tty.raw_token.set(0);
+        tty.raw_generation.set(u64::MAX - 2);
+        let first = tty.set_raw(Some(1), true).unwrap().unwrap();
+        let second = tty.set_raw(Some(2), true).unwrap().unwrap();
+        assert_eq!(tty.set_raw(None, false), Err(29));
+        assert!(tty.release_raw(2, Some(second)));
+        assert!(tty.raw.get());
+        assert!(tty.release_raw(1, Some(first)));
+        assert!(!tty.raw.get());
+    }
+
+    #[test]
     fn raw_mode_preserves_bytes_and_flushes_uncommitted_input() {
         let tty = Terminal::new();
         tty.write(true, b"partial").unwrap();
         assert!(!tty.ready());
-        tty.set_raw(true);
+        tty.set_raw(Some(1), true).unwrap();
         assert_eq!(tty.available(), 7);
         assert_eq!(tty.write(true, b"\0\x03\x04\r\n\x7f"), Ok(6));
         assert_eq!(tty.write(false, b"a\nb"), Ok(3));
@@ -312,14 +452,14 @@ mod tests {
                 .collect::<Vec<_>>()
                 .ends_with(b"a\nb")
         );
-        tty.set_raw(false);
+        tty.set_raw(Some(1), false).unwrap();
         assert_eq!(tty.available(), 13);
     }
 
     #[test]
     fn buffers_and_line_records_are_bounded_without_dropping_input() {
         let tty = Terminal::new();
-        tty.set_raw(true);
+        tty.set_raw(Some(1), true).unwrap();
         assert_eq!(tty.write(true, &vec![42; PIPE_BYTES + 1]), Ok(PIPE_BYTES));
         assert_eq!(tty.write(true, b"x"), Err(6));
         let cooked = Terminal::new();
@@ -355,7 +495,7 @@ mod tests {
                 .collect::<Vec<_>>(),
             b"discardkept\r\n"
         );
-        tty.set_raw(true);
+        tty.set_raw(Some(1), true).unwrap();
         tty.signals.set(0);
         assert_eq!(tty.write(true, b"\x03\x1c\x1a"), Ok(3));
         assert_eq!(tty.signals.get(), 0);

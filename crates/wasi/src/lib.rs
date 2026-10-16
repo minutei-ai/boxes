@@ -535,6 +535,7 @@ struct State {
     environment: Vec<Vec<u8>>,
     stdin_pipe: Option<Rc<Pipe>>,
     terminal: Option<Rc<TerminalAttachment>>,
+    raw_leases: RefCell<Vec<(Rc<pty::Terminal>, u64)>>,
     stdin_writer: Rc<RefCell<Option<Rc<PipeEndpoint>>>>,
     stdin: Rc<Vec<u8>>,
     stdin_offset: Rc<Cell<usize>>,
@@ -3044,7 +3045,37 @@ fn dispatch(caller: &mut Caller<'_, State>, name: &str, args: &[u64]) -> Result<
                 .and_then(|descriptor| descriptor.pipe.as_ref())
                 .and_then(|pipe| pipe.terminal.as_ref())
                 .ok_or(Failure::Errno(59))?;
-            side.terminal.set_raw(a[0] == 1);
+            let terminal = side.terminal.clone();
+            let state = caller.data();
+            let pid = state.pid;
+            let table = state.processes.borrow();
+            let group = if pid == 1 {
+                table.root_group
+            } else {
+                table.children.get(&pid).ok_or(Failure::Errno(71))?.group
+            };
+            let owner = if a[0] == 0
+                || terminal.foreground.get() == 0
+                || terminal.foreground.get() == group
+            {
+                Some(pid)
+            } else {
+                None
+            };
+            let token = terminal.set_raw(owner, a[0] == 1).map_err(Failure::Errno)?;
+            let mut leases = state.raw_leases.borrow_mut();
+            if let Some(token) = token {
+                if let Some(lease) = leases
+                    .iter_mut()
+                    .find(|(owned, _)| Rc::ptr_eq(owned, &terminal))
+                {
+                    lease.1 = token;
+                } else {
+                    leases.push((terminal, token));
+                }
+            } else if a[0] == 0 {
+                leases.retain(|(owned, _)| !Rc::ptr_eq(owned, &terminal));
+            }
         }
         "get_size" => {
             let pipe = caller
@@ -3661,6 +3692,13 @@ fn resumable_start(bytes: &[u8]) -> Result<Option<(Vec<u8>, String)>, String> {
 }
 
 impl WasmGuest {
+    fn release_raw_leases(&self) {
+        let state = self.store.data();
+        for (terminal, token) in state.raw_leases.borrow_mut().drain(..) {
+            terminal.release_raw(state.pid, Some(token));
+        }
+    }
+
     fn drain_terminal(&mut self) -> Result<(), String> {
         let state = self.store.data_mut();
         let Some(attachment) = &state.terminal else {
@@ -3826,6 +3864,7 @@ impl WasmGuest {
                 environment,
                 stdin_pipe: None,
                 terminal: None,
+                raw_leases: RefCell::new(Vec::new()),
                 stdin_writer: Rc::new(RefCell::new(None)),
                 stdin: Rc::new(stdin.to_vec()),
                 stdin_offset: Rc::new(Cell::new(0)),
@@ -4186,6 +4225,7 @@ thread_local! {
 
 impl Drop for WasmGuest {
     fn drop(&mut self) {
+        self.release_raw_leases();
         self.store.data().processes.borrow_mut().memory_bytes -= self.memory_limit;
     }
 }
@@ -4349,6 +4389,7 @@ impl WasmGuest {
     }
 
     pub fn finish_child(&self, failed: bool) {
+        self.release_raw_leases();
         let table = self.store.data().processes.clone();
         let mut table = table.borrow_mut();
         if let Some(child) = table.children.get_mut(&self.store.data().pid) {
@@ -4617,6 +4658,8 @@ impl WasmGuest {
             Err(_) => return self.respond(45, &[], "/", false, 0, &[]),
         };
         replacement.fuel_limit = self.fuel_limit;
+        *replacement.store.data().raw_leases.borrow_mut() =
+            std::mem::take(&mut *self.store.data().raw_leases.borrow_mut());
         let state = replacement.store.data();
         if state.pid == 1 {
             state.processes.borrow_mut().root_dispositions = state.dispositions.clone();
@@ -4801,6 +4844,9 @@ impl WasmGuest {
         }
         if self.done.is_none() && self.store.data().pending.is_none() && self.exhaustion.is_none() {
             return self.step();
+        }
+        if self.done.is_some() {
+            self.release_raw_leases();
         }
         self.drain_terminal()
             .map_err(|error| JsValue::from_str(&error))?;
@@ -5758,6 +5804,42 @@ impl WasmGuest {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn root_raw_ownership_releases_before_guest_drop_and_on_abandonment() {
+        let module = [
+            0, 97, 115, 109, 1, 0, 0, 0, 1, 5, 1, 96, 0, 1, 127, 3, 2, 1, 0, 7, 7, 1, 3, 114, 117,
+            110, 0, 0, 10, 6, 1, 4, 0, 65, 0, 11,
+        ];
+        for complete in [true, false] {
+            let mut guest = WasmGuest::create(
+                &module,
+                r#"{"argv":[],"env":{}}"#,
+                GuestInitialization::Fresh(&[]),
+                8_388_608,
+                100_000,
+                1024,
+                None,
+            )
+            .unwrap();
+            let tty = pty::Terminal::new();
+            let token = tty.set_raw(Some(1), true).unwrap().unwrap();
+            guest
+                .store
+                .data()
+                .raw_leases
+                .borrow_mut()
+                .push((tty.clone(), token));
+            if complete {
+                let step: serde_json::Value = serde_json::from_str(&guest.step().unwrap()).unwrap();
+                assert_eq!(step["kind"], "done");
+                assert!(!tty.raw.get());
+                assert!(guest.store.data().raw_leases.borrow().is_empty());
+            }
+            drop(guest);
+            assert!(!tty.raw.get());
+        }
+    }
+
     #[test]
     fn invalid_binary_and_limits_are_rejected() {
         assert!(
