@@ -1,0 +1,278 @@
+{
+  "status": "Locally verified Rust source after published 0.14.0. No new matching archive, release or production deployment. Full AgentOS parity remains open.",
+  "baseCommit": "0d2b612638f7737df020abc5c2cf9fac1b7fd206",
+  "baseCI": {
+    "url": "https://github.com/minutei-ai/boxes/actions/runs/38875607930",
+    "conclusion": "success"
+  },
+  "reference": {
+    "commit": "4d48628304c1ddedafc9d55f60752093fcf6f3d2",
+    "terminal": "https://github.com/rivet-dev/agentos/blob/4d48628304c1ddedafc9d55f60752093fcf6f3d2/crates/kernel/src/pty.rs",
+    "kernel": "https://github.com/rivet-dev/agentos/blob/4d48628304c1ddedafc9d55f60752093fcf6f3d2/crates/kernel/src/kernel.rs",
+    "scope": "The inspected terminal owns six flags and seven configurable control bytes. Boxes guest imports use their documented packed ABI, rather than copying a libc struct."
+  },
+  "change": {
+    "attributes": "One native Termios record replaces the Boolean raw/canonical owner. ICRNL, OPOST, ONLCR, ICANON, ECHO and ISIG are independent; VINTR, VQUIT, VSUSP, VEOF, VERASE, VKILL and VWERASE are configurable.",
+    "guestABI": "host_tty.tcgetattr(fd, output_ptr) and tcsetattr(fd, input_ptr) use 12 bytes: a six-bit u32 little-endian flag word, seven control bytes and a zero reserved byte. Unknown bits, reserved data, invalid memory and non-terminal/closed descriptors fail before mutation.",
+    "editing": "Canonical input accepts configured erase, word erase and line kill plus backspace 08. Echo uses caret notation and removes the displayed width. Complete edit echoes are preflighted before changing either channel. Echo-disabled admission is independent of output capacity.",
+    "translation": "ICRNL controls incoming CR separately. Slave output requires OPOST and ONLCR for LF conversion; an existing CR before LF in the same write is retained without duplication. Noncanonical echo and signal generation remain independent.",
+    "ownership": "Raw enable disables all six flags and retains configured control bytes. Recovery frames retain complete attributes; nested/out-of-order exit restores them and a direct tcsetattr supersedes older restore tokens. Existing descriptor-independent ownership, spawn/exec and heap checkpoint lifetimes remain.",
+    "persistence": "No R2 input-head schema, new infrastructure or per-keystroke persistence operation. Native attributes and lease frames survive the existing same-build cooperative heap snapshot.",
+    "bounds": "64 KiB per direction, 4096 unfinished-line bytes and 4096 committed line/EOF records. Ordinary canonical runs and unprocessed noncanonical input use bounded bulk copies."
+  },
+  "verification": {
+    "rust": {
+      "tests": 22,
+      "failures": 0,
+      "includes": "All 64 flag combinations; reserved bits; independent flags; custom controls; caret-width word/line erase; atomic full-line echo backpressure; complete-state lease restore; counter exhaustion."
+    },
+    "nativeTargeted": {
+      "command": "bun test tests/tty-termios.test.ts tests/pty-recovery.test.ts --test-name-pattern 'terminal attributes|active termios'",
+      "tests": 2,
+      "failures": 0,
+      "assertions": 24,
+      "seconds": 3.71,
+      "binding": "Native Alchemy workerd service binding with read/execute-only authority, cross-sandbox rejection, real master/slave aliases, bad descriptors/pointers and configured SIGINT delivery.",
+      "checkpoint": "A child retains custom controls in raw mode across a 30-second checkpoint and replacement Worker, consumes appended raw input and closes stdin. Its exit restores the complete custom attributes before parent wait completes. Subsequent output verifies independent ONLCR and another setter. Exact R2 replay and duplicate Queue delivery preserve results.",
+      "fixtureCorrection": "The first pair probe checked its handler immediately after a native master write. The corrected fixture observes delivery through the next interruptible host_tty.read, matching the existing cooperative signal contract; no scheduler or signal policy changed."
+    },
+    "fullCheck": {
+      "command": "bun run check",
+      "tests": 394,
+      "files": 78,
+      "assertions": 5298,
+      "seconds": 194.96,
+      "failures": 0,
+      "includes": [
+        "Runtime/SDK build",
+        "TypeScript",
+        "Workspace Clippy with warnings denied",
+        "Cargo tests",
+        "Native workerd/R2/Queue suite, including published interactive shells and recovery"
+      ]
+    },
+    "generalBenchmark": {
+      "command": "bun run bench",
+      "result": "passed",
+      "environment": {
+        "runtime": "local workerd via native Alchemy",
+        "alchemy": "2.0.0-beta.83",
+        "production": false,
+        "platform": "linux",
+        "arch": "x64"
+      },
+      "artifactBytes": {
+        "javascript": 369509,
+        "kernelWasm": 1139581,
+        "wasiWasm": 1684836,
+        "pythonWasm": 10719083,
+        "guestWasm": 1129863,
+        "compilerWasm": 1943596
+      },
+      "maintainedEvidence": "The previous performance-local.json was restored byte for byte; this smoke run is not a paired performance claim."
+    }
+  },
+  "performance": {
+    "reference": "Exact published runtime 0.14.0 archive, previously verified SHA-256 92deeadb4247f3c98f1293af596958d2c569d18e212299c34c8931af5b3a5649",
+    "method": "Eight fresh-R2 phases in ABBA then BAAB, ten discarded warmups and 25 retained samples per phase. Identical fixture and validated byte counts for both runtimes.",
+    "fixtureChange": "The comparison fixture replaces its tab with printable z for both versions, retaining all byte counts. Canonical tab now has caret echo under the reference termios behavior, so the old fixture output would differ. Tab/backspace/word erase are covered separately by native tests. The fixture hash and every phase/sample are retained.",
+    "pooledNearestRank": {
+      "reference": {
+        "samples": 100,
+        "p50Ms": 46.27263700000003,
+        "p95Ms": 52.79950800000006
+      },
+      "current": {
+        "samples": 100,
+        "p50Ms": 46.29868700000043,
+        "p95Ms": 54.107889000000796
+      }
+    },
+    "report": {
+      "measuredAt": "2026-10-16T09:03:01.730Z",
+      "environment": "local native Alchemy workerd; runtime module directories; fresh R2 per phase; sequential ABBA then BAAB",
+      "workload": "16 rounds of 64 plain canonical lines and 64 edited/control lines through native PTY master/slave descriptors; validate all 39936 input bytes and 45056 echoed bytes per request",
+      "fixtureSha256": "9c50b72655b93675346e570eb5e266b0f5c74fb773a38b2dfd5d61c6ace430a4",
+      "artifacts": [
+        {
+          "version": "reference",
+          "workerSha256": "5db1f636f4524233e1295411a7a54890e96f639c139f589a6bc2718bdb62d7fe",
+          "wasiSha256": "2f8ab400160da165ea5d2bc5255d95f35cb869500d29847521b1083e8e2f8208"
+        },
+        {
+          "version": "current",
+          "workerSha256": "4a8d11f3874bae67b9dd7375331b2e4b8d0e2a7068b6ba826f2435c658ebb9ad",
+          "wasiSha256": "16519c669d3b89c716fe8ba9535b64500c1bed523596aacbbf29463183674be0"
+        }
+      ],
+      "phases": [
+        {
+          "version": "reference",
+          "phase": 0,
+          "warmups": 10,
+          "samplesMs": [
+            49.31404199999997, 51.698576, 45.831848000000036, 51.79743300000018, 44.46405499999992,
+            44.35843299999988, 45.21544500000027, 44.47265900000002, 44.63588800000025,
+            47.05740700000024, 45.092001999999866, 46.77144200000021, 47.556422999999995,
+            45.993978999999854, 43.96574899999996, 48.72827099999995, 44.267109999999775,
+            43.777098000000024, 43.83762999999999, 49.21179000000029, 48.69616999999971,
+            54.08969500000012, 53.862482, 44.796736999999666, 47.648203000000194
+          ],
+          "p50Ms": 45.993978999999854,
+          "p95Ms": 53.862482
+        },
+        {
+          "version": "current",
+          "phase": 1,
+          "warmups": 10,
+          "samplesMs": [
+            53.991682999999284, 52.17941999999948, 47.76202900000044, 56.367145000000164,
+            45.995679000000564, 46.06031499999972, 46.29868700000043, 45.666049999999814,
+            47.20605599999999, 47.956669999999576, 47.45910499999991, 48.441249999999854,
+            57.94200399999954, 50.29999299999963, 47.42752500000006, 43.089782000000014,
+            43.70608100000027, 44.289590999999746, 47.1813659999998, 44.77726100000018,
+            45.06928599999992, 47.454892000000655, 45.46133900000041, 47.555379999999786,
+            43.40470499999992
+          ],
+          "p50Ms": 47.20605599999999,
+          "p95Ms": 56.367145000000164
+        },
+        {
+          "version": "current",
+          "phase": 2,
+          "warmups": 10,
+          "samplesMs": [
+            44.528754999999364, 45.31359499999962, 45.00899799999934, 51.42501900000025,
+            44.7493829999994, 45.235095, 44.90329699999984, 44.75620799999979, 44.98537699999997,
+            45.800726999999824, 44.78831999999966, 44.19959999999992, 46.3178939999998,
+            47.05258599999979, 43.69123099999979, 44.50821300000007, 43.53789499999948,
+            45.089500000000044, 43.938060999999834, 48.90878299999986, 54.12244699999974,
+            47.89615799999956, 51.60828800000127, 52.60754900000029, 47.616015999999945
+          ],
+          "p50Ms": 45.089500000000044,
+          "p95Ms": 52.60754900000029
+        },
+        {
+          "version": "reference",
+          "phase": 3,
+          "warmups": 10,
+          "samplesMs": [
+            47.95622999999978, 45.382102000001396, 46.306446999999025, 50.45574099999976,
+            44.48070299999927, 45.009532000000036, 45.39265699999851, 46.57259800000065,
+            44.539058999998815, 47.39532899999904, 46.52153999999973, 43.580839000000196,
+            47.036425000000236, 45.937355000000025, 44.11948999999913, 43.977138000000195,
+            44.14180800000031, 42.85947799999849, 44.80737000000045, 44.33775799999967,
+            49.9225639999986, 44.31031599999915, 44.297199000000546, 46.61586400000124,
+            45.143794999999955
+          ],
+          "p50Ms": 45.143794999999955,
+          "p95Ms": 49.9225639999986
+        },
+        {
+          "version": "current",
+          "phase": 4,
+          "warmups": 10,
+          "samplesMs": [
+            54.107889000000796, 46.567134999999325, 45.81231399999888, 53.24092400000154,
+            47.74586900000031, 46.76620300000104, 47.56778200000008, 47.49553899999955,
+            44.91078899999957, 48.03270900000098, 48.29533699999956, 47.73795099999916,
+            50.92782200000147, 49.93084999999883, 48.21478500000012, 48.91822200000024,
+            49.17212899999868, 49.01532899999984, 49.27439400000003, 55.630826000000525,
+            49.374212000000625, 48.861307000001034, 45.057190999999875, 42.97443999999996,
+            45.976244999999835
+          ],
+          "p50Ms": 48.21478500000012,
+          "p95Ms": 54.107889000000796
+        },
+        {
+          "version": "reference",
+          "phase": 5,
+          "warmups": 10,
+          "samplesMs": [
+            50.406465000000026, 49.48398900000029, 50.40209099999993, 56.46288100000129,
+            51.343668000001344, 51.180334000000585, 49.69618900000023, 51.387423000000126,
+            50.13321199999882, 55.10002499999973, 51.56613799999832, 49.539380999998684,
+            52.79950800000006, 50.99021499999981, 48.1396220000006, 49.35523099999955,
+            48.47581299999911, 45.88641800000005, 46.35142799999994, 48.952369999999064,
+            44.7158959999997, 46.27263700000003, 45.564526999998634, 52.282296000001224,
+            48.995247000002564
+          ],
+          "p50Ms": 49.69618900000023,
+          "p95Ms": 55.10002499999973
+        },
+        {
+          "version": "reference",
+          "phase": 6,
+          "warmups": 10,
+          "samplesMs": [
+            50.5012850000021, 51.095486999998684, 55.93761500000255, 51.16995600000155,
+            43.989340000000084, 45.168353999997635, 43.925482999999076, 49.65062399999806,
+            43.47663399999874, 45.6504509999977, 46.532014000000345, 42.53650100000232,
+            46.18382600000041, 47.27465400000074, 43.94277900000088, 45.10822800000096,
+            44.71172200000001, 43.61003999999957, 43.03622600000017, 43.29029399999854,
+            43.27117299999736, 43.653746999996656, 44.98308199999883, 51.64425000000119,
+            44.3234709999997
+          ],
+          "p50Ms": 44.98308199999883,
+          "p95Ms": 51.64425000000119
+        },
+        {
+          "version": "current",
+          "phase": 7,
+          "warmups": 10,
+          "samplesMs": [
+            48.91688499999873, 45.57603300000119, 45.0002650000024, 57.15877499999988,
+            44.21466999999757, 44.002980000001116, 48.05794099999912, 45.386115000001155,
+            43.40136900000289, 44.70855600000141, 45.67514099999971, 43.86674200000198,
+            52.18754799999806, 44.7186589999983, 44.1961160000028, 45.142932999999175,
+            44.83421100000123, 44.74779699999999, 49.44913099999758, 44.52689100000134,
+            44.467296999999235, 43.89075700000103, 44.42874700000175, 47.194548999999824,
+            50.624031999999715
+          ],
+          "p50Ms": 44.83421100000123,
+          "p95Ms": 52.18754799999806
+        }
+      ]
+    },
+    "interpretation": "Pooled medians are approximately equal in this shared-host run; phase distributions overlap and p95 is higher for the candidate. No speedup, production latency, memory or billing advantage is established."
+  },
+  "runtimeAssets": {
+    "index.js": {
+      "bytes": 369509,
+      "sha256": "4a8d11f3874bae67b9dd7375331b2e4b8d0e2a7068b6ba826f2435c658ebb9ad",
+      "unchangedFrom014": false
+    },
+    "cirro_kernel_bg.wasm": {
+      "bytes": 1139581,
+      "sha256": "1d3d1811805905af3c00e8afedd696c22d585db7538877306c28e7b099725e92",
+      "unchangedFrom014": true
+    },
+    "cirro_guest_bg.wasm": {
+      "bytes": 1129863,
+      "sha256": "b773b74626b08bd1083860081ccd2a3d0fdff80dcd97b5ec13ed7c6e2148ef22",
+      "unchangedFrom014": true
+    },
+    "cirro_compiler_bg.wasm": {
+      "bytes": 1943596,
+      "sha256": "27d9b0022a634ed4eef47b6561ad38cafde3522c17e834afed1264440678bf2f",
+      "unchangedFrom014": true
+    },
+    "cirro_wasi_bg.wasm": {
+      "bytes": 1684836,
+      "sha256": "16519c669d3b89c716fe8ba9535b64500c1bed523596aacbbf29463183674be0",
+      "unchangedFrom014": false
+    },
+    "cirro_python_bg.wasm": {
+      "bytes": 10719083,
+      "sha256": "8aa6aec5ab6fb0623637e2b6dda7318f4934e4736f4a97e45ca3312bf32e529c",
+      "unchangedFrom014": true
+    }
+  },
+  "limits": [
+    "Native guest attributes are source-only after 0.14.0; public terminal attribute actions/listing and richer metadata remain open.",
+    "Controlling-terminal ownership, background-access signals and broader POSIX terminal features remain open.",
+    "The packed ABI contains the six flags and seven controls of the inspected reference; other libc termios fields and modes are not accepted.",
+    "Cooperative same-build R2 recovery is tested. Arbitrary-crash recovery, cross-build heap migration and production published-shell recovery remain open.",
+    "Matching archive delivery, remote CI and production proof of this source increment remain separate gates."
+  ]
+}

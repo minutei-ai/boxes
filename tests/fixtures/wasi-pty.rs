@@ -399,11 +399,7 @@ pub extern "C" fn run() -> i32 {
                     b"abcdefghijklmnopqrstuvwxyzABCD\n",
                     b"abcdefghijklmnopqrstuvwxyzABCD\r\n",
                 ),
-                (
-                    b"abX\x7fc\t\x01\r",
-                    b"abc\t\x01\n",
-                    b"abX\x08 \x08c\t^A\r\n",
-                ),
+                (b"abX\x7fcz\x01\r", b"abcz\x01\n", b"abX\x08 \x08cz^A\r\n"),
             ];
             let chunks =
                 patterns.map(|(input, line, echo)| (input.repeat(64), line, echo.repeat(64)));

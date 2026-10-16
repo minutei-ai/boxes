@@ -358,6 +358,23 @@ await Effect.runPromise(
         `dist/wasi-tty-raw-owner-${fixture}.wasm`,
       ]);
     }
+    for (const fixture of ["pair", "recovery", "child"]) {
+      yield* run([
+        "rustc",
+        "--crate-type",
+        "cdylib",
+        "--target",
+        "wasm32-unknown-unknown",
+        "-O",
+        "-C",
+        "strip=symbols",
+        "--cfg",
+        `case="${fixture}"`,
+        "tests/fixtures/wasi-termios.rs",
+        "-o",
+        `dist/wasi-termios-${fixture}.wasm`,
+      ]);
+    }
     for (const fixture of ["parent", "child", "foreign", "pair", "recovery"]) {
       yield* run([
         "rustc",

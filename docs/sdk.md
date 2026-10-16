@@ -100,6 +100,17 @@ Both imports return zero on success or a WASI errno: `8` for an invalid/closed d
 
 The 0.14.0 runtime also tracks raw-mode recovery per process. Enabling raw mode from the foreground group or an unassigned terminal retains the previous mode. Process exit restores that state before its parent observes completion, including after closing stdin or replacing the image with exec. Nested owners unwind to the inherited state; newer unowned changes supersede an older restore point. A background caller can change raw mode but acquires no recovery lease. Disabling releases an owned lease and can restore inherited raw mode; without a lease it selects cooked mode. Same-build cooperative checkpoints preserve these owners. Use matching 0.14.0 SDK/runtime archives for these terminal behaviors.
 
+The runtime source after 0.14.0 also exposes native guest attribute imports. These require a newer matching runtime; the published 0.14.0 archives predate them:
+
+| `host_tty` import                            | Contract                                                        |
+| -------------------------------------------- | --------------------------------------------------------------- |
+| `tcgetattr(fd: u32, output_ptr: u32) -> u32` | Writes the terminal's 12-byte attribute record.                 |
+| `tcsetattr(fd: u32, input_ptr: u32) -> u32`  | Atomically replaces attributes from a validated 12-byte record. |
+
+Bytes 0–3 hold a little-endian flag word: ICRNL=1, OPOST=2, ONLCR=4, ICANON=8, ECHO=16 and ISIG=32. Bytes 4–10 hold VINTR, VQUIT, VSUSP, VEOF, VERASE, VKILL and VWERASE, initially `03 1c 1a 04 7f 15 17`. Byte 11 is reserved and must be zero. Read, modify and write the record to retain fields outside a guest's intended change. The ABI uses the six flags and seven control bytes of the inspected AgentOS terminal contract; callers supply this packed record rather than a host libc struct. Other flag bits and nonzero reserved data return EINVAL (`28`). Invalid/closed descriptors return `8`, non-terminals `59`, invalid pointers `21` and exhausted mutation counters EIO (`29`). Failed setters preserve attributes.
+
+Input translation, output translation, canonical reads, echo and signal generation are independent. Canonical editing uses configured EOF/erase/kill/word-erase bytes and also accepts backspace `08`. Echo uses caret notation for control bytes; erase removes their displayed width. Line edits wait for enough room for their entire echo. OPOST and ONLCR together translate output LF while retaining an existing CR before LF within a write. Raw mode disables all six flags and preserves the control bytes; an owned disable or process exit restores the complete inherited record. A later `tcsetattr` supersedes older recovery tokens. Descriptor aliases, spawn, exec and same-build cooperative heap recovery share the existing native ownership rules. Public attribute controls, controlling-terminal acquisition, background-access signals and the remaining POSIX terminal features stay open.
+
 The 0.13.0 API also exposes terminal control through the Effect SDK, native service bindings and scoped guest tools:
 
 ```ts

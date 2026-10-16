@@ -2988,6 +2988,28 @@ fn dispatch(caller: &mut Caller<'_, State>, name: &str, args: &[u64]) -> Result<
                 caller.data_mut().umask = a[0] as u32 & 0o777;
             }
         }
+        "tcgetattr" | "tcsetattr" => {
+            let terminal = caller
+                .data()
+                .descriptors
+                .get(&(a[0] as u32))
+                .ok_or(Failure::Errno(8))?
+                .pipe
+                .as_ref()
+                .and_then(|pipe| pipe.terminal.as_ref())
+                .ok_or(Failure::Errno(59))?
+                .terminal
+                .clone();
+            if name == "tcgetattr" {
+                put(caller, a[1], &terminal.termios.get().encode())?;
+            } else {
+                let attributes =
+                    pty::Termios::decode(&bytes(caller, a[1], 12)?).map_err(Failure::Errno)?;
+                terminal
+                    .set_attributes(attributes)
+                    .map_err(Failure::Errno)?;
+            }
+        }
         "get_foreground" | "set_foreground" => {
             let descriptor = caller
                 .data()
@@ -3484,6 +3506,8 @@ fn linker(engine: &Engine) -> Result<Linker<State>, String> {
     bind!("host_process","umask",a:i32,b:i32,c:i32);
     bind!("host_process","proc_umask",a:i32,b:i32);
     bind!("host_tty","set_raw_mode",a:i32);
+    bind!("host_tty","tcgetattr",a:i32,b:i32);
+    bind!("host_tty","tcsetattr",a:i32,b:i32);
     bind!("host_tty","get_size",a:i32,b:i32,c:i32);
     bind!("host_tty","get_foreground",a:i32,b:i32);
     bind!("host_tty","set_foreground",a:i32,b:i32);
@@ -5832,11 +5856,11 @@ mod tests {
             if complete {
                 let step: serde_json::Value = serde_json::from_str(&guest.step().unwrap()).unwrap();
                 assert_eq!(step["kind"], "done");
-                assert!(!tty.raw.get());
+                assert!(tty.termios.get().icanon);
                 assert!(guest.store.data().raw_leases.borrow().is_empty());
             }
             drop(guest);
-            assert!(!tty.raw.get());
+            assert!(tty.termios.get().icanon);
         }
     }
 
