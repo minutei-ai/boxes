@@ -359,7 +359,7 @@ export const ProcessReadAction = Schema.Union([
 ]);
 export const Digest = Schema.String.check(Schema.isPattern(/^[0-9a-f]{64}$/));
 export const SourceDigest = Schema.String.check(Schema.isPattern(/^sha256:[0-9a-f]{64}$/));
-export const CommandName = Schema.String.check(Schema.isPattern(/^[a-zA-Z0-9_+.-]{1,128}$/));
+export const CommandName = Schema.String.check(Schema.isPattern(/^(?:[a-zA-Z0-9_+.-]{1,128}|\[)$/));
 export const SoftwareAction = Schema.Union([
   Schema.Struct({
     op: Schema.Literal("software.install"),

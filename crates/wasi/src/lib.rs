@@ -917,7 +917,10 @@ fn descriptor_rights(state: &State, fd: u32) -> Result<(u64, u64), Failure> {
         return Ok((descriptor.rights, descriptor.inheriting));
     }
     if let Some(index) = stream(state, fd) {
-        return Ok(((if index == 0 { 2 } else { 64 }) | (1 << 27) | (1 << 3), 0));
+        return Ok((
+            (if index == 0 { 2 } else { 64 }) | (1 << 27) | (1 << 21) | (1 << 3),
+            0,
+        ));
     }
     Err(Failure::Errno(8))
 }
@@ -1867,11 +1870,16 @@ fn dispatch(caller: &mut Caller<'_, State>, name: &str, args: &[u64]) -> Result<
             put(caller, a[0], &reader.to_le_bytes())?;
             put(caller, a[1], &writer.to_le_bytes())?;
         }
-        "fd_dup" | "fd_dup2" => {
+        "fd_dup" | "fd_dup_min" | "fd_dup2" => {
             let source = duplicate_source(caller.data(), a[0] as u32)?;
-            let target = if name == "fd_dup" {
-                bytes(caller, a[1], 4)?;
-                (0..MAX_FILES as u32 + 4)
+            let output = if name == "fd_dup_min" { a[2] } else { a[1] };
+            let target = if name != "fd_dup2" {
+                bytes(caller, output, 4)?;
+                let minimum = if name == "fd_dup_min" { a[1] as u32 } else { 0 };
+                if minimum >= MAX_FILES as u32 + 4 {
+                    return Err(Failure::Errno(28));
+                }
+                (minimum..MAX_FILES as u32 + 4)
                     .find(|fd| {
                         stream(caller.data(), *fd).is_none()
                             && !caller.data().descriptors.contains_key(fd)
@@ -1899,8 +1907,8 @@ fn dispatch(caller: &mut Caller<'_, State>, name: &str, args: &[u64]) -> Result<
             state.descriptors.insert(target, source);
             state.closed.remove(&target);
             state.cloexec.remove(&target);
-            if name == "fd_dup" {
-                put(caller, a[1], &target.to_le_bytes())?;
+            if name != "fd_dup2" {
+                put(caller, output, &target.to_le_bytes())?;
             }
         }
         "fd_renumber" => {
@@ -1943,6 +1951,26 @@ fn dispatch(caller: &mut Caller<'_, State>, name: &str, args: &[u64]) -> Result<
             }
         }
 
+        "fd_record_lock" => {
+            duplicate_source(caller.data(), a[0] as u32)?;
+            return Err(Failure::Errno(58));
+        }
+        "proc_getrlimit" => {
+            if a[0] >= 16 {
+                return Err(Failure::Errno(28));
+            }
+            if a[0] != 7 {
+                return Err(Failure::Errno(58));
+            }
+            bytes(caller, a[1], 8)?;
+            bytes(caller, a[2], 8)?;
+            let limit = (MAX_FILES as u64 + 4).to_le_bytes();
+            put(caller, a[1], &limit)?;
+            put(caller, a[2], &limit)?;
+        }
+        "getuid" | "geteuid" | "getgid" | "getegid" => {
+            put(caller, a[0], &0u32.to_le_bytes())?;
+        }
         "isatty" => {
             let fd = a[0] as u32;
             if (fd >= 3 || caller.data().closed.contains(&fd))
@@ -2788,6 +2816,16 @@ fn dispatch(caller: &mut Caller<'_, State>, name: &str, args: &[u64]) -> Result<
         }
         "fd_filestat_get" => {
             bytes(caller, a[1], 64)?;
+            if stream(caller.data(), a[0] as u32).is_some() {
+                if descriptor_rights(caller.data(), a[0] as u32)?.0 & (1 << 21) == 0 {
+                    return Err(Failure::Errno(76));
+                }
+                let mut metadata = [0u8; 64];
+                metadata[16] = 2;
+                metadata[24..32].copy_from_slice(&1u64.to_le_bytes());
+                put(caller, a[1], &metadata)?;
+                return Ok(0);
+            }
             let descriptor = caller
                 .data()
                 .descriptors
@@ -3613,11 +3651,18 @@ fn linker(engine: &Engine) -> Result<Linker<State>, String> {
     bind!("host_process","proc_signal_mask_v2",a:i32,b:i32,c:i32,d:i32,e:i32);
     bind!("host_process","fd_pipe",a:i32,b:i32);
     bind!("host_process","fd_dup",a:i32,b:i32);
+    bind!("host_process","fd_dup_min",a:i32,b:i32,c:i32);
+    bind!("host_process","fd_record_lock",a:i32,b:i32,c:i32,d:i64,e:i64,f:i32,g:i32,h:i32,i:i32);
     bind!("host_process","fd_dup2",a:i32,b:i32);
     bind!("host_process","proc_closefrom",a:i32);
     bind!("host_process","fd_getfd",a:i32,b:i32);
     bind!("host_process","fd_setfd",a:i32,b:i32);
     bind!("host_user","isatty",a:i32,b:i32);
+    bind!("host_process","proc_getrlimit",a:i32,b:i32,c:i32);
+    bind!("host_user","getuid",a:i32);
+    bind!("host_user","geteuid",a:i32);
+    bind!("host_user","getgid",a:i32);
+    bind!("host_user","getegid",a:i32);
     macro_rules! bind_stat {
         ($name:literal,$result:ty,$failure:expr $(,$arg:ident:$type:ty)*) => {
             linker.func_wrap("host_fs",$name,|mut caller:Caller<'_,State>,$($arg:$type),*| -> Result<$result,Error> {

@@ -58,7 +58,7 @@ const report = await Effect.runPromise(
             if (collected.status !== "complete") return yield* Effect.die(collected);
           }).pipe(Effect.orDie),
       );
-      const packages = yield* Effect.forEach(defaultSoftware, (software) =>
+      const packages = yield* Effect.forEach(defaultSoftware.slice(0, 2), (software) =>
         Effect.gen(function* () {
           yield* client.action(id, { op: "software.uninstall", packageId: software.digest });
           const bytes = yield* downloadSoftware(software);
@@ -75,6 +75,12 @@ const report = await Effect.runPromise(
           });
           if (installed.digest !== `sha256:${software.digest}`)
             return yield* Effect.die("Installed package digest mismatch");
+          if (software.name === "sh")
+            yield* client.action(id, {
+              op: "software.link",
+              packageId: installed.packageId,
+              command: "sh",
+            });
           return installed;
         }),
       );

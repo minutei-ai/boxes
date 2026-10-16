@@ -34,14 +34,13 @@ export const prepareSoftwareBase = Effect.fn("software.prepareBase")(function* (
   for (const artifact of configured.artifacts) {
     const bytes = yield* downloadSoftware(artifact);
     const installed = yield* Schema.decodeUnknownEffect(Schema.fromJsonString(PackageInstallation))(
-      yield* kernelCall(() => kernel.install_package(bytes)),
+      yield* kernelCall(() => kernel.install_image_package(bytes)),
     );
     if (installed.installed.manifest.name !== artifact.name)
       return yield* new SoftwareBaseFailure({ message: "Package name does not match the catalog" });
     for (const block of installed.blocks)
       blocks.set(block.hash, bytes.subarray(block.offset, block.offset + block.length));
   }
-  yield* kernelCall(() => kernel.share_package_blocks());
   const manifest = yield* kernelCall(() => kernel.manifest());
   const digest = new Bun.CryptoHasher("sha256").update(manifest).digest("hex");
   return { manifest, digest, blocks };

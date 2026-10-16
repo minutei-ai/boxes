@@ -993,6 +993,17 @@ await Effect.runPromise(
       "-o",
       "dist/wasi-umask.wasm",
     ]);
+    yield* run([
+      "rustc",
+      "--target",
+      "wasm32-wasip1",
+      "-O",
+      "-C",
+      "strip=symbols",
+      "tests/fixtures/wasi-user-identity.rs",
+      "-o",
+      "dist/wasi-user-identity.wasm",
+    ]);
     yield* Effect.forEach(
       [
         "allocate-rights",

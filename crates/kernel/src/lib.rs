@@ -505,8 +505,6 @@ impl Kernel {
         if size > MAX_FILE {
             return Err(fail("EFBIG: file limit exceeded"));
         }
-        self.writable_file(&path, size, false)
-            .map_err(|error| fail(&error))?;
         let old = match self.state.node(&path) {
             Some(Node::File { chunks, .. }) => chunks.as_slice(),
             _ => &[],
@@ -536,6 +534,19 @@ impl Kernel {
                 chunks.push(previous.map(|block| block.hash));
             }
         }
+        let private_size = chunks
+            .iter()
+            .enumerate()
+            .filter(|(_, hash)| {
+                hash.as_ref()
+                    .map_or(self.state.shared_chunks.is_empty(), |hash| {
+                        !self.state.shared_chunks.contains(*hash)
+                    })
+            })
+            .map(|(index, _)| (size - index as u64 * 262_144).min(262_144))
+            .sum();
+        self.writable_file(&path, private_size, false)
+            .map_err(|error| fail(&error))?;
         serde_json::to_string(&RangeWritePlan {
             path: &path,
             offset,
@@ -904,7 +915,7 @@ impl Kernel {
             }
         }
         self.validate_packages()?;
-        if self.used_bytes() > MAX_TOTAL {
+        if self.private_bytes() > MAX_TOTAL {
             return Err("ENOSPC: filesystem byte quota exceeded".into());
         }
         Ok(())
@@ -921,7 +932,32 @@ impl Kernel {
             .sum()
     }
 
-    fn writable_file(&self, path: &str, size: u64, descriptor: bool) -> Result<u32, String> {
+    fn private_file_bytes(&self, node: &Node) -> u64 {
+        match node {
+            Node::File { size, chunks, .. } => chunks
+                .iter()
+                .enumerate()
+                .filter(|(_, hash)| !self.state.shared_chunks.contains(*hash))
+                .map(|(index, _)| size.saturating_sub(index as u64 * 262_144).min(262_144))
+                .sum(),
+            _ => 0,
+        }
+    }
+
+    fn private_bytes(&self) -> u64 {
+        self.state
+            .inodes
+            .values()
+            .map(|inode| self.private_file_bytes(&inode.node))
+            .sum()
+    }
+
+    fn writable_file(
+        &self,
+        path: &str,
+        private_size: u64,
+        descriptor: bool,
+    ) -> Result<u32, String> {
         let mode = match self.state.node(path) {
             Some(Node::File { mode, .. }) if descriptor || mode & 0o200 != 0 => *mode,
             Some(Node::File { .. }) => return Err("EACCES: file is not writable".into()),
@@ -931,8 +967,16 @@ impl Kernel {
                 0o644
             }
         };
-        let old = self.state.node(path).map_or(0, Node::size);
-        if self.used_bytes().saturating_sub(old).saturating_add(size) > MAX_TOTAL {
+        let old = self
+            .state
+            .node(path)
+            .map_or(0, |node| self.private_file_bytes(node));
+        if self
+            .private_bytes()
+            .saturating_sub(old)
+            .saturating_add(private_size)
+            > MAX_TOTAL
+        {
             return Err("ENOSPC: filesystem byte quota exceeded".into());
         }
         if !self.state.nodes.contains_key(path) && self.state.nodes.len() >= MAX_NODES {
@@ -969,7 +1013,12 @@ impl Kernel {
         }) {
             return Err("EINVAL: invalid content digest".into());
         }
-        let mode = self.writable_file(&path, size, descriptor)?;
+        let private_size = self.private_file_bytes(&Node::File {
+            mode: 0,
+            size,
+            chunks: hashes.clone(),
+        });
+        let mode = self.writable_file(&path, private_size, descriptor)?;
         let existing: BTreeSet<_> = match self.state.node(&path) {
             Some(Node::File { chunks, .. }) => chunks.iter().cloned().collect(),
             _ => BTreeSet::new(),
@@ -1241,9 +1290,12 @@ impl Kernel {
         let path = self.resolve(path, true).map_err(|error| fail(&error))?;
         self.package_writable(&path, false)
             .map_err(|error| fail(&error))?;
-        let size = self.state.node(&path).map_or(0, Node::size);
+        let private_size = match (append, self.state.node(&path)) {
+            (true, Some(node)) => self.private_file_bytes(node),
+            _ => 0,
+        };
         let mode = self
-            .writable_file(&path, size, false)
+            .writable_file(&path, private_size, false)
             .map_err(|error| fail(&error))?;
         let changed = !append || !self.state.nodes.contains_key(&path);
         if changed {
@@ -2122,6 +2174,88 @@ mod tests {
             },
         )?;
         assert!(kernel.validate().is_err());
+        Ok(())
+    }
+    #[test]
+    fn public_content_does_not_spend_private_quota_and_copy_on_write_is_bounded()
+    -> Result<(), String> {
+        let mut kernel = Kernel::fresh();
+        let shared = "a".repeat(64);
+        let private = "b".repeat(64);
+        kernel.state.shared_chunks.insert(shared.clone());
+        for index in 0..8 {
+            kernel.insert(
+                format!("/tmp/public-{index}"),
+                Node::File {
+                    mode: 0o644,
+                    size: MAX_FILE,
+                    chunks: vec![shared.clone(); 64],
+                },
+            )?;
+        }
+        for index in 0..4 {
+            kernel.insert(
+                format!("/tmp/private-{index}"),
+                Node::File {
+                    mode: 0o644,
+                    size: MAX_FILE,
+                    chunks: vec![private.clone(); 64],
+                },
+            )?;
+        }
+        assert_eq!(kernel.used_bytes(), MAX_FILE * 12);
+        assert_eq!(kernel.private_bytes(), MAX_TOTAL);
+        kernel.validate()?;
+        let public_chunks =
+            serde_json::to_string(&vec![shared.clone(); 64]).map_err(|error| error.to_string())?;
+        assert!(
+            kernel
+                .write_plan("/tmp/copy", MAX_FILE, &public_chunks)
+                .is_ok()
+        );
+        assert!(
+            kernel
+                .write_plan("/tmp/overflow", 1, &format!("[\"{private}\"]"))
+                .is_err()
+        );
+        assert!(
+            kernel
+                .writable_file("/tmp/public-0", 262_144, false)
+                .is_err()
+        );
+        if let Some(node) = kernel.state.node_mut("/tmp/private-0") {
+            *node = Node::File {
+                mode: 0o644,
+                size: MAX_FILE - 262_144,
+                chunks: vec![private.clone(); 63],
+            };
+        }
+        assert_eq!(kernel.private_bytes(), MAX_TOTAL - 262_144);
+        assert!(kernel.write_range_plan("/tmp/public-0", Some(0), 1).is_ok());
+        let mut changed = vec![shared; 64];
+        changed[0] = private.clone();
+        let hashes = serde_json::to_string(&changed).map_err(|error| error.to_string())?;
+        let plan = kernel.write_plan("/tmp/public-0", MAX_FILE, &hashes)?;
+        kernel.insert(
+            plan.path,
+            Node::File {
+                mode: plan.mode,
+                size: MAX_FILE,
+                chunks: plan.chunks,
+            },
+        )?;
+        assert_eq!(kernel.private_bytes(), MAX_TOTAL);
+        kernel.validate()?;
+        assert!(
+            kernel
+                .writable_file("/tmp/public-1", 262_144, false)
+                .is_err()
+        );
+        assert!(
+            kernel
+                .write_plan("/tmp/overflow", 1, &format!("[\"{private}\"]"))
+                .is_err()
+        );
         Ok(())
     }
 }

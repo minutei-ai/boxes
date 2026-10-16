@@ -85,10 +85,11 @@ pub fn root(package: &Installed) -> Result<String, String> {
     ))
 }
 
-pub fn parse(bytes: &[u8]) -> Result<(Installed, format::MountIndex, usize), String> {
-    if bytes.len() < 16
-        || bytes.len() > 16_777_216
-        || bytes[..8] != [0x89, b'A', b'O', b'S', 2, 0, 0, 0]
+fn parse_bounded(
+    bytes: &[u8],
+    limit: usize,
+) -> Result<(Installed, format::MountIndex, usize), String> {
+    if bytes.len() < 16 || bytes.len() > limit || bytes[..8] != [0x89, b'A', b'O', b'S', 2, 0, 0, 0]
     {
         return Err("EINVAL: invalid package header or size".into());
     }
@@ -182,6 +183,10 @@ pub struct Preparation {
     pub blocks: Vec<Block>,
 }
 
+fn command_name(value: &str) -> bool {
+    value == "[" || segment(value)
+}
+
 fn segment(value: &str) -> bool {
     !value.is_empty()
         && value.len() <= 128
@@ -193,7 +198,15 @@ fn segment(value: &str) -> bool {
 }
 
 pub fn prepare(bytes: &[u8]) -> Result<Preparation, String> {
-    let (installed, index, mount_start) = parse(bytes)?;
+    prepare_bounded(bytes, 16_777_216, super::MAX_TOTAL)
+}
+
+fn prepare_bounded(
+    bytes: &[u8],
+    package_limit: usize,
+    logical_limit: u64,
+) -> Result<Preparation, String> {
+    let (installed, index, mount_start) = parse_bounded(bytes, package_limit)?;
     let manifest = &installed.manifest;
     if !segment(&manifest.name)
         || !segment(&manifest.version)
@@ -243,7 +256,7 @@ pub fn prepare(bytes: &[u8]) -> Result<Preparation, String> {
                 logical_bytes = logical_bytes
                     .checked_add(entry.size)
                     .ok_or("EFBIG: package byte count overflows")?;
-                if logical_bytes > super::MAX_TOTAL {
+                if logical_bytes > logical_limit {
                     return Err("ENOSPC: package logical bytes exceed the filesystem quota".into());
                 }
                 let start = mount_start
@@ -311,7 +324,7 @@ pub fn prepare(bytes: &[u8]) -> Result<Preparation, String> {
     }
     let mut commands = BTreeSet::new();
     for command in &manifest.commands {
-        if !segment(&command.command)
+        if !command_name(&command.command)
             || !commands.insert(&command.command)
             || command.entry.starts_with('/')
             || super::normalize(&command.entry, "/")? != format!("/{}", command.entry)
@@ -420,7 +433,7 @@ impl Kernel {
     }
 
     pub(crate) fn validate_packages(&self) -> Result<(), String> {
-        if self.state.packages.len() > 128 || self.state.links.len() > 128 {
+        if self.state.packages.len() > 128 || self.state.links.len() > 256 {
             return Err("ENOSPC: package or command catalog exceeds its quota".into());
         }
         let mut ids = BTreeSet::new();
@@ -447,7 +460,7 @@ impl Kernel {
                 }
             }
             for command in &package.manifest.commands {
-                if !segment(&command.command)
+                if !command_name(&command.command)
                     || command.entry.starts_with('/')
                     || super::normalize(&command.entry, "/")? != format!("/{}", command.entry)
                     || !self
@@ -470,7 +483,7 @@ impl Kernel {
         }
         for (alias, link) in &self.state.links {
             let target = self.package_target(link)?;
-            if !segment(alias)
+            if !command_name(alias)
                 || !matches!(self.state.node(&format!("/opt/cirro/bin/{alias}")),Some(super::Node::Symlink{target:actual}) if actual == &target)
             {
                 return Err("EINVAL: invalid package command projection".into());
@@ -520,7 +533,7 @@ impl Kernel {
                     });
             }
         }
-        if self.state.links.len() > 128 {
+        if self.state.links.len() > 256 {
             return Err("ENOSPC: command catalog exceeds its quota".into());
         }
         let mut aliases = BTreeMap::new();
@@ -579,6 +592,10 @@ impl Kernel {
     }
 
     pub(crate) fn install_prepared(&mut self, prepared: &Preparation) -> Result<(), String> {
+        self.install_content(prepared, false)
+    }
+
+    fn install_content(&mut self, prepared: &Preparation, shared: bool) -> Result<(), String> {
         if self
             .state
             .packages
@@ -596,6 +613,12 @@ impl Kernel {
             now: self.now,
             snapshot_import: false,
         };
+        if shared {
+            staged
+                .state
+                .shared_chunks
+                .extend(prepared.blocks.iter().map(|block| block.hash.clone()));
+        }
         staged.package_directory(&prepared.root)?;
         if let Some(super::Node::Directory { mode }) = staged.state.node_mut(&prepared.root) {
             *mode = 0o555;
@@ -671,7 +694,7 @@ impl Kernel {
         command: &str,
         alias: &str,
     ) -> Result<(), String> {
-        if !segment(alias) {
+        if !command_name(alias) {
             return Err("EINVAL: invalid command alias".into());
         }
         let link = Link {
@@ -708,6 +731,16 @@ impl Kernel {
             .collect::<Vec<_>>();
         serde_json::to_string(&serde_json::json!({"installed":prepared.installed,"blocks":blocks}))
             .map_err(|_| super::fail("EIO: package serialization failed"))
+    }
+    pub fn install_image_package(&mut self, bytes: &[u8]) -> Result<String, wasm_bindgen::JsValue> {
+        let prepared = prepare_bounded(bytes, 134_217_728, 134_217_728)
+            .map_err(|error| super::fail(&error))?;
+        self.install_content(&prepared, true)
+            .map_err(|error| super::fail(&error))?;
+        serde_json::to_string(
+            &serde_json::json!({"installed":prepared.installed,"blocks":prepared.blocks}),
+        )
+        .map_err(|_| super::fail("EIO: package serialization failed"))
     }
     pub fn share_package_blocks(&mut self) -> Result<(), wasm_bindgen::JsValue> {
         let roots = self
@@ -909,6 +942,25 @@ mod tests {
         bytes.extend(index);
         bytes.extend(tar);
         Ok(bytes)
+    }
+
+    #[test]
+    fn image_admission_has_independent_bounds_and_posix_bracket_command() -> Result<(), String> {
+        let (mut manifest, index, mut tar) = fixture();
+        manifest.commands[0].command = "[".into();
+        tar.resize(16_777_216, 0);
+        let bytes = encode(&manifest, &index, &tar)?;
+        assert!(prepare(&bytes).is_err());
+        let prepared = prepare_bounded(&bytes, 134_217_728, 134_217_728)?;
+        let mut kernel = Kernel::fresh();
+        kernel.install_content(&prepared, true)?;
+        assert_eq!(kernel.private_bytes(), 0);
+        assert_eq!(kernel.used_bytes(), 4);
+        kernel.validate()?;
+        assert!(kernel.state.links.contains_key("["));
+        assert!(prepare_bounded(&bytes, bytes.len() - 1, 134_217_728).is_err());
+        assert!(prepare_bounded(&bytes, 134_217_728, 3).is_err());
+        Ok(())
     }
 
     #[test]

@@ -27,7 +27,7 @@ test(
           );
           const base = yield* prepareSoftwareBase({
             kernelDigest: new Bun.CryptoHasher("sha256").update(kernelBytes).digest("hex"),
-            artifacts: defaultSoftware,
+            artifacts: defaultSoftware.slice(0, 2),
           });
           const retained = yield* Effect.scoped(
             Effect.gen(function* () {
@@ -101,7 +101,7 @@ test(
               });
               const manual = yield* makeBinding(binding, Redacted.make(manualGrant.token));
               expect(yield* manual.action("manual", { op: "software.list" })).toEqual([]);
-              for (const artifact of defaultSoftware) {
+              for (const artifact of defaultSoftware.slice(0, 2)) {
                 const bytes = yield* downloadSoftware(artifact);
                 const path = `/tmp/${artifact.name}.aospkg`;
                 yield* manual.action("manual", {

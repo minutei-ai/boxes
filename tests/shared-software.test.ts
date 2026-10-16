@@ -89,3 +89,39 @@ test("explicit v4 migration preserves inode aliases and private provenance witho
   ).toThrow();
   kernel.free();
 });
+
+test("a full private quota still permits an unchanged public block while final hashes reject new private content", async () => {
+  const bytes = await Effect.runPromise(downloadSoftware(defaultSoftware[0]));
+  const kernel = new Kernel();
+  kernel.install_image_package(bytes);
+  const executable = "/opt/cirro/pkgs/sh/0.17.0/bin/sh";
+  const plan = Schema.decodeUnknownSync(Schema.fromJsonString(ReadPlan))(
+    kernel.read_plan(executable, 0n, 16_777_216n, false),
+  );
+  const shared = kernel.chunks(executable, false);
+  kernel.write("/tmp/public-copy", BigInt(plan.length), shared);
+  const privateChunks = JSON.stringify(Array.from({ length: 64 }, () => "b".repeat(64)));
+  for (const name of ["a", "b", "c", "d"]) kernel.write(`/tmp/${name}`, 16_777_216n, privateChunks);
+  const range = Schema.decodeUnknownSync(Schema.fromJsonString(RangeWritePlan))(
+    kernel.write_range_plan("/tmp/public-copy", 0n, 1n),
+  );
+  expect(range.blocks).toHaveLength(1);
+  expect(range.blocks[0]?.previous?.shared).toBe(true);
+  expect(kernel.prepare_write("/tmp/public-copy", BigInt(plan.length), shared)).toBe("[]");
+  const changed = plan.blocks.map((block, index) => {
+    if (index === 0) return "b".repeat(64);
+    return block.hash;
+  });
+  expect(() =>
+    kernel.prepare_write("/tmp/public-copy", BigInt(plan.length), JSON.stringify(changed)),
+  ).toThrow("ENOSPC");
+  kernel.write(
+    "/tmp/d",
+    16_515_072n,
+    JSON.stringify(Array.from({ length: 63 }, () => "b".repeat(64))),
+  );
+  expect(
+    kernel.prepare_write("/tmp/public-copy", BigInt(plan.length), JSON.stringify(changed)),
+  ).toBe(JSON.stringify(["b".repeat(64)]));
+  kernel.free();
+});

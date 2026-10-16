@@ -1,0 +1,144 @@
+{
+  "measuredAt": "2026-10-16T17:49:48.380Z",
+  "environment": {
+    "runtime": "local workerd via native Alchemy",
+    "alchemy": "2.0.0-beta.83",
+    "production": false,
+    "platform": "linux",
+    "arch": "x64"
+  },
+  "artifactBytes": {
+    "javascript": 381318,
+    "kernelWasm": 1157899,
+    "wasiWasm": 1707779,
+    "pythonWasm": 10719083,
+    "guestWasm": 1129863,
+    "compilerWasm": 1943596
+  },
+  "measurements": {
+    "fullEightMiB": {
+      "count": 25,
+      "p50Ms": 85.90587999999843,
+      "p95Ms": 110.56043900000077,
+      "minMs": 81.5087480000002,
+      "maxMs": 154.57866099999956
+    },
+    "appendToEightMiB": {
+      "count": 25,
+      "p50Ms": 20.366041999997833,
+      "p95Ms": 22.755216999998083,
+      "minMs": 18.886168000000907,
+      "maxMs": 28.873571000000084
+    },
+    "resizeEightMiBTail": {
+      "count": 25,
+      "p50Ms": 11.99112199999945,
+      "p95Ms": 13.56272700000045,
+      "minMs": 10.008383000000322,
+      "maxMs": 20.11460100000113
+    },
+    "rangeFourKiB": {
+      "count": 25,
+      "p50Ms": 4.748132999997324,
+      "p95Ms": 5.004871999997704,
+      "minMs": 4.5042670000002545,
+      "maxMs": 6.055263999998715
+    },
+    "patchFourKiB": {
+      "count": 25,
+      "p50Ms": 29.50985800000126,
+      "p95Ms": 32.59233199999653,
+      "minMs": 27.12057999999888,
+      "maxMs": 49.59264699999767
+    },
+    "python": {
+      "count": 25,
+      "p50Ms": 61.99133900000015,
+      "p95Ms": 74.54387300000053,
+      "minMs": 57.91230699999869,
+      "maxMs": 209.68258199999946
+    },
+    "sequentialEightFiles": {
+      "count": 25,
+      "p50Ms": 126.41215499999998,
+      "p95Ms": 190.764678,
+      "minMs": 111.35147400000005,
+      "maxMs": 388.09107700000004
+    },
+    "batchEightFiles": {
+      "count": 25,
+      "p50Ms": 48.13709199999994,
+      "p95Ms": 63.820128000000295,
+      "minMs": 42.95487099999991,
+      "maxMs": 72.2768670000005
+    },
+    "status": {
+      "count": 100,
+      "p50Ms": 5.124941999999919,
+      "p95Ms": 9.012009999999918,
+      "minMs": 3.0354879999999866,
+      "maxMs": 13.451800999999932
+    },
+    "write256KiB": {
+      "count": 25,
+      "p50Ms": 21.794160000000375,
+      "p95Ms": 28.568190999999842,
+      "minMs": 16.967345999999907,
+      "maxMs": 52.598811000000296
+    },
+    "read256KiB": {
+      "count": 25,
+      "p50Ms": 9.389201999999841,
+      "p95Ms": 12.365122000000156,
+      "minMs": 6.404117999999926,
+      "maxMs": 13.1042809999999
+    },
+    "isolatedJavascript": {
+      "count": 25,
+      "p50Ms": 26.357727000000523,
+      "p95Ms": 32.3744829999996,
+      "minMs": 25.476854000000458,
+      "maxMs": 70.6805830000003
+    },
+    "detachedJavascript": {
+      "count": 25,
+      "p50Ms": 134.49722099999963,
+      "p95Ms": 151.38779599999907,
+      "minMs": 47.65022299999873,
+      "maxMs": 156.401973
+    },
+    "wasiFileAndSync": {
+      "count": 25,
+      "p50Ms": 64.96862300000066,
+      "p95Ms": 99.94713200000115,
+      "minMs": 57.07483499999944,
+      "maxMs": 188.87095299999964
+    },
+    "shellPipeline": {
+      "count": 25,
+      "p50Ms": 35.171352999999726,
+      "p95Ms": 43.695599999999104,
+      "minMs": 33.782845000001544,
+      "maxMs": 49.64234699999906
+    }
+  },
+  "wasiPublication": {
+    "samples": 25,
+    "rootPublications": 25
+  },
+  "batchPublication": {
+    "filesPerSample": 8,
+    "samples": 25,
+    "sequentialPublications": 200,
+    "batchPublications": 25
+  },
+  "contentDeduplication": {
+    "singleFileWrites": 25,
+    "uniqueBlocks": 1,
+    "singleFileLogicalBytesWritten": 6553600,
+    "storedBlockBytes": 262144
+  },
+  "scope": "Intermediate full-image source candidate before the final public-block quota prediction fix. Explicit bare SOFTWARE_BASE=null; local workerd, no default-image creation, production latency or billing measurement.",
+  "kernelSha256": "3a1734dc7a242b08ac6f3ccb37f05157eadec7302bc68522685b3b017a35a5dc",
+  "wasiSha256": "0d1fd49eb2d515f724ad1067dec002f07d009d056bb6091402807b8ac5110090"
+}

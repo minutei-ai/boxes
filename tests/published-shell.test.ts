@@ -44,7 +44,7 @@ test(
           expiresInSeconds: 600,
         });
         const client = yield* make({ url, token: Redacted.make(grant.token) });
-        yield* Effect.forEach(defaultSoftware, (software) =>
+        yield* Effect.forEach(defaultSoftware.slice(0, 2), (software) =>
           Effect.gen(function* () {
             const bytes = yield* downloadSoftware(software);
             const path = `/tmp/${software.name}.aospkg`;

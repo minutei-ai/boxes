@@ -1,7 +1,19 @@
 #[link(wasm_import_module = "host_process")]
 unsafe extern "C" {
     fn fd_dup(fd: u32, output: *mut u32) -> u32;
+    fn fd_dup_min(fd: u32, minimum: u32, output: *mut u32) -> u32;
     fn fd_dup2(fd: u32, target: u32) -> u32;
+    fn fd_record_lock(
+        fd: u32,
+        command: u32,
+        kind: u32,
+        start: i64,
+        length: u64,
+        found_type: *mut u32,
+        found_pid: *mut u32,
+        found_start: *mut u64,
+        found_length: *mut u64,
+    ) -> u32;
     fn fd_getfd(fd: u32, output: *mut u32) -> u32;
     fn fd_setfd(fd: u32, flags: u32) -> u32;
 }
@@ -25,6 +37,7 @@ unsafe extern "C" {
     fn fd_seek(fd: u32, offset: i64, whence: u32, output: *mut u64) -> u32;
     fn fd_tell(fd: u32, output: *mut u64) -> u32;
     fn fd_fdstat_get(fd: u32, output: *mut u8) -> u32;
+    fn fd_filestat_get(fd: u32, output: *mut u8) -> u32;
     fn fd_fdstat_set_flags(fd: u32, flags: u32) -> u32;
     fn fd_prestat_get(fd: u32, output: *mut u8) -> u32;
 }
@@ -37,6 +50,28 @@ struct Io {
 #[unsafe(no_mangle)]
 pub extern "C" fn run() -> i32 {
     unsafe {
+        let mut stream_stat = [0u8; 64];
+        for stream in [0, 1, 2] {
+            if fd_filestat_get(stream, stream_stat.as_mut_ptr()) != 0
+                || stream_stat[16] != 2
+                || stream_stat[24] != 1
+            {
+                return 84;
+            }
+        }
+        let mut stdin_stat_alias = 0;
+        let mut alias_stat = [0u8; 64];
+        if fd_filestat_get(0, (u32::MAX - 1) as *mut u8) != 21
+            || fd_dup_min(0, 80, &mut stdin_stat_alias) != 0
+            || fd_close(0) != 0
+            || fd_filestat_get(0, alias_stat.as_mut_ptr()) != 8
+            || fd_filestat_get(stdin_stat_alias, alias_stat.as_mut_ptr()) != 0
+            || alias_stat != stream_stat
+            || fd_dup2(stdin_stat_alias, 0) != 0
+            || fd_close(stdin_stat_alias) != 0
+        {
+            return 85;
+        }
         let path = b"tmp/dup";
         let other = b"tmp/other";
         let mut fd = 0;
@@ -64,6 +99,52 @@ pub extern "C" fn run() -> i32 {
         {
             return 3;
         }
+        let mut lock_type = 91;
+        let mut lock_pid = 91;
+        let mut lock_start = 91;
+        let mut lock_length = 91;
+        if fd_record_lock(
+            fd,
+            12,
+            0,
+            0,
+            0,
+            &mut lock_type,
+            &mut lock_pid,
+            &mut lock_start,
+            &mut lock_length,
+        ) != 58
+            || (lock_type, lock_pid, lock_start, lock_length) != (91, 91, 91, 91)
+            || fd_record_lock(
+                u32::MAX,
+                12,
+                0,
+                0,
+                0,
+                &mut lock_type,
+                &mut lock_pid,
+                &mut lock_start,
+                &mut lock_length,
+            ) != 8
+        {
+            return 83;
+        }
+        let mut high = 0;
+        if fd_dup_min(fd, 80, (u32::MAX - 1) as *mut u32) != 21
+            || fd_dup_min(fd, u32::MAX, &mut high) != 28
+            || fd_dup_min(fd, 132, &mut high) != 28
+            || fd_dup_min(u32::MAX, 80, &mut high) != 8
+            || fd_dup_min(fd, 80, &mut high) != 0
+            || high != 80
+            || fd_getfd(high, &mut flag) != 0
+            || flag != 0
+        {
+            return 80;
+        }
+        let mut higher = 0;
+        if fd_dup_min(fd, 80, &mut higher) != 0 || higher != 81 {
+            return 81;
+        }
         let mut buffer = [0u8; 2];
         let vector = Io {
             pointer: buffer.as_mut_ptr(),
@@ -79,6 +160,15 @@ pub extern "C" fn run() -> i32 {
         let mut position = 0;
         if fd_tell(fd, &mut position) != 0 || position != 2 {
             return 6;
+        }
+        if fd_read(high, &vector, 1, &mut count) != 0
+            || buffer[0] != b'c'
+            || fd_tell(higher, &mut position) != 0
+            || position != 3
+            || fd_close(high) != 0
+            || fd_close(higher) != 0
+        {
+            return 82;
         }
         if fd_seek(alias, 4, 0, &mut position) != 0
             || fd_tell(fd, &mut position) != 0
