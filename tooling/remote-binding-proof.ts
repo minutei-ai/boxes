@@ -1,3 +1,7 @@
+import {
+  DefaultSoftwareProof,
+  DefaultSoftwareProofInput,
+} from "../tests/fixtures/default-software-proof";
 import { defaultSoftware } from "../src/default-software";
 import { bindingConsumer } from "./binding-consumer";
 import { terminalProofSources } from "./terminal-proof-inputs";
@@ -36,6 +40,7 @@ const Report = Schema.Struct({
   consumerBundleSha256: Schema.String,
   sdkVersion: Schema.String,
   shellPackage: PackagePreparation.fields.installed,
+  defaultSoftware: DefaultSoftwareProof,
   sdkModulesSha256: Schema.Record(Schema.String, Schema.String),
   inlineDeadline: Schema.Struct({
     requestedMs: Schema.Literal(remoteRpcTimeoutMs),
@@ -123,6 +128,25 @@ const report = await Effect.runPromise(
           { name: "BOXES_AGENT", type: "service", service: targetWorker, entrypoint: "Agent" },
         ],
       });
+      const defaultsResponse = yield* Effect.tryPromise(() =>
+        fetch(new URL("/software-defaults", session.url), {
+          method: "POST",
+          keepalive: false,
+          headers: { ...session.headers, "content-type": "application/json" },
+          signal: AbortSignal.timeout(120000),
+          body: Schema.encodeSync(Schema.fromJsonString(DefaultSoftwareProofInput))({
+            sandboxId: id,
+            token: grant.token,
+            packageDigests: defaultSoftware.map((artifact) => artifact.digest),
+          }),
+        }),
+      );
+      const defaultsBody = yield* Effect.tryPromise(() => defaultsResponse.text());
+      if (defaultsResponse.status !== 200)
+        return yield* Effect.die({ status: defaultsResponse.status, body: defaultsBody });
+      const defaults = yield* Schema.decodeUnknownEffect(
+        Schema.fromJsonString(DefaultSoftwareProof),
+      )(defaultsBody);
       const pending = yield* Effect.gen(function* () {
         const response = yield* Effect.promise(() =>
           fetch(session.url, {
@@ -316,6 +340,7 @@ const report = await Effect.runPromise(
         consumerBundleSha256,
         sdkVersion: version,
         shellPackage,
+        defaultSoftware: defaults,
         sdkModulesSha256,
         inlineDeadline,
         proof,

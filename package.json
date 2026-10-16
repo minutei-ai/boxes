@@ -83,11 +83,13 @@
     "minutei:proof": "bun tooling/minutei-proof.ts",
     "binding:remote:proof": "bun tooling/remote-binding-proof.ts",
     "reclaim:proof": "bun tooling/reclamation-proof.ts",
-    "software:defaults:proof": "bun tooling/default-software-proof.ts"
+    "software:defaults:proof": "bun tooling/default-software-proof.ts",
+    "software:storage:proof": "bun tooling/default-software-storage-proof.ts"
   },
   "devDependencies": {
     "@alchemy.run/cloudflare-runtime": "2.0.0-beta.83",
     "@cloudflare/workers-types": "5.20261003.1",
+    "@distilled.cloud/cloudflare": "1.0.0-rc.15",
     "@effect/platform-bun": "4.0.4",
     "@effect/platform-node": "4.0.4",
     "@tanstack/ai-code-mode": "0.5.2",

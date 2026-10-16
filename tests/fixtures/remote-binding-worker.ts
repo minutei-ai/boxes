@@ -1,3 +1,8 @@
+import {
+  DefaultSoftwareProof,
+  DefaultSoftwareProofInput,
+  defaultSoftwareProof,
+} from "./default-software-proof";
 import { TerminalProof, TerminalProofInput, terminalProof } from "./terminal-proof";
 import { DescriptorProof, descriptorProof } from "./descriptor-proof";
 import { Cause, Clock, Effect, Redacted, Schedule, Schema } from "effect";
@@ -26,6 +31,18 @@ export default {
   fetch(request: Request, env: { BOXES: Fetcher; BOXES_AGENT: Fetcher<AgentProtocol> }) {
     return Effect.runPromise(
       Effect.gen(function* () {
+        if (new URL(request.url).pathname === "/software-defaults") {
+          const input = yield* Schema.decodeUnknownEffect(
+            Schema.fromJsonString(DefaultSoftwareProofInput),
+            { onExcessProperty: "error" },
+          )(yield* Effect.promise(() => request.text()));
+          const client = yield* makeBinding(env.BOXES, Redacted.make(input.token));
+          const proof = yield* defaultSoftwareProof(client, input.sandboxId, input.packageDigests);
+          return new Response(
+            Schema.encodeSync(Schema.fromJsonString(DefaultSoftwareProof))(proof),
+            { headers: { "content-type": "application/json", "cache-control": "no-store" } },
+          );
+        }
         if (new URL(request.url).pathname === "/published-terminal") {
           const input = yield* Schema.decodeUnknownEffect(
             Schema.fromJsonString(PublishedTerminalInput),
