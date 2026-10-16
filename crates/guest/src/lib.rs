@@ -249,11 +249,7 @@ impl Guest {
         if program.len() > 18_000_000 || ticks == 0 || ticks > 100_000 {
             return Err("Invalid execution limits".into());
         }
-        if self.output.borrow().is_none()
-            || self.active.is_some()
-            || !self.pending.borrow().is_empty()
-            || self.runtime.is_job_pending()
-        {
+        if !self.quiescent() {
             return Err("Previous execution is not quiescent".into());
         }
         let program = serde_json::from_str(program).map_err(|error| error.to_string())?;
@@ -453,6 +449,13 @@ impl Guest {
 
     pub fn step(&mut self) -> Result<String, JsValue> {
         self.advance().map_err(|error| JsValue::from_str(&error))
+    }
+
+    pub fn quiescent(&self) -> bool {
+        self.output.borrow().is_some()
+            && self.active.is_none()
+            && self.pending.borrow().is_empty()
+            && !self.runtime.is_job_pending()
     }
 
     pub fn begin(&mut self, program: &str, ticks: usize) -> Result<(), JsValue> {

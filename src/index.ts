@@ -6,6 +6,8 @@ import { administrator, authorize, mint, requirePermission } from "./auth";
 import { SoftwareBaseDigest } from "./default-software";
 import {
   Action,
+  ContextRecord,
+  ContextPage,
   AgentRequest,
   AgentReply,
   HostCall,
@@ -53,6 +55,7 @@ import { AgentProtocol, type HostCallback } from "./rpc-protocol";
 import { importSnapshot } from "./snapshot";
 import { tick } from "./cron";
 import { guestAction } from "./capabilities";
+import { createContext, getContext, listContexts, changeContext } from "./contexts";
 import { migrateInput } from "./input-migration";
 import { migrateConfiguration } from "./configuration-migration";
 import { migrateFilesystem } from "./filesystem-migration";
@@ -311,174 +314,200 @@ const route = Effect.fn("api.route")(function* (request: Request, env: Env) {
   const action = yield* Schema.decodeUnknownEffect(Schema.fromJsonString(Action), {
     onExcessProperty: "error",
   })(data.toString("utf8"));
-  const value = yield* Match.value(action).pipe(
-    Match.whenOr(
-      { op: "process.run" },
-      { op: "wasm.executeFile" },
-      { op: "process.execFile" },
-      { op: "javascript.execute" },
-      { op: "javascript.evaluate" },
-      { op: "javascript.executeFile" },
-      { op: "typescript.execute" },
-      { op: "typescript.evaluate" },
-      { op: "typescript.executeFile" },
-      { op: "python.execute" },
-      { op: "python.evaluate" },
-      { op: "python.executeFile" },
-      (action) =>
-        run(env, capability, action).pipe(
+  const value = yield* Match.value(action)
+    .pipe(
+      Match.when({ op: "contexts.create" }, (action) =>
+        createContext(env, capability, action.id).pipe(
+          Effect.map((record) => Schema.encodeSync(Schema.fromJsonString(ContextRecord))(record)),
+        ),
+      ),
+      Match.when({ op: "contexts.get" }, (action) =>
+        getContext(env, capability, action.id).pipe(
+          Effect.map((record) => Schema.encodeSync(Schema.fromJsonString(ContextRecord))(record)),
+        ),
+      ),
+      Match.when({ op: "contexts.list" }, (action) =>
+        listContexts(env, capability, action).pipe(
+          Effect.map((page) => Schema.encodeSync(Schema.fromJsonString(ContextPage))(page)),
+        ),
+      ),
+      Match.whenOr({ op: "contexts.reset" }, { op: "contexts.delete" }, (action) =>
+        Effect.gen(function* () {
+          const record = yield* changeContext(env, capability, action);
+          if (action.op === "contexts.delete")
+            return Schema.encodeSync(Schema.fromJsonString(Success))({ ok: true });
+          return Schema.encodeSync(Schema.fromJsonString(ContextRecord))(record);
+        }),
+      ),
+    )
+    .pipe(
+      Match.whenOr(
+        { op: "process.run" },
+        { op: "wasm.executeFile" },
+        { op: "process.execFile" },
+        { op: "javascript.execute" },
+        { op: "javascript.evaluate" },
+        { op: "javascript.executeFile" },
+        { op: "typescript.execute" },
+        { op: "typescript.evaluate" },
+        { op: "typescript.executeFile" },
+        { op: "python.execute" },
+        { op: "python.evaluate" },
+        { op: "python.executeFile" },
+        (action) =>
+          run(env, capability, action).pipe(
+            Effect.map((result) => Schema.encodeSync(Schema.fromJsonString(RunRecord))(result)),
+          ),
+      ),
+      Match.when({ op: "process.spawn" }, (action) =>
+        spawn(env, capability, action.execution, action.stdinMode ?? "closed").pipe(
+          Effect.map((record) => Schema.encodeSync(Schema.fromJsonString(RunRecord))(record)),
+        ),
+      ),
+      Match.whenOr(
+        { op: "process.stdin.write" },
+        { op: "process.stdin.close" },
+        { op: "process.stdin.status" },
+        (action) =>
+          input(env, capability, action).pipe(
+            Effect.map((value) => Schema.encodeSync(Schema.fromJsonString(InputReceipt))(value)),
+          ),
+      ),
+      Match.whenOr({ op: "process.terminal.status" }, { op: "process.terminal.resize" }, (action) =>
+        terminal(env, capability, action).pipe(
+          Effect.map((value) => Schema.encodeSync(Schema.fromJsonString(TerminalGeometry))(value)),
+        ),
+      ),
+      Match.when({ op: "process.terminal.attributes" }, (action) =>
+        terminalAttributes(env, capability, action).pipe(
+          Effect.map((value) =>
+            Schema.encodeSync(Schema.fromJsonString(TerminalAttributeStatus))(value),
+          ),
+        ),
+      ),
+      Match.when({ op: "process.terminal.configure" }, (action) =>
+        configureTerminalAttributes(env, capability, action).pipe(
+          Effect.map((value) =>
+            Schema.encodeSync(Schema.fromJsonString(TerminalAttributeState))(value),
+          ),
+        ),
+      ),
+      Match.when({ op: "process.recovery.status" }, (action) =>
+        recoveryStatus(env, capability, action).pipe(
+          Effect.map((value) => Schema.encodeSync(Schema.fromJsonString(RecoveryStatus))(value)),
+        ),
+      ),
+      Match.when({ op: "process.output.readLive" }, (action) =>
+        liveOutput(env, capability, action).pipe(
+          Effect.map((page) => Schema.encodeSync(Schema.fromJsonString(LiveOutputPage))(page)),
+        ),
+      ),
+      Match.when({ op: "process.output.read" }, (action) =>
+        output(env, capability, action).pipe(
+          Effect.map((page) => Schema.encodeSync(Schema.fromJsonString(ProcessOutputPage))(page)),
+        ),
+      ),
+      Match.when({ op: "process.cancel" }, (action) =>
+        cancel(env, capability, action).pipe(
+          Effect.map((record) => Schema.encodeSync(Schema.fromJsonString(RunSummary))(record)),
+        ),
+      ),
+      Match.when({ op: "process.wait" }, (action) =>
+        wait(env, capability, action).pipe(
+          Effect.map((record) => Schema.encodeSync(Schema.fromJsonString(RunRecord))(record)),
+        ),
+      ),
+      Match.when({ op: "process.get" }, (action) =>
+        inspect(env, capability, action.id).pipe(
           Effect.map((result) => Schema.encodeSync(Schema.fromJsonString(RunRecord))(result)),
         ),
-    ),
-    Match.when({ op: "process.spawn" }, (action) =>
-      spawn(env, capability, action.execution, action.stdinMode ?? "closed").pipe(
-        Effect.map((record) => Schema.encodeSync(Schema.fromJsonString(RunRecord))(record)),
       ),
-    ),
-    Match.whenOr(
-      { op: "process.stdin.write" },
-      { op: "process.stdin.close" },
-      { op: "process.stdin.status" },
-      (action) =>
-        input(env, capability, action).pipe(
-          Effect.map((value) => Schema.encodeSync(Schema.fromJsonString(InputReceipt))(value)),
-        ),
-    ),
-    Match.whenOr({ op: "process.terminal.status" }, { op: "process.terminal.resize" }, (action) =>
-      terminal(env, capability, action).pipe(
-        Effect.map((value) => Schema.encodeSync(Schema.fromJsonString(TerminalGeometry))(value)),
-      ),
-    ),
-    Match.when({ op: "process.terminal.attributes" }, (action) =>
-      terminalAttributes(env, capability, action).pipe(
-        Effect.map((value) =>
-          Schema.encodeSync(Schema.fromJsonString(TerminalAttributeStatus))(value),
+      Match.when({ op: "process.list" }, (action) =>
+        list(env, capability, action).pipe(
+          Effect.map((page) => Schema.encodeSync(Schema.fromJsonString(ProcessPage))(page)),
         ),
       ),
-    ),
-    Match.when({ op: "process.terminal.configure" }, (action) =>
-      configureTerminalAttributes(env, capability, action).pipe(
-        Effect.map((value) =>
-          Schema.encodeSync(Schema.fromJsonString(TerminalAttributeState))(value),
-        ),
+      Match.when({ op: "config.get" }, () =>
+        Effect.gen(function* () {
+          yield* requirePermission(capability, "read");
+          const session = yield* open(env, id);
+          return Schema.encodeSync(Schema.fromJsonString(Configuration))({
+            ...session.head.policy,
+            environment: session.head.environment,
+          });
+        }),
       ),
-    ),
-    Match.when({ op: "process.recovery.status" }, (action) =>
-      recoveryStatus(env, capability, action).pipe(
-        Effect.map((value) => Schema.encodeSync(Schema.fromJsonString(RecoveryStatus))(value)),
-      ),
-    ),
-    Match.when({ op: "process.output.readLive" }, (action) =>
-      liveOutput(env, capability, action).pipe(
-        Effect.map((page) => Schema.encodeSync(Schema.fromJsonString(LiveOutputPage))(page)),
-      ),
-    ),
-    Match.when({ op: "process.output.read" }, (action) =>
-      output(env, capability, action).pipe(
-        Effect.map((page) => Schema.encodeSync(Schema.fromJsonString(ProcessOutputPage))(page)),
-      ),
-    ),
-    Match.when({ op: "process.cancel" }, (action) =>
-      cancel(env, capability, action).pipe(
-        Effect.map((record) => Schema.encodeSync(Schema.fromJsonString(RunSummary))(record)),
-      ),
-    ),
-    Match.when({ op: "process.wait" }, (action) =>
-      wait(env, capability, action).pipe(
-        Effect.map((record) => Schema.encodeSync(Schema.fromJsonString(RunRecord))(record)),
-      ),
-    ),
-    Match.when({ op: "process.get" }, (action) =>
-      inspect(env, capability, action.id).pipe(
-        Effect.map((result) => Schema.encodeSync(Schema.fromJsonString(RunRecord))(result)),
-      ),
-    ),
-    Match.when({ op: "process.list" }, (action) =>
-      list(env, capability, action).pipe(
-        Effect.map((page) => Schema.encodeSync(Schema.fromJsonString(ProcessPage))(page)),
-      ),
-    ),
-    Match.when({ op: "config.get" }, () =>
-      Effect.gen(function* () {
-        yield* requirePermission(capability, "read");
-        const session = yield* open(env, id);
-        return Schema.encodeSync(Schema.fromJsonString(Configuration))({
-          ...session.head.policy,
-          environment: session.head.environment,
-        });
-      }),
-    ),
-    Match.when({ op: "config.set" }, (action) =>
-      Effect.gen(function* () {
-        yield* requirePermission(capability, "manage");
-        const session = yield* open(env, id);
-        yield* publish(env, id, {
-          ...session,
-          head: {
-            ...session.head,
-            policy: action.policy,
+      Match.when({ op: "config.set" }, (action) =>
+        Effect.gen(function* () {
+          yield* requirePermission(capability, "manage");
+          const session = yield* open(env, id);
+          yield* publish(env, id, {
+            ...session,
+            head: {
+              ...session.head,
+              policy: action.policy,
+              environment: action.environment ?? session.head.environment,
+            },
+          });
+          return Schema.encodeSync(Schema.fromJsonString(Configuration))({
+            ...action.policy,
             environment: action.environment ?? session.head.environment,
-          },
-        });
-        return Schema.encodeSync(Schema.fromJsonString(Configuration))({
-          ...action.policy,
-          environment: action.environment ?? session.head.environment,
-        });
-      }),
-    ),
-    Match.when({ op: "config.patch" }, (action) =>
-      Effect.gen(function* () {
-        yield* requirePermission(capability, "manage");
-        const session = yield* open(env, id);
-        const policy = { ...session.head.policy, ...action.policy };
-        yield* publish(env, id, {
-          ...session,
-          head: {
-            ...session.head,
-            policy,
+          });
+        }),
+      ),
+      Match.when({ op: "config.patch" }, (action) =>
+        Effect.gen(function* () {
+          yield* requirePermission(capability, "manage");
+          const session = yield* open(env, id);
+          const policy = { ...session.head.policy, ...action.policy };
+          yield* publish(env, id, {
+            ...session,
+            head: {
+              ...session.head,
+              policy,
+              environment: action.environment ?? session.head.environment,
+            },
+          });
+          return Schema.encodeSync(Schema.fromJsonString(Configuration))({
+            ...policy,
             environment: action.environment ?? session.head.environment,
-          },
-        });
-        return Schema.encodeSync(Schema.fromJsonString(Configuration))({
-          ...policy,
-          environment: action.environment ?? session.head.environment,
-        });
-      }),
-    ),
-    Match.when({ op: "vm.status" }, () =>
-      Effect.gen(function* () {
-        yield* requirePermission(capability, "read");
-        const session = yield* open(env, id);
-        return Schema.encodeSync(Schema.fromJsonString(Status))({
-          id,
-          generation: Number(session.kernel.generation()),
-          filesystemBytes: Number(session.kernel.bytes()),
-          policy: session.head.policy,
-        });
-      }),
-    ),
-    Match.when({ op: "vm.dispose" }, () =>
-      Effect.gen(function* () {
-        yield* requirePermission(capability, "manage");
-        yield* dispose(env, id);
-        return Schema.encodeSync(Schema.fromJsonString(Success))({ ok: true });
-      }),
-    ),
-    Match.when({ op: "vm.reclaim" }, (action) =>
-      reclaim(env, capability, action.limit).pipe(
-        Effect.map((progress) =>
-          Schema.encodeSync(Schema.fromJsonString(ReclamationProgress))(progress),
+          });
+        }),
+      ),
+      Match.when({ op: "vm.status" }, () =>
+        Effect.gen(function* () {
+          yield* requirePermission(capability, "read");
+          const session = yield* open(env, id);
+          return Schema.encodeSync(Schema.fromJsonString(Status))({
+            id,
+            generation: Number(session.kernel.generation()),
+            filesystemBytes: Number(session.kernel.bytes()),
+            policy: session.head.policy,
+          });
+        }),
+      ),
+      Match.when({ op: "vm.dispose" }, () =>
+        Effect.gen(function* () {
+          yield* requirePermission(capability, "manage");
+          yield* dispose(env, id);
+          return Schema.encodeSync(Schema.fromJsonString(Success))({ ok: true });
+        }),
+      ),
+      Match.when({ op: "vm.reclaim" }, (action) =>
+        reclaim(env, capability, action.limit).pipe(
+          Effect.map((progress) =>
+            Schema.encodeSync(Schema.fromJsonString(ReclamationProgress))(progress),
+          ),
         ),
       ),
-    ),
-    Match.orElse((action) =>
-      guestAction(env, capability, action).pipe(
-        Effect.map((result) =>
-          Schema.encodeUnknownSync(Schema.fromJsonString(ActionResponses[action.op]))(result),
+      Match.orElse((action) =>
+        guestAction(env, capability, action).pipe(
+          Effect.map((result) =>
+            Schema.encodeUnknownSync(Schema.fromJsonString(ActionResponses[action.op]))(result),
+          ),
         ),
       ),
-    ),
-  );
+    );
   return new Response(value, {
     headers: { "content-type": "application/json", "cache-control": "no-store" },
   });
@@ -641,6 +670,7 @@ export class Agent extends AgentProtocol<Env> {
             host,
             input.timeoutMs,
             input.memoryBytes,
+            input.contextId ?? null,
           );
           return Schema.encodeSync(AgentReply)({ ok: true, record });
         }).pipe(

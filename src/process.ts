@@ -6,6 +6,7 @@ import {
   Environment,
   Fault,
   RunAction,
+  ScriptAction,
   StoredRun,
   StoredRunMetadata,
   ProcessDelivery,
@@ -33,6 +34,7 @@ import type { Env } from "./resources";
 import type { HostBridge } from "./host";
 import { shell } from "./shell";
 import { restoreExecutionCheckpoint } from "./checkpoint";
+import { acquireContext } from "./contexts";
 import { archiveOutput, restoreOutput, readOutputRange } from "./output";
 
 export const executionWindowMs = 900_000;
@@ -44,6 +46,7 @@ const reserve = Effect.fn("process.reserve")(function* (
   detached: boolean,
   inputMode: typeof StoredRun.Type.inputMode,
   timeoutMs: number | null,
+  contextDeadline: number | null = null,
 ) {
   yield* requirePermission(capability, "execute");
   const session = yield* open(env, capability.sandboxId);
@@ -82,7 +85,10 @@ const reserve = Effect.fn("process.reserve")(function* (
     return {
       status: "running" as const,
       authority: null,
-      deadlineAt: startedAt + Math.min(executionWindowMs, timeoutMs ?? executionWindowMs),
+      deadlineAt: Math.min(
+        startedAt + Math.min(executionWindowMs, timeoutMs ?? executionWindowMs),
+        contextDeadline ?? Number.MAX_SAFE_INTEGER,
+      ),
     };
   });
   const record: typeof RunRecord.Type = {
@@ -150,6 +156,7 @@ const complete = Effect.fn("process.complete")(function* (
   timeoutMs: number | null,
   host: HostBridge | null = null,
   memoryLimitBytes: typeof Policy.Type.memoryBytes | null = null,
+  context: Effect.Success<ReturnType<typeof acquireContext>> | null = null,
 ) {
   const { record, etag } = reservation;
   const key = `processes/${capability.sandboxId}/${record.id}.json`;
@@ -330,6 +337,7 @@ const complete = Effect.fn("process.complete")(function* (
         host,
         memoryLimitBytes,
         reservation.inputMode,
+        context,
       );
     }),
   );
@@ -545,14 +553,67 @@ export const run = Effect.fn("process.run")(function* (
   host: HostBridge | null = null,
   timeoutMs: number | null = null,
   memoryLimitBytes: typeof Policy.Type.memoryBytes | null = null,
+  contextId: string | null = null,
 ): Effect.fn.Return<
   typeof RunRecord.Type,
   Fault | StorageFailure | Schema.SchemaError | QueueFailure
 > {
-  const reservation = yield* Effect.scoped(
-    reserve(env, capability, action, false, "closed", timeoutMs),
+  return yield* Effect.scoped(
+    Effect.gen(function* () {
+      const selectedContext = yield* Effect.gen(function* () {
+        if ("contextId" in action && action.contextId !== undefined) {
+          if (contextId !== null && contextId !== action.contextId)
+            return yield* new Fault({
+              code: "EINVAL",
+              status: 400,
+              message: "Conflicting context identities",
+            });
+          return action.contextId;
+        }
+        return contextId;
+      });
+      const context = yield* Effect.gen(function* () {
+        if (selectedContext === null) return null;
+        if (!Schema.is(ScriptAction)(action))
+          return yield* new Fault({
+            code: "UNSUPPORTED_RUNTIME",
+            status: 501,
+            message: "Retained contexts require JavaScript or TypeScript",
+          });
+        const deadlineAt =
+          (yield* Clock.currentTimeMillis) +
+          Math.min(executionWindowMs, timeoutMs ?? executionWindowMs);
+        return yield* acquireContext(
+          env,
+          capability,
+          selectedContext,
+          action.id,
+          deadlineAt,
+          memoryLimitBytes,
+        );
+      });
+      const reservation = yield* Effect.scoped(
+        reserve(
+          env,
+          capability,
+          action,
+          false,
+          "closed",
+          timeoutMs,
+          context?.record.deadlineAt ?? null,
+        ),
+      );
+      return yield* complete(
+        env,
+        capability,
+        reservation,
+        timeoutMs,
+        host,
+        memoryLimitBytes,
+        context,
+      );
+    }),
   );
-  return yield* complete(env, capability, reservation, timeoutMs, host, memoryLimitBytes);
 });
 
 const readReceipt = Effect.fn("process.readReceipt")(function* (
@@ -881,6 +942,12 @@ export const spawn = Effect.fn("process.spawn")(function* (
   action: typeof RunAction.Type,
   inputMode: typeof StoredRun.Type.inputMode,
 ) {
+  if ("contextId" in action && action.contextId !== undefined)
+    return yield* new Fault({
+      code: "UNSUPPORTED_RUNTIME",
+      status: 501,
+      message: "Queued retained contexts are not implemented",
+    });
   const reservation = yield* Effect.scoped(reserve(env, capability, action, true, inputMode, null));
   yield* Effect.tryPromise({
     try: () =>

@@ -1,6 +1,9 @@
-import { Effect, Result, Schema } from "effect";
+import { Clock, Effect, Result, Schema } from "effect";
 import guestWasm from "cirro:guest";
 import { createBindings } from "../dist/guest/bindings";
+import revision from "../dist/guest/revision.json";
+import { acquireContext, finishContext } from "./contexts";
+import { saveMemoryPages, restoreMemoryPages } from "./memory";
 import {
   Capability,
   Policy,
@@ -50,6 +53,7 @@ export const execute = Effect.fn("execution.run")(function* (
   host: HostBridge | null = null,
   memoryLimitBytes: typeof Policy.Type.memoryBytes | null = null,
   stdinMode: typeof StoredRun.Type.inputMode = "closed",
+  context: Effect.Success<ReturnType<typeof acquireContext>> | null = null,
 ) {
   const policy = session.head.policy;
   if (
@@ -82,22 +86,80 @@ export const execute = Effect.fn("execution.run")(function* (
   }
   if (!("modules" in program))
     return yield* new InterpreterFailure({ cause: "This program belongs to another runtime" });
-  const guest = yield* Effect.acquireRelease(
+  const isolated = yield* Effect.gen(function* () {
+    if (context === null) return null;
+    const factory = createBindings();
+    const native = factory.initSync({ module: guestWasm });
+    if (context.record.heap !== null) {
+      if (
+        context.record.heap.runtime !== revision.sha256 ||
+        context.record.heap.memoryLimitBytes !==
+          Math.min(policy.memoryBytes, memoryLimitBytes ?? policy.memoryBytes) ||
+        context.record.heap.maxOutputBytes !== policy.maxOutputBytes
+      )
+        return yield* new Fault({
+          code: "CONTEXT_LIMITS_CHANGED",
+          status: 409,
+          message: "Context runtime or limits changed before program entry",
+        });
+      yield* restoreMemoryPages(
+        env.OBJECTS,
+        capability.sandboxId,
+        native.memory,
+        context.record.heap,
+      );
+    }
+    return { bindings: factory, memory: native.memory };
+  });
+  const retained = yield* Effect.acquireRelease(
     Effect.try({
-      try: () =>
-        new bindings.Guest(
-          Schema.encodeSync(Schema.fromJsonString(ScriptProgram))(program),
-          Math.min(policy.memoryBytes, memoryLimitBytes ?? policy.memoryBytes),
-          policy.interruptBudget,
-          policy.maxOutputBytes,
-        ),
+      try: () => {
+        if (isolated !== null && context !== null && context.record.heap !== null)
+          return {
+            guest: isolated.bindings.Guest.resume(context.record.heap.handle),
+            released: false,
+          };
+        const factory = isolated?.bindings ?? bindings;
+        return {
+          guest: new factory.Guest(
+            Schema.encodeSync(Schema.fromJsonString(ScriptProgram))(program),
+            Math.min(policy.memoryBytes, memoryLimitBytes ?? policy.memoryBytes),
+            policy.interruptBudget,
+            policy.maxOutputBytes,
+          ),
+          released: false,
+        };
+      },
       catch: (cause) => new InterpreterFailure({ cause }),
     }),
-    (guest) => Effect.sync(() => guest.free()),
+    (retained) =>
+      Effect.sync(() => {
+        if (!retained.released) retained.guest.free();
+      }),
   );
+  const guest = retained.guest;
+  if (context !== null && context.record.heap !== null)
+    yield* Effect.try({
+      try: () =>
+        guest.begin(
+          Schema.encodeSync(Schema.fromJsonString(ScriptProgram))(program),
+          policy.interruptBudget,
+        ),
+      catch: (cause) => new InterpreterFailure({ cause }),
+    });
   const outcome = yield* Effect.gen(function* () {
     const completed: (typeof RunResult.Type)[] = [];
     while (completed.length === 0) {
+      if (context !== null) {
+        const now = yield* Clock.currentTimeMillis;
+        if (now >= capability.expiresAt || now >= context.record.deadlineAt)
+          return yield* new Fault({
+            code: "ETIMEDOUT",
+            status: 408,
+            message: "Context execution authority expired",
+          });
+        context.entered = true;
+      }
       const raw = yield* Effect.try({
         try: () => guest.step(),
         catch: (cause) => new InterpreterFailure({ cause }),
@@ -232,5 +294,31 @@ export const execute = Effect.fn("execution.run")(function* (
     try: () => guest.program(),
     catch: (cause) => new InterpreterFailure({ cause }),
   }).pipe(Effect.flatMap(Schema.decodeUnknownEffect(Schema.fromJsonString(ScriptProgram))));
-  return { outcome, program: captured, changed: guest.revision() > 0 };
+  const changed = guest.revision() > 0;
+  if (context !== null && isolated !== null && outcome._tag === "Success") {
+    if (!guest.quiescent())
+      return yield* new InterpreterFailure({
+        cause: "Retained execution left pending work; reset the context",
+      });
+    retained.released = true;
+    const handle = yield* Effect.try({
+      try: () => guest.park(),
+      catch: (cause) => new InterpreterFailure({ cause }),
+    });
+    const saved = yield* saveMemoryPages(
+      env.OBJECTS,
+      capability.sandboxId,
+      isolated.memory,
+      context.record.heap?.pages ?? [],
+    );
+    yield* finishContext(env, capability, context, {
+      runtime: revision.sha256,
+      memoryBytes: saved.memoryBytes,
+      pages: saved.pages,
+      handle,
+      memoryLimitBytes: Math.min(policy.memoryBytes, memoryLimitBytes ?? policy.memoryBytes),
+      maxOutputBytes: policy.maxOutputBytes,
+    });
+  }
+  return { outcome, program: captured, changed };
 });

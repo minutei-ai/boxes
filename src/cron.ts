@@ -113,6 +113,12 @@ export const cron = Effect.fn("cron.action")(function* (
   }
   const key = `${prefix}${action.id}.json`;
   if (action.op === "cron.schedule") {
+    if ("contextId" in action.execution && action.execution.contextId !== undefined)
+      return yield* new Fault({
+        code: "UNSUPPORTED_RUNTIME",
+        status: 501,
+        message: "Scheduled retained contexts are not implemented",
+      });
     yield* requirePermission(capability, "execute");
     yield* requirePermission(capability, "read");
     const now = yield* Clock.currentTimeMillis;

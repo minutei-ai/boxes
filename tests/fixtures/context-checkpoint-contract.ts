@@ -1,5 +1,13 @@
 import { Schema } from "effect";
-import { Digest, HostCall, MemoryPages, RunResult, ScriptProgram } from "../../src/contracts";
+import {
+  ContextRecord,
+  Digest,
+  HostCall,
+  Id,
+  MemoryPages,
+  RunResult,
+  ScriptProgram,
+} from "../../src/contracts";
 
 export const ContextMemory = Schema.Struct({
   version: Schema.Literal(2),
@@ -53,3 +61,11 @@ export const ContextCheckpointProof = Schema.Union([
   }),
   Schema.Struct({ op: Schema.Literal("isolation-denied"), message: Schema.String }),
 ]);
+
+export const ContextClaimProof = Schema.Struct({
+  claims: Schema.Array(Id),
+  epochs: Schema.Array(Schema.String),
+  sameIdleEtag: Schema.Boolean,
+  staleRejected: Schema.Boolean,
+  heldState: ContextRecord.fields.state,
+});

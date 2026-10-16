@@ -5,6 +5,7 @@ import { BoxesContextCleanupError, createBoxesIsolateDriver } from "../../src/sd
 import type { AgentProtocol } from "../../src/rpc-protocol";
 import {
   CronRecord,
+  ContextRecord,
   FileContent,
   FileStat,
   Id,
@@ -23,6 +24,12 @@ export const BindingProof = Schema.Struct({
   hostCalls: Schema.Array(Schema.String),
   denied: Schema.Int,
   reclaimed: ReclamationProgress,
+});
+export const ContextBindingProof = Schema.Struct({
+  records: Schema.Array(RunRecord),
+  context: ContextRecord,
+  errors: Schema.Array(Schema.String),
+  calls: Schema.Int,
 });
 export const RpcProbe = Schema.Struct({
   record: Schema.NullOr(RunRecord),
@@ -87,6 +94,182 @@ export default {
           memoryBytes: 8388608,
           maxOutputBytes: 1048576,
         };
+        const contextPhase = new URL(request.url).searchParams.get("contexts");
+        if (contextPhase !== null) {
+          const phase = yield* Schema.decodeUnknownEffect(
+            Schema.Literals(["create", "read", "concurrent", "timeout"]),
+          )(contextPhase);
+          if (phase !== "read") yield* admin.create({ id, policy });
+          const grant = yield* admin.mintCapability(id, {
+            permissions: ["read", "write", "execute"],
+            expiresInSeconds: 600,
+          });
+          const agent = yield* makeAgentBinding(env.BOXES_AGENT, Redacted.make(grant.token));
+          if (phase !== "read") yield* agent.action(id, { op: "contexts.create", id: "analysis" });
+          const calls = { count: 0 };
+          if (phase === "create") {
+            const record = yield* agent.runWithTools(
+              id,
+              {
+                contextId: "analysis",
+                id: "seed",
+                tools: ["echo"],
+                maxToolCalls: 1,
+                timeoutMs: 5000,
+                source:
+                  "export default async({tools})=>{globalThis.reuse=()=>tools.call({op:'host.call',name:'echo'});return globalThis.reuse();}",
+              },
+              async () => {
+                calls.count += 1;
+                return { ok: true, value: 11 };
+              },
+            );
+            return new Response(
+              Schema.encodeSync(Schema.fromJsonString(ContextBindingProof))({
+                records: [record],
+                context: yield* agent.action(id, { op: "contexts.get", id: "analysis" }),
+                errors: [],
+                calls: calls.count,
+              }),
+            );
+          }
+          if (phase === "read") {
+            const record = yield* agent.runWithTools(
+              id,
+              {
+                contextId: "analysis",
+                id: "next",
+                tools: ["echo"],
+                maxToolCalls: 1,
+                timeoutMs: 5000,
+                source: "export default()=>globalThis.reuse();",
+              },
+              async () => {
+                calls.count += 1;
+                return { ok: true, value: 42 };
+              },
+            );
+            const restricted = yield* agent.runWithTools(
+              id,
+              {
+                contextId: "analysis",
+                id: "restricted",
+                tools: [],
+                maxToolCalls: 1,
+                timeoutMs: 5000,
+                source: "export default()=>globalThis.reuse().catch(error=>error.code);",
+              },
+              async () => {
+                calls.count += 1;
+                return { ok: true, value: "forbidden-callback" };
+              },
+            );
+            return new Response(
+              Schema.encodeSync(Schema.fromJsonString(ContextBindingProof))({
+                records: [record, restricted],
+                context: yield* agent.action(id, { op: "contexts.get", id: "analysis" }),
+                errors: [],
+                calls: calls.count,
+              }),
+            );
+          }
+          if (phase === "timeout") {
+            const completed = yield* Latch.make();
+            const record = yield* agent.runWithTools(
+              id,
+              {
+                contextId: "analysis",
+                id: "timeout",
+                tools: ["gate"],
+                maxToolCalls: 1,
+                timeoutMs: 1000,
+                source: "export default({tools})=>tools.call({op:'host.call',name:'gate'});",
+              },
+              async () => {
+                calls.count += 1;
+                return Effect.runPromise(
+                  Effect.sleep(1500).pipe(
+                    Effect.andThen(completed.open),
+                    Effect.as({ ok: true as const, value: "late" }),
+                  ),
+                );
+              },
+            );
+            yield* completed.await;
+            return new Response(
+              Schema.encodeSync(Schema.fromJsonString(ContextBindingProof))({
+                records: [record],
+                context: yield* agent.action(id, { op: "contexts.get", id: "analysis" }),
+                errors: [],
+                calls: calls.count,
+              }),
+            );
+          }
+          return yield* Effect.scoped(
+            Effect.gen(function* () {
+              const entered = yield* Latch.make();
+              const release = yield* Latch.make();
+              const pending = yield* agent
+                .runWithTools(
+                  id,
+                  {
+                    contextId: "analysis",
+                    id: "hold",
+                    tools: ["gate"],
+                    maxToolCalls: 1,
+                    timeoutMs: 5000,
+                    source: "export default({tools})=>tools.call({op:'host.call',name:'gate'});",
+                  },
+                  async () => {
+                    calls.count += 1;
+                    return Effect.runPromise(
+                      entered.open.pipe(
+                        Effect.andThen(release.await),
+                        Effect.as({ ok: true as const, value: "released" }),
+                      ),
+                    );
+                  },
+                )
+                .pipe(Effect.forkChild);
+              yield* entered.await;
+              const errors = yield* Effect.gen(function* () {
+                const active = yield* agent.action(id, { op: "contexts.get", id: "analysis" });
+                if (active.state !== "running")
+                  return yield* Effect.die("Context lost active ownership");
+                return yield* Effect.forEach(
+                  [
+                    { op: "contexts.reset", id: "analysis" },
+                    { op: "contexts.delete", id: "analysis" },
+                    {
+                      op: "javascript.evaluate",
+                      id: "competing",
+                      expression: "1",
+                      contextId: "analysis",
+                    },
+                  ] as const,
+                  (action) =>
+                    agent.action(id, action).pipe(
+                      Effect.result,
+                      Effect.flatMap((result) => {
+                        if (result._tag === "Failure" && result.failure._tag === "BoxesError")
+                          return Effect.succeed(result.failure.error);
+                        return Effect.die("Concurrent context operation was admitted");
+                      }),
+                    ),
+                );
+              }).pipe(Effect.ensuring(release.open));
+              const record = yield* Fiber.join(pending);
+              return new Response(
+                Schema.encodeSync(Schema.fromJsonString(ContextBindingProof))({
+                  records: [record],
+                  context: yield* agent.action(id, { op: "contexts.get", id: "analysis" }),
+                  errors,
+                  calls: calls.count,
+                }),
+              );
+            }),
+          );
+        }
         const persistent = new URL(request.url).searchParams.get("persistent");
         if (persistent !== null) {
           const phase = yield* Schema.decodeUnknownEffect(Schema.Literals(["create", "read"]))(

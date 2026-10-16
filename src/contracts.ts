@@ -444,8 +444,39 @@ export const PythonProgram = Schema.Struct({
   filePath: Path,
   mode: Schema.Literals(["execute", "evaluate"]),
 });
+export const ScriptAction = Schema.Union([
+  InlineRun.mapFields((fields) => ({
+    ...fields,
+    contextId: Schema.optionalKey(Id),
+    language: Schema.Literals(["javascript", "typescript"]),
+  })),
+  Schema.Struct({
+    op: Schema.Literals(["javascript.execute", "typescript.execute"]),
+    id: Id,
+    contextId: Schema.optionalKey(Id),
+    env: Schema.optionalKey(Environment),
+    source: ScriptSource,
+    filePath: Schema.optionalKey(Path),
+  }),
+  Schema.Struct({
+    op: Schema.Literals(["javascript.evaluate", "typescript.evaluate"]),
+    id: Id,
+    contextId: Schema.optionalKey(Id),
+    env: Schema.optionalKey(Environment),
+    expression: ScriptSource,
+    filePath: Schema.optionalKey(Path),
+  }),
+  Schema.Struct({
+    op: Schema.Literals(["javascript.executeFile", "typescript.executeFile"]),
+    id: Id,
+    contextId: Schema.optionalKey(Id),
+    env: Schema.optionalKey(Environment),
+    path: Path,
+  }),
+]);
 export const RunAction = Schema.Union([
-  InlineRun,
+  InlineRun.mapFields((fields) => ({ ...fields, language: Schema.Literals(["python", "shell"]) })),
+  ScriptAction,
   PythonAction,
   Schema.Struct({
     op: Schema.Literal("process.run"),
@@ -456,25 +487,30 @@ export const RunAction = Schema.Union([
   }),
   Schema.Struct({ op: Schema.Literal("wasm.executeFile"), id: Id, path: Path, ...WasmOptions }),
   Schema.Struct({ op: Schema.Literal("process.execFile"), id: Id, command: Path, ...WasmOptions }),
+]);
+export const ContextRecord = Schema.Struct({
+  id: Id,
+  generation: Schema.Int.check(Schema.isGreaterThanOrEqualTo(0)),
+  state: Schema.Literals(["idle", "running", "failed", "deleted"]),
+  createdAt: Schema.Int,
+  updatedAt: Schema.Int,
+  executionId: Schema.NullOr(Id),
+  deadlineAt: Schema.NullOr(Schema.Int),
+});
+export const ContextMetadata = Schema.Struct({ summary: Schema.fromJsonString(ContextRecord) });
+export const ContextPage = Schema.Struct({
+  contexts: Schema.Array(ContextRecord),
+  cursor: Schema.NullOr(Schema.String),
+});
+export const ContextAction = Schema.Union([
+  Schema.Struct({ op: Schema.Literal("contexts.create"), id: Id }),
+  Schema.Struct({ op: Schema.Literal("contexts.get"), id: Id }),
+  Schema.Struct({ op: Schema.Literal("contexts.reset"), id: Id }),
+  Schema.Struct({ op: Schema.Literal("contexts.delete"), id: Id }),
   Schema.Struct({
-    op: Schema.Literals(["javascript.execute", "typescript.execute"]),
-    id: Id,
-    env: Schema.optionalKey(Environment),
-    source: ScriptSource,
-    filePath: Schema.optionalKey(Path),
-  }),
-  Schema.Struct({
-    op: Schema.Literals(["javascript.evaluate", "typescript.evaluate"]),
-    id: Id,
-    env: Schema.optionalKey(Environment),
-    expression: ScriptSource,
-    filePath: Schema.optionalKey(Path),
-  }),
-  Schema.Struct({
-    op: Schema.Literals(["javascript.executeFile", "typescript.executeFile"]),
-    id: Id,
-    env: Schema.optionalKey(Environment),
-    path: Path,
+    op: Schema.Literal("contexts.list"),
+    limit: Schema.Int.check(Schema.isBetween({ minimum: 1, maximum: 100 })),
+    cursor: Schema.optionalKey(Schema.String.check(Schema.isMaxLength(2048))),
   }),
 ]);
 export const SpawnAction = Schema.Struct({
@@ -499,6 +535,7 @@ export const HostReply = Schema.Union([
 ]);
 export const AgentInput = Schema.Struct({
   id: Id,
+  contextId: Schema.optionalKey(Id),
   memoryBytes: Schema.optionalKey(Policy.fields.memoryBytes),
   source: InlineRun.fields.source,
   tools: Schema.Array(HostCall.fields.name).check(Schema.isMaxLength(128)),
@@ -594,6 +631,7 @@ export const ShellProgram = Schema.Struct({
 });
 export const Program = Schema.Union([ScriptProgram, WasmProgram, PythonProgram, ShellProgram]);
 export const Action = Schema.Union([
+  ContextAction,
   GuestAction,
   RunAction,
   Schema.Struct({ op: Schema.Literal("config.get") }),
@@ -1112,6 +1150,24 @@ export const MemoryPages = Schema.Struct({
   memoryBytes: Schema.Int.check(Schema.isBetween({ minimum: 65_536, maximum: 67_108_864 })),
   pages: Schema.Array(Digest).check(Schema.isMaxLength(1024)),
 });
+export const ContextHeap = Schema.Struct({
+  runtime: Digest,
+  ...MemoryPages.fields,
+  handle: Schema.Int.check(Schema.isBetween({ minimum: 1, maximum: 4294967295 })),
+  memoryLimitBytes: Policy.fields.memoryBytes,
+  maxOutputBytes: Policy.fields.maxOutputBytes,
+});
+export const StoredContext = Schema.Struct({
+  ...ContextRecord.fields,
+  claimId: Schema.NullOr(Id),
+  heap: Schema.NullOr(ContextHeap),
+}).check(
+  Schema.makeFilter((record) => {
+    if (record.state === "running")
+      return record.claimId !== null && record.deadlineAt !== null && record.executionId !== null;
+    return record.claimId === null && record.deadlineAt === null;
+  }),
+);
 export const HeapSnapshot = Schema.Struct({
   version: Schema.Literal(1),
   runtime: Digest,
@@ -1138,6 +1194,11 @@ export const ExecutionCheckpoint = Schema.Struct({
 });
 
 export const ActionResponses = {
+  "contexts.create": ContextRecord,
+  "contexts.get": ContextRecord,
+  "contexts.list": ContextPage,
+  "contexts.reset": ContextRecord,
+  "contexts.delete": Success,
   "cron.schedule": CronRecord,
   "cron.get": CronRecord,
   "cron.list": CronPage,

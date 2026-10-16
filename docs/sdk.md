@@ -8,7 +8,7 @@ Version 0.19.1 adds an output-driven PTY input activity window: polling sleeps s
 
 Public content does not spend the 64 MiB private-byte quota. Copies retain shared block references; modified private blocks consume that quota. Duplicate installation still returns EEXIST. After uninstall/reinstall, command ownership follows package order; use `software.link` to explicitly select an overlapping command. Custom runtime deployments and tests must supply `SOFTWARE_BASE`, using null for a bare filesystem or the verified base digest produced by the supplied Alchemy stack. Global image garbage collection remains open.
 
-Native exec/fexec retains validated cwd, and native clock reads preserve the I/O counter while fuel, deadlines and capability expiry still bound execution. The ordinary Worker enables Alchemy Smart Placement for fetch handlers; Cloudflare excludes RPC methods and named entrypoints. Service bindings retain their native transport. Same-build cooperative recovery, terminal controls, persistent contexts and scoped capability enforcement remain available. Use matching SDK/runtime archives. Production delivery and consumer validation are tracked separately from the [local image evidence](evidence/default-software-full-local.json).
+Native exec/fexec retains validated cwd, and native clock reads preserve the I/O counter while fuel, deadlines and capability expiry still bound execution. The ordinary Worker enables Alchemy Smart Placement for fetch handlers; Cloudflare excludes RPC methods and named entrypoints. Service bindings retain their native transport. Same-build cooperative recovery, terminal controls, persistent Code Mode sandboxes and scoped capability enforcement remain available. Use matching SDK/runtime archives. Production delivery and consumer validation are tracked separately from the [local image evidence](evidence/default-software-full-local.json).
 
 Version 0.19.2 overlaps native R2 reads during stdin admission and decodes the acquired input body without a redundant HEAD. A fresh append uses six native R2 requests instead of seven, while preserving the input ETag and the final expiry/lifetime checks. See the [admission evidence](evidence/input-admission-local.json) and [0.19.2 delivery](evidence/sdk-0.19.2-delivery.json); local request counts do not establish production latency or billing.
 
@@ -265,7 +265,38 @@ const driver = createBoxesIsolateDriver(env.BOXES, {
 
 The target contract is exported as `BoxesIsolateTarget`. The caller creates the sandbox and supplies a scoped token with `read` and `execute`, plus `write` for file mutations. The driver never mints authority in persistent mode. Closing one context cancels its outstanding process IDs, waits up to the native 25-second observation deadline for terminal receipts and releases callbacks; the sandbox, files and other processes remain under the caller's lifecycle. New contexts and replacement Workers can attach with the same ID and valid authority. The caller owns final sandbox disposal and token renewal. Keep this driver scoped to its authorized actor/run.
 
-`memoryLimit` is sent as a per-execution byte ceiling to RPC. Rust applies the smaller of that ceiling and the current sandbox policy, without changing the persisted policy. The optional `memoryBytes` field of `runWithTools` has the same behavior for JavaScript/TypeScript executions; omission uses the sandbox policy. Files, policy and process receipts persist; JavaScript heap state and host callback closures do not persist between executions. The existing timeout and token expiry still apply.
+`memoryLimit` is sent as a per-execution byte ceiling to RPC. Rust applies the smaller of that ceiling and the current sandbox policy, without changing the persisted policy. The optional `memoryBytes` field of `runWithTools` has the same behavior for JavaScript/TypeScript executions; omission uses the sandbox policy. Files, policy and process receipts persist. Published 0.19.2 executions use fresh JavaScript heaps; the retained language contexts below are unreleased. Host callback implementations remain request-local in both modes. The existing timeout and token expiry still apply.
+
+Retained language contexts are available on unreleased `main`; published SDK/runtime 0.19.2 does not expose them. Use matching SDK/runtime builds. Create a context inside a sandbox, then supply `contextId` to JavaScript/TypeScript `execute`, `evaluate`, `executeFile`, `process.run`, or native `runWithTools`:
+
+```ts
+yield * boxes.action(sandboxId, { op: "contexts.create", id: "analysis" });
+yield *
+  boxes.action(sandboxId, {
+    op: "javascript.execute",
+    id: "seed-analysis",
+    contextId: "analysis",
+    source: "let value = 40; globalThis.next = () => ++value;",
+  });
+const result =
+  yield *
+  boxes.action(sandboxId, {
+    op: "typescript.evaluate",
+    id: "read-analysis",
+    contextId: "analysis",
+    expression: "globalThis.next() as number",
+  });
+yield * boxes.action(sandboxId, { op: "contexts.reset", id: "analysis" });
+yield * boxes.action(sandboxId, { op: "contexts.delete", id: "analysis" });
+```
+
+The native QuickJS heap, closures and module cache survive replacement Workers through validated R2 pages. Repeated file paths execute new entry code while preserving filename/URL metadata. Each call receives fresh output, environment, fuel, microtask/request budgets and current callback authority. A function retained from an earlier turn uses the current `runWithTools` callback, tool allowlist and call budget. JavaScript and TypeScript share the context; calls without `contextId` keep their ephemeral behavior.
+
+`contexts.get` returns state, generation, timestamps, last execution ID and active deadline. `contexts.list` consumes `limit` (1–100) and native `cursor`; deleted records are omitted, so a page can be empty while retaining a cursor. Get/list require `read`; create/reset/delete require `execute`; running retained code requires both `read` and `execute`. Only one execution owns a context. A competing execution, reset or delete returns `CONTEXT_BUSY`. Execution IDs remain unique within the sandbox, including across contexts.
+
+Failed preflight or duplicate execution admission preserves the previous context. A timeout, interruption or leftover asynchronous work after entry marks it `failed`; later execution returns `CONTEXT_FAILED` until explicit reset. A running context left by an uncertain or interrupted request remains inspectable and can be reset/deleted after its recorded deadline. Reads do not replay it. Inspect both context and process records after an uncertain response: context publication and terminal process-receipt publication are separate R2 writes. Already accepted host effects retain their existing lifetime.
+
+Reset drops retained interpreter state and increments its generation; delete conditionally writes a tombstone, and recreating the ID creates a new generation. Immutable pages stay within the sandbox storage lifecycle and are reclaimed by disposal/collection. Runtime binary, memory and output ceilings must match the retained heap; reset before changing them. Python, queued and cron retained contexts remain unsupported. The [local API evidence](evidence/contexts-api-local.json) covers actual HTTP, native Agent bindings, replacement Workers, permission renewal and collection; production delivery and Minutei opt-in remain open.
 
 SDK 0.9 replaces the driver's former credential argument with the explicit target. Existing ephemeral callers pass `{ kind: "ephemeral", administratorToken }`; persistent callers pass `{ kind: "persistent", sandboxId, capabilityToken }`.
 

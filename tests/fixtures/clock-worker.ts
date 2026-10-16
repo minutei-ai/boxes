@@ -13,15 +13,77 @@ import {
   ProcessInputAction,
   OutputMigrationInput,
   StoredRun,
+  StoredContext,
   Id,
 } from "../../src/contracts";
 import { tick } from "../../src/cron";
 import { reconcile } from "../../src/process";
+import { authorize } from "../../src/auth";
+import { acquireContext } from "../../src/contexts";
+import { ContextClaimProof } from "./context-checkpoint-contract";
 import { readOutputRange } from "../../src/output";
 import type { Env } from "../../src/resources";
 
 type TestEnv = Env & { SELF: Fetcher };
 export class Control extends WorkerEntrypoint<TestEnv> {
+  contextClaims(sandboxId: string, token: string, id: string, now: number) {
+    const bindings = this.env;
+    return Effect.runPromise(
+      Effect.scoped(
+        Effect.gen(function* () {
+          const clock = yield* TestClock.make();
+          yield* clock.setTime(now);
+          return yield* Effect.scoped(
+            Effect.gen(function* () {
+              const capability = yield* authorize(bindings, token, sandboxId);
+              const key = `sandboxes/${sandboxId}/contexts/${id}.json`;
+              const original = yield* Effect.promise(() => bindings.OBJECTS.head(key));
+              if (original === null) return yield* Effect.die("Missing test context");
+              const first = yield* Effect.scoped(
+                acquireContext(bindings, capability, id, "same", now + 60_000, null),
+              );
+              const restored = yield* Effect.promise(() => bindings.OBJECTS.head(key));
+              const proof = yield* Effect.scoped(
+                Effect.gen(function* () {
+                  const second = yield* acquireContext(
+                    bindings,
+                    capability,
+                    id,
+                    "same",
+                    now + 60_000,
+                    null,
+                  );
+                  const stale = yield* Effect.promise(() =>
+                    bindings.OBJECTS.put(
+                      key,
+                      Schema.encodeSync(Schema.fromJsonString(StoredContext))({
+                        ...first.original,
+                        updatedAt: now,
+                      }),
+                      { onlyIf: { etagMatches: first.etag } },
+                    ),
+                  );
+                  const held = yield* Effect.promise(() => bindings.OBJECTS.get(key));
+                  if (held === null) return yield* Effect.die("Claim disappeared");
+                  const record = yield* Schema.decodeUnknownEffect(
+                    Schema.fromJsonString(StoredContext),
+                  )(yield* Effect.promise(() => held.text()));
+                  return {
+                    claims: [first.record.claimId, second.record.claimId],
+                    epochs: [first.etag, second.etag],
+                    sameIdleEtag: restored?.etag === original.etag,
+                    staleRejected: stale === null,
+                    heldState: record.state,
+                  };
+                }),
+              );
+              return Schema.encodeSync(ContextClaimProof)(proof);
+            }),
+          ).pipe(Effect.provideService(Clock.Clock, clock));
+        }),
+      ),
+    );
+  }
   inputRequests(sandboxId: string, token: string, action: typeof ProcessInputAction.Type) {
     const requests: string[] = [];
     const bindings = {

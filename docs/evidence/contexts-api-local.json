@@ -1,0 +1,95 @@
+{
+  "status": "Unreleased public retained JavaScript/TypeScript contexts, backed by native Rust QuickJS heaps and real R2 pages. Source and SDK declarations support the API; published/deployed SDK/runtime remains 0.19.2.",
+  "measuredAt": "2026-10-16T21:55:59.315713+00:00",
+  "baseCommit": "6f5b9df918f8725af018164edf28fa4225de213d",
+  "sourceSha256": {
+    "src/contracts.ts": "27034fdf54b4d0b92f98424fd6209547315c59f81b33ce97bd05975935dfeb37",
+    "src/contexts.ts": "4b45eb4434c9913735342a74a1fe781c6c742f4abe1b93b2cf3894927a7a59f3",
+    "src/execution.ts": "7b76db97117413835d46a960504ba4cec2f1beec6599c58962b9f685c9816179",
+    "src/process.ts": "1bb43f7198cb92729711a603927c35dd1af4dd94234299307d1ce11c18d7139d",
+    "src/cron.ts": "955365d91506e7ec32cc60e22817b8f4349a735ca1f89dd7f79ad32663fce0c5",
+    "src/index.ts": "4d34868be5b241f52bb1ef311f358b9ee7bed16934ff852c61301a22b61c074b",
+    "crates/guest/src/lib.rs": "de422b4fdb2122d2dcbe11535cdb7367af8307a01f821bfee5dadf7093d323c0",
+    "tests/contexts.test.ts": "4134d74d0012747fd3250fa7b87fbbd3c90e0e4caee4d1ea11dec8a6e27b37e7",
+    "tests/fixtures/sdk-binding-worker.ts": "c399ea4954850282d88ac34b37c0ab7ddd52e1af7db950dda70e3ec1262ceb73",
+    "tests/fixtures/clock-worker.ts": "1a7a23b6f59d9238afc2a87d16e7c24500e4ba5114e974c9e25ffbf86c96f08d",
+    "tests/fixtures/context-checkpoint-contract.ts": "fe916cd0996d5a7a9b68b0a0e5effa00eb0b088e7d4984b31dcd68fdb757fe16"
+  },
+  "nativeRuntime": {
+    "sha256": "dcf1a9d66b4c3a11106076c3e9d5fa1f596b8846a811dfeec9ecf3a8744af01f"
+  },
+  "api": {
+    "lifecycle": [
+      "contexts.create",
+      "contexts.get",
+      "contexts.list",
+      "contexts.reset",
+      "contexts.delete"
+    ],
+    "selection": "Optional contextId on JavaScript/TypeScript execute, evaluate, executeFile, process.run and native Agent runWithTools. Calls without it retain ephemeral semantics.",
+    "transport": "Existing Effect SDK action and makeAgentBinding APIs, with shared request/response Schema owners. No self-HTTP or Dynamic Worker is introduced.",
+    "state": "One conditional R2 StoredContext record per sandbox/context owns its generation, claim, deadline and nullable native heap. Public summaries contain no heap or credentials.",
+    "permissions": "Read for get/list; execute for create/reset/delete; both read and execute for retained execution. Current callback allowlists, limits and capability expiry remain authoritative.",
+    "pagination": "Native R2 custom-metadata listing consumes limit/cursor without downloading heaps. Tombstones can produce an empty page with a continuation cursor.",
+    "concurrency": "A confirmed ETag claim with a unique private nonce admits one execution. Frozen-clock retries cannot recycle a busy ETag. Reset/delete reject running claims before their absolute deadline; old publication and cleanup retain their original ETag.",
+    "failure": "Pre-entry failure restores the prior record/heap. Interrupted interpreter execution after entry fails the context and blocks further execution until reset. Uncertain writes are not replayed.",
+    "completion": "A quiescent Guest is parked, stored as validated 64 KiB pages and published under the claimed ETag. Context publication and terminal process settlement remain distinct R2 writes.",
+    "lifetime": "Reset increments generation and clears the heap; delete retains a conditional tombstone, and recreation advances generation. Immutable pages remain under sandbox disposal/reclamation."
+  },
+  "proofs": [
+    "Public HTTP creates a context, retains a lexical closure and shared ESM state through closed/replacement Workers, runs TypeScript in the same heap, and preserves old console closures with fresh output.",
+    "Retained static and computed/dynamic imports use actual sandbox files. Repeated typescript.executeFile uses the same path, runs twice and retains its canonical import.meta URL.",
+    "An ordinary execution without contextId cannot see the retained function. Reset and delete/recreate erase visible retained state and advance generations.",
+    "Native metadata pagination returns distinct context IDs. Sandbox collection removes both context records and heap pages.",
+    "Invalid source and duplicate process IDs preserve the prior context; fuel interruption marks it failed and no automatic replay occurs. Explicit reset creates fresh language state.",
+    "Execute-only authority cannot read retained state. Unsupported queued/cron retained selectors return 501 with properly authorized test scopes and create neither process nor job.",
+    "The actual Agent service binding persists a function across replacement Workers, uses the new callback result 42 instead of the original 11, and denies an old tool name omitted from the current allowlist without invoking the callback.",
+    "A native callback latch holds execution while competing execution/reset/delete each return CONTEXT_BUSY. Releasing it permits one confirmed completion.",
+    "A real native RPC timeout fails the context; an already accepted callback completes once without replay.",
+    "A real Control service binding uses native TestClock at an unchanged timestamp and the same execution ID. Idle content restores its original R2 ETag, while two distinct claims have different private nonces and ETags. A replayed old cleanup conditional put returns null and cannot overwrite the current running claim."
+  ],
+  "checks": [
+    {
+      "command": "TMPDIR=<writable-scratch> bun run check",
+      "exitCode": 0,
+      "result": "Initial public API verification before unique claim nonce hardening: runtime/SDK build, TypeScript, Clippy, Rust and native workerd tests passed. 422 Bun tests, 0 failures, 6031 assertions across 93 files in 253.05 seconds."
+    },
+    {
+      "command": "TMPDIR=<writable-scratch> bun test tests/contexts.test.ts",
+      "exitCode": 0,
+      "result": "Pre-hardening expanded API coverage: 5 passed, 0 failed, 58 assertions in 12.12 seconds."
+    },
+    {
+      "command": "bun run typecheck",
+      "exitCode": 0,
+      "result": "Initial public API and SDK contracts passed; final hardened source was checked again by the stages below."
+    },
+    {
+      "command": "Runtime build followed by TMPDIR=<writable-scratch> bun test tests/contexts.test.ts",
+      "exitCode": 0,
+      "result": "Final nonce and expanded API coverage: 6 passed, 0 failed, 64 assertions in 13.21 seconds. Real R2 and native TestClock; no mocked storage."
+    },
+    {
+      "command": "After final runtime build: bun run build:sdk && bun run typecheck && cargo clippy --workspace --all-targets -- -D warnings && cargo test --workspace && TMPDIR=<writable-scratch> bun run test",
+      "exitCode": 0,
+      "result": "All final stages passed. 423 Bun tests, 0 failures, 6048 assertions across 93 files in 231.68 seconds. Includes six context tests with the frozen-clock ABA and delayed-cleanup proof."
+    },
+    {
+      "command": "bun run format:check",
+      "exitCode": 0,
+      "result": "Final Oxfmt, Cargo formatting and Rust fixture formatting passed."
+    }
+  ],
+  "limits": [
+    "No new SDK/runtime publication, Cloudflare deployment or remote Minutei behavior is claimed by this local evidence.",
+    "Retained Python globals and queued/cron retained contexts remain unimplemented; unsupported selectors are not silently ignored.",
+    "Exact Rust runtime and fixed memory/output ceilings must match the retained heap; reset is required for a change.",
+    "Cross-build heap migration, arbitrary-crash external-effect atomicity and active per-context page garbage collection remain open.",
+    "Native context integration with the Minutei Code Mode driver, production proof, workload scaling and measured billing comparison remain open."
+  ],
+  "parentCI": {
+    "commit": "6f5b9df918f8725af018164edf28fa4225de213d",
+    "run": "https://github.com/minutei-ai/boxes/actions/runs/38969871215",
+    "conclusion": "success"
+  }
+}
