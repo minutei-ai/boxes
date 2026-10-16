@@ -101,9 +101,10 @@ export const restoreHeap = Effect.fn("checkpoint.restoreHeap")(function* (
       try: () => exports.memory.grow(additional),
       catch: (cause) => new StorageFailure({ cause }),
     });
+  const pages = Map.groupBy(snapshot.pages.keys(), (index) => snapshot.pages[index]);
   yield* Effect.forEach(
-    Array.from(snapshot.pages.entries()),
-    ([index, hash]) =>
+    pages,
+    ([hash, indices]) =>
       Effect.gen(function* () {
         const page = yield* Effect.tryPromise({
           try: () => objects.get(`sandboxes/${sandboxId}/checkpoint-pages/${hash}`),
@@ -118,7 +119,8 @@ export const restoreHeap = Effect.fn("checkpoint.restoreHeap")(function* (
         const digest = yield* Effect.promise(() => crypto.subtle.digest("SHA-256", bytes));
         if (Buffer.from(digest).toString("hex") !== hash)
           return yield* new StorageFailure({ cause: "Checkpoint page digest mismatch" });
-        new Uint8Array(exports.memory.buffer, index * 65_536, 65_536).set(new Uint8Array(bytes));
+        for (const index of indices)
+          new Uint8Array(exports.memory.buffer, index * 65_536, 65_536).set(new Uint8Array(bytes));
       }),
     { concurrency: 4, discard: true },
   );

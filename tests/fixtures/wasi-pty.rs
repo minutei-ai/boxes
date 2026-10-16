@@ -82,13 +82,63 @@ fn receive(fd: u32, data: &mut [u8]) -> (u32, u32) {
     case = "sink",
     case = "tty-read",
     case = "tty-invalid",
-    case = "tty-rights"
+    case = "tty-rights",
+    case = "recovery-cooked",
+    case = "recovery-raw"
 ))]
 #[unsafe(no_mangle)]
 pub extern "C" fn _start() {
     unsafe {
         if isatty(0) != 1 || isatty(1) != 1 || isatty(2) != 1 {
             proc_exit(51);
+        }
+        if cfg!(case = "recovery-cooked") {
+            let mut data = [0u8; 32];
+            if read(data.as_mut_ptr(), 32, u32::MAX) != 6 || &data[..6] != b"hello\n" {
+                proc_exit(80);
+            }
+            send(1, b"read:hello\n");
+            if read(data.as_mut_ptr(), 32, u32::MAX) != 0 {
+                proc_exit(81);
+            }
+            send(1, b"eof\n");
+            proc_exit(0);
+        }
+        if cfg!(case = "recovery-raw") {
+            let mut data = [0u8; 32];
+            if set_raw_mode(1) != 0 || receive(0, &mut data[..1]) != (0, 1) || data[0] != b'r' {
+                proc_exit(82);
+            }
+            send(1, b"buffered\n");
+            let mut subscription = [0u8; 48];
+            subscription[16..20].copy_from_slice(&1u32.to_le_bytes());
+            subscription[24..32].copy_from_slice(&31_000_000_000u64.to_le_bytes());
+            subscription[32..40].copy_from_slice(&1_000_000u64.to_le_bytes());
+            let mut event = [0u8; 32];
+            let mut count = 0;
+            if poll_oneoff(subscription.as_ptr(), event.as_mut_ptr(), 1, &mut count) != 0
+                || count != 1
+            {
+                proc_exit(83);
+            }
+            let mut total = 0usize;
+            while total < 9 {
+                let (errno, count) = receive(0, &mut data[total..9]);
+                if errno != 0 || count == 0 {
+                    proc_exit(84);
+                }
+                total += count as usize;
+            }
+            if &data[..9] != b"aw\0\x03\x04\r\n\x7f\xff" {
+                proc_exit(85);
+            }
+            send(1, b"read:");
+            send(1, &data[..9]);
+            if receive(0, &mut data) != (0, 0) {
+                proc_exit(86);
+            }
+            send(1, b"eof\n");
+            proc_exit(0);
         }
         if cfg!(case = "tty-invalid") {
             send(1, b"invalid-ready\n");
@@ -203,7 +253,9 @@ pub extern "C" fn _start() {
     case = "sink",
     case = "tty-read",
     case = "tty-invalid",
-    case = "tty-rights"
+    case = "tty-rights",
+    case = "recovery-cooked",
+    case = "recovery-raw"
 )))]
 #[unsafe(no_mangle)]
 pub extern "C" fn run() -> i32 {

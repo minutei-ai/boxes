@@ -45,6 +45,8 @@ test("R2 heap pages resume Wasmi frames in a replacement workerd without reenter
   expect(proof.steps).toBeGreaterThan(1);
   await second.dispose();
   await rm(directory, { recursive: true, force: true });
+  expect(proof.reads.uniquePages).toBeLessThan(proof.reads.pages);
+  expect(proof.reads.pageRequests).toBe(proof.reads.uniquePages);
 }, 15000);
 
 test("checkpoint integrity and Rust runtime identity are checked before native resume", async () => {
@@ -74,7 +76,9 @@ test("checkpoint integrity and Rust runtime identity are checked before native r
   const rejected = await send(runtime, { op: "resume", hash });
   expect(rejected.status).toBe(500);
   expect(await rejected.text()).toContain("another Rust runtime");
-  const page = snapshot.pages[0];
+  const page = Array.from(Map.groupBy(snapshot.pages, (hash) => hash)).find(
+    ([, pages]) => pages.length > 1,
+  )?.[0];
   expect(page).toBeDefined();
   if (page === undefined) return;
   const pageKey = `sandboxes/checkpoint-test/checkpoint-pages/${page}`;

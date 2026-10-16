@@ -1,0 +1,231 @@
+{
+  "scope": "Same-build cooperative active PTY handover/resume and terminal stdin-status projection",
+  "baseCommit": "b54dc13f4a2f37287afe5a00e5afb2e4721e4524",
+  "priorSourceCi": {
+    "run": 38852185025,
+    "conclusion": "success",
+    "verifiedThisTurn": true
+  },
+  "nativeProof": {
+    "runtime": "Alchemy native workerd with native R2 and Queue bindings",
+    "clock": "Existing request-local Effect TestClock crosses the 30-second lease; replacement uses saved clock plus 1000 ms for the original raw clock deadline",
+    "scopes": "First Worker and its proxy are fully disposed before replacement opens the same native R2 state directory; all fixtures and runtimes have scoped cleanup",
+    "capture": "StoredRun, ExecutionCheckpoint and HeapSnapshot decoded through owning Effect Schemas; archived heap metadata/PID handles inspected, then native restore validates and loads the retained pages",
+    "cooked": "Native host_tty.read is pending with an unfinished canonical hel line; after parking, lo plus CR and EOF are retained; replacement returns hello plus newline, then EOF with exact single echo/output",
+    "raw": "Native guest enables raw mode, reads r from raw and parks in a 31-second monotonic poll while aw remains unread; later control and invalid UTF-8 bytes plus EOF are delivered after restoration; fd_read and base64 output replay preserve every byte",
+    "family": "Parent and child native handles [1,2] are retained; child ready marker appears once before parking; shared canonical terminal input and EOF complete after replacement",
+    "cancelled": "A checkpointed pending terminal read is cancelled before replacement; new stdin writes fail 409; replacement acknowledges Queue delivery without guest reentry or receipt ETag mutation, retaining hel output and reporting logically closed stdin",
+    "authorization": "Cross-sandbox stdin writes fail 401 while parked; original read/write/execute capability persists through replacement",
+    "duplicateDelivery": "Stale original reservation Queue delivery is acknowledged after settlement; completed receipt ETag and byte output remain identical"
+  },
+  "regression": {
+    "baselineLog": "/tmp/boxes-pty-recovery-status-baseline.log",
+    "baseline": "Three resume cases passed; cancelled case failed: stdin.status returned closed false despite cancelled receipt and 409 on append",
+    "owner": "src/input.ts process.input",
+    "cause": "The handler computed effective closure from the input head and process receipt, but status returned current.closed instead of that computed closure",
+    "fix": "Return the existing derived closed field, matching append/close; no repair writes, record changes, new persistence owner or migration"
+  },
+  "checks": {
+    "focusedCombined": {
+      "command": "bun test tests/pty-recovery.test.ts tests/pty-replacement.test.ts tests/tty-read.test.ts tests/stdin.test.ts",
+      "log": "/tmp/boxes-pty-recovery-fixed-focused.log",
+      "result": "12 pass, 1 fail, 181 assertions in 37.16 seconds; all four new recovery cases passed; existing three-Worker replacement case exceeded default 5000 ms"
+    },
+    "boundedFollowup": {
+      "command": "bun test tests/pty-replacement.test.ts tests/pty-recovery.test.ts",
+      "log": "/tmp/boxes-pty-recovery-repeat-focused.log",
+      "result": "5 pass, 0 fail, 97 assertions in 11.12 seconds; unchanged existing replacement case passed in 2441.09 ms"
+    },
+    "timingLimit": "One existing replacement-test timeout was observed. No timeout, assertion, fixture, production retry or execution policy was changed to make it pass; the underlying timing variability is not diagnosed as fixed",
+    "fullCheck": {
+      "command": "bun run check",
+      "log": "/tmp/boxes-pty-recovery-final-check.log",
+      "exitCode": 0,
+      "passed": 366,
+      "failed": 0,
+      "assertions": 4978,
+      "files": 72,
+      "testSeconds": 160.92,
+      "includes": [
+        "runtime and SDK builds",
+        "TypeScript",
+        "workspace Clippy with warnings denied",
+        "native Rust workspace tests",
+        "native workerd/R2/Queue suites"
+      ],
+      "limit": "This passing final gate does not establish that the earlier timeout variability has been eliminated"
+    },
+    "format": {
+      "command": "bun run format:check",
+      "log": "/tmp/boxes-pty-recovery-final-format.log",
+      "exitCode": 0
+    },
+    "firstFullGate": {
+      "command": "bun run check",
+      "log": "/tmp/boxes-pty-recovery-check.log",
+      "exitCode": 1,
+      "passed": 362,
+      "failed": 4,
+      "errors": 2,
+      "assertions": 4927,
+      "files": 72,
+      "testSeconds": 188.33,
+      "failures": [
+        "existing process-repair-metadata default 5000 ms timeout",
+        "existing process Queue continuation default 5000 ms timeout",
+        "later process capability-expiry test ECONNREFUSED after the native Worker was killed",
+        "new cooked PTY recovery default 5000 ms timeout"
+      ],
+      "limit": "Timing variability and resulting connection cascade are not established as fixed; no timeout, assertion or execution policy was relaxed"
+    },
+    "deduplicatedFocused": {
+      "command": "bun test tests/checkpoint.test.ts tests/pty-recovery.test.ts",
+      "log": "/tmp/boxes-checkpoint-dedup-focused.log",
+      "passed": 8,
+      "failed": 0,
+      "assertions": 119,
+      "testSeconds": 13.1,
+      "includes": [
+        "counter regression for unique payload reads",
+        "shared-page corruption rejected before native resume",
+        "native family and signal-handler restoration",
+        "all four PTY recovery/cancellation cases"
+      ]
+    },
+    "generalBenchmark": {
+      "command": "bun run bench",
+      "log": "/tmp/boxes-pty-recovery-benchmark.log",
+      "output": "/tmp/boxes-pty-recovery-benchmark.json",
+      "exitCode": 0,
+      "limit": "Unpaired general native workloads; no end-to-end latency/cost improvement inferred; maintained performance-local.json bytes restored after running",
+      "environment": {
+        "runtime": "local workerd via native Alchemy",
+        "alchemy": "2.0.0-beta.83",
+        "production": false,
+        "platform": "linux",
+        "arch": "x64"
+      },
+      "artifactBytes": {
+        "javascript": 363981,
+        "kernelWasm": 1139581,
+        "wasiWasm": 1671286,
+        "pythonWasm": 10719083,
+        "guestWasm": 1129863,
+        "compilerWasm": 1943596
+      }
+    }
+  },
+  "sourceSha256": {
+    "src/input.ts": "22a473f3b2d4a372974e8b17ca8b1bca69212809b336cbcbb7477180bce85f76",
+    "tests/pty-recovery.test.ts": "64accd70ad00e3dd3fdff9bc98b24a25493d5345575d9d06a7f505ec15370176",
+    "tests/fixtures/wasi-pty.rs": "eebc6855815a589a4aacfe8653f171b768a6fd1a08f3e231650861f493d3758d",
+    "tooling/build.ts": "0f033f62f2b14cc49cfd12d55fdab93a0c29f2d21c140bdc6dd748421ae4c75e",
+    "src/checkpoint.ts": "f05866e91a5650ad8b448d9eaee9063a933bda6caa19873c2f24becdcbf9d0ce",
+    "tests/checkpoint.test.ts": "7afa3cb28b9bdbdf6d25dbf69a25a0ee85df278cc3ac857a8127a86a1847ba68",
+    "tests/fixtures/checkpoint-contract.ts": "e1eb76211a834e57bb7dfd7361b263a7dc3c16558ffa89ccd68e7ed6b7291aef",
+    "tests/fixtures/checkpoint-worker.ts": "2a21e178e176d5e0ed65a4c912f94e263947e73909d30bddf3be643cbf90ef8d"
+  },
+  "artifacts": {
+    "dist/worker/index.js": {
+      "bytes": 363981,
+      "sha256": "3511269f8eda930722c562f33b5657752b265133dd2bb017e097ca97b9f229ab"
+    },
+    "dist/clock-worker/index.js": {
+      "bytes": 382351,
+      "sha256": "126f84d5ec8b2a9a36b21474201ad6b9cfa0d15b1b4c55cff397ba302af92749"
+    },
+    "dist/wasi/cirro_wasi_bg.wasm": {
+      "bytes": 1671286,
+      "sha256": "5f488286d878649bcff1838db7d1d277d9ed490f4d6083d5a7a1dddc5da1dec6"
+    }
+  },
+  "rustRuntimeUnchangedFromPriorEvidence": true,
+  "delivery": {
+    "publication": "No new release; public SDK/runtime 0.12.1 unchanged",
+    "deployment": "No new deployment",
+    "minutei": "Consumer unchanged; no Minutei push or deploy"
+  },
+  "remaining": [
+    "Recovery after abrupt termination before a confirmed checkpoint",
+    "Cross-build native heap migration",
+    "Published Brush/Reedline session handover proof",
+    "Terminal resize, listing and metadata",
+    "Full termios and foreground job control",
+    "Direct TerminalRead caught-signal and SA_RESTART proof",
+    "Shared 256 host-request family budget still bounds session lifetime",
+    "Production interactive terminal delivery and actual remote Minutei app/model integration",
+    "Production memory, latency and AgentOS cost comparison"
+  ],
+  "pageReads": {
+    "owner": "src/checkpoint.ts restoreHeap",
+    "baselineLog": "/tmp/boxes-checkpoint-dedup-baseline.log",
+    "baselineFailure": "Expected 8 distinct payload reads; received 37 (one per page slot)",
+    "implementation": "Native Map.groupBy associates offsets with each immutable page hash; one native get, size check and SHA-256 validation per distinct hash; each validated payload is copied to all its slots",
+    "bounds": "Existing four-read concurrency, 64 KiB payloads, 1024-page cap, and exact runtime/layout/digest validation unchanged; no cross-request cache or persisted-format migration",
+    "nativeCounter": "Fixture Proxy counts actual R2.get page-payload calls and forwards every original call/body unchanged",
+    "comparison": {
+      "phases": [
+        {
+          "phase": 1,
+          "mode": "reference",
+          "workerSha256": "b887995575780d874e5cbc9de3bfb9193284fdebc2f3e18e69ac5f69918d0d9c",
+          "reads": {
+            "pages": 37,
+            "uniquePages": 8,
+            "pageRequests": 37
+          },
+          "elapsedMillis": 107.992884,
+          "exitCode": 0,
+          "result": 352
+        },
+        {
+          "phase": 2,
+          "mode": "candidate",
+          "workerSha256": "e8713ddb0a5c5b610d545ab963dc274da53662149b2d7a3aac2481c70bac7543",
+          "reads": {
+            "pages": 37,
+            "uniquePages": 8,
+            "pageRequests": 8
+          },
+          "elapsedMillis": 62.509662,
+          "exitCode": 0,
+          "result": 352
+        },
+        {
+          "phase": 3,
+          "mode": "candidate",
+          "workerSha256": "e8713ddb0a5c5b610d545ab963dc274da53662149b2d7a3aac2481c70bac7543",
+          "reads": {
+            "pages": 37,
+            "uniquePages": 8,
+            "pageRequests": 8
+          },
+          "elapsedMillis": 59.583525,
+          "exitCode": 0,
+          "result": 352
+        },
+        {
+          "phase": 4,
+          "mode": "reference",
+          "workerSha256": "b887995575780d874e5cbc9de3bfb9193284fdebc2f3e18e69ac5f69918d0d9c",
+          "reads": {
+            "pages": 37,
+            "uniquePages": 8,
+            "pageRequests": 37
+          },
+          "elapsedMillis": 88.432019,
+          "exitCode": 0,
+          "result": 352
+        }
+      ],
+      "scope": "Local native workerd restore plus guest completion; four fresh-R2 phases, no production or latency-significance claim"
+    },
+    "guestSha256": "e5af272fc777bced3a285e0bb24d8493ac339225f907c345c0a1692994dd7368",
+    "limit": "37 to 8 is the number of page payload gets for this local 37-page/8-distinct-hash fixture. It is not a production latency, billed-request or AgentOS price comparison; four timing samples do not establish a latency distribution",
+    "timingBoundary": "Client monotonic time around resume fetch and JSON decoding, including native heap restoration, fixture metadata inspection, guest completion and HTTP transport; Worker startup excluded",
+    "probeSha256": "3e4d2abfb4b8817b5b4c35246a6e46a440668fd4c294a223c39cf34038a17a88",
+    "orchestrationSha256": "312ceb85fce80eed83555b2fe0c6f7146e6d8296745bc266c66fe6d1721ce0d3",
+    "referenceRustWasmSha256": "5f488286d878649bcff1838db7d1d277d9ed490f4d6083d5a7a1dddc5da1dec6",
+    "candidateRustWasmSha256": "5f488286d878649bcff1838db7d1d277d9ed490f4d6083d5a7a1dddc5da1dec6"
+  }
+}

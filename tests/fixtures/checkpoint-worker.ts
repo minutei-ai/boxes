@@ -4,7 +4,7 @@ import { PLATFORM_PROXY_PREFIX } from "@alchemy.run/cloudflare-runtime/core/plat
 import wasm from "cirro:wasi";
 import { createBindings } from "../../dist/wasi/bindings";
 import { saveHeap, restoreHeap } from "../../src/checkpoint";
-import { WasmStep, SpawnStageResult } from "../../src/contracts";
+import { WasmStep, SpawnStageResult, HeapSnapshot } from "../../src/contracts";
 import type { Env } from "../../src/resources";
 
 import { CheckpointRequest, CheckpointProof } from "./checkpoint-contract";
@@ -77,7 +77,34 @@ export default {
               ]);
               return { op: "saved" as const, hash, before };
             }
-            const restored = yield* restoreHeap(env.OBJECTS, "checkpoint-test", input.hash);
+            const counts = { pageRequests: 0 };
+            const objects = new Proxy(env.OBJECTS, {
+              get(target, property) {
+                if (property === "get")
+                  return (...args: Parameters<Env["OBJECTS"]["get"]>) => {
+                    if (args[0].startsWith("sandboxes/checkpoint-test/checkpoint-pages/"))
+                      counts.pageRequests += 1;
+                    return target.get(...args);
+                  };
+                const value = Reflect.get(target, property, target);
+                if (typeof value === "function") return value.bind(target);
+                return value;
+              },
+            });
+            const restored = yield* restoreHeap(objects, "checkpoint-test", input.hash);
+            const metadata = yield* Effect.tryPromise(() =>
+              env.OBJECTS.get(`sandboxes/checkpoint-test/checkpoints/${input.hash}.json`),
+            );
+            if (metadata === null)
+              return yield* Effect.die("Restored checkpoint metadata disappeared");
+            const snapshot = yield* Schema.decodeUnknownEffect(Schema.fromJsonString(HeapSnapshot))(
+              yield* Effect.tryPromise(() => metadata.text()),
+            );
+            const reads = {
+              pages: snapshot.pages.length,
+              uniquePages: new Set(snapshot.pages).size,
+              pageRequests: counts.pageRequests,
+            };
             const handle = restored.handles[0];
             if (handle === undefined) return yield* Effect.die("Missing test checkpoint handle");
             const guest = yield* Effect.acquireRelease(
@@ -113,7 +140,7 @@ export default {
               guest.step(),
             );
             if (after.kind === "done")
-              return { op: "resumed" as const, after, terminal: after, steps: 1 };
+              return { op: "resumed" as const, after, terminal: after, steps: 1, reads };
             const steps = { count: 0 };
             while (steps.count < 1000) {
               const step = yield* Schema.decodeUnknownEffect(Schema.fromJsonString(WasmStep))(
@@ -121,7 +148,7 @@ export default {
               );
               steps.count += 1;
               if (step.kind === "done")
-                return { op: "resumed" as const, after, terminal: step, steps: steps.count };
+                return { op: "resumed" as const, after, terminal: step, steps: steps.count, reads };
             }
             return yield* Effect.die("Checkpoint test did not terminate");
           });

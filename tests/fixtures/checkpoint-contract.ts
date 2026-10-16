@@ -12,5 +12,10 @@ export const CheckpointProof = Schema.Union([
     after: WasmStep,
     terminal: WasmStep,
     steps: Schema.Int,
+    reads: Schema.Struct({
+      pages: Schema.Int,
+      uniquePages: Schema.Int,
+      pageRequests: Schema.Int,
+    }),
   }),
 ]);

@@ -276,6 +276,8 @@ await Effect.runPromise(
       "tty-read",
       "tty-invalid",
       "tty-rights",
+      "recovery-cooked",
+      "recovery-raw",
     ]) {
       yield* run([
         "rustc",

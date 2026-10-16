@@ -178,7 +178,7 @@ export const input = Effect.fn("process.input")(function* (
   const { input: current, etag } = yield* load(env, capability.sandboxId, action.id);
   const closed = current.closed || (record.status !== "queued" && record.status !== "running");
   if (action.op === "process.stdin.status")
-    return { offset: current.size, total: current.size, closed: current.closed };
+    return { offset: current.size, total: current.size, closed };
   const bytes = yield* Effect.sync(() => {
     if (action.op === "process.stdin.write") return Buffer.from(action.content, action.encoding);
     return Buffer.alloc(0);
