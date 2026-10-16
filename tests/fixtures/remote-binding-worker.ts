@@ -7,6 +7,7 @@ import type { AgentProtocol } from "../../src/rpc-protocol";
 import type { HostCall } from "../../src/contracts";
 import { persistentBindingProof } from "./remote-persistent-binding";
 import { publishedInterpreterFile, publishedInterpreterCases } from "./published-software";
+import { shellCwdProof } from "./shell-cwd-proof";
 
 import {
   RemoteBindingInput,
@@ -150,6 +151,7 @@ export default {
           op: "filesystem.readFile",
           path: "/tmp/from-script",
         });
+        const shellCwd = yield* shellCwdProof(client, input.sandboxId, "sh", "/opt/cirro/bin/sh");
         return new Response(
           Schema.encodeSync(Schema.fromJsonString(RemoteBindingProof))({
             measuredAt: yield* Clock.currentTimeMillis,
@@ -157,6 +159,7 @@ export default {
             voidCallback,
             interpreters,
             interpreterFile,
+            shellCwd,
             file,
             calls,
             managementDenied: denied.failure.status,

@@ -1,6 +1,7 @@
 import { Schema, Struct } from "effect";
 import { AgentRequest, FileContent, HostCall, RunRecord } from "../../src/contracts";
 import { publishedInterpreterCases } from "./published-software";
+import { ShellCwdProof } from "./shell-cwd-proof";
 
 export const remoteRpcTimeoutMs = 15000;
 export const remoteDeadlinePath = "/deadline-observed";
@@ -17,6 +18,7 @@ export const RemoteBindingProof = Schema.Struct({
     Schema.isMaxLength(publishedInterpreterCases.length),
   ),
   interpreterFile: FileContent,
+  shellCwd: ShellCwdProof,
   file: FileContent,
   calls: Schema.Array(HostCall),
   managementDenied: Schema.Int,

@@ -12,9 +12,11 @@ import {
   ProcessListAction,
   OutputMigrationInput,
   StoredRun,
+  Id,
 } from "../../src/contracts";
 import { tick } from "../../src/cron";
 import { reconcile } from "../../src/process";
+import { readOutputRange } from "../../src/output";
 import type { Env } from "../../src/resources";
 
 type TestEnv = Env & { SELF: Fetcher };
@@ -242,6 +244,9 @@ export default {
         Effect.gen(function* () {
           const start = yield* Schema.decodeUnknownEffect(Schema.Int)(env.CLOCK_START);
           const advance = yield* Schema.decodeUnknownEffect(Schema.Int)(env.CLOCK_ADVANCE);
+          const afterOutput = yield* Schema.decodeUnknownEffect(Schema.NullOr(Schema.String))(
+            env.CLOCK_ADVANCE_AFTER_OUTPUT,
+          );
           const clock = yield* TestClock.make();
           yield* clock.setTime(start);
           const delivery = yield* consume(batch, bindings).pipe(
@@ -253,16 +258,31 @@ export default {
           const drive = Effect.gen(function* () {
             yield* Effect.gen(function* () {
               const object = yield* Effect.promise(() => bindings.OBJECTS.get(event.key));
-              if (object === null) return undefined;
+              if (object === null) return false;
               const text = yield* Effect.promise(() => object.text());
-              return yield* Schema.decodeUnknownEffect(Schema.fromJsonString(StoredRun))(text);
+              const record = yield* Schema.decodeUnknownEffect(Schema.fromJsonString(StoredRun))(
+                text,
+              );
+              if (record.status !== "running" || record.output === null) return false;
+              if (afterOutput === null) return true;
+              const sandboxId = yield* Schema.decodeUnknownEffect(Id)(event.key.split("/")[1]);
+              const stdout = yield* readOutputRange(
+                bindings,
+                sandboxId,
+                record.output.stdout,
+                0,
+                record.output.stdout.size,
+              );
+              if (stdout.toString().includes(afterOutput)) return true;
+              yield* clock.adjust("10 millis");
+              return false;
             }).pipe(
               Effect.repeat({
-                until: (record) => record?.status === "running" && record.output !== null,
+                until: (ready) => ready,
                 schedule: Schedule.spaced("1 millis"),
               }),
             );
-            yield* clock.adjust(advance);
+            yield* clock.adjust(Math.max(0, start + advance - (yield* clock.currentTimeMillis)));
             return yield* Fiber.join(delivery);
           });
           return yield* Effect.raceFirst(Fiber.join(delivery), drive);
@@ -276,6 +296,7 @@ declare global {
     interface Env {
       CLOCK_START: number;
       CLOCK_ADVANCE: number;
+      CLOCK_ADVANCE_AFTER_OUTPUT: string | null;
       CLOCK_CONTROLLED: boolean;
     }
   }

@@ -1,0 +1,205 @@
+{
+  "status": "Source candidate 0.18.0. The published Boxes shell passed native production cwd binding and software composition against runtime 0.17.0. Native clock budget and minimal/Reedline checkpoint recovery passed locally with the 0.18.0 engine; deployment and remote interactive recovery for this engine remain open.",
+  "measuredAt": "2026-10-16T14:52:53.508138+00:00",
+  "baseCommit": "e90c332f491934bed6afc95dd1f9fab63ba626b3",
+  "sourceInputsSha256": {
+    "crates/wasi/src/lib.rs": "413aaf41c95ac48c428061009a3b2cb89d5c8c2f756ccc3feafa030e35f00773",
+    "tests/fixtures/wasi-abi.rs": "7055830c128bd727098642919686e2a1a8abc64755dae99d7280e9332993c153",
+    "tests/wasi-clock-budget.test.ts": "00d75ce407c014fc9ae4274d559465d25e3d7036341b01239acbde7676faf2ed",
+    "tests/published-shell-recovery.test.ts": "7203854f73be3db221d9600bd2aca8a06865f7e96f0a08e7d907c6ee2006ecbd",
+    "tests/fixtures/clock-worker.ts": "751902be5be2b30e2cbf55cead15ce9ffe94de39b87190dbf14b05378eb46c88",
+    "tooling/worker-test.ts": "bb93d700615e82fe3263490d46550fa338281ff50995727466eac7d3b78a6cb9",
+    "tests/fixtures/shell-cwd-proof.ts": "84feadbe70c96aa9ddb97661851e9e0839759e5a407ba1f40c12aee56c3ff9e2",
+    "tests/fixtures/published-software.ts": "01b8b9b3868af02d1d18fdc878be2ae7c05d9870c8048821939d50ecccb7be2e",
+    "tests/fixtures/published-package.ts": "2fc50b8ce04393b79b294654e1ab9889b6d516efb837cb41b0ecc9b86c9e2016",
+    "tooling/remote-binding-proof.ts": "9bcf2578fff6b3f9c66d9cef3b895937c8efb5cbdc7ca819dca2d0104b169c36",
+    "tooling/software-proof.ts": "0fdde831dd1aa62b699afc1a53bc5c6150c14a5a68263628765311c4227455cd",
+    "package.json": "56da12cbadbfd8435193c29f16c6651557aed6b75d61a135b6e0af752f823d7f",
+    "tooling/build.ts": "54a9f773fa6b23ab7b4e06bad6957d0dc2012521da95fdd56742264bc7fd3c6f",
+    "tests/fixtures/remote-binding-contracts.ts": "f39a53552bef2848f7e50c53b2e6450f7883c0bc4780457054fadd3e83fdcd6c",
+    "tests/fixtures/remote-binding-worker.ts": "779727183392e03348749786e38c50ae7b073a3c6407e093c75db9dbe22bdf2b",
+    "tests/remote-binding.test.ts": "7f783cd8bfeed59491854ef2b3a35c036988b44bd75440354c6bc5cff43f92ef",
+    "tooling/shell-cwd-proof.ts": "8b79f674c1e86ed639e603427f3005eb5d0c13b6a6716d0105a2004cc497fb68"
+  },
+  "guest": {
+    "url": "https://github.com/minutei-ai/boxes/releases/download/sdk-v0.17.0/sh-0.17.0.aospkg",
+    "sha256": "1922d7987e34c080abe1c8edf85e0d01c4f5dccaefafe1dada5735c6e64eb2ec",
+    "bytes": 4349290,
+    "version": "0.17.0",
+    "selectionOwner": "tests/fixtures/published-software.ts",
+    "scope": "Explicit software test/proof selection. Sandboxes and Minutei do not automatically install this package."
+  },
+  "nativeProductionBinding": {
+    "targetWorker": "cirro-sandbox-prod-rs7wexxow56rmsoz",
+    "measuredAt": 1792160862924,
+    "sdkVersion": "0.17.0",
+    "shellPackage": {
+      "packageId": "1922d7987e34c080abe1c8edf85e0d01c4f5dccaefafe1dada5735c6e64eb2ec",
+      "digest": "sha256:1922d7987e34c080abe1c8edf85e0d01c4f5dccaefafe1dada5735c6e64eb2ec",
+      "sizeBytes": 4349290,
+      "manifest": {
+        "name": "sh",
+        "version": "0.17.0",
+        "provides": null,
+        "commands": [
+          {
+            "command": "sh",
+            "entry": "bin/sh"
+          }
+        ],
+        "man_pages": []
+      }
+    },
+    "consumerBundleSha256": "989b12a059cd3205eb73fa01f03d807f67b9b9203daf1dcac0614fe8e3be5be7",
+    "sandboxId": "remote-binding-27146314-57af-4f58-838f-c3fc226fce05",
+    "cwdCases": [
+      {
+        "id": "direct",
+        "status": "exited",
+        "exitCode": 0,
+        "stdout": "/tmp/context|/tmp/context/script|hello\n"
+      },
+      {
+        "id": "absolute",
+        "status": "exited",
+        "exitCode": 0,
+        "stdout": "/tmp/context\n"
+      },
+      {
+        "id": "symlink",
+        "status": "exited",
+        "exitCode": 0,
+        "stdout": "/tmp/context|/tmp/link/script|hello\n"
+      },
+      {
+        "id": "spoofed-pwd",
+        "status": "exited",
+        "exitCode": 0,
+        "stdout": "/tmp/context|/tmp/context/script|hello\n"
+      },
+      {
+        "id": "empty-environment",
+        "status": "exited",
+        "exitCode": 0,
+        "stdout": "/tmp/context|/tmp/context/script|hello\n"
+      }
+    ],
+    "receiptSha256": "6de9570e22c471841bfe69b894e94a6d678b74e838c01dbb5ce8e6e7b6a75d1d",
+    "scope": "Native default service binding for filesystem/process actions, plus the existing Agent RPC callbacks, persistent contexts and terminal proofs. This ran before the native clock change, against the documented 0.17.0 deployment."
+  },
+  "nativeProductionSoftware": {
+    "target": "https://cirro-sandbox-prod-rs7wexxow56rmsoz.manoel-carvalhoneto.workers.dev",
+    "measuredAt": 1792160826304,
+    "sandboxId": "software-proof-41ae3927-319a-495c-bf34-511e0b3e3938",
+    "reclaimed": true,
+    "packages": [
+      {
+        "packageId": "1922d7987e34c080abe1c8edf85e0d01c4f5dccaefafe1dada5735c6e64eb2ec",
+        "digest": "sha256:1922d7987e34c080abe1c8edf85e0d01c4f5dccaefafe1dada5735c6e64eb2ec",
+        "sizeBytes": 4349290,
+        "manifest": {
+          "name": "sh",
+          "version": "0.17.0",
+          "provides": null,
+          "commands": [
+            {
+              "command": "sh",
+              "entry": "bin/sh"
+            }
+          ],
+          "man_pages": []
+        }
+      },
+      {
+        "packageId": "edb1cf0bbcf663d177916592d2f1b4361a02966dbf2eb44e3e61ea2a399bb43a",
+        "digest": "sha256:edb1cf0bbcf663d177916592d2f1b4361a02966dbf2eb44e3e61ea2a399bb43a",
+        "sizeBytes": 716972,
+        "manifest": {
+          "name": "jq",
+          "version": "0.3.3",
+          "provides": null,
+          "commands": [
+            {
+              "command": "jq",
+              "entry": "bin/jq"
+            }
+          ],
+          "man_pages": []
+        }
+      }
+    ],
+    "successfulRuns": 25,
+    "descriptorCases": 5,
+    "cwdCases": 5,
+    "receiptSha256": "4691237bbe23d50ff6e42a5b310e9553f1c9887aa9c88c2b81947aaab131535f",
+    "scope": "Authenticated HTTP API, with functions/loops, shell and jq composition, scripts, descriptor execution, file effects and explicit scoped reclamation."
+  },
+  "reproduction": {
+    "unchangedGuest": true,
+    "runtimeBeforeSha256": "24906ba091af0dce87c7e6e324beb36975b6f88c759b4108d62f575208058f34",
+    "runtimeAfterSha256": "5ac447f28c3fff0f61fd3bfe64fbbf86f0b6acafae6f61a65224fec0fd90ac8a",
+    "symptom": "Reedline failed with WASI host request budget exceeded before saving its interactive checkpoint.",
+    "completedSuspensionsBeforeFailure": {
+      "clock": 245,
+      "poll": 4,
+      "flush": 4,
+      "random": 1,
+      "pathStat": 1,
+      "open": 1
+    },
+    "fuelSliceYields": 2,
+    "initialFixtureIssue": "Preloaded cursor responses did not satisfy every native DSR query. The fixture now answers actual observed queries through native stdin writes before advancing to the handover deadline."
+  },
+  "change": {
+    "nativeOwner": "crates/wasi/src/lib.rs suspend",
+    "clockObservations": "Clock requests do not consume the I/O request allowance. They still use the native Effect clock and Wasmi fuel.",
+    "remainingBudget": "Randomness, polling, filesystem work and other suspended host requests retain the shared 256-call ceiling.",
+    "clockDriver": "The optional acknowledged-output marker keeps the request-local native TestClock at small steps during terminal negotiation, then advances to the original absolute handover deadline. Existing fixtures retain their first-output behavior.",
+    "terminalWrites": "Cursor replies complete without interruption; accepted stdin offsets are read from the native owner before subsequent writes."
+  },
+  "localVerification": {
+    "clockAndRecovery": {
+      "tests": 3,
+      "assertions": 42,
+      "seconds": 27.66,
+      "clockRegression": [
+        "300 monotonic reads succeed",
+        "257 subsequent random requests fail with acknowledged clock output retained",
+        "an infinite clock loop fails by Wasmi fuel",
+        "Worker remains usable after failures"
+      ]
+    },
+    "finalRecoveryDriver": {
+      "tests": 2,
+      "assertions": 34,
+      "seconds": 18.5,
+      "minimalMilliseconds": 6821.06,
+      "reedlineMilliseconds": 11250.09,
+      "checks": [
+        "R2-backed checkpoint at the existing lease boundary",
+        "old Worker closed before replacement opens the same native store",
+        "partial command resumes with retained output",
+        "exit status seven",
+        "first command output and file append occur once",
+        "duplicate native Queue delivery retains the identical result and file"
+      ]
+    },
+    "fullCheck": {
+      "command": "bun run check",
+      "status": "passed",
+      "tests": 406,
+      "files": 86,
+      "assertions": 5843,
+      "seconds": 256.15,
+      "scope": "Native build, SDK build, TypeScript, Clippy with warnings denied, Cargo tests and the complete two-worker native Bun suite."
+    },
+    "benchmark": "bun run bench passed; complete report in shell-clock-budget-benchmark-local.json, without a before/after or production performance claim."
+  },
+  "limits": [
+    "The 0.18.0 clock budget change and rebuilt-guest interactive recovery are local proofs until the matching runtime is delivered.",
+    "The production binding/software runs validate the rebuilt shell on runtime 0.17.0; they do not establish the 0.18.0 interactive recovery behavior in production.",
+    "The marker-clock coordination is test-only and does not add a production timing flag.",
+    "The shared non-clock host-request ceiling, total fuel, deadlines and capability expiry still bound sessions; arbitrary indefinite execution is not established.",
+    "No production cost, latency, maximum-memory or AgentOS performance comparison is claimed."
+  ]
+}

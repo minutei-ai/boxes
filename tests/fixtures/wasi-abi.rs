@@ -284,6 +284,31 @@ pub extern "C" fn run() -> i32 {
         }
         return 42;
     }
+    if cfg!(case = "clock-budget") || cfg!(case = "clock-then-budget") || cfg!(case = "clock-spin")
+    {
+        let mut previous = 0u64;
+        let mut reads = 0;
+        while reads < 300 || cfg!(case = "clock-spin") {
+            let mut current = 0u64;
+            if unsafe { clock_time_get(1, 0, &mut current) } != 0 || current < previous {
+                return -1;
+            }
+            previous = current;
+            reads += 1;
+        }
+        if write(1, b"clock-observed\n") != 0 {
+            return -1;
+        }
+        if cfg!(case = "clock-then-budget") {
+            let mut byte = 0u8;
+            for _ in 0..257 {
+                if unsafe { random_get(&mut byte, 1) } != 0 {
+                    return -1;
+                }
+            }
+        }
+        return 42;
+    }
     if cfg!(case = "escape") {
         return match open(3, b"../escape", 1, 64, 0, 1) {
             Ok(_) => -1,

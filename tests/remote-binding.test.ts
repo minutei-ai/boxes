@@ -163,11 +163,14 @@ test(
             limit: 10,
             cursor: null,
           });
-          expect(processes.items.map((run) => run.id).toSorted()).toEqual([
-            "rpc-callback",
-            "rpc-void",
-            ...publishedInterpreterCases.map((probe) => probe.id).toSorted(),
-          ]);
+          expect(processes.items.map((run) => run.id).toSorted()).toEqual(
+            [
+              "rpc-callback",
+              "rpc-void",
+              ...publishedInterpreterCases.map((probe) => probe.id),
+              ...proof.shellCwd.map((probe) => probe.id),
+            ].toSorted(),
+          );
           yield* prepareDescriptorProof(manager, id);
           const descriptorResponse = yield* Effect.promise(() =>
             fetch(new URL("/descriptors", proxy.env.URLS[0]), {

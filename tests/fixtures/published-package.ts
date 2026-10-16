@@ -6,10 +6,7 @@ export const downloadPublished = Effect.fn("fixtures.downloadPublished")(functio
   software: (typeof publishedPackages)[number],
 ) {
   const response = yield* Effect.tryPromise(() =>
-    fetch(
-      `https://releases.rivet.dev/agent-os/latest/software/packages/${software.name}/${software.digest}.aospkg`,
-      { signal: AbortSignal.timeout(30000) },
-    ),
+    fetch(software.url, { signal: AbortSignal.timeout(30000) }),
   );
   if (response.status !== 200)
     return yield* Effect.die({ package: software.name, status: response.status });

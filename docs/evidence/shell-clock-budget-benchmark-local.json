@@ -1,0 +1,146 @@
+{
+  "version": "0.18.0",
+  "scope": "Native Alchemy workerd and local R2 benchmark for the clock-budget source candidate. No alternating reference run was performed; this report does not establish production latency, billing, maximum memory or a speed improvement.",
+  "wasiRuntimeSha256": "5ac447f28c3fff0f61fd3bfe64fbbf86f0b6acafae6f61a65224fec0fd90ac8a",
+  "report": {
+    "measuredAt": "2026-10-16T14:55:09.171Z",
+    "environment": {
+      "runtime": "local workerd via native Alchemy",
+      "alchemy": "2.0.0-beta.83",
+      "production": false,
+      "platform": "linux",
+      "arch": "x64"
+    },
+    "artifactBytes": {
+      "javascript": 379792,
+      "kernelWasm": 1139581,
+      "wasiWasm": 1699454,
+      "pythonWasm": 10719083,
+      "guestWasm": 1129863,
+      "compilerWasm": 1943596
+    },
+    "measurements": {
+      "fullEightMiB": {
+        "count": 25,
+        "p50Ms": 112.6181710000019,
+        "p95Ms": 153.59039200000188,
+        "minMs": 88.07130999999936,
+        "maxMs": 197.59912299999996
+      },
+      "appendToEightMiB": {
+        "count": 25,
+        "p50Ms": 24.32615900000019,
+        "p95Ms": 30.605351999998675,
+        "minMs": 20.943631000001915,
+        "maxMs": 36.459704000000784
+      },
+      "resizeEightMiBTail": {
+        "count": 25,
+        "p50Ms": 15.428426000002219,
+        "p95Ms": 21.403378999999404,
+        "minMs": 11.885549000002356,
+        "maxMs": 22.099813000000722
+      },
+      "rangeFourKiB": {
+        "count": 25,
+        "p50Ms": 6.293593000002147,
+        "p95Ms": 9.156683000001067,
+        "minMs": 4.883888000000297,
+        "maxMs": 25.84555100000216
+      },
+      "patchFourKiB": {
+        "count": 25,
+        "p50Ms": 37.20298399999956,
+        "p95Ms": 43.17707599999994,
+        "minMs": 30.344401000002108,
+        "maxMs": 43.720478999999614
+      },
+      "python": {
+        "count": 25,
+        "p50Ms": 81.80809600000066,
+        "p95Ms": 100.7981749999999,
+        "minMs": 59.38971800000036,
+        "maxMs": 248.9289579999986
+      },
+      "sequentialEightFiles": {
+        "count": 25,
+        "p50Ms": 134.1071409999995,
+        "p95Ms": 156.81964000000016,
+        "minMs": 118.81333599999925,
+        "maxMs": 163.79445599999963
+      },
+      "batchEightFiles": {
+        "count": 25,
+        "p50Ms": 52.35538400000041,
+        "p95Ms": 70.28338299999996,
+        "minMs": 44.40422200000012,
+        "maxMs": 73.53484500000013
+      },
+      "status": {
+        "count": 100,
+        "p50Ms": 3.038620000000037,
+        "p95Ms": 5.024180999999999,
+        "minMs": 2.760379000000057,
+        "maxMs": 6.702622999999903
+      },
+      "write256KiB": {
+        "count": 25,
+        "p50Ms": 17.815124999999853,
+        "p95Ms": 26.767140000000154,
+        "minMs": 14.90728399999989,
+        "maxMs": 37.876576000000114
+      },
+      "read256KiB": {
+        "count": 25,
+        "p50Ms": 7.0153080000000045,
+        "p95Ms": 10.316981000000169,
+        "minMs": 6.325237999999899,
+        "maxMs": 13.812629000000015
+      },
+      "isolatedJavascript": {
+        "count": 25,
+        "p50Ms": 27.172935999999936,
+        "p95Ms": 33.31242899999961,
+        "minMs": 24.997009000000617,
+        "maxMs": 190.60869100000036
+      },
+      "detachedJavascript": {
+        "count": 25,
+        "p50Ms": 133.52002599999832,
+        "p95Ms": 142.34440399999949,
+        "minMs": 125.522930000001,
+        "maxMs": 152.69348499999978
+      },
+      "wasiFileAndSync": {
+        "count": 25,
+        "p50Ms": 71.46636899999976,
+        "p95Ms": 91.24664400000074,
+        "minMs": 60.25485200000003,
+        "maxMs": 201.74159300000065
+      },
+      "shellPipeline": {
+        "count": 25,
+        "p50Ms": 40.86855300000025,
+        "p95Ms": 54.087760000000344,
+        "minMs": 35.78648599999906,
+        "maxMs": 57.83700499999941
+      }
+    },
+    "wasiPublication": {
+      "samples": 25,
+      "rootPublications": 25
+    },
+    "batchPublication": {
+      "filesPerSample": 8,
+      "samples": 25,
+      "sequentialPublications": 200,
+      "batchPublications": 25
+    },
+    "contentDeduplication": {
+      "singleFileWrites": 25,
+      "uniqueBlocks": 1,
+      "singleFileLogicalBytesWritten": 6553600,
+      "storedBlockBytes": 262144
+    }
+  }
+}

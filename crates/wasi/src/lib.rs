@@ -737,9 +737,11 @@ fn suspend(
     completion: Completion,
 ) -> Result<i32, Failure> {
     let state = caller.data_mut();
-    state.requests.set(state.requests.get() + 1);
-    if state.requests.get() > 256 {
-        return Err(Failure::Budget);
+    if !matches!(&request, Request::Clock { .. }) {
+        state.requests.set(state.requests.get() + 1);
+        if state.requests.get() > 256 {
+            return Err(Failure::Budget);
+        }
     }
     state.pending = Some(Pending {
         request,

@@ -10,6 +10,7 @@ import * as BunServices from "@effect/platform-bun/BunServices";
 import { FetchHttpClient } from "effect/http";
 import { CloudflareApiLive, createEdgeSession } from "alchemy/Cloudflare";
 import { currentProfileName } from "alchemy/Auth/Profile";
+import { PackagePreparation } from "../src/contracts";
 import { AuthProviders } from "alchemy/Auth/AuthProvider";
 import { layerNonInteractive } from "alchemy/Interaction";
 import { make } from "../dist/sdk/sdk.js";
@@ -35,6 +36,7 @@ const Report = Schema.Struct({
   replacementPreviewOrigin: Schema.String,
   consumerBundleSha256: Schema.String,
   sdkVersion: Schema.String,
+  shellPackage: PackagePreparation.fields.installed,
   sdkModulesSha256: Schema.Record(Schema.String, Schema.String),
   inlineDeadline: Schema.Struct({
     requestedMs: Schema.Literal(remoteRpcTimeoutMs),
@@ -112,7 +114,7 @@ const report = await Effect.runPromise(
         content: packageBytes.toString("base64"),
         encoding: "base64",
       });
-      yield* manager.action(id, {
+      const shellPackage = yield* manager.action(id, {
         op: "software.install",
         source: { path: "/tmp/binding-sh.aospkg", digest: `sha256:${software.digest}` },
       });
@@ -321,6 +323,7 @@ const report = await Effect.runPromise(
         replacementPreviewOrigin: replacement.url,
         consumerBundleSha256,
         sdkVersion: version,
+        shellPackage,
         sdkModulesSha256,
         inlineDeadline,
         proof,

@@ -1,6 +1,7 @@
 import { DescriptorProof, descriptorProof } from "../tests/fixtures/descriptor-proof";
 import { prepareDescriptorProof } from "../tests/fixtures/descriptor-proof-inputs";
 import { downloadPublished } from "../tests/fixtures/published-package";
+import { ShellCwdProof, shellCwdProof } from "../tests/fixtures/shell-cwd-proof";
 import { Clock, Config, Crypto, Effect, Redacted, Schema } from "effect";
 import { BunCrypto } from "@effect/platform-bun";
 import { FetchHttpClient } from "effect/http";
@@ -21,6 +22,7 @@ const Report = Schema.Struct({
   packages: Schema.Array(PackagePreparation.fields.installed),
   runs: Schema.Array(RunRecord),
   descriptors: DescriptorProof,
+  shellCwd: ShellCwdProof,
 });
 const report = await Effect.runPromise(
   Effect.scoped(
@@ -165,6 +167,7 @@ const report = await Effect.runPromise(
         path: "/tmp/private",
         follow: true,
       });
+      const shellCwd = yield* shellCwdProof(client, id, "sh", "/opt/cirro/bin/sh");
       if ((privateFile.mode & 0o777) !== 0o600)
         return yield* Effect.die("Published sh did not apply its creation mask");
       const pipeline = yield* client.action(id, {
@@ -186,6 +189,7 @@ const report = await Effect.runPromise(
         measuredAt: yield* Clock.currentTimeMillis,
         packages,
         descriptors,
+        shellCwd,
         runs: [...interpreted, ...jq, ...shell, pipeline],
       };
     }),
