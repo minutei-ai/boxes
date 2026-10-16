@@ -190,6 +190,7 @@ enum Request {
         path: Option<String>,
         fd: Option<u32>,
         cwd: String,
+        synchronize_cwd: bool,
         argv: Vec<String>,
         env: BTreeMap<String, String>,
     },
@@ -1301,9 +1302,25 @@ fn dispatch(caller: &mut Caller<'_, State>, name: &str, args: &[u64]) -> Result<
                     .group = group;
             }
         }
-        "proc_exec" | "proc_fexec" => {
-            let shift = usize::from(name == "proc_exec");
-            let (path, fd) = if name == "proc_exec" {
+        "proc_exec" | "proc_fexec" | "proc_exec_v2" | "proc_fexec_v2" => {
+            let direct = matches!(name, "proc_exec" | "proc_exec_v2");
+            let shift = usize::from(direct);
+            let synchronize_cwd = matches!(name, "proc_exec_v2" | "proc_fexec_v2");
+            let cwd = if synchronize_cwd {
+                if a[8 + shift] > 4096 {
+                    return Err(Failure::Errno(28));
+                }
+                let raw = bytes(caller, a[7 + shift], a[8 + shift])?;
+                if raw.first() != Some(&b'/') || raw.contains(&0) {
+                    return Err(Failure::Errno(28));
+                }
+                std::str::from_utf8(&raw)
+                    .map_err(|_| Failure::Errno(25))?
+                    .to_string()
+            } else {
+                caller.data().cwd.clone()
+            };
+            let (path, fd) = if direct {
                 let raw = bytes(caller, a[0], a[1])?;
                 if raw.is_empty() {
                     return Err(Failure::Errno(44));
@@ -1380,7 +1397,8 @@ fn dispatch(caller: &mut Caller<'_, State>, name: &str, args: &[u64]) -> Result<
                 Request::Exec {
                     path,
                     fd,
-                    cwd: caller.data().cwd.clone(),
+                    cwd,
+                    synchronize_cwd,
                     argv,
                     env,
                 },
@@ -3560,6 +3578,8 @@ fn linker(engine: &Engine) -> Result<Linker<State>, String> {
     bind!("host_process","proc_getppid",a:i32);
     bind!("host_process","proc_exec",a:i32,b:i32,c:i32,d:i32,e:i32,f:i32,g:i32,h:i32);
     bind!("host_process","proc_fexec",a:i32,b:i32,c:i32,d:i32,e:i32,f:i32,g:i32);
+    bind!("host_process","proc_exec_v2",a:i32,b:i32,c:i32,d:i32,e:i32,f:i32,g:i32,h:i32,i:i32,j:i32);
+    bind!("host_process","proc_fexec_v2",a:i32,b:i32,c:i32,d:i32,e:i32,f:i32,g:i32,h:i32,i:i32);
     for (name, count) in [("proc_spawn_v3", 17), ("proc_spawn_v4", 21)] {
         linker
             .func_new(
@@ -4643,7 +4663,12 @@ impl WasmGuest {
             .map_err(|error| JsValue::from_str(&error.to_string()))
     }
 
-    pub fn replace_image(&mut self, bytes: &[u8], configuration: &str) -> Result<(), JsValue> {
+    pub fn replace_image(
+        &mut self,
+        bytes: &[u8],
+        configuration: &str,
+        cwd: &str,
+    ) -> Result<(), JsValue> {
         let closed = match self
             .store
             .data()
@@ -4682,6 +4707,7 @@ impl WasmGuest {
             Err(_) => return self.respond(45, &[], "/", false, 0, &[]),
         };
         replacement.fuel_limit = self.fuel_limit;
+        replacement.store.data_mut().cwd = cwd.into();
         *replacement.store.data().raw_leases.borrow_mut() =
             std::mem::take(&mut *self.store.data().raw_leases.borrow_mut());
         let state = replacement.store.data();

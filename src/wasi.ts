@@ -611,6 +611,25 @@ export const wasi = Effect.fn("wasi.execute")(function* (
                 Effect.gen(function* () {
                   yield* requirePermission(capability, "execute");
                   yield* requirePermission(capability, "read");
+                  const cwd = yield* Effect.gen(function* () {
+                    if (!input.synchronizeCwd) return input.cwd;
+                    const directory = yield* kernelCall(() => kernel.stat(input.cwd, true)).pipe(
+                      Effect.flatMap(Schema.decodeUnknownEffect(Schema.fromJsonString(FileStat))),
+                    );
+                    if (directory.kind !== "directory")
+                      return yield* new Fault({
+                        code: "ENOTDIR",
+                        status: 400,
+                        message: "Exec cwd is not a directory",
+                      });
+                    if ((directory.mode & 0o111) === 0)
+                      return yield* new Fault({
+                        code: "EACCES",
+                        status: 403,
+                        message: "Exec cwd is not searchable",
+                      });
+                    return directory.path;
+                  });
                   const image = yield* Effect.gen(function* () {
                     if (input.fd !== null) {
                       const fd = input.fd;
@@ -624,7 +643,7 @@ export const wasi = Effect.fn("wasi.execute")(function* (
                         kernel,
                         `/dev/fd/${fd}`,
                         input.argv,
-                        input.cwd,
+                        cwd,
                         Buffer.from(bytes.buffer, bytes.byteOffset, bytes.byteLength),
                       );
                     }
@@ -637,16 +656,9 @@ export const wasi = Effect.fn("wasi.execute")(function* (
                     const image = input.path;
                     const path = Match.value(image.startsWith("/")).pipe(
                       Match.when(true, () => image),
-                      Match.orElse(() => `${input.cwd}/${image}`),
+                      Match.orElse(() => `${cwd}/${image}`),
                     );
-                    return yield* loadExecutable(
-                      env,
-                      capability,
-                      kernel,
-                      path,
-                      input.argv,
-                      input.cwd,
-                    );
+                    return yield* loadExecutable(env, capability, kernel, path, input.argv, cwd);
                   });
                   yield* Effect.try({
                     try: () =>
@@ -656,7 +668,8 @@ export const wasi = Effect.fn("wasi.execute")(function* (
                           Schema.fromJsonString(
                             WasmConfiguration.mapFields((fields) => Struct.omit(fields, ["stdin"])),
                           ),
-                        )({ argv: image.argv, env: { ...input.env, PWD: input.cwd } }),
+                        )({ argv: image.argv, env: { ...input.env, PWD: cwd } }),
+                        cwd,
                       ),
                     catch: (cause) => new WasmFailure({ cause }),
                   });

@@ -1,0 +1,55 @@
+--- a/toolchain/crates/wasi-ext/src/lib.rs
++++ b/toolchain/crates/wasi-ext/src/lib.rs
+@@ -117,6 +117,18 @@
+     ) -> Errno;
+ 
+     /// Replace the current process image. Success never returns.
++    fn proc_exec_v2(
++        exec_path_ptr: *const u8,
++        exec_path_len: u32,
++        argv_ptr: *const u8,
++        argv_len: u32,
++        envp_ptr: *const u8,
++        envp_len: u32,
++        cloexec_fds_ptr: *const u32,
++        cloexec_fds_len: u32,
++        cwd_ptr: *const u8,
++        cwd_len: u32,
++    ) -> Errno;
+     fn proc_exec(
+         exec_path_ptr: *const u8,
+         exec_path_len: u32,
+@@ -503,6 +515,33 @@
+     exec_with_cloexec(exec_path, argv, envp, &[])
+ }
+ 
++pub fn exec_in(
++    exec_path: &[u8],
++    argv: &[u8],
++    envp: &[u8],
++    cwd: &[u8],
++) -> Result<core::convert::Infallible, Errno> {
++    let errno = unsafe {
++        proc_exec_v2(
++            exec_path.as_ptr(),
++            checked_u32_len(exec_path.len())?,
++            argv.as_ptr(),
++            checked_u32_len(argv.len())?,
++            envp.as_ptr(),
++            checked_u32_len(envp.len())?,
++            core::ptr::null(),
++            0,
++            cwd.as_ptr(),
++            checked_u32_len(cwd.len())?,
++        )
++    };
++    Err(if errno == ERRNO_SUCCESS {
++        ERRNO_IO
++    } else {
++        errno
++    })
++}
++
+ /// Replace the current process image and close the supplied descriptors on a
+ /// successful replacement. Returns only when the host rejects the request.
+ pub fn exec_with_cloexec(

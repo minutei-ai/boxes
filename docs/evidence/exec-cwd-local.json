@@ -1,0 +1,258 @@
+{
+  "status": "Local source candidate 0.17.0: explicit cwd works in native exec/fexec and the rebuilt Rust shell. The deployed runtime remains 0.16.0 and the digest-pinned published sh guest is unchanged. Full local parallel test timeouts remain under investigation; the complete serial suite passed.",
+  "version": "0.17.0",
+  "baseCommit": "3a3ff53f74b489ba2bdbdca6b2bde8b467db2dd6",
+  "sourceInputsSha256": {
+    "crates/wasi/src/lib.rs": "67532f28f29fa617f43a1a2e0ed26f8576fc5f0e39ad89ff7d31347a94d1473f",
+    "src/contracts.ts": "a76642c841c347b20c921f8706e5fb0626a9c105c0ccf30bce8a1e0ef87d46ad",
+    "src/wasi.ts": "61f15f32ad80ced04bf0d562016f3ef5854d43420b536e0b898832303861dc98",
+    "tests/exec-cwd.test.ts": "de911d784c4697c30d10531a660eb637d75c61eadf1b4ab8a0b6ddf444b5374a",
+    "tests/fixtures/wasi-exec-cwd.rs": "370b3ae5339932bf883269fd48da2daa1b5a47beedcce58fdc2ce850207436d9",
+    "tooling/shell-cwd-proof.ts": "c68cf8f135f865b4e216d00811e2f2f0bd2a446e20a3e7aff8f91f38740228fe",
+    "tooling/guest-patches/wasi-ext-exec-cwd.patch": "c0231225b3d116113aa74de083b14c1404582c392bb2f578d8ad846058db7a0d",
+    "tooling/guest-patches/brush-exec-cwd.patch": "e7c85316b39edbc0eb8bf9c1e7d19a0be5df74f78e0238cf4605fc01d070b6b3"
+  },
+  "upstream": {
+    "repository": "https://github.com/rivet-dev/agentos",
+    "commit": "4d48628304c1ddedafc9d55f60752093fcf6f3d2",
+    "brushBuiltins": "0.1.0",
+    "rust": "nightly-2026-03-01",
+    "wasiSdk": "25",
+    "wasiLibc": "574b88da481569b65a237cb80daf9a2d5aeaf82d"
+  },
+  "reproduction": {
+    "command": "cd /tmp/context; exec ./script hello",
+    "publishedPackageSha256": "f606cc4caa9ba50f7022d681269ca0ea98ccffc0d29f3106a0f18ab593c59412",
+    "publishedShellSha256": "80be7eaa5a17400d3c078a191962cb022920f1f4d22798e44626cafdda192f0c",
+    "publishedShellExitCode": 127,
+    "expectedExitCode": 0,
+    "seam": "The same shell-cwd-proof.ts command rejects the original published shell and accepts the rebuilt shell through native service bindings."
+  },
+  "verification": {
+    "runtimeBuild": "passed",
+    "sdkBuild": "passed",
+    "typescript": "passed",
+    "clippy": "passed with warnings denied",
+    "cargoTests": "passed",
+    "format": "passed",
+    "focusedTests": {
+      "passed": 51,
+      "failed": 0,
+      "assertions": 420,
+      "tests": 51,
+      "files": 5,
+      "seconds": 27.16
+    },
+    "finalExecAdmissionTests": {
+      "result": "see separately recorded failures"
+    },
+    "completeSerialSuite": {
+      "command": "bun test --parallel=1",
+      "passed": 402,
+      "failed": 0,
+      "assertions": 5787,
+      "tests": 402,
+      "files": 83,
+      "seconds": 417.48
+    },
+    "parallelRuns": {
+      "firstCompleteRun": {
+        "result": "passed before the final additional admission cases",
+        "passed": 402,
+        "failed": 0,
+        "assertions": 5782,
+        "tests": 402,
+        "files": 83,
+        "seconds": 214.72
+      },
+      "finalCheck": {
+        "command": "bun run check",
+        "result": "401 passed, 1 existing terminal-attributes test exceeded its 5 second wall budget; build, SDK, TypeScript, Clippy and Cargo gates passed",
+        "seconds": 215.38
+      },
+      "rerun": {
+        "command": "bun run test",
+        "result": "395 passed, 7 failed and 2 errors. Three tests exceeded their 5 second wall budgets; later output cases failed after their workerd process was killed.",
+        "seconds": 263.43
+      },
+      "terminalRecheck": {
+        "result": "see separately recorded failures"
+      },
+      "narrowRegistryDifferential": [
+        {
+          "phase": 0,
+          "mode": "shared",
+          "exitCode": 0,
+          "seconds": 11.298629387005349,
+          "log": "registry-0-shared.log"
+        },
+        {
+          "phase": 1,
+          "mode": "private",
+          "exitCode": 0,
+          "seconds": 11.886772991012549,
+          "log": "registry-1-private.log"
+        },
+        {
+          "phase": 2,
+          "mode": "private",
+          "exitCode": 0,
+          "seconds": 12.064183328999206,
+          "log": "registry-2-private.log"
+        },
+        {
+          "phase": 3,
+          "mode": "shared",
+          "exitCode": 0,
+          "seconds": 11.853308981997543,
+          "log": "registry-3-shared.log"
+        }
+      ],
+      "narrowRunnerDifferential": [
+        {
+          "mode": "parallel-isolated",
+          "flags": ["--parallel=2"],
+          "exitCode": 0,
+          "seconds": 37.19251877001079,
+          "log": "runner-parallel-isolated.log"
+        },
+        {
+          "mode": "serial-isolated",
+          "flags": ["--parallel=1"],
+          "exitCode": 0,
+          "seconds": 63.33808045400656,
+          "log": "runner-serial-isolated.log"
+        },
+        {
+          "mode": "parallel-cached",
+          "flags": ["--parallel=2", "--no-isolate"],
+          "exitCode": 0,
+          "seconds": 34.55552508299297,
+          "log": "runner-parallel-cached.log"
+        }
+      ],
+      "assessment": "Narrow batches passed in every tested mode. These observations do not establish the cause of the full parallel timeout. Default parallelism and test timeouts are unchanged; diagnostic instrumentation was removed."
+    },
+    "rebuiltShell": {
+      "bytes": 3459705,
+      "secondBuildIdenticalSha256": true,
+      "proof": {
+        "shellSha256": "22c8e751be3799d221b6068082a87bf14477d249f9989069497a0910fba53432",
+        "wasiRuntimeSha256": "24906ba091af0dce87c7e6e324beb36975b6f88c759b4108d62f575208058f34",
+        "transport": "native Alchemy workerd Agent service binding and local R2",
+        "processes": [
+          {
+            "id": "direct",
+            "result": {
+              "id": "direct",
+              "status": "exited",
+              "sourceHash": "e44a92bff0b3be0105b452c12ac8286c905c68517ffa1693c3d59029909ad177",
+              "language": "wasm",
+              "startedAt": 1792154802991,
+              "finishedAt": 1792154803895,
+              "output": {
+                "stdout": "/tmp/context|/tmp/context/script|hello\n",
+                "stderr": "",
+                "result": null,
+                "exitCode": 0
+              }
+            }
+          },
+          {
+            "id": "absolute",
+            "result": {
+              "id": "absolute",
+              "status": "exited",
+              "sourceHash": "7bb4d0986a8f0e0d1b231b629843f339af604b8af4eb8db289d0c7b6325991ed",
+              "language": "wasm",
+              "startedAt": 1792154803962,
+              "finishedAt": 1792154804571,
+              "output": {
+                "stdout": "/tmp/context\n",
+                "stderr": "",
+                "result": null,
+                "exitCode": 0
+              }
+            }
+          },
+          {
+            "id": "symlink",
+            "result": {
+              "id": "symlink",
+              "status": "exited",
+              "sourceHash": "56848632cf27af66be81b8f2f970af11d3395ecf78b28d125d695d27cbf45e61",
+              "language": "wasm",
+              "startedAt": 1792154804623,
+              "finishedAt": 1792154805204,
+              "output": {
+                "stdout": "/tmp/context|/tmp/link/script|hello\n",
+                "stderr": "",
+                "result": null,
+                "exitCode": 0
+              }
+            }
+          },
+          {
+            "id": "spoofed-pwd",
+            "result": {
+              "id": "spoofed-pwd",
+              "status": "exited",
+              "sourceHash": "4413d34b4cba754ce44dbf3d70a26cf4311a697af72e432616f8a66b70090da2",
+              "language": "wasm",
+              "startedAt": 1792154805259,
+              "finishedAt": 1792154805825,
+              "output": {
+                "stdout": "/tmp/context|/tmp/context/script|hello\n",
+                "stderr": "",
+                "result": null,
+                "exitCode": 0
+              }
+            }
+          },
+          {
+            "id": "empty-environment",
+            "result": {
+              "id": "empty-environment",
+              "status": "exited",
+              "sourceHash": "6e187b1d0a788ee09db1ace7784ad1b9758f1b200e1bdc938974c79149f04b67",
+              "language": "wasm",
+              "startedAt": 1792154805870,
+              "finishedAt": 1792154806408,
+              "output": {
+                "stdout": "/tmp/context|/tmp/context/script|hello\n",
+                "stderr": "",
+                "result": null,
+                "exitCode": 0
+              }
+            }
+          }
+        ]
+      }
+    },
+    "generalBenchmark": {
+      "command": "bun run bench",
+      "result": "passed",
+      "report": "docs/evidence/exec-cwd-benchmark-local.json",
+      "limit": "General local workload baseline, not a before/after cwd benchmark or production performance/cost comparison."
+    }
+  },
+  "behavior": [
+    "Absolute, UTF-8, NUL-free cwd bounded to 4096 bytes before copying",
+    "One native kernel stat resolves and validates the explicit cwd; it is independent of environment PWD",
+    "Successful admission retains PID and commits the physical cwd with the replacement image",
+    "Invalid cwd, descriptor, read authority and image admission preserve the prior cwd",
+    "Native tests cover exec, fexec, subsequent existing exec and sandbox authority isolation"
+  ],
+  "delivery": {
+    "sourceCI": "pending",
+    "newGuestPublished": false,
+    "runtimeDeployed": false,
+    "recipe": "tooling/guest-patches/README.md"
+  },
+  "limits": [
+    "The digest-pinned published sh package still reproduces the original failure.",
+    "Rebuilt guest distribution, matching remote runtime and production proof remain delivery gates.",
+    "General C libc cwd synchronization and complete AgentOS parity remain open.",
+    "The existing patched-libc startup convention supplies PWD from the validated cwd. Strict POSIX envp preservation and environment-clearing conformance are not established by the exec -c probe."
+  ]
+}

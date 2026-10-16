@@ -695,6 +695,7 @@ export const WasiOpen = Schema.Struct({
 export const WasmStep = Schema.Union([
   Schema.Struct({
     kind: Schema.Literal("exec"),
+    synchronizeCwd: Schema.Boolean,
     path: Schema.NullOr(Schema.String.check(Schema.isMinLength(1), Schema.isMaxLength(4096))),
     fd: Schema.NullOr(Schema.Int),
     cwd: Path,
