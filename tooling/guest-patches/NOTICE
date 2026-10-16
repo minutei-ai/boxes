@@ -1,0 +1,28 @@
+Boxes sh guest
+Copyright 2026 Minutei AI contributors
+
+This guest is derived from Rivet agentOS, licensed under Apache-2.0:
+https://github.com/rivet-dev/agentos/tree/4d48628304c1ddedafc9d55f60752093fcf6f3d2
+
+Boxes changes, dated 2026-10-16, add an explicit working-directory argument
+to the native Rust exec import and pass Brush's actual working directory
+when replacing a process image. The source patches and build recipe are
+maintained at https://github.com/minutei-ai/boxes/tree/main/tooling/guest-patches
+
+Brush is Copyright (c) 2024 reuben olinsky, licensed under MIT.
+Its unchanged license is included as brush-LICENSE-MIT.
+
+THIRD-PARTY-LICENSES.txt contains cargo-about's selected dependency license
+texts, copyright notices and component inventory for cmd-sh, targeting
+wasm32-wasip1. Build dependencies are included; development dependencies
+are excluded. The Rust standard library's supplied copyright inventory
+is retained in Rust-COPYRIGHT-library.html. Additional Rust, wasi-libc,
+musl, cloudlibc, musl-fts and LLVM runtime license files accompany it.
+
+The guest uses the dedicated nightly-2026-03-01 Rust toolchain, wasi-sdk 25,
+wasi-libc 574b88da481569b65a237cb80daf9a2d5aeaf82d and LLVM runtimes 19.1.5,
+with the source patches supplied by the pinned Rivet checkout.
+
+wasi-libc's dlmalloc is written by Doug Lea and released to the public domain:
+https://creativecommons.org/publicdomain/zero/1.0/
+https://github.com/WebAssembly/wasi-libc/blob/574b88da481569b65a237cb80daf9a2d5aeaf82d/dlmalloc/src/malloc.c

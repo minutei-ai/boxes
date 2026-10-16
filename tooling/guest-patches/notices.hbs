@@ -6,9 +6,13 @@ Boxes sh third-party dependency notices Components:
 {{/each}}
 
 License texts:
-{{#each overview}}
+{{#each licenses}}
   {{name}}
-  ({{id}})
+  ({{id}}) Used by:
+  {{#each used_by}}
+    {{crate.name}}
+    {{crate.version}}
+  {{/each}}
 
   {{{text}}}
 

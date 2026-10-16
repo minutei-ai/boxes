@@ -12,6 +12,9 @@ git clone https://github.com/rivet-dev/agentos.git /path/to/guest-source
 git -C /path/to/guest-source checkout --detach 4d48628304c1ddedafc9d55f60752093fcf6f3d2
 make -C /path/to/guest-source/toolchain/c sysroot
 make -C /path/to/guest-source/toolchain vendor patch-vendor patch-std
+mkdir -p /path/to/guest-source/.cargo
+mv /path/to/guest-source/toolchain/.cargo/config.toml /path/to/guest-source/.cargo/config.toml
+sed -i 's/directory = "vendor"/directory = "toolchain\/vendor"/' /path/to/guest-source/.cargo/config.toml
 git -C /path/to/guest-source apply /path/to/boxes/tooling/guest-patches/wasi-ext-exec-cwd.patch
 git -C /path/to/guest-source apply --directory=toolchain/vendor/brush-builtins /path/to/boxes/tooling/guest-patches/brush-exec-cwd.patch
 make -C /path/to/guest-source/toolchain -o vendor -o patch-vendor -o patch-std -o wasm-opt-check wasm-cmd CMD=sh
@@ -20,7 +23,7 @@ bun run build
 bun tooling/shell-cwd-proof.ts /path/to/guest-source/toolchain/target/wasm32-wasip1/release/sh.wasm
 ```
 
-The proof consumes the raw Cargo artifact, before optional `wasm-opt` processing. It runs through native Alchemy workerd, service bindings and R2. Direct relative exec, absolute exec, symlink cwd, an adulterated `PWD` and `exec -c` must all retain the correct directory. Passing the original published `sh` binary to the same proof must fail the direct case with exit 127. Native Rust fixtures separately cover `fexec`, subsequent existing exec calls, malformed pointers/paths, rejected image admission and authorization.
+The proof accepts the raw Cargo artifact, before optional `wasm-opt` processing, or a v2 `.aospkg`. It runs through native Alchemy workerd, service bindings and R2. For packages it installs the digest-pinned artifact through `software.install`, executes the catalog command `sh` and reads back the installed binary and notices. Direct relative exec, absolute exec, symlink cwd, an adulterated `PWD` and `exec -c` must all retain the correct directory. Passing the original published `sh` binary to the same proof must fail the direct case with exit 127. Native Rust fixtures separately cover `fexec`, subsequent existing exec calls, malformed pointers/paths, rejected image admission and authorization.
 
 These patches and the proof do not update the digest-pinned published shell package or establish a production fix. Shipping the rebuilt guest, its source/notice bundle and the matching runtime remains a separate delivery gate. General C libc cwd synchronization is also still open. The runtime retains the existing patched-libc startup convention of supplying `PWD` from the validated cwd, including after `exec -c`; the empty-environment probe does not establish strict POSIX environment-clearing conformance.
 
@@ -28,4 +31,18 @@ Rivet agentOS source is Apache-2.0; see the repository [LICENSE](../../LICENSE).
 
 `cargo run --locked -p boxes-guest-pack -- <sh.wasm> <notices-directory> <output.aospkg>` builds a deterministic shell package using the kernel's generated v2 package schema and the Boxes project version. The notice directory must contain `NOTICE`; regular files are installed under `share/boxes-sh`. The builder rejects symlinks, more than 256 entries, paths deeper than 16 components and notices exceeding 4 MiB. Package generation does not establish license completeness or runtime installation proof.
 
-`about.toml` and `notices.hbs` are inputs for cargo-about 0.9.2 dependency notices. Generating the complete guest notice bundle, validating package installation and publishing it remain delivery gates. The current pinned upstream guest checkout rejects cargo-about's locked metadata resolution; do not remove the lock constraint to claim a reproducible notice bundle.
+`about.toml` and `notices.hbs` are inputs for cargo-about 0.9.2 dependency notices. The template preserves all distinct selected license texts and their component associations. The Cargo source-replacement configuration moves to the upstream repository root because cargo-about starts metadata in the crate directory, outside `toolchain`. Both the build and metadata then resolve the same patched vendor tree. Keep `--locked` and the dedicated toolchain; the upstream lockfile remains unchanged.
+
+With cargo-about 0.9.2 installed, generate the dependency notice from the upstream toolchain directory:
+
+```sh
+cd /path/to/guest-source/toolchain
+RUSTUP_TOOLCHAIN=nightly-2026-03-01 cargo-about generate \
+  --manifest-path ../software/coreutils/native/crates/cmd-sh/Cargo.toml \
+  --config /path/to/boxes/tooling/guest-patches/about.toml \
+  --locked --target wasm32-wasip1 --fail \
+  --output-file /path/to/notices/THIRD-PARTY-LICENSES.txt \
+  /path/to/boxes/tooling/guest-patches/notices.hbs
+```
+
+The notice directory also contains this directory's `NOTICE`, the unchanged Rivet Apache-2.0 license, `brush-LICENSE` as `brush-LICENSE-MIT`, the dedicated Rust toolchain's `share/doc/rust/COPYRIGHT-library.html`, `library/compiler-builtins/LICENSE.txt` and `library/compiler-builtins/libm/LICENSE.txt`. Retain wasi-libc's `LICENSE`, `LICENSE-APACHE`, `LICENSE-APACHE-LLVM`, `LICENSE-MIT`, cloudlibc `LICENSE`, musl `COPYRIGHT` and musl-fts `COPYING`, plus the LLVM source root, libc++, libc++abi and libunwind `LICENSE.TXT` files. Preserve each file unchanged under a component-specific name. Also retain the vendored libm `LICENSE.txt` and [number_prefix 0.4.0's LICENCE](https://github.com/ogham/rust-number-prefix/blob/v0.4.0/LICENCE), which its crate archive excludes. Cargo-about otherwise supplies canonical fallback text for those dependencies; the supplemental files preserve their original notices. Generate the package twice, compare its bytes and run `bun tooling/shell-cwd-proof.ts <output.aospkg>` before distribution. Publishing the guest and matching runtime remains a separate gate.

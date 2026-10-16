@@ -1,4 +1,4 @@
-accepted = ["Apache-2.0", "MIT", "BSD-3-Clause", "Unicode-3.0"]
+accepted = ["Apache-2.0", "MIT", "BSD-2-Clause", "BSD-3-Clause", "Unicode-3.0", "Zlib"]
 targets = ["wasm32-wasip1"]
 ignore-dev-dependencies = true
 ignore-build-dependencies = false

@@ -107,6 +107,7 @@ const run = Effect.fn("build.command")(function* (args: string[]) {
 });
 await Effect.runPromise(
   Effect.gen(function* () {
+    yield* run(["cargo", "build", "-p", "boxes-guest-pack", "--release", "--locked"]);
     yield* run([
       "cargo",
       "build",

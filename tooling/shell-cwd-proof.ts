@@ -8,7 +8,12 @@ import { make, makeBinding } from "../src/sdk";
 import { runtime } from "./worker-test";
 
 const Report = Schema.Struct({
+  artifactFormat: Schema.Literals(["wasm", "aospkg"]),
+  artifactSha256: Schema.String,
   shellSha256: Schema.String,
+  notices: Schema.Array(
+    Schema.Struct({ path: Schema.String, sha256: Schema.String, bytes: Schema.Int }),
+  ),
   wasiRuntimeSha256: Schema.String,
   transport: Schema.Literal("native Alchemy workerd Agent service binding and local R2"),
   processes: Schema.Array(Schema.Struct({ id: Id, result: RunRecord })),
@@ -20,7 +25,7 @@ const proof = await Effect.runPromise(
   Effect.scoped(
     Effect.gen(function* () {
       const bytes = yield* Effect.promise(() => Bun.file(path).bytes());
-      const shellSha256 = Buffer.from(
+      const artifactSha256 = Buffer.from(
         yield* Effect.promise(() => crypto.subtle.digest("SHA-256", bytes)),
       ).toString("hex");
       const wasiRuntime = yield* Effect.promise(() =>
@@ -52,13 +57,90 @@ const proof = await Effect.runPromise(
         },
       });
       const grant = yield* admin.mintCapability(id, {
-        permissions: ["read", "write", "execute"],
+        permissions: ["read", "write", "execute", "manage"],
         expiresInSeconds: 600,
       });
       const client = yield* makeBinding(
         yield* Effect.promise(() => worker.service),
         Redacted.make(grant.token),
       );
+      const artifact = yield* Effect.gen(function* () {
+        if (Buffer.from(bytes.subarray(0, 8)).equals(Buffer.from("\0asm\x01\0\0\0"))) {
+          yield* client.action(id, {
+            op: "filesystem.writeFile",
+            path: "/tmp/boxes-sh.wasm",
+            content: Buffer.from(bytes).toString("base64"),
+            encoding: "base64",
+          });
+          yield* client.action(id, {
+            op: "filesystem.chmod",
+            path: "/tmp/boxes-sh.wasm",
+            mode: 493,
+          });
+          return {
+            format: "wasm" as const,
+            command: "/tmp/boxes-sh.wasm",
+            image: "/tmp/boxes-sh.wasm",
+            shellSha256: artifactSha256,
+            notices: [],
+          };
+        }
+        if (!Buffer.from(bytes.subarray(0, 8)).equals(Buffer.from("\x89AOS\x02\0\0\0", "latin1")))
+          return yield* Effect.die("Expected a Wasm v1 image or a v2 aospkg");
+        yield* client.action(id, {
+          op: "filesystem.writeFile",
+          path: "/tmp/shell.aospkg",
+          content: Buffer.from(bytes).toString("base64"),
+          encoding: "base64",
+        });
+        const installed = yield* client.action(id, {
+          op: "software.install",
+          source: { path: "/tmp/shell.aospkg", digest: `sha256:${artifactSha256}` },
+        });
+        if (installed.manifest.name !== "sh" || installed.digest !== `sha256:${artifactSha256}`)
+          return yield* Effect.die("Installed shell identity does not match its artifact");
+        const binary = yield* client.action(id, {
+          op: "filesystem.readFile",
+          path: "/opt/cirro/bin/sh",
+        });
+        const shellSha256 = Buffer.from(
+          yield* Effect.promise(() =>
+            crypto.subtle.digest("SHA-256", Buffer.from(binary.content, "base64")),
+          ),
+        ).toString("hex");
+        const noticeRoot = `/opt/cirro/pkgs/sh/${installed.manifest.version}/share/boxes-sh`;
+        const entries = yield* client.action(id, {
+          op: "filesystem.readdirRecursive",
+          path: noticeRoot,
+          maxDepth: 16,
+        });
+        if (!entries.some((entry) => entry.path === `${noticeRoot}/NOTICE` && entry.size > 0))
+          return yield* Effect.die("Installed shell has no NOTICE");
+        const notices = yield* Effect.forEach(
+          entries.filter((entry) => entry.type === "file"),
+          Effect.fn("proof.shellCwd.notice")(function* (entry) {
+            const file = yield* client.action(id, {
+              op: "filesystem.readFile",
+              path: entry.path,
+            });
+            const content = Buffer.from(file.content, "base64");
+            return {
+              path: entry.path.slice(noticeRoot.length + 1),
+              sha256: Buffer.from(
+                yield* Effect.promise(() => crypto.subtle.digest("SHA-256", content)),
+              ).toString("hex"),
+              bytes: content.length,
+            };
+          }),
+        );
+        return {
+          format: "aospkg" as const,
+          command: "sh",
+          image: "/opt/cirro/bin/sh",
+          shellSha256,
+          notices,
+        };
+      });
       yield* client.action(id, {
         op: "filesystem.mkdir",
         path: "/tmp/context",
@@ -68,24 +150,21 @@ const proof = await Effect.runPromise(
         op: "filesystem.writeFiles",
         entries: [
           {
-            path: "/tmp/boxes-sh.wasm",
-            content: Buffer.from(bytes).toString("base64"),
-            encoding: "base64",
-          },
-          {
             path: "/tmp/context/script",
             content: '#!./interpreter\nprintf "%s|%s|%s\\n" "$PWD" "$0" "$1"',
             encoding: "utf8",
           },
         ],
       });
-      yield* Effect.forEach(["/tmp/boxes-sh.wasm", "/tmp/context/script"], (path) =>
-        client.action(id, { op: "filesystem.chmod", path, mode: 493 }),
-      );
+      yield* client.action(id, {
+        op: "filesystem.chmod",
+        path: "/tmp/context/script",
+        mode: 493,
+      });
       yield* client.action(id, {
         op: "filesystem.symlink",
         path: "/tmp/context/interpreter",
-        target: "/tmp/boxes-sh.wasm",
+        target: artifact.image,
       });
       yield* client.action(id, {
         op: "filesystem.symlink",
@@ -101,7 +180,7 @@ const proof = await Effect.runPromise(
           },
           {
             id: "absolute",
-            source: 'cd /tmp/context; exec /tmp/boxes-sh.wasm -c \'printf "%s\\n" "$PWD"\'',
+            source: `cd /tmp/context; exec ${artifact.image} -c 'printf "%s\\n" "$PWD"'`,
             stdout: "/tmp/context\n",
           },
           {
@@ -124,7 +203,7 @@ const proof = await Effect.runPromise(
           const result = yield* client.action(id, {
             op: "process.execFile",
             id: probe.id,
-            command: "/tmp/boxes-sh.wasm",
+            command: artifact.command,
             args: ["-c", probe.source],
           });
           if (
@@ -142,7 +221,10 @@ const proof = await Effect.runPromise(
         }),
       );
       return {
-        shellSha256,
+        artifactFormat: artifact.format,
+        artifactSha256,
+        shellSha256: artifact.shellSha256,
+        notices: artifact.notices,
         wasiRuntimeSha256,
         transport: "native Alchemy workerd Agent service binding and local R2" as const,
         processes,

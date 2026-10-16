@@ -143,6 +143,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         });
     }
     let tar = archive.into_inner()?;
+    entries.sort_by(|left, right| left.path.cmp(&right.path));
     let project: serde_json::Value =
         serde_json::from_slice(include_bytes!("../../../package.json"))?;
     let version = project["version"]

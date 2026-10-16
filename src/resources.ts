@@ -12,6 +12,7 @@ export const worker = Effect.gen(function* () {
     bundle: false,
     compatibility: { date: "2026-10-06", flags: ["nodejs_compat", "enable_request_signal"] },
     limits: { cpuMs: 30_000 },
+    placement: { mode: "smart" },
     crons: ["* * * * *"],
     env: { OBJECTS: objects, API_KEY: key, EVENTS: events },
   });
