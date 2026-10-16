@@ -2,12 +2,12 @@
 
 The `@minutei-ai/boxes` SDK targets Effect 4 and ordinary Cloudflare Workers. Its primary transport is a native Cloudflare service binding. Effect HttpClient owns request construction, interruption and transport errors. The package contains generated ESM and TypeScript declarations; Rust, Alchemy, server bindings and credentials are excluded. All request/response Schemas come from the same owner as the server. Schema exports are available from `@minutei-ai/boxes/contracts`.
 
-Version 0.15.0 is an experimental SDK/runtime candidate with native guest terminal attributes, revisioned configuration and fresh attribute observations through Effect service bindings. It includes terminal control-key signals, guest foreground transfer, process-owned raw-mode restoration and absolute checkpoint lease deadlines. It includes queued WASI PTYs, timed reads, R2-backed resize and SIGWINCH, and same-build cooperative recovery. It retains descriptor-based scripts, shared inodes, scoped binding/RPC and automatic ephemeral-context reclamation. Complete AgentOS parity and production performance/cost remain open. Use matching SDK/runtime archives.
+Version 0.16.0 is an experimental SDK/runtime with process discovery by external stdin mode, native guest terminal attributes, revisioned configuration and fresh attribute observations through Effect service bindings. It includes terminal control-key signals, guest foreground transfer, process-owned raw-mode restoration and absolute checkpoint lease deadlines. It includes queued WASI PTYs, timed reads, R2-backed resize and SIGWINCH, and same-build cooperative recovery. It retains descriptor-based scripts, shared inodes, scoped binding/RPC and automatic ephemeral-context reclamation. Complete AgentOS parity and production performance/cost remain open. Use matching SDK/runtime archives.
 
-Install the SDK archive from the [experimental 0.15.0 release](https://github.com/minutei-ai/boxes/releases/tag/sdk-v0.15.0). Publication, deployment and native remote proof are tracked separately in the [delivery evidence](evidence/sdk-0.15.0-delivery.json):
+Install the SDK archive from the [experimental 0.16.0 release](https://github.com/minutei-ai/boxes/releases/tag/sdk-v0.16.0). Publication, deployment and native remote proof are tracked separately in the [delivery evidence](evidence/sdk-0.16.0-delivery.json):
 
 ```sh
-bun add https://github.com/minutei-ai/boxes/releases/download/sdk-v0.15.0/minutei-ai-boxes-0.15.0.tgz
+bun add https://github.com/minutei-ai/boxes/releases/download/sdk-v0.16.0/minutei-ai-boxes-0.16.0.tgz
 ```
 
 Use the service binding from the Minutei Worker environment:
@@ -48,7 +48,7 @@ In Minutei, acquire the client in the Layer that owns sandbox orchestration. Kee
 
 API failures are `BoxesError` with the server's `status`, `error` code and `message`. Use `Effect.catchTag("BoxesError", ...)` to handle declared remote failures. Invalid input and invalid response shapes preserve native Schema/HttpBody errors; transport failures preserve native HttpClient errors. Native Effect interruption cancels the HTTP request. Cancellation of a client request does not cancel a durable sandbox process; explicitly send `process.cancel` for that behavior. If a conditional cancellation loses to actual completion or another confirmed cancellation, the owner rereads and returns that execution's current summary. A competing change that leaves it active remains a 409 conflict. Uncertain storage writes are not retried, and cancellation never replays guest execution.
 
-The unpublished 0.16.0 source adds `stdinMode` to process-list descriptions and an optional filter:
+Version 0.16.0 adds `stdinMode` to process-list descriptions and an optional filter:
 
 ```ts
 const page =
@@ -61,7 +61,7 @@ const page =
   });
 ```
 
-The filter accepts `closed`, `pipe` or `pty`; omitting it lists every mode. Read permission is required. The mode describes the job's external stdin, so `pty` discovers jobs usable with the existing terminal controls; it does not enumerate internal guest-created descriptor pairs. A page scans at most `limit` native R2 entries, from 1 through 50. Filtering can return fewer items or an empty page with a continuation. Keep the filter unchanged and follow `cursor` until null. Descriptions retain the existing process summary fields and add the mode; they omit private authority, deadlines, checkpoint references and output. Listing reads the R2 index without fetching individual receipts or input heads. These source contracts require matching 0.16.0 artifacts and the unconditional process-index-v6 cutover; published 0.15.0 does not expose them.
+The filter accepts `closed`, `pipe` or `pty`; omitting it lists every mode. Read permission is required. The mode describes the job's external stdin, so `pty` discovers jobs usable with the existing terminal controls; it does not enumerate internal guest-created descriptor pairs. A page scans at most `limit` native R2 entries, from 1 through 50. Filtering can return fewer items or an empty page with a continuation. Keep the filter unchanged and follow `cursor` until null. Descriptions retain the existing process summary fields and add the mode; they omit private authority, deadlines, checkpoint references and output. Listing reads the R2 index without fetching individual receipts or input heads. These contracts require matching 0.16.0 artifacts and the unconditional process-index-v6 cutover; published 0.15.0 does not expose them.
 
 The low-level clients have no automatic mutation retries, process polling loops or local copies of process state. After a lost mutation response or `409`, read current state before deciding whether to resubmit. Compose deadlines and schedules through Effect at the calling domain owner. SDK tests use real Alchemy workerd/R2, a second Worker connected through `Service.local`, and a native origin Worker for malformed responses and interruption. `bun run build:sdk` generates the distributable and `bun run sdk:proof` verifies the compiled SDK against the authenticated deployed Worker. The package is distributed through GitHub; npm registry publication and direct Minutei integration are separate steps.
 
