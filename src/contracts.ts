@@ -208,8 +208,10 @@ export const NetworkAction = NetworkRequest.mapFields((fields) => ({
   op: Schema.Literal("network.fetch"),
   url: Schema.String.check(Schema.isMaxLength(8192)),
 }));
+const ProcessInputMode = Schema.Literals(["closed", "pipe", "pty"]);
 export const ProcessListAction = Schema.Struct({
   op: Schema.Literal("process.list"),
+  stdinMode: Schema.optionalKey(ProcessInputMode),
   limit: Schema.Int.check(Schema.isBetween({ minimum: 1, maximum: 50 })),
   cursor: Schema.NullOr(Schema.String.check(Schema.isMinLength(1), Schema.isMaxLength(4096))),
 });
@@ -475,7 +477,6 @@ export const RunAction = Schema.Union([
     path: Path,
   }),
 ]);
-const ProcessInputMode = Schema.Literals(["closed", "pipe", "pty"]);
 export const SpawnAction = Schema.Struct({
   op: Schema.Literal("process.spawn"),
   execution: RunAction,
@@ -871,7 +872,7 @@ export const StoredRun = RunRecord.mapFields((fields) => ({
   output: Schema.NullOr(StoredOutput),
   authority: Schema.NullOr(Capability),
   deadlineAt: Schema.NullOr(Schema.Int),
-  stdinMode: ProcessInputMode,
+  inputMode: ProcessInputMode,
   checkpointCount: Schema.Int.check(Schema.isBetween({ minimum: 0, maximum: 1_000_000 })),
   checkpoint: Schema.NullOr(Schema.String.check(Schema.isPattern(/^[a-f0-9]{64}$/))),
 }));
@@ -881,14 +882,26 @@ export const RecoveryStatus = StoredRun.mapFields((fields) => ({
   resumable: Schema.Boolean,
   deadlineAt: fields.deadlineAt,
 }));
+export const ProcessDescription = StoredRun.mapFields((fields) => ({
+  ...Struct.omit(fields, [
+    "output",
+    "authority",
+    "deadlineAt",
+    "inputMode",
+    "checkpoint",
+    "checkpointCount",
+  ]),
+  stdinMode: fields.inputMode,
+}));
 export const StoredRunMetadata = RunMetadata.mapFields((fields) => ({
   ...fields,
-  format: Schema.Literal("run-v5"),
+  summary: Schema.fromJsonString(ProcessDescription),
+  format: Schema.Literal("run-v6"),
 }));
 export const DispatchReceipt = Schema.Struct({ notifications: Schema.Int });
 export const ProcessDelivery = Schema.Struct({ key: Schema.String, eTag: Schema.String });
 export const ProcessPage = Schema.Struct({
-  items: Schema.Array(RunSummary),
+  items: Schema.Array(ProcessDescription),
   cursor: Schema.NullOr(Schema.String),
 });
 export const ProcessOutputPage = Schema.Struct({

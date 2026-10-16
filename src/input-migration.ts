@@ -77,7 +77,7 @@ export const migrateInput = Effect.fn("migration.inputTerminal")(function* (
           const geometry = Match.value(input).pipe(
             Match.when({ version: 2 }, (input) => input.terminal),
             Match.orElse(() => {
-              if (record !== null && record.stdinMode === "pty")
+              if (record !== null && record.inputMode === "pty")
                 return { cols: 80, rows: 24, revision: 0 };
               return null;
             }),

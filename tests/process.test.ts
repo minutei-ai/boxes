@@ -624,8 +624,18 @@ test("claimed execution with a lost observation becomes failed after its platfor
   };
   await bucket.put(object.key, Schema.encodeSync(Schema.fromJsonString(StoredRun))(lost), {
     customMetadata: Schema.encodeSync(StoredRunMetadata)({
-      format: "run-v5",
-      summary: Struct.omit(lost, ["authority", "deadlineAt", "output", "stdinMode", "checkpoint"]),
+      format: "run-v6",
+      summary: {
+        ...Struct.omit(lost, [
+          "authority",
+          "deadlineAt",
+          "output",
+          "checkpoint",
+          "checkpointCount",
+          "inputMode",
+        ]),
+        stdinMode: lost.inputMode,
+      },
     }),
   });
   const retained = await bucket.head("processes/queue-lost/lost.json");

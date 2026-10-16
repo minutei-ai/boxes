@@ -2,7 +2,7 @@ import { afterAll, expect, test } from "bun:test";
 import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { Schema, Struct } from "effect";
+import { Effect, Schema, Struct } from "effect";
 import {
   ProcessOutputPage,
   LiveOutputPage,
@@ -399,98 +399,124 @@ test("output pages read only addressed immutable blocks and reject corrupted add
   expect(restored).toEqual(result);
 });
 
-test("inline receipt migration preserves grants, deadlines, observed output and all process states", async () => {
-  const token = await setup(mf, "output-migration");
-  const bucket = await mf.objects;
-  const Inline = RunRecord.mapFields((fields) => ({
-    ...fields,
-    authority: Schema.NullOr(Capability),
-    deadlineAt: Schema.NullOr(Schema.Int),
-  }));
-  const grant = {
-    sandboxId: "output-migration",
-    permissions: ["read", "execute"] as const,
-    expiresAt: Date.now() + 60000,
-  };
-  for (const status of [
-    "queued",
-    "running",
-    "cancelling",
-    "cancelled",
-    "failed",
-    "exited",
-  ] as const) {
-    const record = {
-      id: status,
-      status,
-      sourceHash: "0".repeat(64),
-      language: "javascript" as const,
-      startedAt: 10,
-      finishedAt: null,
-      output: { stdout: "😀".repeat(20000), stderr: "retained", result: null, exitCode: null },
-      authority: grant,
-      deadlineAt: 123456,
-    };
-    await bucket.put(
-      `processes/output-migration/${status}.json`,
-      Schema.encodeSync(Schema.fromJsonString(Inline))(record),
-      {
-        customMetadata: {
-          format: "run-v2",
-          summary: Schema.encodeSync(
-            Schema.fromJsonString(RunRecord.mapFields((fields) => Struct.omit(fields, ["output"]))),
-          )(Struct.omit(record, ["output", "authority", "deadlineAt"])),
-        },
-      },
-    );
-  }
-  const migrate = await post(
-    mf,
-    "/v1/migrations/output-chunks-v1",
-    "cirro-local-test-credential",
-    {},
-  );
-  expect(migrate.status).toBe(200);
-  expect(Schema.decodeUnknownSync(MigrationReceipt)(await migrate.json())).toEqual({ migrated: 6 });
-  for (const status of [
-    "queued",
-    "running",
-    "cancelling",
-    "cancelled",
-    "failed",
-    "exited",
-  ] as const) {
-    const object = await bucket.get(`processes/output-migration/${status}.json`);
-    if (object === null) return expect(object).not.toBeNull();
-    const stored = Schema.decodeUnknownSync(Schema.fromJsonString(StoredRun))(await object.text());
-    expect(stored.authority).toEqual(grant);
-    expect(stored.deadlineAt).toBe(123456);
-    expect(Schema.decodeUnknownSync(StoredRunMetadata)(object.customMetadata).format).toBe(
-      "run-v5",
-    );
-    const record = Schema.decodeUnknownSync(RunRecord)(
-      await (await act("output-migration", token, { op: "process.get", id: status })).json(),
-    );
-    expect(record.status).toBe(status);
-    expect(record.output).toEqual({
-      stdout: "😀".repeat(20000),
-      stderr: "retained",
-      result: null,
-      exitCode: null,
-    });
-  }
-  const repeated = await post(
-    mf,
-    "/v1/migrations/output-chunks-v1",
-    "cirro-local-test-credential",
-    {},
-  );
-  expect(repeated.status).toBe(200);
-  expect(Schema.decodeUnknownSync(MigrationReceipt)(await repeated.json())).toEqual({
-    migrated: 0,
-  });
-  expect((await post(mf, "/v1/migrations/output-chunks-v1", token, {})).status).toBe(401);
-});
+test("inline receipt migration preserves grants, deadlines, observed output and all process states", () =>
+  Effect.runPromise(
+    Effect.acquireUseRelease(
+      Effect.sync(() => runtime(join(directory, "inline-migration"), { controlled: false })),
+      (migration) =>
+        Effect.promise(async () => {
+          const token = await setup(migration, "output-migration");
+          const bucket = await migration.objects;
+          const Inline = RunRecord.mapFields((fields) => ({
+            ...fields,
+            authority: Schema.NullOr(Capability),
+            deadlineAt: Schema.NullOr(Schema.Int),
+          }));
+          const grant = {
+            sandboxId: "output-migration",
+            permissions: ["read", "execute"] as const,
+            expiresAt: Date.now() + 60000,
+          };
+          for (const status of [
+            "queued",
+            "running",
+            "cancelling",
+            "cancelled",
+            "failed",
+            "exited",
+          ] as const) {
+            const record = {
+              id: status,
+              status,
+              sourceHash: "0".repeat(64),
+              language: "javascript" as const,
+              startedAt: 10,
+              finishedAt: null,
+              output: {
+                stdout: "😀".repeat(20000),
+                stderr: "retained",
+                result: null,
+                exitCode: null,
+              },
+              authority: grant,
+              deadlineAt: 123456,
+            };
+            await bucket.put(
+              `processes/output-migration/${status}.json`,
+              Schema.encodeSync(Schema.fromJsonString(Inline))(record),
+              {
+                customMetadata: {
+                  format: "run-v2",
+                  summary: Schema.encodeSync(
+                    Schema.fromJsonString(
+                      RunRecord.mapFields((fields) => Struct.omit(fields, ["output"])),
+                    ),
+                  )(Struct.omit(record, ["output", "authority", "deadlineAt"])),
+                },
+              },
+            );
+          }
+          const migrate = await post(
+            migration,
+            "/v1/migrations/process-index-v6",
+            "cirro-local-test-credential",
+            {},
+          );
+          expect(migrate.status).toBe(200);
+          expect(Schema.decodeUnknownSync(MigrationReceipt)(await migrate.json())).toEqual({
+            migrated: 6,
+          });
+          for (const status of [
+            "queued",
+            "running",
+            "cancelling",
+            "cancelled",
+            "failed",
+            "exited",
+          ] as const) {
+            const object = await bucket.get(`processes/output-migration/${status}.json`);
+            if (object === null) return expect(object).not.toBeNull();
+            const stored = Schema.decodeUnknownSync(Schema.fromJsonString(StoredRun))(
+              await object.text(),
+            );
+            expect(stored.authority).toEqual(grant);
+            expect(stored.deadlineAt).toBe(123456);
+            expect(Schema.decodeUnknownSync(StoredRunMetadata)(object.customMetadata).format).toBe(
+              "run-v6",
+            );
+            const record = Schema.decodeUnknownSync(RunRecord)(
+              await (
+                await post(migration, "/v1/sandboxes/output-migration/action", token, {
+                  op: "process.get",
+                  id: status,
+                })
+              ).json(),
+            );
+            expect(record.status).toBe(status);
+            expect(record.output).toEqual({
+              stdout: "😀".repeat(20000),
+              stderr: "retained",
+              result: null,
+              exitCode: null,
+            });
+          }
+          const repeated = await post(
+            migration,
+            "/v1/migrations/process-index-v6",
+            "cirro-local-test-credential",
+            {},
+          );
+          expect(repeated.status).toBe(200);
+          expect(Schema.decodeUnknownSync(MigrationReceipt)(await repeated.json())).toEqual({
+            migrated: 0,
+          });
+          expect((await post(migration, "/v1/migrations/process-index-v6", token, {})).status).toBe(
+            401,
+          );
+        }),
+      (migration) => Effect.promise(() => migration.dispose()),
+    ),
+  ));
 
 test("historical receipt migration remains resumable after fencing and a conflicting target", async () => {
   const token = await setup(mf, "output-fence");
@@ -552,12 +578,19 @@ test("version 3 chunked receipts migrate to explicit closed stdin without rewrit
   if (object === null) return;
   const record = Schema.decodeUnknownSync(Schema.fromJsonString(StoredRun))(await object.text());
   const metadata = Schema.decodeUnknownSync(StoredRunMetadata)(object.customMetadata);
-  await bucket.put(key, JSON.stringify(Struct.omit(record, ["stdinMode", "checkpoint"])), {
-    customMetadata: { format: "run-v3", summary: JSON.stringify(metadata.summary) },
-  });
+  await bucket.put(
+    key,
+    JSON.stringify(Struct.omit(record, ["inputMode", "checkpoint", "checkpointCount"])),
+    {
+      customMetadata: {
+        format: "run-v3",
+        summary: JSON.stringify(Struct.omit(metadata.summary, ["stdinMode"])),
+      },
+    },
+  );
   const migrated = await post(
     mf,
-    "/v1/migrations/output-chunks-v1",
+    "/v1/migrations/process-index-v6",
     "cirro-local-test-credential",
     {},
   );
@@ -566,12 +599,12 @@ test("version 3 chunked receipts migrate to explicit closed stdin without rewrit
   expect(current).not.toBeNull();
   if (current === null) return;
   const updated = Schema.decodeUnknownSync(Schema.fromJsonString(StoredRun))(await current.text());
-  expect(updated.stdinMode).toBe("closed");
+  expect(updated.inputMode).toBe("closed");
   expect(updated.output).toEqual(record.output);
   expect(updated.sourceHash).toBe(record.sourceHash);
-  expect(Schema.decodeUnknownSync(StoredRunMetadata)(current.customMetadata).format).toBe("run-v5");
+  expect(Schema.decodeUnknownSync(StoredRunMetadata)(current.customMetadata).format).toBe("run-v6");
   expect(
-    (await post(mf, "/v1/migrations/output-chunks-v1", "cirro-local-test-credential", {})).status,
+    (await post(mf, "/v1/migrations/process-index-v6", "cirro-local-test-credential", {})).status,
   ).toBe(200);
 });
 test("receipt migration returns bounded page cursors and skips confirmed conversions on retry", async () => {
@@ -604,7 +637,7 @@ test("receipt migration returns bounded page cursors and skips confirmed convers
     const cursor = cursors.shift();
     const response = await post(
       instance,
-      "/v1/migrations/output-chunks-v1",
+      "/v1/migrations/process-index-v6",
       "cirro-local-test-credential",
       { cursor },
     );
@@ -622,10 +655,10 @@ test("receipt migration returns bounded page cursors and skips confirmed convers
   expect(progress.pages).toBe(3);
   expect(progress.migrated).toBe(101);
   const last = await bucket.get("processes/paged/old-100.json");
-  expect(last?.customMetadata?.format).toBe("run-v5");
+  expect(last?.customMetadata?.format).toBe("run-v6");
   const retry = await post(
     instance,
-    "/v1/migrations/output-chunks-v1",
+    "/v1/migrations/process-index-v6",
     "cirro-local-test-credential",
     {},
   );

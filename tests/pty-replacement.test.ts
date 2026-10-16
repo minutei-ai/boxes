@@ -90,7 +90,7 @@ test("PTY mode and closed queued input survive Worker replacement without duplic
             const record = yield* Schema.decodeUnknownEffect(Schema.fromJsonString(StoredRun))(
               yield* Effect.promise(() => stored.text()),
             );
-            expect(record.stdinMode).toBe("pty");
+            expect(record.inputMode).toBe("pty");
             return { token: grant.token, key, eTag: stored.etag };
           }),
         );

@@ -6,13 +6,104 @@ import { PLATFORM_PROXY_PREFIX } from "@alchemy.run/cloudflare-runtime/core/plat
 import type { Fetcher } from "@cloudflare/workers-types/experimental";
 import { consume, handleRequest } from "../../src/index";
 export { Agent } from "../../src/index";
-import { ProcessCancelAction, ProcessDelivery, StoredRun } from "../../src/contracts";
+import {
+  ProcessCancelAction,
+  ProcessDelivery,
+  ProcessListAction,
+  OutputMigrationInput,
+  StoredRun,
+} from "../../src/contracts";
 import { tick } from "../../src/cron";
 import { reconcile } from "../../src/process";
 import type { Env } from "../../src/resources";
 
 type TestEnv = Env & { SELF: Fetcher };
 export class Control extends WorkerEntrypoint<TestEnv> {
+  migrateProcessIndex(token: string, cursor: typeof OutputMigrationInput.Type.cursor) {
+    const counts = { writes: 0, notifications: 0 };
+    const bindings = {
+      ...this.env,
+      EVENTS: new Proxy(this.env.EVENTS, {
+        get(target, property) {
+          if (property === "send")
+            return (...args: Parameters<Env["EVENTS"]["send"]>) => {
+              counts.notifications += 1;
+              return target.send(...args);
+            };
+          const value = Reflect.get(target, property, target);
+          if (typeof value === "function") return value.bind(target);
+          return value;
+        },
+      }),
+      OBJECTS: new Proxy(this.env.OBJECTS, {
+        get(target, property) {
+          if (property === "put")
+            return (...args: Parameters<Env["OBJECTS"]["put"]>) => {
+              if (args[0].startsWith("processes/")) counts.writes += 1;
+              return target.put(...args);
+            };
+          const value = Reflect.get(target, property, target);
+          if (typeof value === "function") return value.bind(target);
+          return value;
+        },
+      }),
+    };
+    const request = new Request("https://boxes.test/v1/migrations/process-index-v6", {
+      method: "POST",
+      headers: { authorization: `Bearer ${token}`, "content-type": "application/json" },
+      body: Schema.encodeSync(Schema.fromJsonString(OutputMigrationInput))({ cursor }),
+    });
+    return Effect.runPromise(
+      Effect.gen(function* () {
+        const response = yield* handleRequest(request, bindings);
+        return {
+          status: response.status,
+          body: yield* Effect.promise(() => response.text()),
+          writes: counts.writes,
+          notifications: counts.notifications,
+        };
+      }),
+    );
+  }
+  listProcesses(sandboxId: string, token: string, action: typeof ProcessListAction.Type) {
+    const counts = { receiptReads: 0, inputReads: 0, listings: 0 };
+    const bindings = {
+      ...this.env,
+      OBJECTS: new Proxy(this.env.OBJECTS, {
+        get(target, property) {
+          if (property === "get")
+            return (...args: Parameters<Env["OBJECTS"]["get"]>) => {
+              if (args[0].startsWith("processes/")) counts.receiptReads += 1;
+              if (args[0].startsWith("process-input/")) counts.inputReads += 1;
+              return target.get(...args);
+            };
+          if (property === "list")
+            return (...args: Parameters<Env["OBJECTS"]["list"]>) => {
+              counts.listings += 1;
+              return target.list(...args);
+            };
+          const value = Reflect.get(target, property, target);
+          if (typeof value === "function") return value.bind(target);
+          return value;
+        },
+      }),
+    };
+    const request = new Request(`https://boxes.test/v1/sandboxes/${sandboxId}/action`, {
+      method: "POST",
+      headers: { authorization: `Bearer ${token}`, "content-type": "application/json" },
+      body: Schema.encodeSync(Schema.fromJsonString(ProcessListAction))(action),
+    });
+    return Effect.runPromise(
+      Effect.gen(function* () {
+        const response = yield* handleRequest(request, bindings);
+        return {
+          status: response.status,
+          body: yield* Effect.promise(() => response.text()),
+          ...counts,
+        };
+      }),
+    );
+  }
   cancelAfterCompletion(sandboxId: string, token: string, id: string) {
     const native = this.env;
     const key = `processes/${sandboxId}/${id}.json`;

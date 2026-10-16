@@ -408,14 +408,17 @@ for (const mode of ["expired", "cancelled", "corrupt"] as const) {
         }),
         {
           customMetadata: Schema.encodeSync(StoredRunMetadata)({
-            format: "run-v5",
-            summary: Struct.omit(context.paused, [
-              "output",
-              "authority",
-              "deadlineAt",
-              "stdinMode",
-              "checkpoint",
-            ]),
+            format: "run-v6",
+            summary: {
+              ...Struct.omit(context.paused, [
+                "output",
+                "authority",
+                "deadlineAt",
+                "checkpoint",
+                "inputMode",
+              ]),
+              stdinMode: context.paused.inputMode,
+            },
           }),
         },
       );

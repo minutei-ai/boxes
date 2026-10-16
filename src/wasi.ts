@@ -109,7 +109,7 @@ export const wasi = Effect.fn("wasi.execute")(function* (
   inputId: string | null,
   checkpointReference: string | null,
   canHandover: boolean,
-  stdinMode: typeof StoredRun.Type.stdinMode = "closed",
+  stdinMode: typeof StoredRun.Type.inputMode = "closed",
 ) {
   const handoverAt = (yield* Clock.currentTimeMillis) + 30_000;
   const policy = initial.head.policy;

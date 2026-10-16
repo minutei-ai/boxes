@@ -173,15 +173,18 @@ test(
                     Schema.encodeSync(Schema.fromJsonString(StoredRun))(record),
                     {
                       customMetadata: Schema.encodeSync(StoredRunMetadata)({
-                        format: "run-v5",
-                        summary: Struct.omit(record, [
-                          "output",
-                          "authority",
-                          "deadlineAt",
-                          "stdinMode",
-                          "checkpoint",
-                          "checkpointCount",
-                        ]),
+                        format: "run-v6",
+                        summary: {
+                          ...Struct.omit(record, [
+                            "output",
+                            "authority",
+                            "deadlineAt",
+                            "checkpoint",
+                            "checkpointCount",
+                            "inputMode",
+                          ]),
+                          stdinMode: record.inputMode,
+                        },
                       }),
                     },
                   ),
@@ -206,15 +209,18 @@ test(
               Schema.encodeSync(Schema.fromJsonString(StoredRun))(future),
               {
                 customMetadata: Schema.encodeSync(StoredRunMetadata)({
-                  format: "run-v5",
-                  summary: Struct.omit(future, [
-                    "output",
-                    "authority",
-                    "deadlineAt",
-                    "stdinMode",
-                    "checkpoint",
-                    "checkpointCount",
-                  ]),
+                  format: "run-v6",
+                  summary: {
+                    ...Struct.omit(future, [
+                      "output",
+                      "authority",
+                      "deadlineAt",
+                      "checkpoint",
+                      "checkpointCount",
+                      "inputMode",
+                    ]),
+                    stdinMode: future.inputMode,
+                  },
                 }),
               },
             ),
@@ -387,13 +393,14 @@ test(
               Schema.encodeSync(Schema.fromJsonString(StoredRun))(inconsistent),
               {
                 customMetadata: Schema.encodeSync(StoredRunMetadata)({
-                  format: "run-v5",
+                  format: "run-v6",
                   summary: {
+                    stdinMode: inconsistent.inputMode,
                     ...Struct.omit(inconsistent, [
+                      "inputMode",
                       "output",
                       "authority",
                       "deadlineAt",
-                      "stdinMode",
                       "checkpoint",
                       "checkpointCount",
                     ]),

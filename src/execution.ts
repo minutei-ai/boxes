@@ -48,7 +48,7 @@ export const execute = Effect.fn("execution.run")(function* (
   canHandover: boolean,
   host: HostBridge | null = null,
   memoryLimitBytes: typeof Policy.Type.memoryBytes | null = null,
-  stdinMode: typeof StoredRun.Type.stdinMode = "closed",
+  stdinMode: typeof StoredRun.Type.inputMode = "closed",
 ) {
   const policy = session.head.policy;
   if (

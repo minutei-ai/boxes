@@ -1,16 +1,26 @@
 import { expect, test } from "bun:test";
 import { mkdtemp, rm } from "node:fs/promises";
-import { Clock, Effect, Match, Redacted, Schema } from "effect";
+import { Clock, Effect, Match, Redacted, Schema, Struct } from "effect";
 import { FetchHttpClient } from "effect/http";
 import {
   ExecutionCheckpoint,
   HeapSnapshot,
   ProcessDelivery,
+  RunMetadata,
   StoredRun,
   TerminalAttributes,
 } from "../src/contracts";
 import { make } from "../src/sdk";
 import { runtime } from "../tooling/worker-test";
+
+const VersionFiveStoredRun = StoredRun.mapFields((fields) => ({
+  ...Struct.omit(fields, ["inputMode"]),
+  stdinMode: fields.inputMode,
+}));
+const VersionFiveMetadata = RunMetadata.mapFields((fields) => ({
+  ...fields,
+  format: Schema.Literal("run-v5"),
+}));
 
 for (const mode of [
   "cooked",
@@ -197,8 +207,50 @@ for (const mode of [
               );
               expect(delivered.outcome).toBe("ok");
               expect(paused.status).toBe("queued");
-              expect(paused.stdinMode).toBe("pty");
+              expect(paused.inputMode).toBe("pty");
               expect(paused.checkpointCount).toBe(1);
+              if (mode === "attributes") {
+                const legacy = yield* Effect.promise(() =>
+                  objects.put(
+                    key,
+                    Schema.encodeSync(Schema.fromJsonString(VersionFiveStoredRun))({
+                      ...Struct.omit(paused, ["inputMode"]),
+                      stdinMode: paused.inputMode,
+                    }),
+                    {
+                      onlyIf: { etagMatches: object.etag },
+                      customMetadata: Schema.encodeSync(VersionFiveMetadata)({
+                        format: "run-v5",
+                        summary: Struct.omit(paused, [
+                          "output",
+                          "authority",
+                          "deadlineAt",
+                          "inputMode",
+                          "checkpoint",
+                          "checkpointCount",
+                        ]),
+                      }),
+                    },
+                  ),
+                );
+                if (legacy === null)
+                  return yield* Effect.die("Parked receipt changed before legacy cutover");
+                const migrated = yield* Effect.promise(() =>
+                  control.migrateProcessIndex("cirro-local-test-credential", null),
+                );
+                expect(migrated).toMatchObject({ status: 200, writes: 1, notifications: 1 });
+                expect(
+                  yield* client.action("active", {
+                    op: "process.list",
+                    stdinMode: "pty",
+                    limit: 10,
+                    cursor: null,
+                  }),
+                ).toMatchObject({
+                  items: [{ id: "job", status: "queued", stdinMode: "pty" }],
+                  cursor: null,
+                });
+              }
               if (paused.checkpoint === null) return yield* Effect.die("PTY did not checkpoint");
               const envelopeObject = yield* Effect.promise(() =>
                 objects.get(`sandboxes/active/execution-checkpoints/${paused.checkpoint}.json`),
@@ -430,6 +482,18 @@ for (const mode of [
             expect(attributes.observed.attributes.cc).toEqual([33, 63, 126, 64, 35, 37, 38]);
           }
           expect(record.output?.stderr).toBe("");
+          if (mode === "attributes")
+            expect(
+              yield* client.action("active", {
+                op: "process.list",
+                stdinMode: "pty",
+                limit: 10,
+                cursor: null,
+              }),
+            ).toMatchObject({
+              items: [{ id: "job", status: "exited", stdinMode: "pty" }],
+              cursor: null,
+            });
           const output = yield* client.action("active", {
             op: "process.output.read",
             id: "job",

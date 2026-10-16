@@ -85,15 +85,18 @@ test("repair dispatches queued listing ETags without receipt downloads after Wor
                     Schema.encodeSync(Schema.fromJsonString(StoredRun))(record),
                     {
                       customMetadata: Schema.encodeSync(StoredRunMetadata)({
-                        format: "run-v5",
-                        summary: Struct.omit(record, [
-                          "output",
-                          "authority",
-                          "deadlineAt",
-                          "stdinMode",
-                          "checkpoint",
-                          "checkpointCount",
-                        ]),
+                        format: "run-v6",
+                        summary: {
+                          ...Struct.omit(record, [
+                            "output",
+                            "authority",
+                            "deadlineAt",
+                            "checkpoint",
+                            "checkpointCount",
+                            "inputMode",
+                          ]),
+                          stdinMode: record.inputMode,
+                        },
                       }),
                     },
                   ),

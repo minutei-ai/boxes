@@ -113,7 +113,7 @@ const migrate = Alchemy.Action(
         while (cursors.length > 0) {
           const cursor = cursors.shift();
           const page = yield* Effect.gen(function* () {
-            const response = yield* http.post(new URL("/v1/migrations/output-chunks-v1", url), {
+            const response = yield* http.post(new URL("/v1/migrations/process-index-v6", url), {
               headers: { authorization: `Bearer ${Redacted.value(key)}` },
               body: HttpBody.text(
                 Schema.encodeSync(Schema.fromJsonString(OutputMigrationInput))({ cursor }),
@@ -123,7 +123,7 @@ const migrate = Alchemy.Action(
             if (response.status < 200 || response.status >= 300)
               return yield* new MigrationStatusError({
                 status: response.status,
-                path: "/v1/migrations/output-chunks-v1",
+                path: "/v1/migrations/process-index-v6",
               });
             const text = yield* response.text;
             return yield* Schema.decodeUnknownEffect(Schema.fromJsonString(OutputMigrationReceipt))(
@@ -133,7 +133,7 @@ const migrate = Alchemy.Action(
           progress.pages += 1;
           progress.migrated += page.migrated;
           yield* Effect.logInfo({
-            migration: "process-input-v4",
+            migration: "process-index-v6",
             page: progress.pages,
             migrated: page.migrated,
             hasMore: page.cursor !== null,
@@ -240,7 +240,7 @@ const migrate = Alchemy.Action(
           receipts,
           filesystemMigration: filesystem,
           environmentMigration: { heads: configurationHeads, programs: configurationPrograms },
-          inputMigration: progress,
+          processIndexMigration: progress,
           inputTerminalMigration: inputTerminal,
           deadlineMigration: deadlines,
           deployedAt: input.deployedAt,

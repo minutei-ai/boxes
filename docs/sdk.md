@@ -48,6 +48,21 @@ In Minutei, acquire the client in the Layer that owns sandbox orchestration. Kee
 
 API failures are `BoxesError` with the server's `status`, `error` code and `message`. Use `Effect.catchTag("BoxesError", ...)` to handle declared remote failures. Invalid input and invalid response shapes preserve native Schema/HttpBody errors; transport failures preserve native HttpClient errors. Native Effect interruption cancels the HTTP request. Cancellation of a client request does not cancel a durable sandbox process; explicitly send `process.cancel` for that behavior. If a conditional cancellation loses to actual completion or another confirmed cancellation, the owner rereads and returns that execution's current summary. A competing change that leaves it active remains a 409 conflict. Uncertain storage writes are not retried, and cancellation never replays guest execution.
 
+The unpublished 0.16.0 source adds `stdinMode` to process-list descriptions and an optional filter:
+
+```ts
+const page =
+  yield *
+  boxes.action(sandboxId, {
+    op: "process.list",
+    stdinMode: "pty",
+    limit: 20,
+    cursor: null,
+  });
+```
+
+The filter accepts `closed`, `pipe` or `pty`; omitting it lists every mode. Read permission is required. The mode describes the job's external stdin, so `pty` discovers jobs usable with the existing terminal controls; it does not enumerate internal guest-created descriptor pairs. A page scans at most `limit` native R2 entries, from 1 through 50. Filtering can return fewer items or an empty page with a continuation. Keep the filter unchanged and follow `cursor` until null. Descriptions retain the existing process summary fields and add the mode; they omit private authority, deadlines, checkpoint references and output. Listing reads the R2 index without fetching individual receipts or input heads. These source contracts require matching 0.16.0 artifacts and the unconditional process-index-v6 cutover; published 0.15.0 does not expose them.
+
 The low-level clients have no automatic mutation retries, process polling loops or local copies of process state. After a lost mutation response or `409`, read current state before deciding whether to resubmit. Compose deadlines and schedules through Effect at the calling domain owner. SDK tests use real Alchemy workerd/R2, a second Worker connected through `Service.local`, and a native origin Worker for malformed responses and interruption. `bun run build:sdk` generates the distributable and `bun run sdk:proof` verifies the compiled SDK against the authenticated deployed Worker. The package is distributed through GitHub; npm registry publication and direct Minutei integration are separate steps.
 
 Shell `process.run` supports stdin `<`/`0<`, stdout `>`/`1>`/`>>`, and stderr `2>`/`2>>` file redirections. Opens happen left to right before execution. A diagnostic uses the last successfully opened stderr target, including when a later open fails. Output targets retain their inode across rename/unlink and need `write`, including append to mode-0200 files without a read grant. Redirected bytes stay outside process output/replay; the command output limit still applies. Descriptor duplication such as `2>&1`, heredocs and original cross-stream write ordering remain unsupported. Streams are buffered and applied at command completion.

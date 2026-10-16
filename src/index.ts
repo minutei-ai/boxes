@@ -138,7 +138,7 @@ const route = Effect.fn("api.route")(function* (request: Request, env: Env) {
       headers: { "content-type": "application/json", "cache-control": "no-store" },
     });
   }
-  if (url.pathname === "/v1/migrations/output-chunks-v1") {
+  if (url.pathname === "/v1/migrations/process-index-v6") {
     yield* administrator(env, token);
     const bytes = yield* readBounded(request.body, 4096);
     const input = yield* Schema.decodeUnknownEffect(Schema.fromJsonString(OutputMigrationInput), {

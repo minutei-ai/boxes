@@ -1,9 +1,17 @@
 import { Effect, Schema, Struct } from "effect";
-import { RunRecord, RunMetadata, StoredRun, StoredRunMetadata, Id, Capability } from "./contracts";
+import {
+  RunRecord,
+  RunMetadata,
+  StoredRun,
+  StoredRunMetadata,
+  Id,
+  Capability,
+  ProcessDelivery,
+} from "./contracts";
 import { StorageFailure } from "./storage";
 import type { Env } from "./resources";
 import { archiveOutput } from "./output";
-import { executionWindowMs } from "./process";
+import { executionWindowMs, QueueFailure } from "./process";
 
 export const migrateDeadlines = Effect.fn("migration.processDeadlines")(function* (
   env: Env,
@@ -49,14 +57,17 @@ export const migrateDeadlines = Effect.fn("migration.processDeadlines")(function
           catch: (cause) => new StorageFailure({ cause }),
         });
         const record = yield* Schema.decodeUnknownEffect(Schema.fromJsonString(StoredRun))(text);
-        const summary = Struct.omit(record, [
-          "output",
-          "authority",
-          "deadlineAt",
-          "stdinMode",
-          "checkpoint",
-          "checkpointCount",
-        ]);
+        const summary = {
+          ...Struct.omit(record, [
+            "output",
+            "authority",
+            "deadlineAt",
+            "inputMode",
+            "checkpoint",
+            "checkpointCount",
+          ]),
+          stdinMode: record.inputMode,
+        };
         if (!Schema.toEquivalence(StoredRunMetadata.fields.summary)(metadata.summary, summary))
           return yield* new StorageFailure({
             cause: "Deadline migration metadata does not match the receipt",
@@ -138,7 +149,7 @@ export const migrateProcesses = Effect.fn("migration.processReceipts")(function*
             output,
             authority: null,
             deadlineAt: null,
-            stdinMode: "closed",
+            inputMode: "closed",
             checkpoint: null,
             checkpointCount: 0,
           });
@@ -164,8 +175,8 @@ export const migrateProcesses = Effect.fn("migration.processReceipts")(function*
               env.OBJECTS.put(key, encoded, {
                 onlyIf: { etagDoesNotMatch: "*" },
                 customMetadata: Schema.encodeSync(StoredRunMetadata)({
-                  format: "run-v5",
-                  summary: Struct.omit(record, ["output"]),
+                  format: "run-v6",
+                  summary: { ...Struct.omit(record, ["output"]), stdinMode: "closed" },
                 }),
               }),
             catch: (cause) => new StorageFailure({ cause }),
@@ -207,28 +218,37 @@ const InlineMetadata = RunMetadata.mapFields((fields) => ({
   ...fields,
   format: Schema.Literal("run-v2"),
 }));
-const PreviousStoredRun = StoredRun.mapFields((fields) =>
+const VersionFiveStoredRun = StoredRun.mapFields((fields) => ({
+  ...Struct.omit(fields, ["inputMode"]),
+  stdinMode: fields.inputMode,
+}));
+const PreviousStoredRun = VersionFiveStoredRun.mapFields((fields) =>
   Struct.omit(fields, ["stdinMode", "checkpoint", "checkpointCount"]),
 );
-const PreviousMetadata = StoredRunMetadata.mapFields((fields) => ({
+const PreviousMetadata = RunMetadata.mapFields((fields) => ({
   ...fields,
   format: Schema.Literal("run-v3"),
 }));
-const VersionFourStoredRun = StoredRun.mapFields((fields) =>
+const VersionFourStoredRun = VersionFiveStoredRun.mapFields((fields) =>
   Struct.omit(fields, ["checkpoint", "checkpointCount"]),
 );
-const VersionFourMetadata = StoredRunMetadata.mapFields((fields) => ({
+const VersionFourMetadata = RunMetadata.mapFields((fields) => ({
   ...fields,
   format: Schema.Literal("run-v4"),
 }));
+const VersionFiveMetadata = RunMetadata.mapFields((fields) => ({
+  ...fields,
+  format: Schema.Literal("run-v5"),
+}));
 const MigrationMetadata = Schema.Union([
   StoredRunMetadata,
+  VersionFiveMetadata,
   VersionFourMetadata,
   PreviousMetadata,
   InlineMetadata,
 ]);
 
-export const migrateOutput = Effect.fn("migration.outputChunks")(function* (
+export const migrateOutput = Effect.fn("migration.processIndex")(function* (
   env: Env,
   cursor: string | null,
 ) {
@@ -250,7 +270,7 @@ export const migrateOutput = Effect.fn("migration.outputChunks")(function* (
         const metadata = yield* Schema.decodeUnknownEffect(MigrationMetadata)(
           object.customMetadata,
         );
-        if (metadata.format === "run-v5") return;
+        if (metadata.format === "run-v6") return;
         const parts = object.key.split("/");
         const sandboxId = yield* Schema.decodeUnknownEffect(Id)(parts[1]);
         if (
@@ -272,11 +292,22 @@ export const migrateOutput = Effect.fn("migration.outputChunks")(function* (
           catch: (cause) => new StorageFailure({ cause }),
         });
         const converted = yield* Effect.gen(function* () {
+          if (metadata.format === "run-v5") {
+            const record = yield* Schema.decodeUnknownEffect(
+              Schema.fromJsonString(VersionFiveStoredRun),
+            )(text);
+            return { ...Struct.omit(record, ["stdinMode"]), inputMode: record.stdinMode };
+          }
           if (metadata.format === "run-v4") {
             const record = yield* Schema.decodeUnknownEffect(
               Schema.fromJsonString(VersionFourStoredRun),
             )(text);
-            return { ...record, checkpoint: null, checkpointCount: 0 };
+            return {
+              ...Struct.omit(record, ["stdinMode"]),
+              inputMode: record.stdinMode,
+              checkpoint: null,
+              checkpointCount: 0,
+            };
           }
           if (metadata.format === "run-v3") {
             const record = yield* Schema.decodeUnknownEffect(
@@ -284,7 +315,7 @@ export const migrateOutput = Effect.fn("migration.outputChunks")(function* (
             )(text);
             return {
               ...record,
-              stdinMode: "closed" as const,
+              inputMode: "closed" as const,
               checkpoint: null,
               checkpointCount: 0,
             };
@@ -297,38 +328,46 @@ export const migrateOutput = Effect.fn("migration.outputChunks")(function* (
           return {
             ...record,
             output,
-            stdinMode: "closed" as const,
+            inputMode: "closed" as const,
             checkpoint: null,
             checkpointCount: 0,
           };
         });
-        if (converted.id !== metadata.summary.id)
-          return yield* new StorageFailure({ cause: "Process body does not match its identity" });
+        const summary = Struct.omit(converted, [
+          "output",
+          "authority",
+          "deadlineAt",
+          "inputMode",
+          "checkpoint",
+          "checkpointCount",
+        ]);
+        if (!Schema.toEquivalence(RunMetadata.fields.summary)(summary, metadata.summary))
+          return yield* new StorageFailure({
+            cause: "Process body does not match its indexed summary",
+          });
+        const serialized = yield* Schema.encodeEffect(Schema.fromJsonString(StoredRun))(converted);
         const receipt = yield* Effect.tryPromise({
           try: () =>
-            env.OBJECTS.put(
-              object.key,
-              Schema.encodeSync(Schema.fromJsonString(StoredRun))(converted),
-              {
-                onlyIf: { etagMatches: stored.etag },
-                customMetadata: Schema.encodeSync(StoredRunMetadata)({
-                  format: "run-v5",
-                  summary: Struct.omit(converted, [
-                    "output",
-                    "authority",
-                    "deadlineAt",
-                    "stdinMode",
-                    "checkpoint",
-                    "checkpointCount",
-                  ]),
-                }),
-              },
-            ),
+            env.OBJECTS.put(object.key, serialized, {
+              onlyIf: { etagMatches: stored.etag },
+              customMetadata: Schema.encodeSync(StoredRunMetadata)({
+                format: "run-v6",
+                summary: { ...summary, stdinMode: converted.inputMode },
+              }),
+            }),
           catch: (cause) => new StorageFailure({ cause }),
         });
         if (receipt === null)
           return yield* new StorageFailure({ cause: "Process changed during output migration" });
         progress.migrated += 1;
+        if (converted.status === "queued")
+          yield* Effect.tryPromise({
+            try: () =>
+              env.EVENTS.send(
+                Schema.encodeSync(ProcessDelivery)({ key: object.key, eTag: receipt.etag }),
+              ),
+            catch: (cause) => new QueueFailure({ cause }),
+          });
       }),
     { concurrency: 4 },
   );

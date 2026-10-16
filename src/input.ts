@@ -52,7 +52,7 @@ export const initializeInput = Effect.fn("input.initialize")(function* (
   sandboxId: string,
   id: string,
   initial: Uint8Array,
-  mode: Exclude<typeof StoredRun.Type.stdinMode, "closed">,
+  mode: Exclude<typeof StoredRun.Type.inputMode, "closed">,
 ) {
   const current = yield* Effect.tryPromise({
     try: () => env.OBJECTS.head(`process-input/${sandboxId}/${id}.json`),
@@ -191,7 +191,7 @@ const openInput = Effect.fn("input.open")(function* (
     catch: (cause) => new StorageFailure({ cause }),
   });
   const record = yield* Schema.decodeUnknownEffect(Schema.fromJsonString(StoredRun))(text);
-  if (record.stdinMode === "closed")
+  if (record.inputMode === "closed")
     return yield* new Fault({
       code: "EINVAL",
       status: 400,
@@ -211,7 +211,7 @@ const openInput = Effect.fn("input.open")(function* (
       capability.sandboxId,
       id,
       Buffer.from(program.stdin, "base64"),
-      record.stdinMode,
+      record.inputMode,
     );
   }
   return { record, ...(yield* load(env, capability.sandboxId, id)) };
@@ -326,7 +326,7 @@ export const terminal = Effect.fn("process.terminal")(function* (
   if (action.op === "process.terminal.status") yield* requirePermission(capability, "read");
   else yield* requirePermission(capability, "execute");
   const { record, input: current, etag } = yield* openInput(env, capability, action.id);
-  if (record.stdinMode !== "pty")
+  if (record.inputMode !== "pty")
     return yield* new Fault({ code: "EINVAL", status: 400, message: "Process has no terminal" });
   if (current.terminal === null)
     return yield* new StorageFailure({ cause: "PTY input head has no geometry" });
@@ -419,7 +419,7 @@ export const configureTerminalAttributes = Effect.fn("process.configureTerminalA
   ) {
     yield* requirePermission(capability, "execute");
     const { record, input: current, etag } = yield* openInput(env, capability, action.id);
-    if (record.stdinMode !== "pty")
+    if (record.inputMode !== "pty")
       return yield* new Fault({ code: "EINVAL", status: 400, message: "Process has no terminal" });
     const control = current.attributes;
     if (control === null)
@@ -483,7 +483,7 @@ export const terminalAttributes = Effect.fn("process.terminalAttributes")(functi
     if (capability.expiresAt <= now)
       return yield* new Fault({ code: "UNAUTHORIZED", status: 401, message: "Capability expired" });
     const { record, input: current, etag } = yield* openInput(env, capability, action.id);
-    if (record.stdinMode !== "pty")
+    if (record.inputMode !== "pty")
       return yield* new Fault({ code: "EINVAL", status: 400, message: "Process has no terminal" });
     const control = current.attributes;
     if (control === null)
