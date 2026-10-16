@@ -1,5 +1,5 @@
 {
-  "status": "Source candidate 0.18.0. The published Boxes shell passed native production cwd binding and software composition against runtime 0.17.0. Native clock budget and minimal/Reedline checkpoint recovery passed locally with the 0.18.0 engine; deployment and remote interactive recovery for this engine remain open.",
+  "status": "Historical local record for the 0.18.0 clock budget fix and published guest selection. Experimental 0.18.0 publication, deployment, native production shell recovery and local Minutei delivery are tracked in sdk-0.18.0-delivery.json.",
   "measuredAt": "2026-10-16T14:52:53.508138+00:00",
   "baseCommit": "e90c332f491934bed6afc95dd1f9fab63ba626b3",
   "sourceInputsSha256": {
@@ -201,5 +201,6 @@
     "The marker-clock coordination is test-only and does not add a production timing flag.",
     "The shared non-clock host-request ceiling, total fuel, deadlines and capability expiry still bound sessions; arbitrary indefinite execution is not established.",
     "No production cost, latency, maximum-memory or AgentOS performance comparison is claimed."
-  ]
+  ],
+  "deliveryEvidence": "sdk-0.18.0-delivery.json"
 }

@@ -233,7 +233,7 @@
     },
     "change": "The proof has one input writer. It now advances its next offset from each confirmed native write receipt instead of making a status request before every write. Failed or uncertain writes propagate without replay. Guest deadlines, R2 persistence and runtime budgets are unchanged.",
     "interpretation": "The baseline failed cursor negotiation before checkpoint recovery. The revised binding sequence passed. This does not prove a latency bound or rule out future network-induced cursor timeouts.",
-    "http": "The initial external HTTP Reedline sequence also exited 1 during cursor negotiation. The revised receipt-based HTTP sequence has not been validated."
+    "http": "The initial external HTTP Reedline sequence exited 1 during cursor negotiation. A subsequent receipt-based HTTP sequence reached one cursor query but exceeded the fixture first-prompt observation budget of 15 seconds while the process was still running; its scoped finalizer disposed and reclaimed the sandbox. It is not a successful HTTP terminal proof or evidence that this later guest exited with a cursor timeout."
   },
   "production": [
     {
@@ -399,5 +399,10 @@
     "Only same-build heap recovery is supported. Arbitrary crash and cross-build restoration remain open.",
     "No automatic shell provisioning or Minutei deployment is established by these proofs.",
     "Full AgentOS parity and comparative production performance/cost remain open."
-  ]
+  ],
+  "additionalHttpAttempt": {
+    "backend": "reedline",
+    "result": "The revised receipt-based sequence reached one cursor query, but the fixture first-prompt observation expired after 15 seconds. The process was still running in the diagnostic record; it was then disposed and reclaimed. This is not a successful HTTP terminal proof or proof that the guest exited with a cursor timeout.",
+    "sandboxId": "terminal-proof-ae9fb6ae-2f56-4ae4-821f-79eee3e9f026"
+  }
 }
