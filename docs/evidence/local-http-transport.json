@@ -1,0 +1,74 @@
+{
+  "status": "Test-only mitigation validated by native repeated regressions, the full 352-test workerd suite and TypeScript.",
+  "observations": [
+    {
+      "source": "https://github.com/minutei-ai/boxes/actions/runs/38831149022",
+      "site": "tests/dispose.test.ts:114",
+      "failure": "Native HttpClient TransportError instead of expected authorization response."
+    },
+    {
+      "source": "https://github.com/minutei-ai/boxes/actions/runs/38837440866",
+      "site": "tests/interpreter.test.ts",
+      "failure": "Native ECONNRESET from localhost workerd; 351 of 352 tests passed."
+    }
+  ],
+  "reproductions": {
+    "unchangedNativeTests": {
+      "command": "bun test --rerun-each 20 tests/interpreter.test.ts tests/dispose.test.ts",
+      "passed": 59,
+      "failed": 1,
+      "assertions": 1058,
+      "seconds": 106.01,
+      "site": "Same disposed authority assertion as the earlier CI failure."
+    },
+    "isolatedSdkOnly": {
+      "pairs": 500,
+      "failed": 0
+    },
+    "mixedRawAndSdk": {
+      "failureAtPair": 156,
+      "stage": "SDK request immediately after the raw controlled-clock authorization request",
+      "error": "ECONNRESET"
+    },
+    "verboseMixedRepeat": {
+      "failureAtPair": 208,
+      "wire": "HTTP/1.1; keep-alive; expected 401 response fully read before the subsequent reset."
+    },
+    "independentDifferentialVariants": [
+      {
+        "change": "Disable reuse only for native SDK HttpClient requests",
+        "pairs": 500,
+        "failed": 0
+      },
+      {
+        "change": "Disable reuse only for raw controlled-clock request",
+        "pairs": 500,
+        "failed": 0
+      }
+    ]
+  },
+  "change": "Use native FetchHttpClient.RequestInit keepalive:false in the two affected test scopes and keepalive:false for the disposal clock probe. Expected status/error/body and Worker replacement checks are unchanged. No SDK/Worker code, test retry or timeout changed.",
+  "fixedNativeTests": {
+    "command": "bun test --rerun-each 20 tests/interpreter.test.ts tests/dispose.test.ts",
+    "passed": 60,
+    "failed": 0,
+    "assertions": 1060,
+    "seconds": 100.88
+  },
+  "reference": "https://bun.com/docs/runtime/networking/fetch#implementation-details",
+  "limits": [
+    "The minimized reproduction mixes pooled native host transports at the local workerd boundary; the underlying native socket-close internals were not traced.",
+    "500-case and repeated test passes do not establish that every possible transport failure is eliminated.",
+    "Release archives and deployed Worker code remain byte-identical; the mitigation changes test transport ownership only."
+  ],
+  "baseCommit": "39cbdd07351b820032c823fe9a2b9ade56f0d2bc",
+  "fullSuite": {
+    "command": "bun run test",
+    "passed": 352,
+    "failed": 0,
+    "files": 65,
+    "assertions": 4783,
+    "seconds": 145.53
+  },
+  "typecheck": "bun run typecheck passed."
+}

@@ -215,7 +215,10 @@ test(
           expect(queued.output?.stdout).toContain("stdin=[115, 97, 118, 101, 100]");
           yield* nextClient.action(id, { op: "vm.dispose" });
         }),
-      ).pipe(Effect.provide(FetchHttpClient.layer)),
+      ).pipe(
+        Effect.provide(FetchHttpClient.layer),
+        Effect.provideService(FetchHttpClient.RequestInit, { keepalive: false }),
+      ),
     ),
   15000,
 );

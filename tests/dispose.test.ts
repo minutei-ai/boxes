@@ -98,6 +98,7 @@ test("disposal is durable and idempotent without weakening authority or reusing 
         const expired = yield* Effect.promise(() =>
           fetch(new URL(`/v1/sandboxes/${id}/action`, url), {
             method: "POST",
+            keepalive: false,
             headers: {
               authorization: `Bearer ${retained.expiring.token}`,
               "content-type": "application/json",
@@ -139,7 +140,10 @@ test("disposal is durable and idempotent without weakening authority or reusing 
         );
         expect(results).toEqual([{ ok: true }, { ok: true }, { ok: true }]);
       }),
-    ).pipe(Effect.provide(FetchHttpClient.layer)),
+    ).pipe(
+      Effect.provide(FetchHttpClient.layer),
+      Effect.provideService(FetchHttpClient.RequestInit, { keepalive: false }),
+    ),
   ));
 
 test("disposal settles queued work even when its archived program awaits a newer runtime", () =>
