@@ -1,5 +1,5 @@
 {
-  "status": "Source implementation verified locally; not included in the published SDK/runtime 0.11.0 or deployed Worker.",
+  "status": "Local evidence for descriptor script execution, subsequently published and deployed in experimental SDK/runtime 0.12.0.",
   "baseCommit": "a76b62063eccfc7ef7f7228a1c0f9397dec2e2ce",
   "change": "Native WASI fexec dispatch resolves shebang scripts through the same bounded loader as path exec. Rust owns process-local regular-file aliases, descriptor rights, independent offsets and close-on-exec admission. Effect reads the original executable descriptor bytes and loads bounded interpreters; the descriptor buffer view avoids a second host-side byte copy.",
   "cases": [
@@ -22,7 +22,7 @@
   "limits": [
     "Only regular-file, read-only descriptor aliases and followed metadata are supported; no devfs mount, directory or pipe alias support.",
     "Direct libc cd/exec synchronization, other interpreter runtimes, PTY and remaining AgentOS parity gates stay open.",
-    "Production proof and archive distribution for this source increment remain pending. The published 0.11.0 artifacts are unchanged.",
+    "Production and archive distribution are recorded in sdk-0.12.0-delivery.json. Published 0.11.0 artifacts remain unchanged.",
     "Native test timings do not establish production latency, throughput or cost."
   ],
   "verification": {
@@ -48,5 +48,6 @@
   "runtimeAssetsSha256": {
     "index.js": "f7e9c9ea3ff28c52e04c715f512c64784161b8f5a595d75db6a2041b2e98c43a",
     "cirro_wasi_bg.wasm": "719f3bfa9fcaec2a9552f1d17b1fecdaf4a1753edc3f78b628c0791451fd0cff"
-  }
+  },
+  "deliveryEvidence": "docs/evidence/sdk-0.12.0-delivery.json"
 }

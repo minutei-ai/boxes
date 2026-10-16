@@ -1,5 +1,5 @@
 {
-  "status": "Experimental SDK/runtime 0.12.0 candidate validated locally; deployment and publication are separate gates.",
+  "status": "Local candidate evidence for the subsequently published and deployed experimental SDK/runtime 0.12.0.",
   "version": "0.12.0",
   "baseCommit": "8f8967bc82e735d96ba8ad8c1739244e6ebde582",
   "change": "Deliver descriptor-based shebang execution through the ordinary Worker and native service binding. SDK action inference uses the concrete native Action input type so source and emitted declarations retain portable action/response relationships without casts. Shared descriptor cases verify normal execution, rename, unlink, CLOEXEC and explicit-close failure, and per-case retained file effects.",
@@ -85,5 +85,6 @@
     "This compatibility proof uses Minutei local SDK 0.10.1 with the exact new runtime 0.12.0; it does not establish a 0.12.0 consumer installation or a Minutei deployment.",
     "Local Minutei history Queue has no consumer; browser authentication and model quality remain unverified.",
     "No production cost or AgentOS performance comparison is claimed."
-  ]
+  ],
+  "deliveryEvidence": "docs/evidence/sdk-0.12.0-delivery.json"
 }

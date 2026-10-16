@@ -1,0 +1,980 @@
+{
+  "status": "Published experimental SDK/runtime 0.12.0; ordinary Worker deployment, authenticated HTTP/native-binding descriptor execution and actual local Minutei integration verified. Full AgentOS parity remains open.",
+  "version": "0.12.0",
+  "sourceCommit": "39cbdd07351b820032c823fe9a2b9ade56f0d2bc",
+  "descriptorImplementationCommit": "8f8967bc82e735d96ba8ad8c1739244e6ebde582",
+  "release": {
+    "assets": [
+      {
+        "apiUrl": "https://api.github.com/repos/minutei-ai/boxes/releases/assets/645726487",
+        "contentType": "application/x-gtar",
+        "createdAt": "2026-10-16T01:15:59Z",
+        "digest": "sha256:6b9cc8817c618dc9ce3ec04dcc733a95e508dfb4124014c7ae8be5ba631e6e41",
+        "downloadCount": 1,
+        "id": "RA_kwDOVHG00M4mfQEX",
+        "label": "",
+        "name": "minutei-ai-boxes-0.12.0.tgz",
+        "size": 69046,
+        "state": "uploaded",
+        "updatedAt": "2026-10-16T01:16:00Z",
+        "url": "https://github.com/minutei-ai/boxes/releases/download/sdk-v0.12.0/minutei-ai-boxes-0.12.0.tgz"
+      },
+      {
+        "apiUrl": "https://api.github.com/repos/minutei-ai/boxes/releases/assets/645726482",
+        "contentType": "application/x-gtar",
+        "createdAt": "2026-10-16T01:15:59Z",
+        "digest": "sha256:882b1ccb47ece2897403d72064fa23e802db25413852b6b57a41186d02b40802",
+        "downloadCount": 1,
+        "id": "RA_kwDOVHG00M4mfQES",
+        "label": "",
+        "name": "minutei-ai-boxes-runtime-0.12.0.tgz",
+        "size": 5523640,
+        "state": "uploaded",
+        "updatedAt": "2026-10-16T01:16:00Z",
+        "url": "https://github.com/minutei-ai/boxes/releases/download/sdk-v0.12.0/minutei-ai-boxes-runtime-0.12.0.tgz"
+      },
+      {
+        "apiUrl": "https://api.github.com/repos/minutei-ai/boxes/releases/assets/645726486",
+        "contentType": "application/octet-stream",
+        "createdAt": "2026-10-16T01:15:59Z",
+        "digest": "sha256:a5295d725eec2cfd6402ca65e10218414c85eaaf7b0defc54f0d044ff5877a73",
+        "downloadCount": 1,
+        "id": "RA_kwDOVHG00M4mfQEW",
+        "label": "",
+        "name": "SHA256SUMS",
+        "size": 196,
+        "state": "uploaded",
+        "updatedAt": "2026-10-16T01:16:00Z",
+        "url": "https://github.com/minutei-ai/boxes/releases/download/sdk-v0.12.0/SHA256SUMS"
+      }
+    ],
+    "isDraft": false,
+    "isPrerelease": true,
+    "tagName": "sdk-v0.12.0",
+    "targetCommitish": "39cbdd07351b820032c823fe9a2b9ade56f0d2bc",
+    "url": "https://github.com/minutei-ai/boxes/releases/tag/sdk-v0.12.0"
+  },
+  "archiveAudit": [
+    {
+      "name": "minutei-ai-boxes-0.12.0.tgz",
+      "entries": 16,
+      "bytes": 69046,
+      "sha256": "6b9cc8817c618dc9ce3ec04dcc733a95e508dfb4124014c7ae8be5ba631e6e41",
+      "configuredCredentialAbsent": true,
+      "licenseMatches": true
+    },
+    {
+      "name": "minutei-ai-boxes-runtime-0.12.0.tgz",
+      "entries": 8,
+      "bytes": 5523640,
+      "sha256": "882b1ccb47ece2897403d72064fa23e802db25413852b6b57a41186d02b40802",
+      "configuredCredentialAbsent": true,
+      "licenseMatches": true,
+      "deployableAssetsMatch": true
+    }
+  ],
+  "verification": {
+    "localCandidateEvidence": "docs/evidence/sdk-0.12.0-local.json",
+    "sourceCI": {
+      "url": "https://github.com/minutei-ai/boxes/actions/runs/38834142000",
+      "conclusion": "success",
+      "nativeTests": 352,
+      "seconds": 117.95,
+      "packageProof": "Passed all workflow steps, including exact CI SDK/runtime package and declaration proof."
+    },
+    "tagCI": {
+      "url": "https://github.com/minutei-ai/boxes/actions/runs/38837440866",
+      "initialConclusion": "failure",
+      "nativeTestsPassed": 351,
+      "nativeTestsFailed": 1,
+      "seconds": 117.37,
+      "observation": "Native localhost ECONNRESET in interpreter integration test. The minimized mixed-transport reproduction and test-only mitigation are recorded separately.",
+      "diagnosisEvidence": "docs/evidence/local-http-transport.json",
+      "rerun": {
+        "attempt": 2,
+        "conclusion": "",
+        "headSha": "39cbdd07351b820032c823fe9a2b9ade56f0d2bc",
+        "status": "in_progress",
+        "url": "https://github.com/minutei-ai/boxes/actions/runs/38837440866"
+      },
+      "rerunLimit": "This rerun uses the original tag code, before the test-only mitigation. Its result does not prove that the old transport configuration is fixed."
+    },
+    "uploadedAssets": "Uploaded draft assets downloaded through native gh; both attached SHA256SUMS passed. Publicly installed Minutei SDK/runtime files match all 24 archive files. Existing 0.11.0 assets retained.",
+    "deployment": {
+      "profile": "minutei",
+      "stack": "cirro",
+      "stage": "prod",
+      "worker": "cirro-sandbox-prod-rs7wexxow56rmsoz",
+      "runtime": "ordinary Cloudflare Worker; native R2 and Queue; no Dynamic Workers",
+      "diagnosis": {
+        "initialDeployment": {
+          "workerUpdate": "succeeded",
+          "migration": "filesystem-v4",
+          "lastCompletedPage": 36,
+          "failure": "TimeoutError after 120 seconds on the next page",
+          "wallSeconds": 522.8
+        },
+        "nativePersistedPlan": {
+          "Sandbox": "noop",
+          "Migrations": "run"
+        },
+        "replay": {
+          "pages": 67,
+          "statuses": [200],
+          "migrated": 0,
+          "maxHeadersMs": 6013,
+          "maxBodyAdditionalMs": 2,
+          "page37Repetitions": [
+            {
+              "headerMs": 4926,
+              "bodyMs": 4928
+            },
+            {
+              "headerMs": 5340,
+              "bodyMs": 5342
+            }
+          ],
+          "nativeTail": {
+            "status": 200,
+            "cpuMs": 53,
+            "wallMs": 5158
+          }
+        },
+        "sourceContract": "Installed FetchHttpClient reads RequestInit at each request; the configured keepalive:false is applied at the execution context.",
+        "conclusion": "The page timeout did not reproduce. No code, timeout or retry policy changed; the whole native Alchemy migration action was resumed against current persisted records. The original timeout cause remains undetermined."
+      },
+      "resume": "Unmodified native Alchemy action completed successfully; only Migrations ran, Worker and all other resources remained noop.",
+      "resumeSeconds": 558.3,
+      "limits": "The original production page timeout did not reproduce; its cause remains undetermined. No timeout, retry or migration policy changed."
+    },
+    "productionSoftware": {
+      "target": "https://cirro-sandbox-prod-rs7wexxow56rmsoz.manoel-carvalhoneto.workers.dev",
+      "measuredAt": 1792115471745,
+      "sandboxId": "software-proof-c63dd235-d091-42be-9195-eb2a62809471",
+      "reclaimed": true,
+      "packages": [
+        {
+          "packageId": "f606cc4caa9ba50f7022d681269ca0ea98ccffc0d29f3106a0f18ab593c59412",
+          "digest": "sha256:f606cc4caa9ba50f7022d681269ca0ea98ccffc0d29f3106a0f18ab593c59412",
+          "sizeBytes": 3104428,
+          "manifest": {
+            "name": "sh",
+            "version": "0.0.1",
+            "provides": null,
+            "commands": [
+              {
+                "command": "sh",
+                "entry": "bin/sh"
+              }
+            ],
+            "man_pages": []
+          }
+        },
+        {
+          "packageId": "edb1cf0bbcf663d177916592d2f1b4361a02966dbf2eb44e3e61ea2a399bb43a",
+          "digest": "sha256:edb1cf0bbcf663d177916592d2f1b4361a02966dbf2eb44e3e61ea2a399bb43a",
+          "sizeBytes": 716972,
+          "manifest": {
+            "name": "jq",
+            "version": "0.3.3",
+            "provides": null,
+            "commands": [
+              {
+                "command": "jq",
+                "entry": "bin/jq"
+              }
+            ],
+            "man_pages": []
+          }
+        }
+      ],
+      "runs": [
+        {
+          "id": "shebang-direct",
+          "status": "exited",
+          "sourceHash": "f5e4811863745bdfc31f16d80d52709092f75c79868efbc17ac04fad88e21b2e",
+          "language": "wasm",
+          "startedAt": 1792115253772,
+          "finishedAt": 1792115259261,
+          "output": {
+            "stdout": "/tmp/installed-script|a b|shebang-direct|input line\n",
+            "stderr": "",
+            "result": null,
+            "exitCode": 0
+          }
+        },
+        {
+          "id": "shebang-spawn",
+          "status": "exited",
+          "sourceHash": "7a9f385e9364edfd053d787448f7fdf458b86522b613f38fa743f14ba160a102",
+          "language": "wasm",
+          "startedAt": 1792115262539,
+          "finishedAt": 1792115268975,
+          "output": {
+            "stdout": "/tmp/installed-script|a b|shebang-spawn|input line\nafter",
+            "stderr": "",
+            "result": null,
+            "exitCode": 0
+          }
+        },
+        {
+          "id": "shebang-exec",
+          "status": "exited",
+          "sourceHash": "0f27692c74a018d722b8e7ab72e24d55b2bff8f1fc755a65aa4376a88207e98f",
+          "language": "wasm",
+          "startedAt": 1792115272845,
+          "finishedAt": 1792115279289,
+          "output": {
+            "stdout": "/tmp/installed-script|a b|shebang-exec|input line\n",
+            "stderr": "",
+            "result": null,
+            "exitCode": 0
+          }
+        },
+        {
+          "id": "jq-0",
+          "status": "exited",
+          "sourceHash": "0f4c3e26b488ce3d9ac7e4bbd4eb8e41d85f5cda439e58a461ad382db2b59a0d",
+          "language": "wasm",
+          "startedAt": 1792115282843,
+          "finishedAt": 1792115285818,
+          "output": {
+            "stdout": "jq-jaq-0.1.0\n",
+            "stderr": "",
+            "result": null,
+            "exitCode": 0
+          }
+        },
+        {
+          "id": "jq-1",
+          "status": "exited",
+          "sourceHash": "f85bdeb7bc5ccfbd4984eaa5d3d8291d7a6c52c68759746f05b9164077b914c2",
+          "language": "wasm",
+          "startedAt": 1792115287059,
+          "finishedAt": 1792115290177,
+          "output": {
+            "stdout": "42\n",
+            "stderr": "",
+            "result": null,
+            "exitCode": 0
+          }
+        },
+        {
+          "id": "jq-2",
+          "status": "exited",
+          "sourceHash": "c433e8dd81d5e420551ce6d2ac57efebe3b85ab20ea7b6900f410ecd09ced7b3",
+          "language": "wasm",
+          "startedAt": 1792115291379,
+          "finishedAt": 1792115294214,
+          "output": {
+            "stdout": "45\n",
+            "stderr": "",
+            "result": null,
+            "exitCode": 0
+          }
+        },
+        {
+          "id": "jq-3",
+          "status": "exited",
+          "sourceHash": "dba7b0361b8089927f6645e9f1ed1e3f943aec054258079084cd4b4932b9c040",
+          "language": "wasm",
+          "startedAt": 1792115295350,
+          "finishedAt": 1792115298690,
+          "output": {
+            "stdout": "73\n",
+            "stderr": "",
+            "result": null,
+            "exitCode": 0
+          }
+        },
+        {
+          "id": "sh-0",
+          "status": "exited",
+          "sourceHash": "e0bb9baa9eecd25891f56b0a51edbf9b0c5d33cf65f94b555e2b9feb413d0a35",
+          "language": "wasm",
+          "startedAt": 1792115300231,
+          "finishedAt": 1792115304431,
+          "output": {
+            "stdout": "one\ntwo\n",
+            "stderr": "",
+            "result": null,
+            "exitCode": 0
+          }
+        },
+        {
+          "id": "sh-1",
+          "status": "exited",
+          "sourceHash": "41b812ea30d049c717df6d7e671f2561392d67c354745e677b0050f8e08cc38b",
+          "language": "wasm",
+          "startedAt": 1792115305891,
+          "finishedAt": 1792115309816,
+          "output": {
+            "stdout": "function\n",
+            "stderr": "",
+            "result": null,
+            "exitCode": 0
+          }
+        },
+        {
+          "id": "sh-2",
+          "status": "exited",
+          "sourceHash": "4e0db22e675fa7193356b3121d7c8877b8405f67e2c9966da18118aab816f496",
+          "language": "wasm",
+          "startedAt": 1792115311333,
+          "finishedAt": 1792115316512,
+          "output": {
+            "stdout": "0\n1\n2\n",
+            "stderr": "",
+            "result": null,
+            "exitCode": 0
+          }
+        },
+        {
+          "id": "sh-3",
+          "status": "exited",
+          "sourceHash": "7e387215c605d48410b897c2db3c7bafb23b11b7b4528e6592f9a8e268052568",
+          "language": "wasm",
+          "startedAt": 1792115318019,
+          "finishedAt": 1792115322392,
+          "output": {
+            "stdout": "default\nmatched\n",
+            "stderr": "",
+            "result": null,
+            "exitCode": 0
+          }
+        },
+        {
+          "id": "sh-4",
+          "status": "exited",
+          "sourceHash": "9be95ebd1581d773197d03ddb17e0d713b2b2d430896e03bbf22f5ced12d5df0",
+          "language": "wasm",
+          "startedAt": 1792115324139,
+          "finishedAt": 1792115328088,
+          "output": {
+            "stdout": "0077\n",
+            "stderr": "",
+            "result": null,
+            "exitCode": 0
+          }
+        },
+        {
+          "id": "sh-5",
+          "status": "exited",
+          "sourceHash": "79ddae80a3eaeef6759bd4868a70d661d5be58fe7756962306ef82e777c6aa73",
+          "language": "wasm",
+          "startedAt": 1792115329654,
+          "finishedAt": 1792115332637,
+          "output": {
+            "stdout": "0022\n",
+            "stderr": "",
+            "result": null,
+            "exitCode": 0
+          }
+        },
+        {
+          "id": "sh-6",
+          "status": "exited",
+          "sourceHash": "40c275b8ea52aa1000641b69b95a634ab155e50de2770df4c1a548f92f27f853",
+          "language": "wasm",
+          "startedAt": 1792115334212,
+          "finishedAt": 1792115344162,
+          "output": {
+            "stdout": "0077\n0077\n",
+            "stderr": "",
+            "result": null,
+            "exitCode": 0
+          }
+        },
+        {
+          "id": "sh-7",
+          "status": "exited",
+          "sourceHash": "db575d6414d41152d3dab9128946a45f2b2bfb626921222c37236cc07d815d80",
+          "language": "wasm",
+          "startedAt": 1792115347337,
+          "finishedAt": 1792115352011,
+          "output": {
+            "stdout": "0077\n",
+            "stderr": "",
+            "result": null,
+            "exitCode": 0
+          }
+        },
+        {
+          "id": "sh-8",
+          "status": "exited",
+          "sourceHash": "7e08df717a774067a4c4a5742fc499b0bae06537307261f934a2be0d03177016",
+          "language": "wasm",
+          "startedAt": 1792115354733,
+          "finishedAt": 1792115358726,
+          "output": {
+            "stdout": "0077\n",
+            "stderr": "",
+            "result": null,
+            "exitCode": 0
+          }
+        },
+        {
+          "id": "sh-9",
+          "status": "exited",
+          "sourceHash": "9e40c43c492c5163277009c056e57d3101a55017760afe8e9b1e278b8f3d3714",
+          "language": "wasm",
+          "startedAt": 1792115360547,
+          "finishedAt": 1792115371102,
+          "output": {
+            "stdout": "42\n",
+            "stderr": "",
+            "result": null,
+            "exitCode": 0
+          }
+        },
+        {
+          "id": "sh-10",
+          "status": "exited",
+          "sourceHash": "be51dfd2f9af5f6fa503993c99aa26d7ed876a1c773afee8fb913c5ac309ac89",
+          "language": "wasm",
+          "startedAt": 1792115372605,
+          "finishedAt": 1792115375331,
+          "output": {
+            "stdout": "42\n",
+            "stderr": "",
+            "result": null,
+            "exitCode": 0
+          }
+        },
+        {
+          "id": "sh-11",
+          "status": "exited",
+          "sourceHash": "15dfac7a355de73dc466e777835bca5f3c583f9caffb693bd527c6494015a0ca",
+          "language": "wasm",
+          "startedAt": 1792115377007,
+          "finishedAt": 1792115380678,
+          "output": {
+            "stdout": "73\n",
+            "stderr": "",
+            "result": null,
+            "exitCode": 0
+          }
+        },
+        {
+          "id": "sh-12",
+          "status": "exited",
+          "sourceHash": "8a1281c568389beb5cbf60392dc6b3e72093706e9ccea7d46a81a3f46d3349a0",
+          "language": "wasm",
+          "startedAt": 1792115382431,
+          "finishedAt": 1792115387149,
+          "output": {
+            "stdout": "first\nsecond\n",
+            "stderr": "",
+            "result": null,
+            "exitCode": 0
+          }
+        },
+        {
+          "id": "sh-13",
+          "status": "exited",
+          "sourceHash": "2954c1398c088477b2ade378d5012c0d03a170026fd5cb22335faf43588c38d3",
+          "language": "wasm",
+          "startedAt": 1792115388692,
+          "finishedAt": 1792115395762,
+          "output": {
+            "stdout": "\"outerr\"\n",
+            "stderr": "",
+            "result": null,
+            "exitCode": 0
+          }
+        },
+        {
+          "id": "sh-14",
+          "status": "exited",
+          "sourceHash": "0b0c1eeafe28903baa32af5fca429db4b912facc9b3c704a1fc487f38f971d46",
+          "language": "wasm",
+          "startedAt": 1792115397404,
+          "finishedAt": 1792115400529,
+          "output": {
+            "stdout": "1\n",
+            "stderr": "",
+            "result": null,
+            "exitCode": 0
+          }
+        },
+        {
+          "id": "sh-15",
+          "status": "exited",
+          "sourceHash": "59ff2467151ab422f753e5f8d98c7512efcccb724722914b1fd03686d8baafb2",
+          "language": "wasm",
+          "startedAt": 1792115402153,
+          "finishedAt": 1792115408399,
+          "output": {
+            "stdout": "1\n2\n3\n",
+            "stderr": "",
+            "result": null,
+            "exitCode": 0
+          }
+        },
+        {
+          "id": "sh-16",
+          "status": "exited",
+          "sourceHash": "f82db8cf49f1218e5ba0e04e567a679f4e5f0e2a95ab18eceb6118aa83813cc1",
+          "language": "wasm",
+          "startedAt": 1792115409945,
+          "finishedAt": 1792115413415,
+          "output": {
+            "stdout": "",
+            "stderr": "",
+            "result": null,
+            "exitCode": 0
+          }
+        },
+        {
+          "id": "pipeline",
+          "status": "exited",
+          "sourceHash": "f80a8287545608f9df43163350753cf00c9a8ce365d4221ed9f929ac9d547726",
+          "language": "shell",
+          "startedAt": 1792115465819,
+          "finishedAt": 1792115471054,
+          "output": {
+            "stdout": "91\n",
+            "stderr": "",
+            "result": null,
+            "exitCode": 0
+          }
+        }
+      ],
+      "descriptors": [
+        {
+          "run": {
+            "id": "descriptor-fexec",
+            "status": "exited",
+            "sourceHash": "0c8e786835f8ab9b3cbb4f71bb0f9dd9917b582ad1eb4f38c6d6ea2ce03c1779",
+            "language": "wasm",
+            "startedAt": 1792115420523,
+            "finishedAt": 1792115427434,
+            "output": {
+              "stdout": "/dev/fd/12|fexec|blue\n",
+              "stderr": "",
+              "result": null,
+              "exitCode": 0
+            }
+          },
+          "file": {
+            "content": "ZmV4ZWM=",
+            "encoding": "base64",
+            "size": 5
+          }
+        },
+        {
+          "run": {
+            "id": "descriptor-fexec-unlink",
+            "status": "exited",
+            "sourceHash": "d7884d7a020822394129d672fa05fe1b1f6595ea7f285e67efac13c8c54a135b",
+            "language": "wasm",
+            "startedAt": 1792115432028,
+            "finishedAt": 1792115438358,
+            "output": {
+              "stdout": "/dev/fd/12|fexec|blue\n",
+              "stderr": "",
+              "result": null,
+              "exitCode": 0
+            }
+          },
+          "file": {
+            "content": "ZmV4ZWMtdW5saW5r",
+            "encoding": "base64",
+            "size": 12
+          }
+        },
+        {
+          "run": {
+            "id": "descriptor-fexec-rename",
+            "status": "exited",
+            "sourceHash": "5252bf965c8a33706f36dfeb3936a9cf90179665b93b3d48f045d6d0f87c5c28",
+            "language": "wasm",
+            "startedAt": 1792115442848,
+            "finishedAt": 1792115448978,
+            "output": {
+              "stdout": "/dev/fd/12|fexec|blue\n",
+              "stderr": "",
+              "result": null,
+              "exitCode": 0
+            }
+          },
+          "file": {
+            "content": "ZmV4ZWMtcmVuYW1l",
+            "encoding": "base64",
+            "size": 12
+          }
+        },
+        {
+          "run": {
+            "id": "descriptor-fexec-cloexec",
+            "status": "exited",
+            "sourceHash": "eb6b5667f0c2002fb8bbacc86d9d2983b4532a613db8f38843879e671c868e02",
+            "language": "wasm",
+            "startedAt": 1792115454062,
+            "finishedAt": 1792115456359,
+            "output": {
+              "stdout": "",
+              "stderr": "",
+              "result": 44,
+              "exitCode": 0
+            }
+          },
+          "file": {
+            "content": "ZmV4ZWMtcmVuYW1l",
+            "encoding": "base64",
+            "size": 12
+          }
+        },
+        {
+          "run": {
+            "id": "descriptor-fexec-closed",
+            "status": "exited",
+            "sourceHash": "6ee56814462c45c8da4aae9696c84790e89f45dd9f76c2c5514aa4b6cf26f28e",
+            "language": "wasm",
+            "startedAt": 1792115461358,
+            "finishedAt": 1792115464112,
+            "output": {
+              "stdout": "",
+              "stderr": "",
+              "result": 44,
+              "exitCode": 0
+            }
+          },
+          "file": {
+            "content": "ZmV4ZWMtcmVuYW1l",
+            "encoding": "base64",
+            "size": 12
+          }
+        }
+      ]
+    },
+    "productionBinding": {
+      "measuredAt": 1792115374720,
+      "profile": "minutei",
+      "targetWorker": "cirro-sandbox-prod-rs7wexxow56rmsoz",
+      "sandboxId": "remote-binding-71b38eee-48ff-43fa-8ace-31ac50ec4a9c",
+      "previewOrigin": "https://boxes-binding-71b38eee-48ff-43fa-8ace-31ac50ec4a9c.manoel-carvalhoneto.workers.dev",
+      "replacementPreviewOrigin": "https://boxes-replacement-71b38eee-48ff-43fa-8ace-31ac50ec4a9c.manoel-carvalhoneto.workers.dev",
+      "consumerBundleSha256": "500b135ee5288cfd7aead648831bae28d3a4046d356de5acfa52a779d57b8713",
+      "sdkVersion": "0.12.0",
+      "sdkModulesSha256": {
+        "../../src/sdk": "160f9dd7e0049d4ec1a50eca36fa1c86669393d466f6ef3505670e307890b721",
+        "../../src/sdk-rpc": "9f75e2d2a10abe0a774bd13b2178963d036fecd13ef1d6bcca710e0a082cfc15",
+        "../../src/sdk-tanstack": "1b0881ec6fcbfebecb8a365f8e86f7f6645fe803aec6d421250201de98ec436c",
+        "../../src/contracts": "875496158b9435808c462a2b038e47b5a1be52a3ba24169ebb17c2b83dd48e38"
+      },
+      "inlineDeadline": {
+        "requestedMs": 15000,
+        "startedAt": 1792115254107,
+        "recovery": {
+          "state": "running",
+          "checkpoints": 0,
+          "resumable": false,
+          "deadlineAt": 1792115269107
+        }
+      },
+      "proof": {
+        "measuredAt": 1792115290574,
+        "callback": {
+          "id": "rpc-callback",
+          "status": "exited",
+          "sourceHash": "75090090f42e508d6542184bce91b43c775c128d2ccfc04977bc226f5980cf7d",
+          "language": "typescript",
+          "startedAt": 1792115254107,
+          "finishedAt": 1792115259711,
+          "output": {
+            "stdout": "",
+            "stderr": "",
+            "result": {
+              "answer": 42,
+              "transport": "native RPC"
+            },
+            "exitCode": 0
+          }
+        },
+        "voidCallback": {
+          "id": "rpc-void",
+          "status": "exited",
+          "sourceHash": "0216a3fc5e53bcf477f59bda2cb4dc00f2f8f938fc8658ed498f019dcfbca5fa",
+          "language": "typescript",
+          "startedAt": 1792115260691,
+          "finishedAt": 1792115262680,
+          "output": {
+            "stdout": "",
+            "stderr": "",
+            "result": {
+              "wasUndefined": true,
+              "freshGlobals": true
+            },
+            "exitCode": 0
+          }
+        },
+        "interpreters": [
+          {
+            "id": "shebang-direct",
+            "status": "exited",
+            "sourceHash": "f5e4811863745bdfc31f16d80d52709092f75c79868efbc17ac04fad88e21b2e",
+            "language": "wasm",
+            "startedAt": 1792115268145,
+            "finishedAt": 1792115273534,
+            "output": {
+              "stdout": "/tmp/installed-script|a b|shebang-direct|input line\n",
+              "stderr": "",
+              "result": null,
+              "exitCode": 0
+            }
+          },
+          {
+            "id": "shebang-spawn",
+            "status": "exited",
+            "sourceHash": "7a9f385e9364edfd053d787448f7fdf458b86522b613f38fa743f14ba160a102",
+            "language": "wasm",
+            "startedAt": 1792115275065,
+            "finishedAt": 1792115281566,
+            "output": {
+              "stdout": "/tmp/installed-script|a b|shebang-spawn|input line\nafter",
+              "stderr": "",
+              "result": null,
+              "exitCode": 0
+            }
+          },
+          {
+            "id": "shebang-exec",
+            "status": "exited",
+            "sourceHash": "0f27692c74a018d722b8e7ab72e24d55b2bff8f1fc755a65aa4376a88207e98f",
+            "language": "wasm",
+            "startedAt": 1792115282922,
+            "finishedAt": 1792115289235,
+            "output": {
+              "stdout": "/tmp/installed-script|a b|shebang-exec|input line\n",
+              "stderr": "",
+              "result": null,
+              "exitCode": 0
+            }
+          }
+        ],
+        "interpreterFile": {
+          "content": "c2hlYmFuZy1leGVj",
+          "encoding": "base64",
+          "size": 12
+        },
+        "file": {
+          "content": "bmF0aXZlIENsb3VkZmxhcmUgYmluZGluZw==",
+          "encoding": "base64",
+          "size": 25
+        },
+        "calls": [
+          {
+            "op": "host.call",
+            "name": "answer",
+            "input": {
+              "value": 21
+            }
+          },
+          {
+            "op": "host.call",
+            "name": "void"
+          }
+        ],
+        "managementDenied": 403,
+        "wrongSandboxDenied": 401
+      },
+      "descriptors": [
+        {
+          "run": {
+            "id": "descriptor-fexec",
+            "status": "exited",
+            "sourceHash": "0c8e786835f8ab9b3cbb4f71bb0f9dd9917b582ad1eb4f38c6d6ea2ce03c1779",
+            "language": "wasm",
+            "startedAt": 1792115297762,
+            "finishedAt": 1792115304703,
+            "output": {
+              "stdout": "/dev/fd/12|fexec|blue\n",
+              "stderr": "",
+              "result": null,
+              "exitCode": 0
+            }
+          },
+          "file": {
+            "content": "ZmV4ZWM=",
+            "encoding": "base64",
+            "size": 5
+          }
+        },
+        {
+          "run": {
+            "id": "descriptor-fexec-unlink",
+            "status": "exited",
+            "sourceHash": "d7884d7a020822394129d672fa05fe1b1f6595ea7f285e67efac13c8c54a135b",
+            "language": "wasm",
+            "startedAt": 1792115309310,
+            "finishedAt": 1792115315735,
+            "output": {
+              "stdout": "/dev/fd/12|fexec|blue\n",
+              "stderr": "",
+              "result": null,
+              "exitCode": 0
+            }
+          },
+          "file": {
+            "content": "ZmV4ZWMtdW5saW5r",
+            "encoding": "base64",
+            "size": 12
+          }
+        },
+        {
+          "run": {
+            "id": "descriptor-fexec-rename",
+            "status": "exited",
+            "sourceHash": "5252bf965c8a33706f36dfeb3936a9cf90179665b93b3d48f045d6d0f87c5c28",
+            "language": "wasm",
+            "startedAt": 1792115319859,
+            "finishedAt": 1792115326399,
+            "output": {
+              "stdout": "/dev/fd/12|fexec|blue\n",
+              "stderr": "",
+              "result": null,
+              "exitCode": 0
+            }
+          },
+          "file": {
+            "content": "ZmV4ZWMtcmVuYW1l",
+            "encoding": "base64",
+            "size": 12
+          }
+        },
+        {
+          "run": {
+            "id": "descriptor-fexec-cloexec",
+            "status": "exited",
+            "sourceHash": "eb6b5667f0c2002fb8bbacc86d9d2983b4532a613db8f38843879e671c868e02",
+            "language": "wasm",
+            "startedAt": 1792115330513,
+            "finishedAt": 1792115332738,
+            "output": {
+              "stdout": "",
+              "stderr": "",
+              "result": 44,
+              "exitCode": 0
+            }
+          },
+          "file": {
+            "content": "ZmV4ZWMtcmVuYW1l",
+            "encoding": "base64",
+            "size": 12
+          }
+        },
+        {
+          "run": {
+            "id": "descriptor-fexec-closed",
+            "status": "exited",
+            "sourceHash": "6ee56814462c45c8da4aae9696c84790e89f45dd9f76c2c5514aa4b6cf26f28e",
+            "language": "wasm",
+            "startedAt": 1792115337043,
+            "finishedAt": 1792115338963,
+            "output": {
+              "stdout": "",
+              "stderr": "",
+              "result": 44,
+              "exitCode": 0
+            }
+          },
+          "file": {
+            "content": "ZmV4ZWMtcmVuYW1l",
+            "encoding": "base64",
+            "size": 12
+          }
+        }
+      ],
+      "persistent": {
+        "created": {
+          "phase": "create",
+          "value": {
+            "content": "cGVyc2lzdGVudCBuYXRpdmUgYmluZGluZw==",
+            "encoding": "base64",
+            "freshGlobals": true,
+            "label": "create"
+          },
+          "callbacks": ["create"],
+          "closedContextDenied": true,
+          "writeDenied": null,
+          "lowMemoryDenied": true,
+          "policyMemoryDenied": true,
+          "allowedAllocation": 6000000
+        },
+        "resumed": {
+          "phase": "resume",
+          "value": {
+            "content": "cGVyc2lzdGVudCBuYXRpdmUgYmluZGluZw==",
+            "encoding": "base64",
+            "freshGlobals": true,
+            "label": "resume"
+          },
+          "callbacks": ["resume"],
+          "closedContextDenied": true,
+          "writeDenied": true,
+          "lowMemoryDenied": true,
+          "policyMemoryDenied": true,
+          "allowedAllocation": 6000000
+        },
+        "previousReceiptRetained": true
+      }
+    },
+    "productionCleanup": "Both scoped proof finalizers completed disposal and bounded reclamation before printing their final success reports.",
+    "minutei": {
+      "nativeProof": {
+        "clientVersion": "0.12.0",
+        "runtimeVersion": "0.12.0",
+        "runtimeArchiveSha256": "882b1ccb47ece2897403d72064fa23e802db25413852b6b57a41186d02b40802",
+        "consumerCommit": "f731503dfa0421def4c6a29c11c09d83653f5951",
+        "consumerBundleSha256": "a2a3d2e100b11c3d150795da8a1074dfe437e2bc85747b424f080e94783a6ec7",
+        "transport": "native workerd Agent service binding; actual Minutei Code Mode and tenant SQLite; local R2, KV and Queue",
+        "retention": true,
+        "isolatedRegistry": true,
+        "capabilities": true,
+        "consumerFixturesSha256": {
+          "boxes-retention.ts": "ab69256069295b3e155a6e47ebc916e23f4ae760eb4a7ae7afebd9bbc37b050f",
+          "boxes-code.worker.ts": "c3d6f06ea5f5afe322076052267468c4702fe79aff596fa847d68bdc3045e5f4"
+        }
+      },
+      "installedFiles": [
+        {
+          "package": "@minutei-ai/boxes",
+          "version": "0.12.0",
+          "matchedFiles": 16,
+          "archiveSha256": "6b9cc8817c618dc9ce3ec04dcc733a95e508dfb4124014c7ae8be5ba631e6e41"
+        },
+        {
+          "package": "@minutei-ai/boxes-runtime",
+          "version": "0.12.0",
+          "matchedFiles": 8,
+          "archiveSha256": "882b1ccb47ece2897403d72064fa23e802db25413852b6b57a41186d02b40802"
+        }
+      ],
+      "consumerTests": {
+        "tests": 2,
+        "files": 2,
+        "wallSeconds": 8.14,
+        "scope": "Actual Code Mode and tenant retention fixtures against the exact 0.12.0 artifacts; native local Workers, SQLite, R2 and Queue.",
+        "failures": 0
+      },
+      "typecheck": "Nx web:typecheck and all 29 dependency tasks passed after installing public 0.12.0 URLs.",
+      "format": "Changed manifest and maintained harness documentation passed native oxfmt.",
+      "delivery": "Local commit f731503dfa0421def4c6a29c11c09d83653f5951 on feat/s3-native-agent-runtime; public GitHub release URLs in manifest/lockfile; not pushed or deployed."
+    },
+    "testTransportMitigation": {
+      "commit": "cf9ac24d71e016c76bb362e221b5dde43f73d18c",
+      "evidence": "docs/evidence/local-http-transport.json",
+      "result": "Original native repeated tests: 59 passed, 1 failed. With explicit connection lifetime: 60 passed, 0 failed. Full suite: 352 passed, 4783 assertions, 145.53 seconds. TypeScript passed.",
+      "scope": "Test callers only; existing 0.12.0 SDK/runtime archives and deployed Worker unchanged."
+    }
+  },
+  "limits": [
+    "AgentOS parity remains incomplete; see docs/parity.md.",
+    "Direct libc cd/exec synchronization, other interpreter runtimes, PTY and broader process/context/network/software gates remain open.",
+    "Read-only regular-file descriptor aliases and followed metadata are supported; directory/pipe aliases, writes and no-follow stat remain unsupported.",
+    "Minutei production, authenticated browser and model quality are unverified; the local history Queue has no consumer.",
+    "No production cost or AgentOS performance comparison is claimed.",
+    "Packaged assets match the deployment input and behavior is proved in production; no remote cryptographic commit attestation is claimed."
+  ]
+}
