@@ -15,6 +15,7 @@ import {
   ToolStep,
   Fault,
   HostCall,
+  StoredRun,
 } from "./contracts";
 import type { HostBridge } from "./host";
 import { guestAction } from "./capabilities";
@@ -47,6 +48,7 @@ export const execute = Effect.fn("execution.run")(function* (
   canHandover: boolean,
   host: HostBridge | null = null,
   memoryLimitBytes: typeof Policy.Type.memoryBytes | null = null,
+  stdinMode: typeof StoredRun.Type.stdinMode = "closed",
 ) {
   const policy = session.head.policy;
   if (
@@ -73,6 +75,7 @@ export const execute = Effect.fn("execution.run")(function* (
       inputId,
       checkpoint,
       canHandover,
+      stdinMode,
     ).pipe(Effect.result);
     return { outcome, program, changed: false };
   }

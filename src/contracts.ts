@@ -400,10 +400,11 @@ export const RunAction = Schema.Union([
     path: Path,
   }),
 ]);
+const ProcessInputMode = Schema.Literals(["closed", "pipe", "pty"]);
 export const SpawnAction = Schema.Struct({
   op: Schema.Literal("process.spawn"),
   execution: RunAction,
-  stdinMode: Schema.optionalKey(Schema.Literals(["closed", "pipe"])),
+  stdinMode: Schema.optionalKey(ProcessInputMode),
 });
 export const HostCall = Schema.Struct({
   op: Schema.Literal("host.call"),
@@ -794,7 +795,7 @@ export const StoredRun = RunRecord.mapFields((fields) => ({
   output: Schema.NullOr(StoredOutput),
   authority: Schema.NullOr(Capability),
   deadlineAt: Schema.NullOr(Schema.Int),
-  stdinMode: Schema.Literals(["closed", "pipe"]),
+  stdinMode: ProcessInputMode,
   checkpointCount: Schema.Int.check(Schema.isBetween({ minimum: 0, maximum: 1_000_000 })),
   checkpoint: Schema.NullOr(Schema.String.check(Schema.isPattern(/^[a-f0-9]{64}$/))),
 }));

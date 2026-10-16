@@ -154,7 +154,7 @@ export const input = Effect.fn("process.input")(function* (
     catch: (cause) => new StorageFailure({ cause }),
   });
   const record = yield* Schema.decodeUnknownEffect(Schema.fromJsonString(StoredRun))(text);
-  if (record.stdinMode !== "pipe")
+  if (record.stdinMode === "closed")
     return yield* new Fault({
       code: "EINVAL",
       status: 400,

@@ -266,7 +266,7 @@ await Effect.runPromise(
         'import { cirroWasi } from "./cirro_wasi";\nexport declare const createBindings: () => typeof cirroWasi;\n',
       ),
     );
-    for (const fixture of ["normal", "blocked", "parent", "child"]) {
+    for (const fixture of ["normal", "blocked", "parent", "child", "session", "sink"]) {
       yield* run([
         "rustc",
         "--crate-type",

@@ -9,6 +9,7 @@ import {
   Schema,
   Scope,
   Semaphore,
+  Schedule,
   Struct,
 } from "effect";
 import wasm from "cirro:wasi";
@@ -26,6 +27,7 @@ import {
   SpawnStageResult,
   WasmProgram,
   WasmConfiguration,
+  StoredRun,
 } from "./contracts";
 import type { open } from "./storage";
 import {
@@ -105,6 +107,7 @@ export const wasi = Effect.fn("wasi.execute")(function* (
   inputId: string | null,
   checkpointReference: string | null,
   canHandover: boolean,
+  stdinMode: typeof StoredRun.Type.stdinMode = "closed",
 ) {
   const leaseStartedAt = yield* Clock.currentTimeMillis;
   const policy = initial.head.policy;
@@ -179,7 +182,10 @@ export const wasi = Effect.fn("wasi.execute")(function* (
       Buffer.from(program.stdin, "base64"),
     );
     yield* Effect.try({
-      try: () => guest.enable_stdin(),
+      try: () => {
+        if (stdinMode === "pty") return guest.enable_terminal();
+        return guest.enable_stdin();
+      },
       catch: (cause) => new WasmFailure({ cause }),
     });
   }
@@ -199,6 +205,19 @@ export const wasi = Effect.fn("wasi.execute")(function* (
     state.resumeFuel = restored.fuelUsed;
     state.checkpointFuel = restored.fuelUsed;
   }
+  const captureStdio = Effect.fn("wasi.captureStdio")(function* (
+    current: InstanceType<ReturnType<typeof createBindings>["WasmGuest"]>,
+    partial: boolean,
+  ) {
+    if (capture === null || current.output_bytes() === state.capturedBytes) return false;
+    const stdio = yield* Effect.try({
+      try: () => ({ stdout: current.stdout_bytes(), stderr: current.stderr_bytes() }),
+      catch: (cause) => new WasmFailure({ cause }),
+    });
+    yield* capture(stdio, partial);
+    state.capturedBytes = stdio.stdout.byteLength + stdio.stderr.byteLength;
+    return true;
+  });
   const openFile = Effect.fn("wasi.openFile")(function* (
     input: typeof WasiOpen.Type,
     guest: InstanceType<ReturnType<typeof createBindings>["WasmGuest"]>,
@@ -334,6 +353,18 @@ export const wasi = Effect.fn("wasi.execute")(function* (
   });
   if (inputId !== null) {
     const reader = Effect.gen(function* () {
+      const pause = Effect.gen(function* () {
+        if (stdinMode !== "pty") return () => Effect.sleep(1000);
+        return yield* Schedule.toStepWithSleep(
+          Schedule.exponential("16 millis").pipe(
+            Schedule.modifyDelay(({ duration }) =>
+              Effect.succeed(Duration.min(duration, Duration.seconds(1))),
+            ),
+            Schedule.map(() => undefined),
+          ),
+        );
+      });
+      const polling = { sleep: yield* pause };
       while (true) {
         if (parking.active) return;
         const wake = changes.pending;
@@ -346,22 +377,29 @@ export const wasi = Effect.fn("wasi.execute")(function* (
           const offset = guest.input_offset();
           const received = yield* readInput(env, capability.sandboxId, inputId, offset, capacity);
           if (received.data.length > 0 || received.closed) {
-            yield* semaphore.withPermits(1)(
-              Effect.try({
-                try: () =>
-                  guest.feed_stdin(
-                    received.data,
-                    received.closed && offset + received.data.length === received.total,
-                  ),
-                catch: (cause) => new WasmFailure({ cause }),
+            const position = yield* semaphore.withPermits(1)(
+              Effect.gen(function* () {
+                yield* Effect.try({
+                  try: () =>
+                    guest.feed_stdin(
+                      received.data,
+                      received.closed && offset + received.data.length === received.total,
+                    ),
+                  catch: (cause) => new WasmFailure({ cause }),
+                });
+                if (stdinMode === "pty") yield* captureStdio(guest, false);
+                return guest.input_offset();
               }),
             );
             yield* notify();
-            if (received.closed && offset + received.data.length === received.total) return;
-            continue;
+            if (received.closed && position === received.total && guest.stdin_closed()) return;
+            if (position > offset) {
+              polling.sleep = yield* pause;
+              continue;
+            }
           }
         }
-        yield* Effect.raceFirst(Effect.sleep(1000), Deferred.await(wake));
+        yield* Effect.raceFirst(polling.sleep(undefined).pipe(Effect.orDie), Deferred.await(wake));
       }
     }).pipe(
       Effect.catch((cause) =>
@@ -415,19 +453,12 @@ export const wasi = Effect.fn("wasi.execute")(function* (
           });
           if (readinessChanged) yield* notify();
           if (
-            capture !== null &&
-            guest.output_bytes() !== state.capturedBytes &&
-            (step.kind !== "yield" ||
-              state.checkpointFuel === 0 ||
-              step.fuelUsed - state.checkpointFuel >= 10_000_000)
+            step.kind !== "yield" ||
+            state.checkpointFuel === 0 ||
+            step.fuelUsed - state.checkpointFuel >= 10_000_000
           ) {
-            const stdio = yield* Effect.try({
-              try: () => ({ stdout: guest.stdout_bytes(), stderr: guest.stderr_bytes() }),
-              catch: (cause) => new WasmFailure({ cause }),
-            });
-            yield* capture(stdio, step.kind === "yield");
-            state.capturedBytes = stdio.stdout.byteLength + stdio.stderr.byteLength;
-            if (step.kind === "yield") state.checkpointFuel = step.fuelUsed;
+            const captured = yield* captureStdio(guest, step.kind === "yield");
+            if (captured && step.kind === "yield") state.checkpointFuel = step.fuelUsed;
           }
           const authorizedAt = yield* Clock.currentTimeMillis;
           if (capability.expiresAt <= authorizedAt)

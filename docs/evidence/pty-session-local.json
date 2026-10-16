@@ -1,0 +1,120 @@
+{
+  "status": "Source-only queued WASI PTY sessions through the existing process API. Full terminal parity and production delivery remain open.",
+  "baseCommit": "f578d00dc0b99fab138c40896da663d291e93397",
+  "implementation": {
+    "contract": "process.spawn stdinMode gains pty in the same Schema that owns StoredRun.stdinMode. Closed and pipe retain their meaning. Unsupported interactive runtimes reject before receipt reservation.",
+    "native": "Rust attaches one slave open description to fd 0/1/2. A family-owned input writer and output reader retain the pair across spawn and exec. Both slave output streams enter the existing stdout capture in observed byte order.",
+    "persistence": "The original process receipt, process-input head, immutable stdin blocks and output blocks remain authoritative. No new terminal namespace, Worker, binding, configuration or dependency was introduced.",
+    "input": "Expected byte offsets retain retry-safe writes. Native consumed offsets advance only for accepted terminal bytes; partial native delivery keeps unread retained bytes. Echo is captured while a partial line is still pending. Transport EOF flushes the unfinished line before closing the writer.",
+    "outputBudget": "The Rust drain applies the existing process output budget to terminal output and echo. A later failure retains previously acknowledged bytes and does not manufacture an exit code.",
+    "polling": "Only PTY input uses Effect exponential delays from 16 ms up to one second, reset after actual input progress. Family notifications race the native delay. Ordinary pipe input retains its one-second pause."
+  },
+  "baseline": {
+    "command": "bun test tests/pty-session.test.ts",
+    "failure": "The native SDK rejected stdinMode pty at its concrete Action Schema before sending the mutation. After contract/transport implementation, the five-second test limit exposed the old fixed one-second interactive polling delay."
+  },
+  "verification": {
+    "fullGate": {
+      "command": "bun run check",
+      "tests": 359,
+      "files": 69,
+      "assertions": 4868,
+      "seconds": 146.21,
+      "failures": 0,
+      "includes": [
+        "Runtime and SDK builds",
+        "TypeScript",
+        "Workspace Clippy with warnings denied",
+        "Cargo tests",
+        "Native workerd/R2/Queue tests"
+      ]
+    },
+    "focused": {
+      "command": "bun test tests/pty-session.test.ts tests/pty-replacement.test.ts tests/pty.test.ts tests/stdin.test.ts",
+      "tests": 11,
+      "files": 4,
+      "assertions": 109,
+      "seconds": 22.28,
+      "failures": 0,
+      "scope": "Focused native proof before the equivalent observer typing adjustment and separate output-budget case; both are covered in the final complete gate."
+    },
+    "echoBudget": {
+      "command": "bun test tests/pty-limits.test.ts",
+      "tests": 1,
+      "assertions": 8,
+      "seconds": 1.53,
+      "failures": 0
+    },
+    "interactive": "The SDK observes ready, writes a partial canonical line, observes echo without guest progress, retries identical input without repeated echo, commits the line, switches to raw mode, transports NUL/control/invalid-UTF8 bytes, restores cooked mode, closes an unfinished line and validates exact raw replay. Wrong-sandbox and readonly mutations are denied.",
+    "replacement": "One native Worker reserves a PTY process and retains seed/additional input plus EOF before entry. A replacement consumes the original Queue message. Duplicate delivery preserves the terminal receipt ETag and output, and a third Worker replays the identical receipt/bytes and closed input state.",
+    "format": "bun run format:check and git diff --check passed."
+  },
+  "latencyComparison": {
+    "workload": "One native workerd/R2/Queue SDK PTY interaction with partial canonical input, retry-safe writes, raw bytes, EOF and exact captured replay. Fresh scope for every sample.",
+    "sequence": "ABBA",
+    "diagnosticTestTimeoutMilliseconds": 15000,
+    "finalTestTimeoutUnchanged": true,
+    "wasmBytesIdenticalBetweenVariants": true,
+    "testSha256": "7d706853ddb8cb400ee0340ffcc25921bb41a00fbbbf8db932595fe972fe4769",
+    "samples": [
+      {
+        "phase": 1,
+        "variant": "reference",
+        "milliseconds": 6680.43,
+        "passed": true
+      },
+      {
+        "phase": 2,
+        "variant": "candidate",
+        "milliseconds": 1196.35,
+        "passed": true
+      },
+      {
+        "phase": 3,
+        "variant": "candidate",
+        "milliseconds": 1208.49,
+        "passed": true
+      },
+      {
+        "phase": 4,
+        "variant": "reference",
+        "milliseconds": 6662.54,
+        "passed": true
+      }
+    ],
+    "limits": "Local cold execution plus interactive transport time on a shared host; not production latency, idle R2 request count or billing."
+  },
+  "generalNativeBenchmark": {
+    "command": "bun run bench",
+    "result": "passed",
+    "artifactBytes": {
+      "javascript": 363951,
+      "kernelWasm": 1139581,
+      "wasiWasm": 1669070,
+      "pythonWasm": 10719083,
+      "guestWasm": 1129863,
+      "compilerWasm": 1943596
+    },
+    "scope": "Existing filesystem, JavaScript, Python, WASI and shell workloads completed with native local workerd/R2. Their unpaired timings do not establish a before/after improvement."
+  },
+  "fixtures": {
+    "tests/pty-session.test.ts": "39dd3cf1f7300ca70a4c86707bef2c08c32a879a7cae05bce4cd570b47611503",
+    "tests/pty-replacement.test.ts": "ca2c63e8e544f2744da82234dfa6e148d24296877785eb9200572a7d0f6e5f7e",
+    "tests/pty-limits.test.ts": "cb3f97ae52f7b8df41995ef5cd998bbece1ab3dad6ba16742924439274863224",
+    "tests/fixtures/wasi-pty.rs": "52b87645137e8a2fef5c915ac32f3ca8b8c28d3e67066b22977d48ba36f0dd2f"
+  },
+  "delivery": {
+    "sourceCI": "Not yet queried for this commit.",
+    "publishedArchives": "The published 0.12.1 SDK/runtime artifacts are unchanged and do not contain these contracts or runtime changes.",
+    "deployment": "No new deployment.",
+    "minutei": "Its local SDK/runtime dependencies remain the public 0.12.1 release."
+  },
+  "remaining": [
+    "Active same-build PTY heap checkpoint/Worker recovery",
+    "Custom host_tty.read ABI and a real published interactive-shell proof",
+    "Terminal-specific listing/metadata and resize",
+    "Full termios, foreground process groups and terminal-generated signals",
+    "Production PTY and maximum-scale memory/latency/cost proof",
+    "All other open docs/parity.md completion gates"
+  ]
+}

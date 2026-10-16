@@ -62,6 +62,31 @@ impl Terminal {
         self.lines.borrow().front().copied().unwrap_or(0)
     }
 
+    pub fn capacity(&self) -> usize {
+        let used = self.input.bytes.borrow().len() + self.line.borrow().len();
+        let available = PIPE_BYTES - used;
+        if self.raw.get() {
+            return available;
+        }
+        available.min(PIPE_BYTES - self.output.bytes.borrow().len())
+    }
+
+    pub fn finish_input(&self) -> bool {
+        if self.line.borrow().is_empty() {
+            return true;
+        }
+        if self.lines.borrow().len() >= MAX_LINES {
+            return false;
+        }
+        let size = self.line.borrow().len();
+        self.input
+            .bytes
+            .borrow_mut()
+            .extend(self.line.borrow_mut().drain(..));
+        self.lines.borrow_mut().push_back(size);
+        true
+    }
+
     pub fn ready(&self) -> bool {
         if self.raw.get() {
             return !self.input.bytes.borrow().is_empty();

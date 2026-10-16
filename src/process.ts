@@ -56,7 +56,7 @@ const reserve = Effect.fn("process.reserve")(function* (
   );
   const environment = { ...defaults, ...session.head.environment, ...(action.env ?? {}) };
   const program = yield* load(env, capability, session.kernel, action, environment);
-  if (stdinMode === "pipe" && program.language !== "wasm")
+  if (stdinMode !== "closed" && program.language !== "wasm")
     return yield* new Fault({
       code: "UNSUPPORTED_RUNTIME",
       status: 501,
@@ -120,7 +120,7 @@ const reserve = Effect.fn("process.reserve")(function* (
       status: 409,
       message: "Execution ID already exists; use process.get to inspect its confirmed state",
     });
-  if (stdinMode === "pipe" && program.language === "wasm")
+  if (stdinMode !== "closed" && program.language === "wasm")
     yield* initializeInput(
       env,
       capability.sandboxId,
@@ -321,13 +321,14 @@ const complete = Effect.fn("process.complete")(function* (
         session,
         capture,
         yield* Effect.sync(() => {
-          if (reservation.stdinMode === "pipe") return record.id;
+          if (reservation.stdinMode !== "closed") return record.id;
           return null;
         }),
         reservation.checkpoint,
         reservation.allowCheckpoint,
         host,
         memoryLimitBytes,
+        reservation.stdinMode,
       );
     }),
   );
@@ -457,7 +458,7 @@ const complete = Effect.fn("process.complete")(function* (
 
     return { ...snapshot, status: "failed" as const, finishedAt, output: snapshots[0] ?? null };
   });
-  if (reservation.stdinMode === "pipe") yield* finishInput(env, capability.sandboxId, record.id);
+  if (reservation.stdinMode !== "closed") yield* finishInput(env, capability.sandboxId, record.id);
   const settledOutput = yield* Effect.gen(function* () {
     if (finished.output === null) return null;
     if (

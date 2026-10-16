@@ -74,12 +74,62 @@ fn receive(fd: u32, data: &mut [u8]) -> (u32, u32) {
     (unsafe { fd_read(fd, &io, 1, &mut count) }, count)
 }
 
-#[cfg(case = "child")]
+#[cfg(any(case = "child", case = "session", case = "sink"))]
 #[unsafe(no_mangle)]
 pub extern "C" fn _start() {
     unsafe {
         if isatty(0) != 1 || isatty(1) != 1 || isatty(2) != 1 {
             proc_exit(51);
+        }
+        if cfg!(case = "sink") {
+            send(1, b"ready\n");
+            let mut total = 0;
+            let mut data = [0u8; 128];
+            loop {
+                let (errno, count) = receive(0, &mut data);
+                if errno != 0 {
+                    proc_exit(60);
+                }
+                if count == 0 {
+                    break;
+                }
+                total += count;
+            }
+            if total != 10 {
+                proc_exit(61);
+            }
+            send(1, b"done\n");
+            proc_exit(0);
+        }
+        if cfg!(case = "session") {
+            send(1, b"ready\n");
+            let mut data = [0u8; 128];
+            if receive(0, &mut data) != (0, 6) || &data[..6] != b"hello\n" {
+                proc_exit(62);
+            }
+            send(1, b"out:hello\n");
+            send(2, b"err\n");
+            if set_raw_mode(1) != 0 {
+                proc_exit(63);
+            }
+            send(1, b"raw\n");
+            if receive(0, &mut data) != (0, 7) || &data[..7] != b"\0\x03\x04\r\n\x7f\xff" {
+                proc_exit(64);
+            }
+            send(1, b"raw:");
+            send(2, &data[..7]);
+            if set_raw_mode(0) != 0 {
+                proc_exit(65);
+            }
+            send(1, b"cooked\n");
+            if receive(0, &mut data) != (0, 4)
+                || &data[..4] != b"tail"
+                || receive(0, &mut data) != (0, 0)
+            {
+                proc_exit(66);
+            }
+            send(1, b"done\n");
+            proc_exit(0);
         }
         let mut data = [0u8; 128];
         if receive(0, &mut data) != (0, 6) || &data[..6] != b"hello\n" {
@@ -92,7 +142,7 @@ pub extern "C" fn _start() {
     }
 }
 
-#[cfg(not(case = "child"))]
+#[cfg(not(any(case = "child", case = "session", case = "sink")))]
 #[unsafe(no_mangle)]
 pub extern "C" fn run() -> i32 {
     unsafe {

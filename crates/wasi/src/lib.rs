@@ -498,6 +498,11 @@ impl SpawnResources {
     }
 }
 
+struct TerminalAttachment {
+    terminal: Rc<pty::Terminal>,
+    output: Rc<PipeEndpoint>,
+}
+
 struct State {
     limits: StoreLimits,
     descriptors: BTreeMap<u32, Descriptor>,
@@ -525,6 +530,7 @@ struct State {
     argv: Vec<Vec<u8>>,
     environment: Vec<Vec<u8>>,
     stdin_pipe: Option<Rc<Pipe>>,
+    terminal: Option<Rc<TerminalAttachment>>,
     stdin_writer: Rc<RefCell<Option<Rc<PipeEndpoint>>>>,
     stdin: Rc<Vec<u8>>,
     stdin_offset: Rc<Cell<usize>>,
@@ -3515,6 +3521,26 @@ fn resumable_start(bytes: &[u8]) -> Result<Option<(Vec<u8>, String)>, String> {
 }
 
 impl WasmGuest {
+    fn drain_terminal(&mut self) -> Result<(), String> {
+        let state = self.store.data_mut();
+        let Some(attachment) = &state.terminal else {
+            return Ok(());
+        };
+        let length = attachment.output.pipe.bytes.borrow().len();
+        if length == 0 {
+            return Ok(());
+        }
+        if state.stdout.borrow().len() + state.stderr.borrow().len() + length > state.max_output {
+            return Err("Terminal output limit exceeded".into());
+        }
+        state
+            .stdout
+            .borrow_mut()
+            .extend(attachment.output.pipe.bytes.borrow_mut().drain(..));
+        state.readiness_notification = true;
+        Ok(())
+    }
+
     fn create(
         bytes: &[u8],
         configuration: &str,
@@ -3659,6 +3685,7 @@ impl WasmGuest {
                 argv,
                 environment,
                 stdin_pipe: None,
+                terminal: None,
                 stdin_writer: Rc::new(RefCell::new(None)),
                 stdin: Rc::new(stdin.to_vec()),
                 stdin_offset: Rc::new(Cell::new(0)),
@@ -3681,6 +3708,7 @@ impl WasmGuest {
             state.stdout = previous.stdout.clone();
             state.stderr = previous.stderr.clone();
             state.stdin_pipe = previous.stdin_pipe.clone();
+            state.terminal = previous.terminal.clone();
             state.stdin_writer = previous.stdin_writer.clone();
             state.stdin = previous.stdin.clone();
             state.stdin_offset = previous.stdin_offset.clone();
@@ -4550,6 +4578,7 @@ impl WasmGuest {
         state.stdout = parent.stdout.clone();
         state.stderr = parent.stderr.clone();
         state.stdin_pipe = parent.stdin_pipe.clone();
+        state.terminal = parent.terminal.clone();
         state.stdin_writer = parent.stdin_writer.clone();
         state.stdin = parent.stdin.clone();
         state.stdin_offset = parent.stdin_offset.clone();
@@ -4625,6 +4654,8 @@ impl WasmGuest {
         if self.done.is_none() && self.store.data().pending.is_none() && self.exhaustion.is_none() {
             return self.step();
         }
+        self.drain_terminal()
+            .map_err(|error| JsValue::from_str(&error))?;
         if self.exhaustion.is_some() {
             let available = self.budget.get();
             return serde_json::to_string(
@@ -4730,6 +4761,68 @@ impl WasmGuest {
         state.stdin_pipe = Some(pipe);
         Ok(())
     }
+
+    pub fn enable_terminal(&mut self) -> Result<(), JsValue> {
+        let state = self.store.data_mut();
+        if state.stdin_pipe.is_some() {
+            return Err(JsValue::from_str("Stdin is already initialized"));
+        }
+        if state.descriptors.len() + 3 > MAX_FILES || state.processes.borrow().pipes.len() + 2 > 64
+        {
+            return Err(JsValue::from_str("Terminal descriptor limit exceeded"));
+        }
+        let terminal = pty::Terminal::new();
+        let slave = Rc::new(PipeEndpoint {
+            pipe: terminal.input.clone(),
+            reading: true,
+            terminal: Some(pty::Side {
+                terminal: terminal.clone(),
+                master: false,
+            }),
+        });
+        let flags = Rc::new(Cell::new(0));
+        let mut metadata = [0u8; 76];
+        metadata[16] = 2;
+        metadata[64..68].copy_from_slice(&0o20620u32.to_le_bytes());
+        for fd in 0..3 {
+            state.descriptors.insert(
+                fd,
+                Descriptor {
+                    path: "/".into(),
+                    directory: false,
+                    read: true,
+                    write: true,
+                    flags: flags.clone(),
+                    offset: Rc::new(Cell::new(0)),
+                    stdio: None,
+                    pipe: Some(slave.clone()),
+                    rights: 66 | (1 << 3) | (1 << 21) | (1 << 27),
+                    inheriting: 0,
+                    cache: None,
+                    linked: false,
+                    metadata,
+                },
+            );
+            state.closed.remove(&fd);
+        }
+        state.processes.borrow_mut().pipes.extend([
+            Rc::downgrade(&terminal.input),
+            Rc::downgrade(&terminal.output),
+        ]);
+        state.stdin_pipe = Some(terminal.input.clone());
+        *state.stdin_writer.borrow_mut() = Some(Rc::new(PipeEndpoint {
+            pipe: terminal.input.clone(),
+            reading: false,
+            terminal: None,
+        }));
+        let output = Rc::new(PipeEndpoint {
+            pipe: terminal.output.clone(),
+            reading: true,
+            terminal: None,
+        });
+        state.terminal = Some(Rc::new(TerminalAttachment { terminal, output }));
+        Ok(())
+    }
     pub fn fuel_used(&self) -> u64 {
         self.fuel_limit - self.budget.get()
     }
@@ -4737,6 +4830,9 @@ impl WasmGuest {
         self.store.data().stdin_offset.get()
     }
     pub fn stdin_capacity(&self) -> usize {
+        if let Some(attachment) = &self.store.data().terminal {
+            return attachment.terminal.capacity();
+        }
         self.store
             .data()
             .stdin_pipe
@@ -4751,26 +4847,48 @@ impl WasmGuest {
             .as_ref()
             .is_some_and(|pipe| pipe.readers.get() > 0)
     }
-    pub fn feed_stdin(&mut self, data: &[u8], closed: bool) -> Result<(), JsValue> {
+    pub fn stdin_closed(&self) -> bool {
+        self.store.data().stdin_writer.borrow().is_none()
+    }
+
+    pub fn feed_stdin(&mut self, data: &[u8], closed: bool) -> Result<usize, JsValue> {
         let state = self.store.data_mut();
         let pipe = state
             .stdin_pipe
             .as_ref()
             .ok_or_else(|| JsValue::from_str("Missing stdin pipe"))?;
-        if data.len() > PIPE_BYTES - pipe.bytes.borrow().len()
-            || state.stdin_writer.borrow().is_none()
-        {
+        if state.stdin_writer.borrow().is_none() {
             return Err(JsValue::from_str("Stdin pipe cannot accept data"));
         }
-        pipe.bytes.borrow_mut().extend(data.iter().copied());
-        state
-            .stdin_offset
-            .set(state.stdin_offset.get() + data.len());
-        if closed {
+        let count = if let Some(attachment) = &state.terminal {
+            match attachment.terminal.write(true, data) {
+                Ok(count) => count,
+                Err(6) => 0,
+                Err(errno) => {
+                    return Err(JsValue::from_str(&format!("Terminal input error: {errno}")));
+                }
+            }
+        } else {
+            if data.len() > PIPE_BYTES - pipe.bytes.borrow().len() {
+                return Err(JsValue::from_str("Stdin pipe cannot accept data"));
+            }
+            pipe.bytes.borrow_mut().extend(data.iter().copied());
+            data.len()
+        };
+        state.stdin_offset.set(state.stdin_offset.get() + count);
+        if closed
+            && count == data.len()
+            && state
+                .terminal
+                .as_ref()
+                .is_none_or(|attachment| attachment.terminal.finish_input())
+        {
             state.stdin_writer.borrow_mut().take();
         }
         state.readiness_notification = true;
-        Ok(())
+        self.drain_terminal()
+            .map_err(|error| JsValue::from_str(&error))?;
+        Ok(count)
     }
 
     pub fn file_metadata(&self, fd: u32) -> Result<Vec<u8>, JsValue> {
