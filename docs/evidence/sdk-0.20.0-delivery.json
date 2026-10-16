@@ -1,5 +1,5 @@
 {
-  "status": "Experimental 0.20.0 published and deployed; source CI, exact public downloads, production native binding/storage proofs and the local Minutei retained-context integration passed. Tag CI retry and full AgentOS parity remain open.",
+  "status": "Experimental 0.20.0 published and deployed; source/delivery CI, exact public downloads, production native binding/storage proofs and the local Minutei retained-context integration passed. The immutable tag CI failed twice on the prior five-second integration timeout; the correction is green on main. Full AgentOS parity remains open.",
   "version": "0.20.0",
   "sourceBase": "237a6a5a0a4510276289cd8ef64b3bed3dadef0b",
   "previousDelivery": "sdk-0.19.2-delivery.json",
@@ -500,7 +500,7 @@
     },
     "tag": {
       "run": 38977574550,
-      "status": "retry in_progress",
+      "status": "failure",
       "url": "https://github.com/minutei-ai/boxes/actions/runs/38977574550",
       "attempt": 2,
       "firstAttempt": {
@@ -508,7 +508,17 @@
         "testsPassed": 422,
         "testsFailed": 1,
         "failure": "process-repair-metadata.test.ts reached Bun default 5000 ms timeout; the identical source passed this test in source CI in 1716.44 ms and locally in 2247.22 ms."
+      },
+      "secondAttempt": {
+        "status": "failure",
+        "failure": "Same process-repair-metadata.test.ts implicit 5000 ms whole-test timeout; 422 other tests passed. No further retry or tag rewrite performed."
       }
+    },
+    "delivery": {
+      "run": 38978524987,
+      "commit": "8b855fa3e81c90918d17b5328509d7a61413ca0e",
+      "status": "success",
+      "url": "https://github.com/minutei-ai/boxes/actions/runs/38978524987"
     }
   },
   "remoteBinding": {
@@ -1303,6 +1313,6 @@
       "testMilliseconds": 2143.77,
       "totalSeconds": 2.6
     },
-    "immutableRelease": "The existing release assets and tag were preserved; their source uses the prior timeout. Tag CI is retried without changing its source."
+    "immutableRelease": "Existing release assets and tag were preserved. Two tag attempts failed at the prior 5000 ms integration cap; main with the explicit 20000 ms functional-test cap passed the full CI."
   }
 }

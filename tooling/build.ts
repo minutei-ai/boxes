@@ -214,6 +214,16 @@ await Effect.runPromise(
         Bun.file(join(root, "dist/python/metered.wasm")),
       ),
     );
+    yield* Effect.promise(async () =>
+      Bun.write(
+        join(root, "dist/python/revision.json"),
+        JSON.stringify({
+          sha256: new Bun.CryptoHasher("sha256")
+            .update(await Bun.file(join(root, "dist/python/cirro_python_bg.wasm")).arrayBuffer())
+            .digest("hex"),
+        }),
+      ),
+    );
     const pythonGenerated = yield* Effect.promise(() =>
       Bun.file(join(root, "dist/python/cirro_python.js")).text(),
     );
@@ -1252,6 +1262,7 @@ await Effect.runPromise(
       ["src/index.ts", "dist/worker"],
       ["tests/fixtures/checkpoint-worker.ts", "dist/checkpoint-worker"],
       ["tests/fixtures/context-checkpoint-worker.ts", "dist/context-checkpoint-worker"],
+      ["tests/fixtures/python-checkpoint-worker.ts", "dist/python-checkpoint-worker"],
       ["tests/fixtures/clock-worker.ts", "dist/clock-worker"],
       ["tests/fixtures/origin-worker.ts", "dist/origin-worker"],
       ["tests/fixtures/sdk-binding-worker.ts", "dist/sdk-binding-worker"],

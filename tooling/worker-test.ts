@@ -36,7 +36,12 @@ const Options = Schema.Struct({
   consume: Schema.optionalKey(Schema.Boolean),
   controlled: Schema.optionalKey(Schema.Boolean),
   artifact: Schema.optionalKey(
-    Schema.Literals(["clock-worker", "checkpoint-worker", "context-checkpoint-worker"]),
+    Schema.Literals([
+      "clock-worker",
+      "checkpoint-worker",
+      "context-checkpoint-worker",
+      "python-checkpoint-worker",
+    ]),
   ),
   softwareBase: Schema.optionalKey(Digest),
 });
@@ -72,6 +77,7 @@ export const runtime = (persist: string, options: typeof Options.Type = {}) => {
     Match.when("clock-worker", () => ["kernel", "wasi", "guest", "compiler", "python"]),
     Match.when("checkpoint-worker", () => ["kernel", "wasi"]),
     Match.when("context-checkpoint-worker", () => ["guest"]),
+    Match.when("python-checkpoint-worker", () => ["python"]),
     Match.exhaustive,
   );
   const modules = [

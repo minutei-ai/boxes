@@ -1,7 +1,10 @@
-use rustpython_vm::builtins::{PyBaseException, PyCoroutine};
+use rustpython_vm::builtins::{PyBaseException, PyCoroutine, PyDictRef};
+use rustpython_vm::scope::Scope;
 use rustpython_vm::{AsObject, Interpreter, PyObjectRef, VirtualMachine, compiler, py_serde};
 use serde::Serialize;
 use serde_json::Value;
+use std::cell::{Cell, RefCell};
+use std::collections::BTreeMap;
 use std::mem::ManuallyDrop;
 use wasm_bindgen::prelude::*;
 include!(concat!(env!("OUT_DIR"), "/bootstrap.rs"));
@@ -51,24 +54,144 @@ enum Step {
 }
 struct State {
     interpreter: Interpreter,
+    scope: Scope,
+    environment: PyDictRef,
     source: Option<String>,
     path: String,
     evaluate: bool,
     coroutine: Option<PyObjectRef>,
     response: Option<PyObjectRef>,
     rejected: bool,
-    tools: PyObjectRef,
     stdout: PyObjectRef,
     stderr: PyObjectRef,
     max_output: usize,
     done: Option<String>,
 }
+thread_local! {
+    static PARKED_CONTEXTS: RefCell<BTreeMap<u32, PythonGuest>> = const { RefCell::new(BTreeMap::new()) };
+    static NEXT_CONTEXT: Cell<u32> = const { Cell::new(1) };
+    static CREATED_GUESTS: Cell<u32> = const { Cell::new(0) };
+}
+
+fn environment_values(
+    source: &str,
+    max_output: usize,
+    environment: &str,
+) -> Result<BTreeMap<String, String>, JsValue> {
+    if source.len() > 1_048_576 || max_output == 0 || max_output > 1_048_576 {
+        return Err(JsValue::from_str("Invalid Python limits"));
+    }
+    if environment.len() > 65_536 {
+        return Err(JsValue::from_str("Python environment exceeds its limit"));
+    }
+    let environment: BTreeMap<String, String> =
+        serde_json::from_str(environment).map_err(|error| JsValue::from_str(&error.to_string()))?;
+    if environment.len() > 128
+        || environment.iter().any(|(key, value)| {
+            key.is_empty()
+                || key.encode_utf16().count() > 128
+                || key.contains(['=', '\0'])
+                || value.len() > 4096
+                || value.contains('\0')
+        })
+    {
+        return Err(JsValue::from_str("Invalid Python environment"));
+    }
+    Ok(environment)
+}
+
 #[wasm_bindgen]
 pub struct PythonGuest {
     state: ManuallyDrop<State>,
 }
 #[wasm_bindgen]
 impl PythonGuest {
+    pub fn park(self) -> Result<u32, JsValue> {
+        if !CREATED_GUESTS.with(|created| created.get() == 1) {
+            return Err(JsValue::from_str(
+                "Context snapshot requires a fresh isolated runtime",
+            ));
+        }
+        PARKED_CONTEXTS.with(|contexts| {
+            let mut contexts = contexts.borrow_mut();
+            if !contexts.is_empty() {
+                return Err(JsValue::from_str("An isolated context is already parked"));
+            }
+            let handle = NEXT_CONTEXT
+                .with(|next| {
+                    let handle = next.get();
+                    next.set(handle.checked_add(1).ok_or("Context handle exhausted")?);
+                    Ok::<_, &str>(handle)
+                })
+                .map_err(JsValue::from_str)?;
+            contexts.insert(handle, self);
+            Ok(handle)
+        })
+    }
+
+    pub fn resume(handle: u32) -> Result<PythonGuest, JsValue> {
+        PARKED_CONTEXTS.with(|contexts| {
+            contexts
+                .borrow_mut()
+                .remove(&handle)
+                .ok_or_else(|| JsValue::from_str("Context handle does not exist"))
+        })
+    }
+
+    pub fn quiescent(&self) -> bool {
+        self.state.done.is_some()
+            && self.state.source.is_none()
+            && self.state.coroutine.is_none()
+            && self.state.response.is_none()
+    }
+
+    pub fn begin(
+        &mut self,
+        source: &str,
+        path: &str,
+        evaluate: bool,
+        environment: &str,
+    ) -> Result<(), JsValue> {
+        if !self.quiescent() {
+            return Err(JsValue::from_str(
+                "Previous Python execution is not quiescent",
+            ));
+        }
+        let environment = environment_values(source, self.state.max_output, environment)?;
+        let state = &mut *self.state;
+        state
+            .interpreter
+            .enter(|vm| -> Result<(), String> {
+                state.environment.clear();
+                for (key, value) in &environment {
+                    state
+                        .environment
+                        .set_item(key.as_str(), vm.ctx.new_str(value.as_str()).into(), vm)
+                        .map_err(|_| "Python environment initialization failed")?;
+                }
+                for stream in [&state.stdout, &state.stderr] {
+                    vm.call_method(stream, "seek", (0,))
+                        .map_err(|_| "Python output reset failed")?;
+                    vm.call_method(stream, "truncate", (0,))
+                        .map_err(|_| "Python output reset failed")?;
+                }
+                vm.sys_module
+                    .set_attr("stdout", state.stdout.clone(), vm)
+                    .map_err(|_| "Python stdout initialization failed")?;
+                vm.sys_module
+                    .set_attr("stderr", state.stderr.clone(), vm)
+                    .map_err(|_| "Python stderr initialization failed")?;
+                Ok(())
+            })
+            .map_err(|error| JsValue::from_str(&error))?;
+        state.source = Some(source.into());
+        state.path = path.into();
+        state.evaluate = evaluate;
+        state.rejected = false;
+        state.done = None;
+        Ok(())
+    }
+
     #[wasm_bindgen(constructor)]
     pub fn new(
         source: &str,
@@ -77,26 +200,8 @@ impl PythonGuest {
         max_output: usize,
         environment: &str,
     ) -> Result<Self, JsValue> {
-        if source.len() > 1_048_576 || max_output == 0 || max_output > 1_048_576 {
-            return Err(JsValue::from_str("Invalid Python limits"));
-        }
-        if environment.len() > 65_536 {
-            return Err(JsValue::from_str("Python environment exceeds its limit"));
-        }
-        let environment: std::collections::BTreeMap<String, String> =
-            serde_json::from_str(environment)
-                .map_err(|error| JsValue::from_str(&error.to_string()))?;
-        if environment.len() > 128
-            || environment.iter().any(|(key, value)| {
-                key.is_empty()
-                    || key.encode_utf16().count() > 128
-                    || key.contains(['=', '\0'])
-                    || value.len() > 4096
-                    || value.contains('\0')
-            })
-        {
-            return Err(JsValue::from_str("Invalid Python environment"));
-        }
+        let environment = environment_values(source, max_output, environment)?;
+        CREATED_GUESTS.with(|created| created.set(created.get().saturating_add(1)));
         let builder = Interpreter::builder(Default::default());
         let environment_module = environment::module_def(&builder.ctx);
         let interpreter = builder
@@ -104,7 +209,7 @@ impl PythonGuest {
             .add_frozen_modules(BOOTSTRAP)
             .add_frozen_modules(TOOLS)
             .build();
-        let (tools, stdout, stderr) = interpreter
+        let (stdout, stderr, scope, environment) = interpreter
             .enter(|vm| -> Result<_, String> {
                 let io = vm
                     .import("_io", 0)
@@ -142,19 +247,25 @@ impl PythonGuest {
                     .import("__cirro_tools", 0)
                     .and_then(|module| module.get_attr("tools", vm))
                     .map_err(|_| "Python tools initialization failed")?;
-                Ok((tools, stdout, stderr))
+                let scope = vm.new_scope_with_builtins();
+                scope
+                    .globals
+                    .set_item("tools", tools.clone(), vm)
+                    .map_err(|_| "Python tools scope failed")?;
+                Ok((stdout, stderr, scope, values))
             })
             .map_err(|error| JsValue::from_str(&error))?;
         Ok(Self {
             state: ManuallyDrop::new(State {
                 interpreter,
+                scope,
+                environment,
                 source: Some(source.into()),
                 path: path.into(),
                 evaluate,
                 coroutine: None,
                 response: None,
                 rejected: false,
-                tools,
                 stdout,
                 stderr,
                 max_output,
@@ -177,11 +288,7 @@ impl PythonGuest {
                 let initial = source.is_some();
                 let mut continuation = None;
                 let result = if let Some(source) = source {
-                    let scope = vm.new_scope_with_builtins();
-                    scope
-                        .globals
-                        .set_item("tools", state.tools.clone(), vm)
-                        .map_err(|_| "Python tools scope failed")?;
+                    let scope = state.scope.clone();
                     let mut opts = vm.compile_opts();
                     opts.allow_top_level_await = true;
                     let mode = if state.evaluate {

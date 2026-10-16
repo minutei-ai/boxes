@@ -1,0 +1,69 @@
+{
+  "status": "Native Python heap foundation verified locally and unreleased; public Python contexts and production delivery remain pending.",
+  "sourceBase": "8b855fa3e81c90918d17b5328509d7a61413ca0e",
+  "runtimeSha256": "438ea33a3579525ec1d60be1cd25bea686c7faff7e75eef01b5e27f674a79bdb",
+  "runtimeBytes": 10732645,
+  "sourcesSha256": {
+    "crates/python/src/lib.rs": "d686a0101a9a11f2288b4fa7c5b1d505655f28a1bd4e0303fbfd11d26f39fb95",
+    "tooling/build.ts": "c0be5791c4da5124391f01af39f647e9fa923ef4153ecadb680fa78b7e54ad02",
+    "tooling/worker-test.ts": "2288fb10b1d97b7b6e7d52ef0525e185358307ceeb475468d41a36ded47ebba8",
+    "tests/fixtures/python-checkpoint-contract.ts": "4ddc253ebd94a5ca2e31c327c0c97d1cf5c5bffb10c33d4f06ed16937f4582d5",
+    "tests/fixtures/python-checkpoint-worker.ts": "0f5c4fd52892318df536ce1e68152a211357940a187448035d056b0911db9494",
+    "tests/python-context-heap.test.ts": "0ed9a8fce1258483814f70de615e91cb44ab2478935011bf00e62bf97caf2827"
+  },
+  "ownership": {
+    "interpreter": "RustPython owns the retained interpreter, scope, globals, closure cells, module cache, environment dictionary and output buffers. No guest globals are serialized to JSON and no source history is replayed.",
+    "checkpoint": "PythonGuest park/resume stores and consumes one native handle in an isolated Wasm instance; the fixture uses the existing saveMemoryPages/restoreMemoryPages owner and native Alchemy R2. Metadata carries the exact metered runtime digest.",
+    "execution": "begin rejects unfinished execution, validates the next program limits/environment, refreshes the owned environment and output buffers, and clears the prior terminal result. Fuel/page limits remain with the existing Wasm instrumentation owner."
+  },
+  "nativeProof": {
+    "command": "bun test tests/python-context-heap.test.ts",
+    "exitCode": 0,
+    "tests": 1,
+    "assertions": 19,
+    "testMilliseconds": 3152.88,
+    "totalSeconds": 3.52,
+    "workersClosedAndReplaced": 3,
+    "closureResults": [41, 42, 43],
+    "checks": [
+      "The first execution creates a genuine nonlocal Python closure and yields a host request; the fixture supplies response 2. begin is rejected while that coroutine is pending.",
+      "The second Worker restores the heap and retains the lexical cell and original /first.py code filename. A cached reference to os.environ sees MODE=second and removal of OLD.",
+      "A retained sys.stdout.write method writes only the second execution output. The third Worker evaluates the same closure to 43 with empty stdout/stderr.",
+      "Restored native handles can be consumed only once. All three snapshots use actual verified R2 pages and each original Worker is disposed before its replacement starts."
+    ]
+  },
+  "checks": {
+    "full": {
+      "command": "bun run check",
+      "exitCode": 0,
+      "tests": 424,
+      "failed": 0,
+      "assertions": 6057,
+      "files": 94,
+      "testSeconds": 209.93,
+      "includes": [
+        "Rust/Wasm and fixture build",
+        "SDK build",
+        "TypeScript",
+        "workspace Clippy",
+        "workspace Rust tests",
+        "native workerd suite"
+      ]
+    },
+    "clippyPython": {
+      "command": "cargo clippy -p cirro-python --all-targets -- -D warnings",
+      "exitCode": 0
+    },
+    "typecheck": {
+      "command": "bun run typecheck",
+      "exitCode": 0
+    }
+  },
+  "buildRecovery": "The initial Wasm build found a cached Python bootstrap referencing a removed temporary checkout. Targeted cargo clean -p cirro-python --target wasm32-unknown-unknown --release regenerated that package; the complete build and checks then passed. No dependency/vendor source was edited.",
+  "openGates": [
+    "Public Python context selector, context-language contract and explicit migration.",
+    "Public ownership/authorization, deadlines, failure/reset/delete/collection and Queue/cron integration.",
+    "Dedicated negative proof of the reused-runtime freshness guard and broader module/coroutine checkpoint behavior.",
+    "Publication, deployment, actual Minutei Python consumption and production performance/cost evidence."
+  ]
+}
