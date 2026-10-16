@@ -1,3 +1,5 @@
+import { DescriptorProof } from "./fixtures/descriptor-proof";
+import { prepareDescriptorProof } from "./fixtures/descriptor-proof-inputs";
 import { downloadPublished } from "./fixtures/published-package";
 import { publishedPackages, publishedInterpreterCases } from "./fixtures/published-software";
 import { expect, test } from "bun:test";
@@ -166,6 +168,20 @@ test(
             "rpc-void",
             ...publishedInterpreterCases.map((probe) => probe.id).toSorted(),
           ]);
+          yield* prepareDescriptorProof(manager, id);
+          const descriptorResponse = yield* Effect.promise(() =>
+            fetch(new URL("/descriptors", proxy.env.URLS[0]), {
+              method: "POST",
+              body: Schema.encodeSync(Schema.fromJsonString(RemoteBindingInput))({
+                sandboxId: id,
+                token: grant.token,
+              }),
+            }),
+          );
+          expect(descriptorResponse.status).toBe(200);
+          yield* Schema.decodeUnknownEffect(Schema.fromJsonString(DescriptorProof))(
+            yield* Effect.promise(() => descriptorResponse.text()),
+          );
           const readonly = yield* admin.mintCapability(id, {
             permissions: ["read", "execute"],
             expiresInSeconds: 600,

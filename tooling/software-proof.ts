@@ -1,3 +1,5 @@
+import { DescriptorProof, descriptorProof } from "../tests/fixtures/descriptor-proof";
+import { prepareDescriptorProof } from "../tests/fixtures/descriptor-proof-inputs";
 import { downloadPublished } from "../tests/fixtures/published-package";
 import { Clock, Config, Crypto, Effect, Redacted, Schema } from "effect";
 import { BunCrypto } from "@effect/platform-bun";
@@ -18,6 +20,7 @@ const Report = Schema.Struct({
   reclaimed: Schema.Literal(true),
   packages: Schema.Array(PackagePreparation.fields.installed),
   runs: Schema.Array(RunRecord),
+  descriptors: DescriptorProof,
 });
 const report = await Effect.runPromise(
   Effect.scoped(
@@ -155,6 +158,8 @@ const report = await Effect.runPromise(
           return run;
         }),
       );
+      yield* prepareDescriptorProof(client, id);
+      const descriptors = yield* descriptorProof(client, id);
       const privateFile = yield* client.action(id, {
         op: "filesystem.stat",
         path: "/tmp/private",
@@ -180,6 +185,7 @@ const report = await Effect.runPromise(
         sandboxId: id,
         measuredAt: yield* Clock.currentTimeMillis,
         packages,
+        descriptors,
         runs: [...interpreted, ...jq, ...shell, pipeline],
       };
     }),

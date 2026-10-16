@@ -1,3 +1,4 @@
+import { DescriptorProof, descriptorProof } from "./descriptor-proof";
 import { Cause, Clock, Effect, Redacted, Schedule, Schema } from "effect";
 import { makeBinding } from "../../src/sdk";
 import { makeAgentBinding } from "../../src/sdk-rpc";
@@ -24,6 +25,12 @@ export default {
         })(yield* Effect.promise(() => request.text()));
         const token = Redacted.make(input.token);
         const client = yield* makeBinding(env.BOXES, token);
+        if (new URL(request.url).pathname === "/descriptors") {
+          const proof = yield* descriptorProof(client, input.sandboxId);
+          return new Response(Schema.encodeSync(Schema.fromJsonString(DescriptorProof))(proof), {
+            headers: { "content-type": "application/json", "cache-control": "no-store" },
+          });
+        }
         const agent = yield* makeAgentBinding(env.BOXES_AGENT, token);
         const calls: (typeof HostCall.Type)[] = [];
         yield* client.action(input.sandboxId, {

@@ -1,3 +1,5 @@
+import { DescriptorProof } from "../tests/fixtures/descriptor-proof";
+import { prepareDescriptorProof } from "../tests/fixtures/descriptor-proof-inputs";
 import { downloadPublished } from "../tests/fixtures/published-package";
 import { publishedPackages } from "../tests/fixtures/published-software";
 import { Clock, Config, Crypto, Effect, Fiber, Redacted, Schedule, Schema } from "effect";
@@ -38,6 +40,7 @@ const Report = Schema.Struct({
     recovery: RecoveryStatus,
   }),
   proof: VerifiedRemoteBindingProof,
+  descriptors: DescriptorProof,
   persistent: Schema.Struct({
     created: VerifiedPersistentBindingProof,
     resumed: VerifiedPersistentBindingProof,
@@ -230,6 +233,29 @@ const report = await Effect.runPromise(
         encoding: "utf8",
       });
       const proof = yield* Fiber.join(pending);
+      yield* prepareDescriptorProof(manager, id);
+      const descriptorResponse = yield* Effect.promise(() =>
+        fetch(new URL("/descriptors", session.url), {
+          method: "POST",
+          keepalive: false,
+          headers: { ...session.headers, "content-type": "application/json" },
+          body: Schema.encodeSync(Schema.fromJsonString(RemoteBindingInput))({
+            sandboxId: id,
+            token: grant.token,
+          }),
+          signal: AbortSignal.timeout(120000),
+        }),
+      );
+      const descriptorBody = yield* Effect.promise(() => descriptorResponse.text());
+      if (descriptorResponse.status !== 200)
+        return yield* Effect.die({
+          message: "Descriptor binding proof failed",
+          status: descriptorResponse.status,
+          body: descriptorBody,
+        });
+      const descriptors = yield* Schema.decodeUnknownEffect(Schema.fromJsonString(DescriptorProof))(
+        descriptorBody,
+      );
       const createdResponse = yield* Effect.promise(() =>
         fetch(new URL("/persistent", session.url), {
           method: "POST",
@@ -325,6 +351,7 @@ const report = await Effect.runPromise(
         sdkModulesSha256,
         inlineDeadline,
         proof,
+        descriptors,
         persistent: { created, resumed, previousReceiptRetained: true as const },
       };
     }),

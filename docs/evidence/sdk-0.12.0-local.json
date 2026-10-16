@@ -1,0 +1,89 @@
+{
+  "status": "Experimental SDK/runtime 0.12.0 candidate validated locally; deployment and publication are separate gates.",
+  "version": "0.12.0",
+  "baseCommit": "8f8967bc82e735d96ba8ad8c1739244e6ebde582",
+  "change": "Deliver descriptor-based shebang execution through the ordinary Worker and native service binding. SDK action inference uses the concrete native Action input type so source and emitted declarations retain portable action/response relationships without casts. Shared descriptor cases verify normal execution, rename, unlink, CLOEXEC and explicit-close failure, and per-case retained file effects.",
+  "archives": [
+    {
+      "name": "minutei-ai-boxes-0.12.0.tgz",
+      "entries": 16,
+      "bytes": 69046,
+      "sha256": "6b9cc8817c618dc9ce3ec04dcc733a95e508dfb4124014c7ae8be5ba631e6e41",
+      "configuredCredentialAbsent": true,
+      "licenseMatches": true
+    },
+    {
+      "name": "minutei-ai-boxes-runtime-0.12.0.tgz",
+      "entries": 8,
+      "bytes": 5523640,
+      "sha256": "882b1ccb47ece2897403d72064fa23e802db25413852b6b57a41186d02b40802",
+      "configuredCredentialAbsent": true,
+      "licenseMatches": true,
+      "deployableAssetsMatch": true
+    }
+  ],
+  "verification": {
+    "fullNativeCheck": {
+      "command": "bun run check",
+      "tests": 352,
+      "files": 65,
+      "assertions": 4778,
+      "seconds": 137.54,
+      "failures": 0,
+      "includes": [
+        "native build",
+        "SDK build",
+        "TypeScript",
+        "Cargo Clippy",
+        "Cargo tests",
+        "native workerd tests"
+      ]
+    },
+    "focusedBinding": {
+      "command": "bun test tests/published-shell.test.ts tests/remote-binding.test.ts",
+      "tests": 3,
+      "files": 2,
+      "assertions": 114,
+      "seconds": 25.02,
+      "failures": 0
+    },
+    "typecheck": "Source and compiled SDK clients pass the shared proof contracts. A native generic Action input and its indexed discriminator replace an intersection that emitted incompatible client method declarations.",
+    "exactArchives": {
+      "version": "0.12.0",
+      "transport": "native Alchemy workerd service binding and Agent RPC; local R2 and Queue",
+      "proof": "SDK archive exports and consumer declarations; runtime archive; filesystem snapshot restore; hard-link metadata; RPC callbacks and cooperative disposal; persistent driver contexts and cancellation; scoped authority"
+    },
+    "minuteiCompatibility": {
+      "clientVersion": "0.10.1",
+      "runtimeVersion": "0.12.0",
+      "runtimeArchiveSha256": "882b1ccb47ece2897403d72064fa23e802db25413852b6b57a41186d02b40802",
+      "consumerCommit": "cccd63326b4288023939acd04f05b5c2321f1b18",
+      "consumerBundleSha256": "15f383865ec42db9bbcabab8869aa653b0597efa712fdb9b6ad056ad33c1d2bc",
+      "transport": "native workerd Agent service binding; actual Minutei Code Mode and tenant SQLite; local R2, KV and Queue",
+      "retention": true,
+      "isolatedRegistry": true,
+      "capabilities": true,
+      "consumerFixturesSha256": {
+        "boxes-retention.ts": "ab69256069295b3e155a6e47ebc916e23f4ae760eb4a7ae7afebd9bbc37b050f",
+        "boxes-code.worker.ts": "c3d6f06ea5f5afe322076052267468c4702fe79aff596fa847d68bdc3045e5f4"
+      }
+    },
+    "format": "bun run format:check passed.",
+    "plan": "Alchemy minutei/prod: update the existing Sandbox Worker and run unconditional Migrations; R2, Queue, consumer and bindings remain noop.",
+    "cleanInstall": "Exact SDK archive installed through Bun with scripts disabled, Effect 4.0.4 and TanStack Code Mode 0.5.2; public root/RPC/contracts imports passed.",
+    "orderedBatchAcknowledgements": {
+      "command": "bun test tests/remote-binding.test.ts",
+      "tests": 1,
+      "assertions": 12,
+      "seconds": 6.98,
+      "failures": 0,
+      "contract": "All five fixture uploads must acknowledge the expected ordered paths before the binding proof runs."
+    }
+  },
+  "limits": [
+    "AgentOS parity remains incomplete; see docs/parity.md.",
+    "This compatibility proof uses Minutei local SDK 0.10.1 with the exact new runtime 0.12.0; it does not establish a 0.12.0 consumer installation or a Minutei deployment.",
+    "Local Minutei history Queue has no consumer; browser authentication and model quality remain unverified.",
+    "No production cost or AgentOS performance comparison is claimed."
+  ]
+}

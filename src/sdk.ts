@@ -58,12 +58,13 @@ export const make = Effect.fn("boxes.client.make")(function* (
         input,
       );
     }),
-    action: Effect.fn("boxes.client.action")(function* <Op extends typeof Action.Type.op>(
+    action: Effect.fn("boxes.client.action")(function* <A extends typeof Action.Type>(
       id: typeof Id.Type,
-      input: typeof Action.Type & { readonly op: Op },
+      input: A,
     ) {
       const sandboxId = yield* Schema.decodeUnknownEffect(Id)(id);
-      const response: (typeof ActionResponses)[Op] = ActionResponses[input.op];
+      const operation: A["op"] = input.op;
+      const response = ActionResponses[operation];
       return yield* post(`/v1/sandboxes/${sandboxId}/action`, Action, response, input);
     }),
   };
