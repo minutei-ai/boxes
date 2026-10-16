@@ -1,0 +1,135 @@
+{
+  "scope": "Source-only native host_tty.read and published interactive Brush sessions after SDK/runtime 0.12.1",
+  "baseCommit": "ef9fd721bb1610de3318d73c60cb3aeeb3fbb6fb",
+  "upstream": {
+    "commit": "4d48628304c1ddedafc9d55f60752093fcf6f3d2",
+    "contract": "https://github.com/rivet-dev/agentos/blob/4d48628304c1ddedafc9d55f60752093fcf6f3d2/crates/execution/assets/runners/wasm-runner.mjs#L12324",
+    "behavior": "read(pointer, length, timeout_ms) returns bytes read; zero on timeout or EOF; u32::MAX blocks; zero timeout returns immediately without consumption"
+  },
+  "owners": {
+    "input": "Existing process-input head and immutable stdin blocks in native R2",
+    "readiness": "Existing Rust terminal endpoints and Effect monotonic poll/deferred notifications",
+    "output": "Existing process-family stdout capture and R2 output blocks",
+    "lifetime": "Existing process cancellation and feeder scopes; no second terminal registry or remote infrastructure"
+  },
+  "reproduction": {
+    "command": "bun test tests/tty-read.test.ts",
+    "baselineLog": "/tmp/boxes-tty-read-baseline.log",
+    "result": "0 pass, 1 fail; native WasmFailure: host_tty.read is unsupported; use WASI fd_read; observer then timed out"
+  },
+  "localProofs": {
+    "command": "bun test tests/tty-read.test.ts tests/published-pty.test.ts",
+    "focusedLog": "/tmp/boxes-tty-read-complete-focused.log",
+    "result": "3 passed, 0 failed, 33 assertions in 11.14 seconds before adding history and line-clear checks",
+    "terminalRead": [
+      "25 ms finite expiry checked through native WASI monotonic clock",
+      "zero-length read accepts an unused pointer",
+      "indefinite read wakes after retained SDK input",
+      "finite 3000 ms read wakes before expiry on later input",
+      "permanent retained EOF returns zero",
+      "cancellation settles cancelled with acknowledged output retained",
+      "invalid guest memory traps with errno 21 rather than returning it as a byte count",
+      "removed read rights trap with errno 76",
+      "failed receipts retain output acknowledged at a preceding native host boundary",
+      "cross-sandbox input denied 401",
+      "read-only capability input denied 403"
+    ],
+    "publishedPackage": {
+      "name": "sh",
+      "sha256": "f606cc4caa9ba50f7022d681269ca0ea98ccffc0d29f3106a0f18ab593c59412",
+      "bytes": 3104428
+    },
+    "publishedShells": {
+      "log": "/tmp/boxes-published-pty-editing.log",
+      "result": "2 passed, 0 failed, 14 assertions in 10.31 seconds",
+      "minimalMilliseconds": 3834.27,
+      "reedlineMilliseconds": 6077.71,
+      "checks": [
+        "real package digest verification and software installation",
+        "separate installation manage/write/read capability; interactive shell has read/write/execute only",
+        "real queued native WASI PTY",
+        "prompt and command output",
+        "file marker persisted through R2",
+        "exit status 7",
+        "Reedline cursor-position query responses",
+        "Reedline bracketed paste",
+        "up-arrow repeats the prior command with two actual output markers required",
+        "up-arrow plus Ctrl-U clears the line before a different pasted command",
+        "wrong sandbox and read-only input authorization"
+      ],
+      "terminalFixture": "Responds to each observed ESC[6n with fixed ESC[1;1R; verifies raw guest protocol/output rather than rendered screen geometry"
+    }
+  },
+  "diagnosis": {
+    "initialReedlineProbe": "Prompt reached, but command observation timed out",
+    "log": "/tmp/boxes-published-pty-reedline-state.log",
+    "observedState": "Receipt remained running; retained raw output contained additional cursor-position queries and the first typed character",
+    "resolution": "The fixture now acknowledges every cursor-position query at its retained stdin offset and uses bracketed paste; no product retry or timeout increase",
+    "instrumentation": "Temporary tagged diagnostic logs were restored out of the test source"
+  },
+  "verification": {
+    "fullCheck": {
+      "command": "bun run check",
+      "log": "/tmp/boxes-tty-read-check.log",
+      "exitCode": 0,
+      "tests": 362,
+      "failed": 0,
+      "assertions": 4899,
+      "files": 71,
+      "testSeconds": 147.1,
+      "includes": [
+        "runtime and SDK builds",
+        "TypeScript",
+        "workspace Clippy with warnings denied",
+        "native workspace Rust tests",
+        "native workerd/R2/Queue suites"
+      ]
+    },
+    "formatCheck": "passed: bun run format:check",
+    "finalNativeTerminalReadMilliseconds": 2972.92,
+    "finalPublishedMinimalMilliseconds": 3712.36,
+    "finalPublishedReedlineMilliseconds": 6235.93
+  },
+  "sourceSha256": {
+    "crates/wasi/src/lib.rs": "af23bbda9f64b4f3043e6548b39667f5e7f4dd6e80c85ec1caaf4604e2785a73",
+    "tests/fixtures/wasi-pty.rs": "ae77236de5778b436268124a963a1a1a7c090d26c133414d6aa25f338d9c52ca",
+    "tests/tty-read.test.ts": "2f345e8c927bdc1897a69871c8083eeade620e5952dad9dbbdc2f83a5f9927af",
+    "tests/published-pty.test.ts": "36f594c5e54a58f0881cc6ae2cc14ae869e98b46407c5fed6d6efe104f5d5f8d",
+    "tooling/build.ts": "632542c795e795a6e69428f090645eb4a66bcd8c8e2f4dfe24323078c3ec7773"
+  },
+  "artifacts": {
+    "dist/worker/index.js": {
+      "bytes": 363951,
+      "sha256": "8548079f0582d64f457ab4d687d3bd2b7fbc22019fcb12c5b55a849fa57f3525"
+    },
+    "dist/clock-worker/index.js": {
+      "bytes": 382321,
+      "sha256": "1d3ebe655efc96a4fdf6c7ac526418aa0a8a215465d4d7aff2d996a4de0ecef1"
+    },
+    "dist/wasi/cirro_wasi_bg.wasm": {
+      "bytes": 1671286,
+      "sha256": "5f488286d878649bcff1838db7d1d277d9ed490f4d6083d5a7a1dddc5da1dec6"
+    }
+  },
+  "delivery": {
+    "publication": "No new release or artifact upload; published SDK/runtime 0.12.1 unchanged",
+    "deployment": "No new deployment",
+    "minutei": "Consumer unchanged; no Minutei push/deploy",
+    "previousSourceCi": {
+      "head": "ef9fd721bb1610de3318d73c60cb3aeeb3fbb6fb",
+      "run": 38850796609,
+      "conclusion": "success"
+    }
+  },
+  "remaining": [
+    "Active PTY heap checkpoint/replacement recovery",
+    "Terminal-specific metadata and listing",
+    "Resize and rendered-terminal behavior",
+    "Full termios, foreground signals and job control",
+    "Direct TerminalRead caught-signal/SA_RESTART regression proof",
+    "Current shared 256 host-request budget bounds session lifetime",
+    "Published artifact delivery and authenticated production interactive-shell proof",
+    "Actual Minutei remote application/authentication/model integration",
+    "Production memory, latency and AgentOS cost comparison"
+  ]
+}

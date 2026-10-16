@@ -314,6 +314,10 @@ enum Completion {
     Exec {
         closed: BTreeSet<u32>,
     },
+    TerminalRead {
+        pointer: usize,
+        length: usize,
+    },
     PipeRead {
         fd: u32,
         vectors: Vec<(usize, usize)>,
@@ -2134,6 +2138,59 @@ fn dispatch(caller: &mut Caller<'_, State>, name: &str, args: &[u64]) -> Result<
             }
             descriptor.flags.set(a[1] as u16);
         }
+        "tty_read" => {
+            let length = a[1];
+            if length == 0 {
+                return Ok(0);
+            }
+            if length > MAX_BYTES {
+                return Err(Failure::Errno(22));
+            }
+            let end = a[0].checked_add(length).ok_or(Failure::Errno(21))?;
+            if memory(caller)?.data(&*caller).get(a[0]..end).is_none() {
+                return Err(Failure::Errno(21));
+            }
+            let descriptor = caller.data().descriptors.get(&0).ok_or(Failure::Errno(8))?;
+            if !descriptor.read || descriptor.rights & 2 == 0 {
+                return Err(Failure::Errno(76));
+            }
+            let pipe = descriptor.pipe.clone().ok_or(Failure::Errno(59))?;
+            if pipe.terminal.is_none() {
+                return Err(Failure::Errno(59));
+            }
+            let timeout = args[2] as u32;
+            if timeout == 0 {
+                return Ok(0);
+            }
+            if pipe.read_ready() {
+                let data = pipe.read_data(length).map_err(Failure::Errno)?;
+                put(caller, a[0], &data)?;
+                caller.data_mut().readiness_notification = true;
+                return Ok(data.len() as i32);
+            }
+            let clocks = if timeout == u32::MAX {
+                Vec::new()
+            } else {
+                vec![PollClock {
+                    index: 0,
+                    clock: 1,
+                    timeout: (u64::from(timeout) * 1_000_000).to_string(),
+                    precision: "1000000".into(),
+                    absolute: false,
+                }]
+            };
+            return suspend(
+                caller,
+                Request::Poll {
+                    clocks,
+                    immediate: false,
+                },
+                Completion::TerminalRead {
+                    pointer: a[0],
+                    length,
+                },
+            );
+        }
         "fd_read" | "fd_pread" => {
             let output = *a.last().ok_or(Failure::Errno(28))?;
             bytes(caller, output, 4)?;
@@ -3337,21 +3394,22 @@ fn linker(engine: &Engine) -> Result<Linker<State>, String> {
         .func_wrap(
             "host_tty",
             "read",
-            |caller: Caller<'_, State>,
-             _pointer: i32,
-             _length: i32,
-             _timeout: i32|
-             -> Result<i32, Error> {
-                if caller
-                    .data()
-                    .descriptors
-                    .get(&0)
-                    .and_then(|descriptor| descriptor.pipe.as_ref())
-                    .is_some_and(|pipe| pipe.terminal.is_some())
-                {
-                    return Err(Error::new("host_tty.read is unsupported; use WASI fd_read"));
+            |mut caller: Caller<'_, State>, pointer: i32, length: i32, timeout: i32| match dispatch(
+                &mut caller,
+                "tty_read",
+                &[
+                    pointer as u32 as u64,
+                    length as u32 as u64,
+                    timeout as u32 as u64,
+                ],
+            ) {
+                Ok(count) => Ok(count),
+                Err(Failure::Suspend) => Err(Error::new("Cirro host request")),
+                Err(Failure::Errno(errno)) => {
+                    Err(Error::new(format!("TTY read failed with errno {errno}")))
                 }
-                Err(Error::new("TTY input requires an attached terminal"))
+                Err(Failure::Budget) => Err(Error::new("WASI host request budget exceeded")),
+                Err(Failure::Signal(signal)) => Err(Error::i32_exit(128 + signal as i32)),
             },
         )
         .map_err(|error| error.to_string())?;
@@ -3867,7 +3925,8 @@ impl WasmGuest {
         let interrupt = self.store.data().pending.as_ref().is_some_and(|pending| {
             matches!(
                 pending.completion,
-                Completion::PipeRead { .. }
+                Completion::TerminalRead { .. }
+                    | Completion::PipeRead { .. }
                     | Completion::PipeWrite { .. }
                     | Completion::Poll { .. }
                     | Completion::Wait { .. }
@@ -3877,7 +3936,8 @@ impl WasmGuest {
         let restartable = self.store.data().pending.as_ref().is_some_and(|pending| {
             matches!(
                 pending.completion,
-                Completion::PipeRead { .. }
+                Completion::TerminalRead { .. }
+                    | Completion::PipeRead { .. }
                     | Completion::PipeWrite { .. }
                     | Completion::Wait { .. }
                     | Completion::WaitRaw { .. }
@@ -3918,7 +3978,8 @@ impl WasmGuest {
                 return Ok(self.store.data().pending.as_ref().is_some_and(|pending| {
                     matches!(
                         pending.completion,
-                        Completion::PipeRead { .. }
+                        Completion::TerminalRead { .. }
+                            | Completion::PipeRead { .. }
                             | Completion::PipeWrite { .. }
                             | Completion::Poll { .. }
                             | Completion::Wait { .. }
@@ -4180,6 +4241,11 @@ impl WasmGuest {
             return false;
         };
         match &pending.completion {
+            Completion::TerminalRead { .. } => state
+                .descriptors
+                .get(&0)
+                .and_then(|descriptor| descriptor.pipe.as_ref())
+                .is_some_and(|pipe| pipe.read_ready()),
             Completion::PipeRead { fd, .. } => state
                 .descriptors
                 .get(fd)
@@ -4947,6 +5013,14 @@ impl WasmGuest {
             .ok_or_else(|| JsValue::from_str("No pending Wasm request"))?;
         let mut result = errno;
         let mut scalar = match &pending.completion {
+            Completion::TerminalRead { .. } if errno != 0 => {
+                if errno != 27 {
+                    return Err(JsValue::from_str(&format!(
+                        "TTY read failed with errno {errno}"
+                    )));
+                }
+                Some(Val::I32(0))
+            }
             Completion::HostStat { projection, .. } if errno != 0 => Some(match projection {
                 StatProjection::Mode => Val::I32(0),
                 StatProjection::Size | StatProjection::Blocks => Val::I64(-1),
@@ -4992,6 +5066,28 @@ impl WasmGuest {
         }
         if errno == 0 {
             match pending.completion {
+                Completion::TerminalRead { pointer, length } => {
+                    let pipe = self
+                        .store
+                        .data()
+                        .descriptors
+                        .get(&0)
+                        .and_then(|descriptor| descriptor.pipe.clone())
+                        .ok_or_else(|| JsValue::from_str("Missing terminal input"))?;
+                    let data = if pipe.read_ready() {
+                        self.store.data_mut().readiness_notification = true;
+                        pipe.read_data(length).map_err(|errno| {
+                            JsValue::from_str(&format!("TTY read failed with errno {errno}"))
+                        })?
+                    } else {
+                        Vec::new()
+                    };
+                    self.memory
+                        .ok_or_else(|| JsValue::from_str("Missing memory"))?
+                        .write(&mut self.store, pointer, &data)
+                        .map_err(|error| JsValue::from_str(&error.to_string()))?;
+                    scalar = Some(Val::I32(data.len() as i32));
+                }
                 Completion::PipeRead {
                     fd,
                     vectors,

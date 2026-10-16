@@ -36,6 +36,7 @@ unsafe extern "C" {
 #[link(wasm_import_module = "host_tty")]
 unsafe extern "C" {
     fn isatty(fd: u32) -> u32;
+    fn read(pointer: *mut u8, length: u32, timeout: u32) -> u32;
     fn get_size(fd: u32, cols: *mut u16, rows: *mut u16) -> u32;
     fn set_raw_mode(enabled: u32) -> u32;
 }
@@ -49,6 +50,7 @@ unsafe extern "C" {
     fn fd_fdstat_set_rights(fd: u32, base: u64, inheriting: u64) -> u32;
     fn poll_oneoff(input: *const u8, output: *mut u8, count: u32, ready: *mut u32) -> u32;
     fn proc_exit(code: u32) -> !;
+    fn clock_time_get(clock: u32, precision: u64, output: *mut u64) -> u32;
 }
 #[repr(C)]
 struct Io {
@@ -74,12 +76,65 @@ fn receive(fd: u32, data: &mut [u8]) -> (u32, u32) {
     (unsafe { fd_read(fd, &io, 1, &mut count) }, count)
 }
 
-#[cfg(any(case = "child", case = "session", case = "sink"))]
+#[cfg(any(
+    case = "child",
+    case = "session",
+    case = "sink",
+    case = "tty-read",
+    case = "tty-invalid",
+    case = "tty-rights"
+))]
 #[unsafe(no_mangle)]
 pub extern "C" fn _start() {
     unsafe {
         if isatty(0) != 1 || isatty(1) != 1 || isatty(2) != 1 {
             proc_exit(51);
+        }
+        if cfg!(case = "tty-invalid") {
+            send(1, b"invalid-ready\n");
+            let mut timestamp = 0;
+            clock_time_get(1, 1_000_000, &mut timestamp);
+            read(u32::MAX as *mut u8, 1, u32::MAX);
+            proc_exit(74);
+        }
+        if cfg!(case = "tty-rights") {
+            send(1, b"rights-ready\n");
+            let mut timestamp = 0;
+            clock_time_get(1, 1_000_000, &mut timestamp);
+            if fd_fdstat_set_rights(0, 0, 0) != 0 {
+                proc_exit(75);
+            }
+            let mut byte = 0u8;
+            read(&mut byte, 1, u32::MAX);
+            proc_exit(76);
+        }
+        if cfg!(case = "tty-read") {
+            let mut data = [0u8; 16];
+            let mut before = 0u64;
+            let mut after = 0u64;
+            if clock_time_get(1, 1_000_000, &mut before) != 0
+                || set_raw_mode(1) != 0
+                || read(u32::MAX as *mut u8, 0, u32::MAX) != 0
+                || read(data.as_mut_ptr(), 16, 25) != 0
+                || clock_time_get(1, 1_000_000, &mut after) != 0
+                || after.saturating_sub(before) < 25_000_000
+            {
+                proc_exit(70);
+            }
+            send(1, b"timeout-ready\n");
+            if read(data.as_mut_ptr(), 3, u32::MAX) != 3 || &data[..3] != b"one" {
+                proc_exit(71);
+            }
+            send(1, b"one-ready\n");
+            if read(data.as_mut_ptr(), 16, 3000) != 3 || &data[..3] != b"two" {
+                proc_exit(72);
+            }
+            send(1, b"two-ready\n");
+            if read(data.as_mut_ptr(), 16, u32::MAX) != 0 {
+                proc_exit(73);
+            }
+            send(1, b"eof-done\n");
+            proc_exit(0);
         }
         if cfg!(case = "sink") {
             send(1, b"ready\n");
@@ -142,7 +197,14 @@ pub extern "C" fn _start() {
     }
 }
 
-#[cfg(not(any(case = "child", case = "session", case = "sink")))]
+#[cfg(not(any(
+    case = "child",
+    case = "session",
+    case = "sink",
+    case = "tty-read",
+    case = "tty-invalid",
+    case = "tty-rights"
+)))]
 #[unsafe(no_mangle)]
 pub extern "C" fn run() -> i32 {
     unsafe {
