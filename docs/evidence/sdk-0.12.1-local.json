@@ -1,5 +1,5 @@
 {
-  "status": "Local candidate evidence for experimental SDK/runtime 0.12.1. Publication and new SDK production verification are separate gates.",
+  "status": "Local candidate evidence for the subsequently published experimental SDK/runtime 0.12.1. Production interoperability and delivery are recorded separately.",
   "version": "0.12.1",
   "implementationCommit": "b9c7544243ce65939902d6534a80fe1d6daa28fe",
   "change": "Ephemeral Code Mode context disposal closes execution, cancels owned active runs, writes the sandbox tombstone and drives native paginated R2 reclamation with management-only authority. Concurrent closes serialize; retrying dispose after a blocked collection resumes reclamation without reopening execution. Persistent contexts retain their files and do not acquire management authority.",
@@ -69,5 +69,6 @@
     "This is SDK-owned ephemeral lifecycle cleanup, not global automatic garbage collection of every disposed sandbox or live unreferenced blob.",
     "No new SDK production proof, Minutei dependency update, Minutei push/deployment, production latency or AgentOS cost advantage is established by these local checks.",
     "Full AgentOS parity remains open, including PTY, restart, other interpreter semantics and the remaining inventory gates."
-  ]
+  ],
+  "deliveryEvidence": "docs/evidence/sdk-0.12.1-delivery.json"
 }

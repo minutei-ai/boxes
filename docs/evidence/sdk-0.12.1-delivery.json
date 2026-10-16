@@ -1,0 +1,137 @@
+{
+  "status": "Published experimental SDK/runtime 0.12.1. Source CI, exact public archive downloads and native remote SDK interoperability passed. Full AgentOS parity remains open.",
+  "version": "0.12.1",
+  "sourceCommit": "1285569d0eb71be62622363d529d27076f664207",
+  "implementationCommit": "b9c7544243ce65939902d6534a80fe1d6daa28fe",
+  "release": {
+    "assets": [
+      {
+        "apiUrl": "https://api.github.com/repos/minutei-ai/boxes/releases/assets/645968841",
+        "contentType": "application/x-gtar",
+        "createdAt": "2026-10-16T03:11:13Z",
+        "digest": "sha256:c49dd52d72f8fb99bd1a145b9d4c7c7d994352cd685c7746528146a8094c6647",
+        "downloadCount": 0,
+        "id": "RA_kwDOVHG00M4mgLPJ",
+        "label": "",
+        "name": "minutei-ai-boxes-0.12.1.tgz",
+        "size": 69675,
+        "state": "uploaded",
+        "updatedAt": "2026-10-16T03:11:13Z",
+        "url": "https://github.com/minutei-ai/boxes/releases/download/sdk-v0.12.1/minutei-ai-boxes-0.12.1.tgz"
+      },
+      {
+        "apiUrl": "https://api.github.com/repos/minutei-ai/boxes/releases/assets/645968843",
+        "contentType": "application/x-gtar",
+        "createdAt": "2026-10-16T03:11:13Z",
+        "digest": "sha256:1f5692b23c7b7d91c64b1bc06b1a78c8a9503d327baa4b44bc56f632473c47a0",
+        "downloadCount": 0,
+        "id": "RA_kwDOVHG00M4mgLPL",
+        "label": "",
+        "name": "minutei-ai-boxes-runtime-0.12.1.tgz",
+        "size": 5523640,
+        "state": "uploaded",
+        "updatedAt": "2026-10-16T03:11:14Z",
+        "url": "https://github.com/minutei-ai/boxes/releases/download/sdk-v0.12.1/minutei-ai-boxes-runtime-0.12.1.tgz"
+      },
+      {
+        "apiUrl": "https://api.github.com/repos/minutei-ai/boxes/releases/assets/645968844",
+        "contentType": "application/octet-stream",
+        "createdAt": "2026-10-16T03:11:13Z",
+        "digest": "sha256:71fa9c078b3e737ba6358ff427f9cf81e09bf9c7616770e693a8bdf1dcbe6382",
+        "downloadCount": 0,
+        "id": "RA_kwDOVHG00M4mgLPM",
+        "label": "",
+        "name": "SHA256SUMS",
+        "size": 196,
+        "state": "uploaded",
+        "updatedAt": "2026-10-16T03:11:13Z",
+        "url": "https://github.com/minutei-ai/boxes/releases/download/sdk-v0.12.1/SHA256SUMS"
+      }
+    ],
+    "isDraft": false,
+    "isPrerelease": true,
+    "tagName": "sdk-v0.12.1",
+    "targetCommitish": "1285569d0eb71be62622363d529d27076f664207",
+    "url": "https://github.com/minutei-ai/boxes/releases/tag/sdk-v0.12.1"
+  },
+  "verification": {
+    "localEvidence": "docs/evidence/sdk-0.12.1-local.json",
+    "sourceCI": {
+      "url": "https://github.com/minutei-ai/boxes/actions/runs/38844197200",
+      "conclusion": "success",
+      "tests": 354,
+      "seconds": 118.74,
+      "exactArchiveProof": "Passed including ephemeral 1,024-file concurrent closure and persistent contexts."
+    },
+    "tagCI": {
+      "url": "https://github.com/minutei-ai/boxes/actions/runs/38844655540",
+      "headSha": "1285569d0eb71be62622363d529d27076f664207",
+      "lastObservedStatus": "in_progress",
+      "scope": "The tag-triggered run is distinct from the successful source CI and was not yet complete when this record was written."
+    },
+    "publicDownloads": "Anonymous HTTPS downloads of both published archives match the frozen, locally tested bytes. Authenticated draft downloads also matched before publication.",
+    "nativeProductionBinding": {
+      "measuredAt": 1792120538730,
+      "profile": "minutei",
+      "targetWorker": "cirro-sandbox-prod-rs7wexxow56rmsoz",
+      "sdkVersion": "0.12.1",
+      "consumerBundleSha256": "d9afcff7fb2296bc350232c48aa940dd49a0cc36256b2df5f3c0c7cae8e146c7",
+      "sdkModulesSha256": {
+        "../../src/sdk": "160f9dd7e0049d4ec1a50eca36fa1c86669393d466f6ef3505670e307890b721",
+        "../../src/sdk-rpc": "9f75e2d2a10abe0a774bd13b2178963d036fecd13ef1d6bcca710e0a082cfc15",
+        "../../src/sdk-tanstack": "230c034846094ce57b511750503f4ffe5be5eb440f7e9a2185e6559d9ef3829b",
+        "../../src/contracts": "875496158b9435808c462a2b038e47b5a1be52a3ba24169ebb17c2b83dd48e38"
+      },
+      "callbacks": 2,
+      "interpreterCases": 3,
+      "descriptorCases": 5,
+      "managementDenied": 403,
+      "wrongSandboxDenied": 401,
+      "persistent": {
+        "created": {
+          "phase": "create",
+          "value": {
+            "content": "cGVyc2lzdGVudCBuYXRpdmUgYmluZGluZw==",
+            "encoding": "base64",
+            "freshGlobals": true,
+            "label": "create"
+          },
+          "callbacks": ["create"],
+          "closedContextDenied": true,
+          "writeDenied": null,
+          "lowMemoryDenied": true,
+          "policyMemoryDenied": true,
+          "allowedAllocation": 6000000
+        },
+        "resumed": {
+          "phase": "resume",
+          "value": {
+            "content": "cGVyc2lzdGVudCBuYXRpdmUgYmluZGluZw==",
+            "encoding": "base64",
+            "freshGlobals": true,
+            "label": "resume"
+          },
+          "callbacks": ["resume"],
+          "closedContextDenied": true,
+          "writeDenied": true,
+          "lowMemoryDenied": true,
+          "policyMemoryDenied": true,
+          "allowedAllocation": 6000000
+        },
+        "previousReceiptRetained": true
+      },
+      "cleanup": "The scoped proof disposes its isolated root and requires native vm.reclaim to complete before printing its report. The process exited successfully.",
+      "limits": "This tests the installed SDK against the existing production Worker, including persistent contexts. Automatic ephemeral cleanup in the new SDK is covered locally; no new claim of that path in production follows from this proof."
+    }
+  },
+  "backend": "No deployment in this increment. All six deployable assets match the published/deployed 0.12.0 runtime bytes; archive version metadata changes only.",
+  "minutei": "No dependency update, push or deployment in this increment. The actual local consumer remains on public 0.12.0 SDK/runtime dependencies verified by sdk-0.12.0-delivery.json.",
+  "remaining": [
+    "Global garbage collection and late-write fencing",
+    "Uncertain context creation after a lost response",
+    "New ephemeral SDK cleanup production proof",
+    "Minutei remote application/authentication/model behavior",
+    "PTY, restart and all remaining docs/parity.md gates",
+    "Production latency and cost comparison against AgentOS"
+  ]
+}
