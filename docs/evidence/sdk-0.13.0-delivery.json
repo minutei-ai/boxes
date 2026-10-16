@@ -1,0 +1,286 @@
+{
+  "status": "Published experimental SDK/runtime 0.13.0. Source/tag CI, exact public downloads, Alchemy deployment with unconditional migrations, native production service bindings and matching local Minutei integration passed. Full AgentOS parity remains open.",
+  "version": "0.13.0",
+  "sourceCommit": "b38d6b1b602c3e956e53fedf67f8230204d416ee",
+  "release": {
+    "url": "https://github.com/minutei-ai/boxes/releases/tag/sdk-v0.13.0",
+    "isPrerelease": true,
+    "isDraft": false,
+    "latest": false,
+    "targetCommitish": "b38d6b1b602c3e956e53fedf67f8230204d416ee",
+    "assets": [
+      {
+        "name": "minutei-ai-boxes-0.13.0.tgz",
+        "bytes": 71885,
+        "digest": "sha256:9ae84cb8e1a2cf18285f2967f002224e146724ab362b4dfc8105ace072b079b9",
+        "url": "https://github.com/minutei-ai/boxes/releases/download/sdk-v0.13.0/minutei-ai-boxes-0.13.0.tgz"
+      },
+      {
+        "name": "minutei-ai-boxes-runtime-0.13.0.tgz",
+        "bytes": 5531415,
+        "digest": "sha256:8ee4c00e8ec909d61c00ff53a7328f4bd0e323ab4cb62aaf0527a6212021892c",
+        "url": "https://github.com/minutei-ai/boxes/releases/download/sdk-v0.13.0/minutei-ai-boxes-runtime-0.13.0.tgz"
+      },
+      {
+        "name": "SHA256SUMS",
+        "bytes": 196,
+        "digest": "sha256:53fce37dac64df2f0789bb8091abe089677004407bd704539722eaa30599da05",
+        "url": "https://github.com/minutei-ai/boxes/releases/download/sdk-v0.13.0/SHA256SUMS"
+      }
+    ]
+  },
+  "verification": {
+    "localEvidence": "docs/evidence/sdk-0.13.0-local.json",
+    "sourceCI": {
+      "url": "https://github.com/minutei-ai/boxes/actions/runs/38860010517",
+      "conclusion": "success",
+      "tests": 371,
+      "seconds": 129.04,
+      "exactArchiveProof": "Passed including PTY and agent-controlled resize."
+    },
+    "publicDownloads": [
+      {
+        "name": "minutei-ai-boxes-0.13.0.tgz",
+        "bytes": 71885,
+        "sha256": "9ae84cb8e1a2cf18285f2967f002224e146724ab362b4dfc8105ace072b079b9",
+        "anonymousDownloadMatches": true
+      },
+      {
+        "name": "minutei-ai-boxes-runtime-0.13.0.tgz",
+        "bytes": 5531415,
+        "sha256": "8ee4c00e8ec909d61c00ff53a7328f4bd0e323ab4cb62aaf0527a6212021892c",
+        "anonymousDownloadMatches": true
+      },
+      {
+        "name": "SHA256SUMS",
+        "bytes": 196,
+        "sha256": "53fce37dac64df2f0789bb8091abe089677004407bd704539722eaa30599da05",
+        "anonymousDownloadMatches": true
+      }
+    ],
+    "nativeProductionBinding": {
+      "measuredAt": 1792131596839,
+      "profile": "minutei",
+      "targetWorker": "cirro-sandbox-prod-rs7wexxow56rmsoz",
+      "sdkVersion": "0.13.0",
+      "consumerBundleSha256": "0d3dbef7687313b6ea8198dafd346b60fcc3d1c024065f2a7373627937936348",
+      "sdkModulesSha256": {
+        "../../src/sdk": "959b75cd796dc753586c9e924505268b01bd01b6570859ceeb093c57dad7fab7",
+        "../../src/sdk-rpc": "9fa975ae0aaaff8f22928827be4c19c2da75eb85bdc9853d9e72320f37c1c39b",
+        "../../src/sdk-tanstack": "3aec8c291cdace33847cef9b87624f3688d05275801fc0f9a4dcca2ca153134b",
+        "../../src/contracts": "970fff1f4a4c2076bde3223432b6fc3dc02609f93bbfdf60fff0379bd2dc2590"
+      },
+      "inlineDeadline": {
+        "requestedMs": 15000,
+        "startedAt": 1792131461567,
+        "recovery": {
+          "state": "running",
+          "checkpoints": 0,
+          "resumable": false,
+          "deadlineAt": 1792131476567
+        }
+      },
+      "terminal": {
+        "initial": {
+          "cols": 80,
+          "rows": 24,
+          "revision": 0
+        },
+        "resized": {
+          "cols": 100,
+          "rows": 30,
+          "revision": 2
+        },
+        "terminal": {
+          "id": "terminal-live",
+          "status": "exited",
+          "sourceHash": "a8a6480394435899e061e452f41d433ae5dcff92bcf00e197b8faea415137b28",
+          "language": "wasm",
+          "startedAt": 1792131577595,
+          "finishedAt": 1792131594975,
+          "output": {
+            "stdout": "ready\neof-ready\nwinch\nafter-one\nwinch\ndone\n",
+            "stderr": "",
+            "result": null,
+            "exitCode": 0
+          }
+        },
+        "agent": {
+          "id": "terminal-agent",
+          "status": "exited",
+          "sourceHash": "0bc9adff0ae13ee1bef54d4ae1ab07254e340a996cec8b6a418fe919151d4056",
+          "language": "typescript",
+          "startedAt": 1792131590438,
+          "finishedAt": 1792131594068,
+          "output": {
+            "stdout": "",
+            "stderr": "",
+            "result": {
+              "cols": 100,
+              "rows": 30,
+              "revision": 2
+            },
+            "exitCode": 0
+          }
+        },
+        "input": {
+          "offset": 0,
+          "total": 0,
+          "closed": true
+        },
+        "staleRevision": 409,
+        "foreignSandbox": 401
+      },
+      "callbacks": 2,
+      "interpreterCases": 3,
+      "descriptorCases": 5,
+      "managementDenied": 403,
+      "wrongSandboxDenied": 401,
+      "persistent": {
+        "created": {
+          "phase": "create",
+          "value": {
+            "content": "cGVyc2lzdGVudCBuYXRpdmUgYmluZGluZw==",
+            "encoding": "base64",
+            "freshGlobals": true,
+            "label": "create"
+          },
+          "callbacks": ["create"],
+          "closedContextDenied": true,
+          "writeDenied": null,
+          "lowMemoryDenied": true,
+          "policyMemoryDenied": true,
+          "allowedAllocation": 6000000
+        },
+        "resumed": {
+          "phase": "resume",
+          "value": {
+            "content": "cGVyc2lzdGVudCBuYXRpdmUgYmluZGluZw==",
+            "encoding": "base64",
+            "freshGlobals": true,
+            "label": "resume"
+          },
+          "callbacks": ["resume"],
+          "closedContextDenied": true,
+          "writeDenied": true,
+          "lowMemoryDenied": true,
+          "policyMemoryDenied": true,
+          "allowedAllocation": 6000000
+        },
+        "previousReceiptRetained": true
+      },
+      "cleanup": "Scoped disposal and native vm.reclaim completed before the report and successful process exit. A later read-capability request was rejected because the sandbox was disposed.",
+      "limits": "Synthetic SDK/RPC/terminal proof against the updated production Worker; migrations were still running. This does not establish arbitrary-crash recovery, published interactive-shell behavior or actual Minutei application/model delivery."
+    },
+    "tagCI": {
+      "url": "https://github.com/minutei-ai/boxes/actions/runs/38860539332",
+      "headSha": "b38d6b1b602c3e956e53fedf67f8230204d416ee",
+      "status": "completed",
+      "conclusion": "success"
+    }
+  },
+  "minutei": {
+    "status": "Matching public SDK/runtime 0.13.0 installed, verified and committed locally. No Minutei push or deployment.",
+    "installedArtifacts": [
+      {
+        "archive": "minutei-ai-boxes-0.13.0.tgz",
+        "sha256": "9ae84cb8e1a2cf18285f2967f002224e146724ab362b4dfc8105ace072b079b9",
+        "files": 16,
+        "allInstalledBytesMatch": true
+      },
+      {
+        "archive": "minutei-ai-boxes-runtime-0.13.0.tgz",
+        "sha256": "8ee4c00e8ec909d61c00ff53a7328f4bd0e323ab4cb62aaf0527a6212021892c",
+        "files": 8,
+        "allInstalledBytesMatch": true
+      }
+    ],
+    "priorSdkCompatibility": {
+      "clientVersion": "0.12.1",
+      "runtimeVersion": "0.13.0",
+      "runtimeArchiveSha256": "8ee4c00e8ec909d61c00ff53a7328f4bd0e323ab4cb62aaf0527a6212021892c",
+      "consumerCommit": "96dddc57faac80499adecc1dc68571678c5a53db",
+      "consumerBundleSha256": "78894f5c0028992ab331bc04e02da43005b3251201c5c6edd02e4bf11f501587",
+      "transport": "native workerd Agent service binding; actual Minutei Code Mode and tenant SQLite; local R2, KV and Queue",
+      "retention": true,
+      "isolatedRegistry": true,
+      "capabilities": true,
+      "consumerFixturesSha256": {
+        "boxes-retention.ts": "ab69256069295b3e155a6e47ebc916e23f4ae760eb4a7ae7afebd9bbc37b050f",
+        "boxes-code.worker.ts": "c3d6f06ea5f5afe322076052267468c4702fe79aff596fa847d68bdc3045e5f4"
+      }
+    },
+    "commit": "592d0037de45c80a4a0ccc3ac46a3756d30bb130",
+    "nativeTests": {
+      "command": "bun run test --project web --project web-integration apps/web/__tests__/boxes-code.test.ts apps/web/__tests__/tenant-lifecycle.test.ts",
+      "files": 2,
+      "tests": 2,
+      "passed": 2,
+      "seconds": 27.68,
+      "environment": "Existing native Python environment with declared Iceberg dependencies."
+    },
+    "typecheck": "Nx web:typecheck and 29 dependency tasks passed.",
+    "format": "Changed package manifest passed its native oxfmt configuration; git diff --check passed.",
+    "actualConsumerProof": {
+      "clientVersion": "0.13.0",
+      "runtimeVersion": "0.13.0",
+      "runtimeArchiveSha256": "8ee4c00e8ec909d61c00ff53a7328f4bd0e323ab4cb62aaf0527a6212021892c",
+      "consumerCommit": "592d0037de45c80a4a0ccc3ac46a3756d30bb130",
+      "consumerBundleSha256": "cc8782dd88e4c08eca0615a1b7af049a09494becb1d90dfc086e73d817f698ab",
+      "transport": "native workerd Agent service binding; actual Minutei Code Mode and tenant SQLite; local R2, KV and Queue",
+      "retention": true,
+      "isolatedRegistry": true,
+      "capabilities": true,
+      "consumerFixturesSha256": {
+        "boxes-retention.ts": "ab69256069295b3e155a6e47ebc916e23f4ae760eb4a7ae7afebd9bbc37b050f",
+        "boxes-code.worker.ts": "c3d6f06ea5f5afe322076052267468c4702fe79aff596fa847d68bdc3045e5f4"
+      }
+    },
+    "limits": "Native local Agent binding with actual Code Mode and tenant SQLite. History Queue has no consumer in this fixture. Authenticated application/model behavior and Minutei deployment remain unverified."
+  },
+  "remaining": [
+    "Full docs/parity.md inventory and completion gates",
+    "Terminal-specific metadata/listing, full termios, foreground control and input-key signals",
+    "Arbitrary-crash and cross-build recovery, published-shell resumption",
+    "Global collection, uncertain creation and late-write fencing",
+    "Actual Minutei authentication/model/history Queue delivery",
+    "Production latency, memory and cost comparison against AgentOS"
+  ],
+  "backend": {
+    "profile": "minutei",
+    "stack": "cirro",
+    "stage": "prod",
+    "worker": "cirro-sandbox-prod-rs7wexxow56rmsoz",
+    "url": "https://cirro-sandbox-prod-rs7wexxow56rmsoz.manoel-carvalhoneto.workers.dev",
+    "bucket": "cirro-objects-prod-vbk2p6ruhs2m645y",
+    "command": "bunx alchemy deploy alchemy.run.ts --stage prod --profile minutei --yes",
+    "exitCode": 0,
+    "seconds": 493.0,
+    "result": "Worker updated and unconditional Migrations action completed; two resources/actions succeeded. Existing private R2 bucket and native Queue were retained.",
+    "pagedMigrations": {
+      "environment-v1": {
+        "pages": 68,
+        "migrated": 0
+      },
+      "process-input-v4": {
+        "pages": 30,
+        "migrated": 0
+      },
+      "input-geometry-v2": {
+        "pages": 1,
+        "migrated": 6
+      },
+      "filesystem-v4": {
+        "pages": 67,
+        "migrated": 0
+      },
+      "process-deadlines-v1": {
+        "pages": 30,
+        "migrated": 0
+      }
+    },
+    "assetsMatchFrozenRuntimeArchive": true,
+    "initialAttempt": "bun run deploy exited before changes because its native CLI could not prompt in a non-interactive terminal. The authorized native --yes application completed.",
+    "bindingTiming": "Native remote binding proof ran after Worker upload while unconditional migrations were still progressing; the entire Alchemy operation subsequently completed successfully."
+  }
+}
