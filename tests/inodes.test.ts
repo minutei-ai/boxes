@@ -202,12 +202,14 @@ test("resize plans preserve prefix references, bound tail I/O and reject invalid
   const partial = Schema.decodeUnknownSync(Schema.fromJsonString(RangeWritePlan))(
     kernel.resize_plan("/tmp/file", 262153n),
   );
-  expect(partial.blocks).toEqual([{ index: 1, size: 9, previous: { hash: first, size: 262144 } }]);
+  expect(partial.blocks).toEqual([
+    { index: 1, size: 9, previous: { hash: first, size: 262144, shared: false } },
+  ]);
   const grown = Schema.decodeUnknownSync(Schema.fromJsonString(RangeWritePlan))(
     kernel.resize_plan("/tmp/file", 1048581n),
   );
   expect(grown.blocks).toEqual([
-    { index: 3, size: 262144, previous: { hash: tail, size: 31 } },
+    { index: 3, size: 262144, previous: { hash: tail, size: 31, shared: false } },
     { index: 4, size: 5, previous: null },
   ]);
   expect(

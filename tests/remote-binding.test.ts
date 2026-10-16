@@ -1,7 +1,8 @@
+import { defaultSoftware } from "../src/default-software";
 import { DescriptorProof } from "./fixtures/descriptor-proof";
 import { prepareDescriptorProof } from "./fixtures/descriptor-proof-inputs";
-import { downloadPublished } from "./fixtures/published-package";
-import { publishedPackages, publishedInterpreterCases } from "./fixtures/published-software";
+import { downloadSoftware } from "../tooling/software-artifacts";
+import { publishedInterpreterCases } from "./fixtures/published-software";
 import { expect, test } from "bun:test";
 import { mkdtemp, rm } from "node:fs/promises";
 import { join } from "node:path";
@@ -57,9 +58,9 @@ test(
             make({ url, token: Redacted.make(management.token) }),
             (client) => client.action(id, { op: "vm.dispose" }).pipe(Effect.orDie),
           );
-          const software = publishedPackages.find((entry) => entry.name === "sh");
+          const software = defaultSoftware.find((entry) => entry.name === "sh");
           if (software === undefined) return yield* Effect.die("Missing pinned shell package");
-          const packageBytes = yield* downloadPublished(software);
+          const packageBytes = yield* downloadSoftware(software);
           yield* manager.action(id, {
             op: "filesystem.writeFile",
             path: "/tmp/binding-sh.aospkg",

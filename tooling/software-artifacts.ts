@@ -2,11 +2,11 @@ import { Effect } from "effect";
 import { mkdir, mkdtemp, rename, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { readBounded } from "../../src/http";
-import { publishedPackages } from "./published-software";
+import { readBounded } from "../src/http";
+import type { SoftwareArtifact } from "../src/default-software";
 
-export const downloadPublished = Effect.fn("fixtures.downloadPublished")(function* (
-  software: (typeof publishedPackages)[number],
+export const downloadSoftware = Effect.fn("software.download")(function* (
+  software: typeof SoftwareArtifact.Type,
 ) {
   const directory = join(tmpdir(), "boxes-published-software");
   const path = join(directory, `${software.digest}.aospkg`);

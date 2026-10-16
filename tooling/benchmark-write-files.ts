@@ -86,6 +86,7 @@ const phases = await Effect.runPromise(
                     bindings: [
                       R2Bucket.local({ binding: "OBJECTS", id: name }),
                       Text.local("API_KEY", "cirro-local-test-credential"),
+                      Json.local("SOFTWARE_BASE", null),
                       Queue.local({ binding: "EVENTS", queueName: name, deliveryDelay: 86400 }),
                     ],
                   });

@@ -155,7 +155,10 @@ const block = Effect.fn("filesystem.block")(function* (
   reference: typeof ContentBlock.Type,
 ) {
   const object = yield* Effect.tryPromise({
-    try: () => env.OBJECTS.get(`sandboxes/${id}/blobs/${reference.hash}`),
+    try: () => {
+      if (reference.shared) return env.OBJECTS.get(`software/blobs/${reference.hash}`);
+      return env.OBJECTS.get(`sandboxes/${id}/blobs/${reference.hash}`);
+    },
     catch: (cause) => new StorageFailure({ cause }),
   });
   if (object === null)

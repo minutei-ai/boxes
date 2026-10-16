@@ -1,6 +1,7 @@
+import { defaultSoftware } from "../src/default-software";
 import { descriptorProof } from "./fixtures/descriptor-proof";
 import { prepareDescriptorProof } from "./fixtures/descriptor-proof-inputs";
-import { downloadPublished } from "./fixtures/published-package";
+import { downloadSoftware } from "../tooling/software-artifacts";
 import { afterAll, expect, test } from "bun:test";
 import { mkdtemp, rm } from "node:fs/promises";
 import { Effect, Redacted, Schema } from "effect";
@@ -9,7 +10,6 @@ import { make } from "../src/sdk";
 import { runtime } from "../tooling/worker-test";
 import { ProcessDelivery, StoredRun } from "../src/contracts";
 import {
-  publishedPackages,
   publishedShellCases,
   publishedInterpreterFile,
   publishedInterpreterCases,
@@ -44,9 +44,9 @@ test(
           expiresInSeconds: 600,
         });
         const client = yield* make({ url, token: Redacted.make(grant.token) });
-        yield* Effect.forEach(publishedPackages, (software) =>
+        yield* Effect.forEach(defaultSoftware, (software) =>
           Effect.gen(function* () {
-            const bytes = yield* downloadPublished(software);
+            const bytes = yield* downloadSoftware(software);
             const path = `/tmp/${software.name}.aospkg`;
             yield* client.action(id, {
               op: "filesystem.writeFile",

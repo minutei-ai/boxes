@@ -86,7 +86,7 @@ test(
             cursor: typeof FilesystemMigrationReceipt.Type.cursor,
           ) {
             const response = yield* Effect.promise(() =>
-              fetch(new URL("/v1/migrations/filesystem-v4", origin), {
+              fetch(new URL("/v1/migrations/filesystem-v5", origin), {
                 method: "POST",
                 keepalive: false,
                 headers: { authorization: `Bearer ${token}`, "content-type": "application/json" },
@@ -148,10 +148,10 @@ test(
             const stored = yield* Schema.decodeUnknownEffect(Schema.fromJsonString(Head))(
               yield* Effect.promise(() => object.text()),
             );
-            expect(JSON.parse(stored.manifest)).toMatchObject({ version: 4, generation: 17 });
+            expect(JSON.parse(stored.manifest)).toMatchObject({ version: 5, generation: 17 });
           }
           const denied = yield* Effect.promise(() =>
-            fetch(new URL("/v1/migrations/filesystem-v4", origin), {
+            fetch(new URL("/v1/migrations/filesystem-v5", origin), {
               method: "POST",
               keepalive: false,
               headers: { authorization: `Bearer ${grant.token}` },
@@ -160,7 +160,7 @@ test(
           );
           expect(denied.status).toBe(401);
           const invalid = yield* Effect.promise(() =>
-            fetch(new URL("/v1/migrations/filesystem-v4", origin), {
+            fetch(new URL("/v1/migrations/filesystem-v5", origin), {
               method: "POST",
               keepalive: false,
               headers: { authorization: `Bearer ${token}` },

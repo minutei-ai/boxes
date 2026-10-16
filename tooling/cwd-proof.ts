@@ -1,5 +1,7 @@
 import { Config, Effect, Redacted, Schema } from "effect";
 import { join } from "node:path";
+import { defaultSoftware } from "../src/default-software";
+import { downloadSoftware } from "./software-artifacts";
 import {
   Action,
   CreateSandbox,
@@ -52,14 +54,10 @@ const action = (input: typeof Action.Type) =>
     token,
     Schema.encodeSync(Schema.fromJsonString(Action))(input),
   );
-const digest = "edb1cf0bbcf663d177916592d2f1b4361a02966dbf2eb44e3e61ea2a399bb43a";
-const artifact = await fetch(
-  `https://releases.rivet.dev/agent-os/latest/software/packages/jq/${digest}.aospkg`,
-  { signal: AbortSignal.timeout(60000) },
-);
-const bytes = await artifact.arrayBuffer();
-const artifactDigest = Buffer.from(await crypto.subtle.digest("SHA-256", bytes)).toString("hex");
-if (!artifact.ok || artifactDigest !== digest) process.exit(1);
+const digest = defaultSoftware[1].digest;
+const bytes = await Effect.runPromise(downloadSoftware(defaultSoftware[1]));
+const removed = await action({ op: "software.uninstall", packageId: digest });
+await removed.text();
 const uploaded = await action({
   op: "filesystem.writeFile",
   path: "/tmp/jq.aospkg",
@@ -188,6 +186,7 @@ const checks = {
   deniedImage:
     deniedDirectory.status === 200 && deniedImage.status === 200 && deniedMode.status === 200,
   setup:
+    removed.status === 200 &&
     uploaded.status === 200 &&
     installed.status === 200 &&
     directory.status === 200 &&
@@ -213,7 +212,7 @@ const report = {
   checks,
   receipts,
   rejected,
-  artifactDigest,
+  artifactDigest: digest,
   allPassed: Object.values(checks).every(Boolean),
   openFileActions: true,
   fullProcessParity: false,

@@ -3,6 +3,7 @@ import type { RpcStub } from "cloudflare:workers";
 import wasm from "cirro:wasm";
 import { initSync, Kernel } from "../dist/kernel/cirro_kernel";
 import { administrator, authorize, mint, requirePermission } from "./auth";
+import { SoftwareBaseDigest } from "./default-software";
 import {
   Action,
   AgentRequest,
@@ -171,7 +172,7 @@ const route = Effect.fn("api.route")(function* (request: Request, env: Env) {
       headers: { "content-type": "application/json", "cache-control": "no-store" },
     });
   }
-  if (url.pathname === "/v1/migrations/filesystem-v4") {
+  if (url.pathname === "/v1/migrations/filesystem-v5") {
     yield* administrator(env, token);
     const bytes = yield* readBounded(request.body, 4096);
     const input = yield* Schema.decodeUnknownEffect(
@@ -195,8 +196,34 @@ const route = Effect.fn("api.route")(function* (request: Request, env: Env) {
       onExcessProperty: "error",
     })(bytes.toString("utf8"));
     const createdAt = yield* Clock.currentTimeMillis;
+    const manifest = yield* Effect.gen(function* () {
+      if (input.snapshot !== undefined) return undefined;
+      const digest = yield* Schema.decodeUnknownEffect(SoftwareBaseDigest)(env.SOFTWARE_BASE).pipe(
+        Effect.mapError((cause) => new StorageFailure({ cause })),
+      );
+      if (digest === null) return undefined;
+      const object = yield* Effect.tryPromise({
+        try: () => env.OBJECTS.get(`software/bases/${digest}.json`),
+        catch: (cause) => new StorageFailure({ cause }),
+      });
+      if (object === null || object.size > 8_388_608)
+        return yield* new StorageFailure({ cause: "Missing or oversized default software base" });
+      const bytes = yield* Effect.tryPromise({
+        try: () => object.arrayBuffer(),
+        catch: (cause) => new StorageFailure({ cause }),
+      });
+      const actual = Buffer.from(
+        yield* Effect.promise(() => crypto.subtle.digest("SHA-256", bytes)),
+      ).toString("hex");
+      if (actual !== digest)
+        return yield* new StorageFailure({ cause: "Default software base digest mismatch" });
+      return yield* Effect.try({
+        try: () => new TextDecoder("utf-8", { fatal: true }).decode(bytes),
+        catch: (cause) => new StorageFailure({ cause }),
+      });
+    });
     const kernel = yield* Effect.acquireRelease(
-      kernelCall(() => new Kernel()),
+      kernelCall(() => new Kernel(manifest)),
       (kernel) => Effect.sync(() => kernel.free()),
     );
     yield* kernelCall(() => kernel.initialize_times(BigInt(createdAt) * 1_000_000n));
@@ -214,11 +241,11 @@ const route = Effect.fn("api.route")(function* (request: Request, env: Env) {
       yield* kernelCall(() => kernel.initialize_snapshot_root());
       yield* importSnapshot(env, input.id, kernel, input.snapshot);
     }
-    const manifest = yield* kernelCall(() => kernel.manifest());
+    const initialManifest = yield* kernelCall(() => kernel.manifest());
     const record: typeof Head.Type = {
       version: 3,
       environment: input.environment ?? {},
-      manifest,
+      manifest: initialManifest,
       policy: input.policy,
       createdAt,
       deleted: false,

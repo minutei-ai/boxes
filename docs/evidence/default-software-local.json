@@ -1,0 +1,356 @@
+{
+  "status": "Unpublished 0.19.0 source candidate; native local proofs only. Production remains experimental 0.18.0.",
+  "sourceBase": "695bb7cee2190392690f70d0b498fa486c31a28e",
+  "sourceSha256": {
+    "src/resources.ts": "1b3602a3a1b804c4c4d8c5287d66158686d57135c04b4accbb484b760ff4b524",
+    "src/default-software.ts": "49f4e16e16815a8fd12f47eb5e1d468e5d0482ac9a7616ffded42ce5ebc3c004",
+    "src/storage.ts": "193ab1127597076393db1368d1dfa99cfdcb3fde0ff568d3a5caf77939d6b06a",
+    "src/index.ts": "d17959165a50f848298e0184fe2d5914033e54fd9411adc5f36b895a9096760d",
+    "tooling/software-base.ts": "d0abda8641b70643e46952f1ac137d6720468b6bfa430ec9de548a438f9d13cb",
+    "tooling/software-artifacts.ts": "845eaec3748c8e3d86e32be2178f85aa9308e07403a5072381870962b5be3fc2",
+    "crates/kernel/src/lib.rs": "cfed69d1f5ce50148a90c1eacb87723a241a855afb096c53951d04a701beeee3",
+    "crates/kernel/src/software.rs": "54d2c49d05d28c140a80bf4d388222fef09414cdbf8fc97d9ef54462934468ff",
+    "tests/default-software.test.ts": "07ef54296fc97b439eb75bd35c631d22a1b72fbb5a056e06bf087ec048fd0189",
+    "tests/shared-software.test.ts": "e02588d7cedb2810c6fcefd9564f5919265fa9393eafcede785460ea425ea25e"
+  },
+  "architecture": {
+    "filesystemVersion": 5,
+    "initialPackages": ["sh", "jq"],
+    "publication": "Native Alchemy DefaultSoftware Action with native R2 ReadWriteBucketLocal, before Worker startup",
+    "runtime": "Ordinary Worker; no Dynamic Workers",
+    "freshSandbox": "Validated shared manifest plus private head; no package downloads or block copies",
+    "bareFixture": "Explicit SOFTWARE_BASE=null",
+    "migration": "Unconditional filesystem-v5 deploy action",
+    "publicBlobRetention": "Retained independently of per-sandbox reclamation; global image GC remains open"
+  },
+  "storage": {
+    "runtime": "Native local Alchemy workerd and R2",
+    "sharedPayloadBlobs": 42,
+    "sharedPayloadBytes": 5020372,
+    "defaultRoots": 2,
+    "privateSoftwareBlobsPerDefaultRoot": 0,
+    "privateSoftwareBlobsPerManualRoot": 42,
+    "privateSoftwareBytesPerManualRoot": 5020372,
+    "manualInstallerAndSoftwareBlobs": 62,
+    "manualInstallerAndSoftwareBytes": 10086634,
+    "scope": "Manual installer totals include retained installer/orphan blocks. Payload comparison uses package block hashes. No latency or billing conclusion."
+  },
+  "nativeAlchemy": {
+    "stage": "dev_software_base_20261016",
+    "profile": "minutei",
+    "origin": "http://localhost:1337",
+    "softwareActionSeconds": 15.2,
+    "applySucceededResources": 4,
+    "concurrencyFailure": "Four concurrent deploy-time native R2 gateway writes reproduced SQLITE_BUSY; serial writes passed.",
+    "cleanup": "Native alchemy destroy completed: 6 succeeded, 29 ms; stage resources only.",
+    "softwareProof": {
+      "measuredAt": 1792168516708,
+      "runs": 25,
+      "descriptorCases": 5,
+      "reclaimed": true
+    },
+    "terminalProofs": [
+      {
+        "measuredAt": 1792168161075,
+        "sdkVersion": "0.18.0",
+        "transport": "http",
+        "backend": "minimal",
+        "milliseconds": 32262,
+        "checkpoints": 1,
+        "exitCode": 7,
+        "file": {
+          "content": "b25jZQ==",
+          "encoding": "base64",
+          "size": 4
+        },
+        "reclaimed": true
+      },
+      {
+        "measuredAt": 1792168391978,
+        "sdkVersion": "0.18.0",
+        "transport": "http",
+        "backend": "reedline",
+        "milliseconds": 32520,
+        "checkpoints": 1,
+        "exitCode": 7,
+        "file": {
+          "content": "b25jZQ==",
+          "encoding": "base64",
+          "size": 4
+        },
+        "reclaimed": true
+      }
+    ]
+  },
+  "checks": {
+    "previousFullRun": {
+      "passed": 409,
+      "failed": 0,
+      "files": 88,
+      "assertions": 5897,
+      "seconds": 219.35,
+      "scope": "Before final preparation-validation and manual-storage assertions; final full check recorded separately when terminal."
+    },
+    "latestFocused": {
+      "passed": 4,
+      "failed": 0,
+      "assertions": 52,
+      "seconds": 7.46
+    },
+    "benchmark": "default-software-benchmark-local.json",
+    "finalFullRun": {
+      "passed": 410,
+      "failed": 0,
+      "files": 88,
+      "assertions": 5905,
+      "seconds": 229.28,
+      "command": "bun run check",
+      "exitCode": 0
+    },
+    "format": {
+      "command": "bun run format:check",
+      "exitCode": 0
+    },
+    "packageProof": {
+      "exitCode": 0,
+      "scope": "Exact local candidate archives, native binding/RPC, consumer declarations and scoped disposal; not uploaded or deployed.",
+      "report": {
+        "version": "0.19.0",
+        "transport": "native Alchemy workerd service binding and Agent RPC; local R2 and Queue",
+        "proof": "SDK archive exports and consumer declarations; runtime archive; filesystem snapshot restore; hard-link metadata; RPC callbacks and cooperative disposal; ephemeral context disposal with 1024 files and concurrent closes; persistent driver contexts and cancellation; scoped authority",
+        "terminal": {
+          "inventory": {
+            "running": {
+              "id": "terminal-live",
+              "status": "running",
+              "sourceHash": "a8a6480394435899e061e452f41d433ae5dcff92bcf00e197b8faea415137b28",
+              "language": "wasm",
+              "startedAt": 1792171091310,
+              "finishedAt": null,
+              "stdinMode": "pty"
+            },
+            "settled": {
+              "id": "terminal-live",
+              "status": "exited",
+              "sourceHash": "a8a6480394435899e061e452f41d433ae5dcff92bcf00e197b8faea415137b28",
+              "language": "wasm",
+              "startedAt": 1792171091310,
+              "finishedAt": 1792171091917,
+              "stdinMode": "pty"
+            }
+          },
+          "initial": {
+            "cols": 80,
+            "rows": 24,
+            "revision": 0
+          },
+          "resized": {
+            "cols": 100,
+            "rows": 30,
+            "revision": 2
+          },
+          "terminal": {
+            "id": "terminal-live",
+            "status": "exited",
+            "sourceHash": "a8a6480394435899e061e452f41d433ae5dcff92bcf00e197b8faea415137b28",
+            "language": "wasm",
+            "startedAt": 1792171091310,
+            "finishedAt": 1792171091917,
+            "output": {
+              "stdout": "ready\neof-ready\nwinch\nafter-one\nwinch\ndone\n",
+              "stderr": "",
+              "result": null,
+              "exitCode": 0
+            }
+          },
+          "agent": {
+            "id": "terminal-agent",
+            "status": "exited",
+            "sourceHash": "0bc9adff0ae13ee1bef54d4ae1ab07254e340a996cec8b6a418fe919151d4056",
+            "language": "typescript",
+            "startedAt": 1792171091788,
+            "finishedAt": 1792171091873,
+            "output": {
+              "stdout": "",
+              "stderr": "",
+              "result": {
+                "cols": 100,
+                "rows": 30,
+                "revision": 2
+              },
+              "exitCode": 0
+            }
+          },
+          "input": {
+            "offset": 0,
+            "total": 0,
+            "closed": true
+          },
+          "staleRevision": 409,
+          "foreignSandbox": 401,
+          "foreground": {
+            "id": "terminal-foreground",
+            "status": "exited",
+            "sourceHash": "ba142b7baf1b3995c8c0c79e34cbbaa5a5918c22842d94de6aaed64be41b3dc3",
+            "language": "wasm",
+            "startedAt": 1792171091960,
+            "finishedAt": 1792171092007,
+            "output": {
+              "stdout": "interrupt\npair-done\n",
+              "stderr": "",
+              "result": null,
+              "exitCode": 0
+            }
+          },
+          "rawOwners": {
+            "id": "terminal-raw-owners",
+            "status": "exited",
+            "sourceHash": "47334effdf47f9cd168641c5b517244045a26912fab8c5f7dd63d11088783fc2",
+            "language": "wasm",
+            "startedAt": 1792171092208,
+            "finishedAt": 1792171092386,
+            "output": {
+              "stdout": "raw-owners-restored\n",
+              "stderr": "",
+              "result": null,
+              "exitCode": 0
+            }
+          },
+          "termios": {
+            "id": "terminal-termios",
+            "status": "exited",
+            "sourceHash": "10c8332bd7f638de1770e1493da38074a0b06d618c198f589d69c36c835c641f",
+            "language": "wasm",
+            "startedAt": 1792171092402,
+            "finishedAt": 1792171092444,
+            "output": {
+              "stdout": "termios-verified\n",
+              "stderr": "",
+              "result": null,
+              "exitCode": 0
+            }
+          },
+          "attributes": {
+            "initial": {
+              "desired": {
+                "attributes": null,
+                "revision": 0
+              },
+              "observed": {
+                "attributes": {
+                  "icrnl": true,
+                  "opost": true,
+                  "onlcr": true,
+                  "icanon": true,
+                  "echo": true,
+                  "isig": true,
+                  "cc": [3, 28, 26, 4, 127, 21, 23]
+                },
+                "revision": 0
+              },
+              "settled": false
+            },
+            "guest": {
+              "desired": {
+                "attributes": {
+                  "icrnl": false,
+                  "opost": false,
+                  "onlcr": false,
+                  "icanon": false,
+                  "echo": false,
+                  "isig": false,
+                  "cc": [1, 2, 3, 4, 5, 6, 7]
+                },
+                "revision": 1
+              },
+              "observed": {
+                "attributes": {
+                  "icrnl": false,
+                  "opost": false,
+                  "onlcr": false,
+                  "icanon": false,
+                  "echo": true,
+                  "isig": false,
+                  "cc": [1, 2, 3, 4, 5, 6, 7]
+                },
+                "revision": 1
+              },
+              "settled": false
+            },
+            "final": {
+              "desired": {
+                "attributes": {
+                  "icrnl": true,
+                  "opost": true,
+                  "onlcr": true,
+                  "icanon": true,
+                  "echo": false,
+                  "isig": true,
+                  "cc": [1, 2, 3, 4, 5, 6, 7]
+                },
+                "revision": 3
+              },
+              "observed": {
+                "attributes": {
+                  "icrnl": true,
+                  "opost": true,
+                  "onlcr": true,
+                  "icanon": true,
+                  "echo": false,
+                  "isig": true,
+                  "cc": [1, 2, 3, 4, 5, 6, 7]
+                },
+                "revision": 3
+              },
+              "settled": true
+            },
+            "process": {
+              "id": "terminal-attributes",
+              "status": "exited",
+              "sourceHash": "631b044078fbac8a03ddea47e5b1ef2185f919c6289a76ec7112a84ab6c8b3b0",
+              "language": "wasm",
+              "startedAt": 1792171092490,
+              "finishedAt": 1792171093205,
+              "output": {
+                "stdout": "attributes-ready\r\nraw-ok\nguest-changed\nconfigured-again\neof-ready\nterminal-done\r\n",
+                "stderr": "",
+                "result": null,
+                "exitCode": 0
+              }
+            },
+            "staleRevision": 409,
+            "foreignSandbox": 401
+          }
+        }
+      },
+      "archives": [
+        {
+          "name": "minutei-ai-boxes-0.19.0.tgz",
+          "bytes": 78095,
+          "sha256": "8d50cce8098f20511ce9c28c493a3b85097d012dea8ca0594674b9221fbd0a89"
+        },
+        {
+          "name": "minutei-ai-boxes-runtime-0.19.0.tgz",
+          "bytes": 5547011,
+          "sha256": "a4a4c7c86d30813c2559aea2126fc854276020bcc5187520f3356e291c54b0b3"
+        }
+      ]
+    }
+  },
+  "smartPlacement": {
+    "measuredAt": 1792170787570,
+    "profile": "minutei",
+    "worker": "cirro-sandbox-prod-rs7wexxow56rmsoz",
+    "placement": {
+      "mode": "smart"
+    },
+    "scope": "Live settings read of existing production 0.18.0. Fetch handlers only; Agent RPC, Queue and cron are outside the placement contract."
+  },
+  "openGates": [
+    "Full upstream default bundle, including 67 MB coreutils, remains outside current 16 MiB package admission.",
+    "No candidate 0.19.0 release, production deployment or Minutei upgrade proved here.",
+    "No production latency, peak-memory or billing comparison.",
+    "Terminal cursor replies are synthetic; real checkpoint handover does not prove physical Cloudflare isolate replacement.",
+    "Full behavioral parity remains open in docs/parity.md."
+  ]
+}

@@ -1,3 +1,4 @@
+import { defaultSoftware } from "../src/default-software";
 import { Config, Effect, Redacted, Schema } from "effect";
 import { join } from "node:path";
 import { commandPackage } from "../tests/fixtures/package";
@@ -916,7 +917,7 @@ const checks = {
     packageWritten.status === 200 &&
     packageInstalledResponse.status === 200 &&
     packageInstalled.digest === packageDigest &&
-    packageCatalog.length === 1,
+    packageCatalog.length === defaultSoftware.length + 1,
   softwareExecution:
     packageCommand.output?.exitCode === 0 &&
     packageCommand.output.stdout.includes("marker=package") &&
@@ -928,7 +929,7 @@ const checks = {
     packageAlias.output.stdout.includes("marker=caller"),
   softwareRemoval:
     packageRemoved.status === 200 &&
-    packageAbsent.length === 0 &&
+    packageAbsent.length === defaultSoftware.length &&
     packageMissingCommand.status === 404,
 
   batchPartialSuccess:

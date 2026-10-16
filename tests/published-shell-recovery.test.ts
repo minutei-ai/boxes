@@ -1,3 +1,4 @@
+import { defaultSoftware } from "../src/default-software";
 import { expect, test } from "bun:test";
 import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
@@ -7,8 +8,7 @@ import { FetchHttpClient } from "effect/http";
 import { ProcessDelivery, StoredRun } from "../src/contracts";
 import { make, makeBinding } from "../src/sdk";
 import { runtime } from "../tooling/worker-test";
-import { downloadPublished } from "./fixtures/published-package";
-import { publishedPackages } from "./fixtures/published-software";
+import { downloadSoftware } from "../tooling/software-artifacts";
 
 test.each(["minimal", "reedline"] as const)(
   "published %s shell resumes a partial interactive command after Worker replacement without replaying writes",
@@ -84,8 +84,8 @@ test.each(["minimal", "reedline"] as const)(
                 yield* Effect.promise(() => worker.service),
                 Redacted.make(grant.token),
               );
-              const software = publishedPackages[0];
-              const bytes = yield* downloadPublished(software);
+              const software = defaultSoftware[0];
+              const bytes = yield* downloadSoftware(software);
               yield* client.action("shell", {
                 op: "filesystem.writeFile",
                 path: "/tmp/sh.aospkg",

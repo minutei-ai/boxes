@@ -701,10 +701,37 @@ impl Kernel {
         let prepared = prepare(bytes).map_err(|error| super::fail(&error))?;
         self.install_prepared(&prepared)
             .map_err(|error| super::fail(&error))?;
-        serde_json::to_string(
-            &serde_json::json!({"installed":prepared.installed,"blocks":prepared.blocks}),
-        )
-        .map_err(|_| super::fail("EIO: package serialization failed"))
+        let blocks = prepared
+            .blocks
+            .into_iter()
+            .filter(|block| !self.state.shared_chunks.contains(&block.hash))
+            .collect::<Vec<_>>();
+        serde_json::to_string(&serde_json::json!({"installed":prepared.installed,"blocks":blocks}))
+            .map_err(|_| super::fail("EIO: package serialization failed"))
+    }
+    pub fn share_package_blocks(&mut self) -> Result<(), wasm_bindgen::JsValue> {
+        let roots = self
+            .state
+            .packages
+            .iter()
+            .map(|package| root(package).map(|root| format!("{root}/")))
+            .collect::<Result<Vec<_>, _>>()
+            .map_err(|error| super::fail(&error))?;
+        let mut shared = self.state.shared_chunks.clone();
+        for (path, node) in self.state.entries() {
+            if roots.iter().any(|root| path.starts_with(root.as_str()))
+                && let super::Node::File { chunks, .. } = node
+            {
+                shared.extend(chunks.iter().cloned());
+            }
+        }
+        if shared.len() > super::MAX_NODES * 2 {
+            return Err(super::fail(
+                "EFBIG: shared block inventory exceeds its quota",
+            ));
+        }
+        self.state.shared_chunks = shared;
+        Ok(())
     }
     pub fn uninstall_package(&mut self, id: &str) -> Result<(), wasm_bindgen::JsValue> {
         self.uninstall_native(id)

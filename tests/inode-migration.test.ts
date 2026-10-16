@@ -63,7 +63,7 @@ test(
             while (cursors.length > 0) {
               const cursor = cursors.shift();
               const response = yield* Effect.promise(() =>
-                fetch(new URL("/v1/migrations/filesystem-v4", url), {
+                fetch(new URL("/v1/migrations/filesystem-v5", url), {
                   method: "POST",
                   headers: { authorization: `Bearer ${token}`, "content-type": "application/json" },
                   body: Schema.encodeSync(Schema.fromJsonString(FilesystemMigrationInput))({

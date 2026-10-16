@@ -1,10 +1,9 @@
+import { defaultSoftware } from "../src/default-software";
 import { bindingConsumer } from "./binding-consumer";
 import { terminalProofSources } from "./terminal-proof-inputs";
 import { TerminalProof, TerminalProofInput } from "../tests/fixtures/terminal-proof";
 import { DescriptorProof } from "../tests/fixtures/descriptor-proof";
 import { prepareDescriptorProof } from "../tests/fixtures/descriptor-proof-inputs";
-import { downloadPublished } from "../tests/fixtures/published-package";
-import { publishedPackages } from "../tests/fixtures/published-software";
 import { Clock, Config, Crypto, Effect, Fiber, Redacted, Schedule, Schema } from "effect";
 import * as BunServices from "@effect/platform-bun/BunServices";
 import { FetchHttpClient } from "effect/http";
@@ -105,19 +104,12 @@ const report = await Effect.runPromise(
             if (reclaimed.status !== "complete") return yield* Effect.die(reclaimed);
           }).pipe(Effect.orDie),
       );
-      const software = publishedPackages.find((entry) => entry.name === "sh");
+      const software = defaultSoftware.find((entry) => entry.name === "sh");
       if (software === undefined) return yield* Effect.die("Missing pinned shell package");
-      const packageBytes = yield* downloadPublished(software);
-      yield* manager.action(id, {
-        op: "filesystem.writeFile",
-        path: "/tmp/binding-sh.aospkg",
-        content: packageBytes.toString("base64"),
-        encoding: "base64",
-      });
-      const shellPackage = yield* manager.action(id, {
-        op: "software.install",
-        source: { path: "/tmp/binding-sh.aospkg", digest: `sha256:${software.digest}` },
-      });
+      const catalog = yield* manager.action(id, { op: "software.list" });
+      const shellPackage = catalog.find((item) => item.packageId === software.digest);
+      if (shellPackage === undefined)
+        return yield* Effect.die("The fresh sandbox did not receive the default shell");
       const grant = yield* admin.mintCapability(id, {
         permissions: ["read", "write", "execute"],
         expiresInSeconds: 600,

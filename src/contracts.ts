@@ -629,6 +629,7 @@ export const Chunks = Schema.Array(Digest);
 export const ContentBlock = Schema.Struct({
   hash: Digest,
   size: Schema.Int.check(Schema.isBetween({ minimum: 1, maximum: 262_144 })),
+  shared: Schema.Boolean,
 });
 export const ReadPlan = Schema.Struct({
   blocks: Schema.Array(ContentBlock).check(Schema.isMaxLength(64)),

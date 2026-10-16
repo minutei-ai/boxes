@@ -1,3 +1,4 @@
+import { defaultSoftware } from "../src/default-software";
 import { Clock, Config, Crypto, Effect, Redacted, Schema } from "effect";
 import * as BunServices from "@effect/platform-bun/BunServices";
 import { FetchHttpClient } from "effect/http";
@@ -9,8 +10,6 @@ import { make } from "../dist/sdk/sdk.js";
 import { Id, PackagePreparation } from "../src/contracts";
 import { bindingConsumer } from "./binding-consumer";
 import { PublicPreviewAccess } from "./preview-access";
-import { downloadPublished } from "../tests/fixtures/published-package";
-import { publishedPackages } from "../tests/fixtures/published-software";
 import {
   PublishedTerminalInput,
   PublishedTerminalProof,
@@ -82,21 +81,14 @@ const report = await Effect.runPromise(
             yield* Effect.logInfo({ phase: "terminal.reclaimed", sandboxId: id });
           }).pipe(Effect.orDie),
       );
-      const software = publishedPackages.find((item) => item.name === "sh");
+      const software = defaultSoftware.find((item) => item.name === "sh");
       if (software === undefined) return yield* Effect.die("Missing pinned shell");
-      const bytes = yield* downloadPublished(software);
-      yield* manager.action(id, {
-        op: "filesystem.writeFile",
-        path: "/tmp/sh.aospkg",
-        content: Buffer.from(bytes).toString("base64"),
-        encoding: "base64",
-      });
-      const installed = yield* manager.action(id, {
-        op: "software.install",
-        source: { path: "/tmp/sh.aospkg", digest: `sha256:${software.digest}` },
-      });
+      const catalog = yield* manager.action(id, { op: "software.list" });
+      const installed = catalog.find((item) => item.packageId === software.digest);
+      if (installed === undefined)
+        return yield* Effect.die("The fresh sandbox did not receive the default shell");
       yield* Effect.logInfo({
-        phase: "terminal.installed",
+        phase: "terminal.available",
         sandboxId: id,
         digest: software.digest,
       });

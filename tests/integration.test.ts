@@ -2181,14 +2181,14 @@ test("metadata migration assigns persistent unique identities without inventing 
     Schema.encodeSync(Schema.fromJsonString(Head))({ ...head, manifest: prior }),
   );
   expect((await act("metadata-migration", token, { op: "vm.status" })).status).toBe(500);
-  expect((await post("/v1/migrations/filesystem-v4", token, {})).status).toBe(401);
+  expect((await post("/v1/migrations/filesystem-v5", token, {})).status).toBe(401);
   const migrate = async () => {
     const cursors: (typeof FilesystemMigrationReceipt.Type.cursor)[] = [null];
     const result = { migrated: 0 };
     while (cursors.length > 0) {
       const page = Schema.decodeUnknownSync(FilesystemMigrationReceipt)(
         await (
-          await post("/v1/migrations/filesystem-v4", admin, { cursor: cursors.shift() })
+          await post("/v1/migrations/filesystem-v5", admin, { cursor: cursors.shift() })
         ).json(),
       );
       result.migrated += page.migrated;

@@ -15,6 +15,7 @@ import { connect } from "@alchemy.run/cloudflare-runtime/core/platform-proxy/con
 import { BINDING_PLATFORM_PROXY_TOKEN } from "@alchemy.run/cloudflare-runtime/core/platform-proxy/PlatformProxyProtocol";
 import * as Plugin from "@alchemy.run/cloudflare-runtime/core/Plugin";
 import type { Env } from "../src/resources";
+import { Digest } from "../src/contracts";
 import type { Control } from "../tests/fixtures/clock-worker";
 
 class NetworkOrigin extends Plugin.Service<NetworkOrigin>()(
@@ -35,6 +36,7 @@ const Options = Schema.Struct({
   consume: Schema.optionalKey(Schema.Boolean),
   controlled: Schema.optionalKey(Schema.Boolean),
   artifact: Schema.optionalKey(Schema.Literals(["clock-worker", "checkpoint-worker"])),
+  softwareBase: Schema.optionalKey(Digest),
 });
 export const runtime = (persist: string, options: typeof Options.Type = {}) => {
   const advance = options.advance ?? 0;
@@ -55,6 +57,7 @@ export const runtime = (persist: string, options: typeof Options.Type = {}) => {
     R2Bucket.local({ binding: "OBJECTS", id: "boxes-test" }),
     Text.local(BINDING_PLATFORM_PROXY_TOKEN, proxyToken),
     Text.local("API_KEY", "cirro-local-test-credential"),
+    Json.local("SOFTWARE_BASE", options.softwareBase ?? null),
     Json.local("CLOCK_START", start),
     Json.local("CLOCK_ADVANCE", advance),
     Json.local("CLOCK_ADVANCE_AFTER_OUTPUT", options.advanceAfterOutput ?? null),

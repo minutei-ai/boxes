@@ -1,0 +1,142 @@
+{
+  "measuredAt": "2026-10-16T16:58:19.964Z",
+  "environment": {
+    "runtime": "local workerd via native Alchemy",
+    "alchemy": "2.0.0-beta.83",
+    "production": false,
+    "platform": "linux",
+    "arch": "x64"
+  },
+  "artifactBytes": {
+    "javascript": 380914,
+    "kernelWasm": 1155312,
+    "wasiWasm": 1699454,
+    "pythonWasm": 10719083,
+    "guestWasm": 1129863,
+    "compilerWasm": 1943596
+  },
+  "measurements": {
+    "fullEightMiB": {
+      "count": 25,
+      "p50Ms": 89.41549799999848,
+      "p95Ms": 123.14118600000074,
+      "minMs": 83.5037020000018,
+      "maxMs": 151.11891899999682
+    },
+    "appendToEightMiB": {
+      "count": 25,
+      "p50Ms": 21.050271000000066,
+      "p95Ms": 22.943191000002116,
+      "minMs": 19.15357800000129,
+      "maxMs": 31.074303000001237
+    },
+    "resizeEightMiBTail": {
+      "count": 25,
+      "p50Ms": 13.788274999998976,
+      "p95Ms": 17.01260199999888,
+      "minMs": 11.507175999999163,
+      "maxMs": 36.715228000000934
+    },
+    "rangeFourKiB": {
+      "count": 25,
+      "p50Ms": 4.765685000002122,
+      "p95Ms": 5.087029000002076,
+      "minMs": 4.476839999999356,
+      "maxMs": 6.289742999997543
+    },
+    "patchFourKiB": {
+      "count": 25,
+      "p50Ms": 30.399631000000227,
+      "p95Ms": 33.695759000002,
+      "minMs": 26.902498999999807,
+      "maxMs": 34.945434000001114
+    },
+    "python": {
+      "count": 25,
+      "p50Ms": 71.29811100000006,
+      "p95Ms": 96.96045800000138,
+      "minMs": 61.24941799999942,
+      "maxMs": 256.3992390000003
+    },
+    "sequentialEightFiles": {
+      "count": 25,
+      "p50Ms": 137.89112000000023,
+      "p95Ms": 160.27528399999983,
+      "minMs": 124.97227100000009,
+      "maxMs": 173.02346899999975
+    },
+    "batchEightFiles": {
+      "count": 25,
+      "p50Ms": 50.631750999999895,
+      "p95Ms": 57.480399000000034,
+      "minMs": 45.261704000000464,
+      "maxMs": 68.3318449999997
+    },
+    "status": {
+      "count": 100,
+      "p50Ms": 3.490242999999964,
+      "p95Ms": 6.647388000000092,
+      "minMs": 2.9481579999999212,
+      "maxMs": 10.784419999999955
+    },
+    "write256KiB": {
+      "count": 25,
+      "p50Ms": 17.88706400000001,
+      "p95Ms": 21.917091000000028,
+      "minMs": 16.283933999999817,
+      "maxMs": 39.97280000000001
+    },
+    "read256KiB": {
+      "count": 25,
+      "p50Ms": 7.225504999999885,
+      "p95Ms": 8.87215900000001,
+      "minMs": 6.631675000000087,
+      "maxMs": 9.768624000000273
+    },
+    "isolatedJavascript": {
+      "count": 25,
+      "p50Ms": 28.426140999999916,
+      "p95Ms": 34.74082199999975,
+      "minMs": 25.616049000000203,
+      "maxMs": 91.96435800000017
+    },
+    "detachedJavascript": {
+      "count": 25,
+      "p50Ms": 135.36979400000018,
+      "p95Ms": 147.97529399999985,
+      "minMs": 53.641851000000315,
+      "maxMs": 149.42191699999967
+    },
+    "wasiFileAndSync": {
+      "count": 25,
+      "p50Ms": 74.54821699999957,
+      "p95Ms": 96.48060700000133,
+      "minMs": 70.03767399999924,
+      "maxMs": 233.6340790000013
+    },
+    "shellPipeline": {
+      "count": 25,
+      "p50Ms": 40.387510000000475,
+      "p95Ms": 47.13046299999951,
+      "minMs": 36.34880599999997,
+      "maxMs": 63.34439799999927
+    }
+  },
+  "wasiPublication": {
+    "samples": 25,
+    "rootPublications": 25
+  },
+  "batchPublication": {
+    "filesPerSample": 8,
+    "samples": 25,
+    "sequentialPublications": 200,
+    "batchPublications": 25
+  },
+  "contentDeduplication": {
+    "singleFileWrites": 25,
+    "uniqueBlocks": 1,
+    "singleFileLogicalBytesWritten": 6553600,
+    "storedBlockBytes": 262144
+  },
+  "scope": "Candidate 0.19.0 native local workerd benchmark with explicit bare SOFTWARE_BASE=null; this does not measure default-image creation or production latency or billing."
+}

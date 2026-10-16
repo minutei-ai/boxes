@@ -1,11 +1,11 @@
+import { defaultSoftware } from "../src/default-software";
 import { expect, test } from "bun:test";
 import { mkdtemp, rm } from "node:fs/promises";
 import { Effect, Redacted, Schedule } from "effect";
 import { FetchHttpClient } from "effect/http";
 import { make } from "../src/sdk";
 import { runtime } from "../tooling/worker-test";
-import { downloadPublished } from "./fixtures/published-package";
-import { publishedPackages } from "./fixtures/published-software";
+import { downloadSoftware } from "../tooling/software-artifacts";
 
 test.each(["minimal", "reedline"])(
   "published Brush %s shell executes interactive commands through a queued PTY",
@@ -42,8 +42,8 @@ test.each(["minimal", "reedline"])(
             expiresInSeconds: 60,
           });
           const installer = yield* make({ url, token: Redacted.make(installation.token) });
-          const software = publishedPackages[0];
-          const bytes = yield* downloadPublished(software);
+          const software = defaultSoftware[0];
+          const bytes = yield* downloadSoftware(software);
           yield* client.action("session", {
             op: "filesystem.writeFile",
             path: "/tmp/sh.aospkg",

@@ -2,17 +2,15 @@ import { afterAll, expect, test } from "bun:test";
 import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { Schema } from "effect";
+import { Effect, Schema } from "effect";
 import { RunRecord, TokenResponse, FileContent } from "../src/contracts";
 import { runtime } from "../tooling/worker-test";
+import { defaultSoftware } from "../src/default-software";
+import { downloadSoftware } from "../tooling/software-artifacts";
 const directory = await mkdtemp(join(tmpdir(), "cirro-wasi-cwd-"));
 const mf = runtime(directory, { consume: true, controlled: false });
-const digest = "edb1cf0bbcf663d177916592d2f1b4361a02966dbf2eb44e3e61ea2a399bb43a";
-const artifact = await fetch(
-  `https://releases.rivet.dev/agent-os/latest/software/packages/jq/${digest}.aospkg`,
-);
-expect(artifact.status).toBe(200);
-const bytes = await artifact.arrayBuffer();
+const digest = defaultSoftware[1].digest;
+const bytes = await Effect.runPromise(downloadSoftware(defaultSoftware[1]));
 expect(Buffer.from(await crypto.subtle.digest("SHA-256", bytes)).toString("hex")).toBe(digest);
 const post = async (path: string, token: string, body: unknown) =>
   fetch(new URL(path, await mf.ready), {

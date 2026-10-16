@@ -1,6 +1,7 @@
+import { defaultSoftware } from "../src/default-software";
 import { DescriptorProof, descriptorProof } from "../tests/fixtures/descriptor-proof";
 import { prepareDescriptorProof } from "../tests/fixtures/descriptor-proof-inputs";
-import { downloadPublished } from "../tests/fixtures/published-package";
+import { downloadSoftware } from "./software-artifacts";
 import { ShellCwdProof, shellCwdProof } from "../tests/fixtures/shell-cwd-proof";
 import { Clock, Config, Crypto, Effect, Redacted, Schema } from "effect";
 import { BunCrypto } from "@effect/platform-bun";
@@ -8,7 +9,6 @@ import { FetchHttpClient } from "effect/http";
 import { make } from "../dist/sdk/sdk.js";
 import { Id, PackagePreparation, RunRecord } from "../src/contracts";
 import {
-  publishedPackages,
   publishedShellCases,
   publishedInterpreterFile,
   publishedInterpreterCases,
@@ -58,9 +58,10 @@ const report = await Effect.runPromise(
             if (collected.status !== "complete") return yield* Effect.die(collected);
           }).pipe(Effect.orDie),
       );
-      const packages = yield* Effect.forEach(publishedPackages, (software) =>
+      const packages = yield* Effect.forEach(defaultSoftware, (software) =>
         Effect.gen(function* () {
-          const bytes = yield* downloadPublished(software);
+          yield* client.action(id, { op: "software.uninstall", packageId: software.digest });
+          const bytes = yield* downloadSoftware(software);
           const path = `/tmp/${software.name}.aospkg`;
           yield* client.action(id, {
             op: "filesystem.writeFile",

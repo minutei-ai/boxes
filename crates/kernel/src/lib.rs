@@ -51,6 +51,19 @@ struct Manifest {
     next_inode: u64,
     packages: Vec<software::Installed>,
     links: BTreeMap<String, software::Link>,
+    shared_chunks: BTreeSet<String>,
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+struct PriorInodeFilesystem {
+    version: u32,
+    generation: u64,
+    nodes: BTreeMap<String, u64>,
+    inodes: BTreeMap<u64, Inode>,
+    next_inode: u64,
+    packages: Vec<software::Installed>,
+    links: BTreeMap<String, software::Link>,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -133,13 +146,14 @@ impl Manifest {
             nodes.insert(path, id);
         }
         Ok(Self {
-            version: 4,
+            version: 5,
             generation: prior.generation,
             nodes,
             inodes,
             next_inode: prior.next_inode,
             packages: prior.packages,
             links: prior.links,
+            shared_chunks: BTreeSet::new(),
         })
     }
 }
@@ -149,6 +163,7 @@ impl Manifest {
 struct ContentBlock<'a> {
     hash: &'a str,
     size: u64,
+    shared: bool,
 }
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -294,8 +309,31 @@ pub fn migrate_filesystem(json: &str) -> Result<String, JsValue> {
     let value: serde_json::Value =
         serde_json::from_str(json).map_err(|_| fail("EINVAL: invalid manifest"))?;
     let version = value.get("version").and_then(serde_json::Value::as_u64);
-    if version == Some(4) {
+    if version == Some(5) {
         return Kernel::new(Some(json.into()))?.manifest();
+    }
+    if version == Some(4) {
+        let prior: PriorInodeFilesystem = serde_json::from_value(value)
+            .map_err(|_| fail("EINVAL: invalid prior inode manifest"))?;
+        if prior.version != 4 {
+            return Err(fail("EINVAL: invalid prior inode version"));
+        }
+        let kernel = Kernel {
+            state: Manifest {
+                version: 5,
+                generation: prior.generation,
+                nodes: prior.nodes,
+                inodes: prior.inodes,
+                next_inode: prior.next_inode,
+                packages: prior.packages,
+                links: prior.links,
+                shared_chunks: BTreeSet::new(),
+            },
+            now: 0,
+            snapshot_import: false,
+        };
+        kernel.validate().map_err(|error| fail(&error))?;
+        return kernel.manifest();
     }
     let prior = match version {
         Some(3) => serde_json::from_value(value).map_err(|_| fail("EINVAL: invalid manifest"))?,
@@ -481,6 +519,7 @@ impl Kernel {
             let previous = old.get(index as usize).map(|hash| ContentBlock {
                 hash,
                 size: (old_size - start).min(262_144),
+                shared: self.state.shared_chunks.contains(hash),
             });
             let overlaps = length != 0 && start < offset + length && start + block_size > offset;
             let resize = previous
@@ -532,6 +571,7 @@ impl Kernel {
                 blocks.push(ContentBlock {
                     hash: &chunks[index as usize],
                     size: (size - index * 262_144).min(262_144),
+                    shared: self.state.shared_chunks.contains(&chunks[index as usize]),
                 });
             }
         }
@@ -738,13 +778,14 @@ impl Kernel {
         }
         Self {
             state: Manifest {
-                version: 4,
+                version: 5,
                 generation: 0,
                 nodes,
                 inodes,
                 next_inode: 5,
                 packages: Vec::new(),
                 links: BTreeMap::new(),
+                shared_chunks: BTreeSet::new(),
             },
             now: 0,
             snapshot_import: false,
@@ -801,9 +842,16 @@ impl Kernel {
     }
 
     fn validate(&self) -> Result<(), String> {
-        if self.state.version != 4
+        if self.state.version != 5
             || self.state.nodes.len() > MAX_NODES
             || self.state.inodes.len() > MAX_NODES
+            || self.state.shared_chunks.len() > MAX_NODES * 2
+            || self.state.shared_chunks.iter().any(|hash| {
+                hash.len() != 64
+                    || !hash
+                        .bytes()
+                        .all(|byte| byte.is_ascii_digit() || (b'a'..=b'f').contains(&byte))
+            })
         {
             return Err("EINVAL: invalid manifest version or node count".into());
         }
@@ -928,7 +976,7 @@ impl Kernel {
         };
         let uploads: BTreeSet<_> = hashes
             .iter()
-            .filter(|hash| !existing.contains(*hash))
+            .filter(|hash| !existing.contains(*hash) && !self.state.shared_chunks.contains(*hash))
             .cloned()
             .collect();
         Ok(WritePlan {
@@ -1059,6 +1107,7 @@ impl Kernel {
         }
         self.state.packages.clear();
         self.state.links.clear();
+        self.state.shared_chunks.clear();
         Ok(())
     }
 
