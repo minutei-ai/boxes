@@ -4,6 +4,7 @@ import {
   AgentRequest,
   InputReceipt,
   RunRecord,
+  ProcessDescription,
   TerminalGeometry,
   TerminalAttributes,
   TerminalAttributeStatus,
@@ -33,6 +34,7 @@ export const TerminalProofInput = AgentRequest.mapFields((fields) => ({
   }),
 }));
 export const TerminalProof = Schema.Struct({
+  inventory: Schema.Struct({ running: ProcessDescription, settled: ProcessDescription }),
   initial: TerminalGeometry,
   resized: TerminalGeometry,
   terminal: RunRecord,
@@ -85,6 +87,17 @@ export const terminalProof = Effect.fn("proof.terminal")(function* (
     }).pipe(Effect.timeout("25 seconds")),
   );
   yield* observed("ready\n");
+  const runningPage = yield* client.action(sandboxId, {
+    op: "process.list",
+    stdinMode: "pty",
+    limit: 50,
+    cursor: null,
+  });
+  const runningDescription = runningPage.items.find((item) => item.id === "terminal-live");
+  if (runningDescription === undefined || runningDescription.status !== "running")
+    return yield* Effect.die("Native binding did not discover the active terminal");
+  if (runningPage.items.some((item) => item.stdinMode !== "pty"))
+    return yield* Effect.die("Native binding returned another stdin mode in a filtered page");
   const initial = yield* client.action(sandboxId, {
     op: "process.terminal.status",
     id: "terminal-live",
@@ -164,6 +177,20 @@ export const terminalProof = Effect.fn("proof.terminal")(function* (
     terminal.output.stderr !== ""
   )
     return yield* Effect.die("Native terminal signal/output proof failed");
+  const settledPage = yield* client.action(sandboxId, {
+    op: "process.list",
+    stdinMode: "pty",
+    limit: 50,
+    cursor: null,
+  });
+  const settledDescription = settledPage.items.find((item) => item.id === "terminal-live");
+  if (
+    settledDescription === undefined ||
+    settledDescription.status !== "exited" ||
+    settledDescription.stdinMode !== "pty" ||
+    settledPage.items.some((item) => item.stdinMode !== "pty")
+  )
+    return yield* Effect.die("Native binding did not retain the settled terminal description");
   const input = yield* client.action(sandboxId, {
     op: "process.stdin.status",
     id: "terminal-live",
@@ -383,6 +410,7 @@ export const terminalProof = Effect.fn("proof.terminal")(function* (
   )
     return yield* Effect.die("Final native terminal attributes were not retained");
   return {
+    inventory: { running: runningDescription, settled: settledDescription },
     initial,
     resized,
     terminal,
