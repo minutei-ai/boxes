@@ -1,0 +1,251 @@
+{
+  "status": "Experimental 0.19.1 source candidate; exact archive, publication, CI and production gates pending. Full AgentOS parity remains open.",
+  "version": "0.19.1",
+  "localEvidence": "pty-cursor-local.json",
+  "change": "Output-driven native Effect PTY feeder polling; unchanged R2 format, guest clocks and guest deadlines.",
+  "previousDelivery": "sdk-0.19.0-delivery.json",
+  "publication": {
+    "status": "pending",
+    "release": "https://github.com/minutei-ai/boxes/releases/tag/sdk-v0.19.1"
+  },
+  "deployment": {
+    "status": "pending",
+    "profile": "minutei",
+    "worker": "cirro-sandbox-prod-rs7wexxow56rmsoz"
+  },
+  "minutei": "No additional consumer push or deployment authorized.",
+  "openGates": [
+    "Production Reedline cursor negotiation and real checkpoint/resume with the fixed feeder.",
+    "Full parity gates in docs/parity.md, rendered terminals, crash recovery and production performance/cost comparison."
+  ],
+  "artifacts": [
+    {
+      "file": "minutei-ai-boxes-0.19.1.tgz",
+      "bytes": 78439,
+      "sha256": "a5622b1ea21e1240c6fafd93861cd625de955e65c65af2bc3bb05a6ef7e53f8a"
+    },
+    {
+      "file": "minutei-ai-boxes-runtime-0.19.1.tgz",
+      "bytes": 5549698,
+      "sha256": "a7b52270d61299ca96698b45c16dec6eebf9b96c0b8f1e568ad2eb3de91d5483"
+    }
+  ],
+  "local": {
+    "exactPackageProof": {
+      "exitCode": 0,
+      "report": {
+        "version": "0.19.1",
+        "transport": "native Alchemy workerd service binding and Agent RPC; local R2 and Queue",
+        "proof": "SDK archive exports and consumer declarations; runtime archive; filesystem snapshot restore; hard-link metadata; RPC callbacks and cooperative disposal; ephemeral context disposal with 1024 files and concurrent closes; persistent driver contexts and cancellation; scoped authority",
+        "terminal": {
+          "inventory": {
+            "running": {
+              "id": "terminal-live",
+              "status": "running",
+              "sourceHash": "a8a6480394435899e061e452f41d433ae5dcff92bcf00e197b8faea415137b28",
+              "language": "wasm",
+              "startedAt": 1792177600774,
+              "finishedAt": null,
+              "stdinMode": "pty"
+            },
+            "settled": {
+              "id": "terminal-live",
+              "status": "exited",
+              "sourceHash": "a8a6480394435899e061e452f41d433ae5dcff92bcf00e197b8faea415137b28",
+              "language": "wasm",
+              "startedAt": 1792177600774,
+              "finishedAt": 1792177601325,
+              "stdinMode": "pty"
+            }
+          },
+          "initial": {
+            "cols": 80,
+            "rows": 24,
+            "revision": 0
+          },
+          "resized": {
+            "cols": 100,
+            "rows": 30,
+            "revision": 2
+          },
+          "terminal": {
+            "id": "terminal-live",
+            "status": "exited",
+            "sourceHash": "a8a6480394435899e061e452f41d433ae5dcff92bcf00e197b8faea415137b28",
+            "language": "wasm",
+            "startedAt": 1792177600774,
+            "finishedAt": 1792177601325,
+            "output": {
+              "stdout": "ready\neof-ready\nwinch\nafter-one\nwinch\ndone\n",
+              "stderr": "",
+              "result": null,
+              "exitCode": 0
+            }
+          },
+          "agent": {
+            "id": "terminal-agent",
+            "status": "exited",
+            "sourceHash": "0bc9adff0ae13ee1bef54d4ae1ab07254e340a996cec8b6a418fe919151d4056",
+            "language": "typescript",
+            "startedAt": 1792177601214,
+            "finishedAt": 1792177601285,
+            "output": {
+              "stdout": "",
+              "stderr": "",
+              "result": {
+                "cols": 100,
+                "rows": 30,
+                "revision": 2
+              },
+              "exitCode": 0
+            }
+          },
+          "input": {
+            "offset": 0,
+            "total": 0,
+            "closed": true
+          },
+          "staleRevision": 409,
+          "foreignSandbox": 401,
+          "foreground": {
+            "id": "terminal-foreground",
+            "status": "exited",
+            "sourceHash": "ba142b7baf1b3995c8c0c79e34cbbaa5a5918c22842d94de6aaed64be41b3dc3",
+            "language": "wasm",
+            "startedAt": 1792177601364,
+            "finishedAt": 1792177601402,
+            "output": {
+              "stdout": "interrupt\npair-done\n",
+              "stderr": "",
+              "result": null,
+              "exitCode": 0
+            }
+          },
+          "rawOwners": {
+            "id": "terminal-raw-owners",
+            "status": "exited",
+            "sourceHash": "47334effdf47f9cd168641c5b517244045a26912fab8c5f7dd63d11088783fc2",
+            "language": "wasm",
+            "startedAt": 1792177601594,
+            "finishedAt": 1792177601760,
+            "output": {
+              "stdout": "raw-owners-restored\n",
+              "stderr": "",
+              "result": null,
+              "exitCode": 0
+            }
+          },
+          "termios": {
+            "id": "terminal-termios",
+            "status": "exited",
+            "sourceHash": "10c8332bd7f638de1770e1493da38074a0b06d618c198f589d69c36c835c641f",
+            "language": "wasm",
+            "startedAt": 1792177601774,
+            "finishedAt": 1792177601819,
+            "output": {
+              "stdout": "termios-verified\n",
+              "stderr": "",
+              "result": null,
+              "exitCode": 0
+            }
+          },
+          "attributes": {
+            "initial": {
+              "desired": {
+                "attributes": null,
+                "revision": 0
+              },
+              "observed": {
+                "attributes": {
+                  "icrnl": true,
+                  "opost": true,
+                  "onlcr": true,
+                  "icanon": true,
+                  "echo": true,
+                  "isig": true,
+                  "cc": [3, 28, 26, 4, 127, 21, 23]
+                },
+                "revision": 0
+              },
+              "settled": false
+            },
+            "guest": {
+              "desired": {
+                "attributes": {
+                  "icrnl": false,
+                  "opost": false,
+                  "onlcr": false,
+                  "icanon": false,
+                  "echo": false,
+                  "isig": false,
+                  "cc": [1, 2, 3, 4, 5, 6, 7]
+                },
+                "revision": 1
+              },
+              "observed": {
+                "attributes": {
+                  "icrnl": false,
+                  "opost": false,
+                  "onlcr": false,
+                  "icanon": false,
+                  "echo": true,
+                  "isig": false,
+                  "cc": [1, 2, 3, 4, 5, 6, 7]
+                },
+                "revision": 1
+              },
+              "settled": false
+            },
+            "final": {
+              "desired": {
+                "attributes": {
+                  "icrnl": true,
+                  "opost": true,
+                  "onlcr": true,
+                  "icanon": true,
+                  "echo": false,
+                  "isig": true,
+                  "cc": [1, 2, 3, 4, 5, 6, 7]
+                },
+                "revision": 3
+              },
+              "observed": {
+                "attributes": {
+                  "icrnl": true,
+                  "opost": true,
+                  "onlcr": true,
+                  "icanon": true,
+                  "echo": false,
+                  "isig": true,
+                  "cc": [1, 2, 3, 4, 5, 6, 7]
+                },
+                "revision": 3
+              },
+              "settled": true
+            },
+            "process": {
+              "id": "terminal-attributes",
+              "status": "exited",
+              "sourceHash": "631b044078fbac8a03ddea47e5b1ef2185f919c6289a76ec7112a84ab6c8b3b0",
+              "language": "wasm",
+              "startedAt": 1792177601861,
+              "finishedAt": 1792177602587,
+              "output": {
+                "stdout": "attributes-ready\r\nraw-ok\nguest-changed\nconfigured-again\neof-ready\nterminal-done\r\n",
+                "stderr": "",
+                "result": null,
+                "exitCode": 0
+              }
+            },
+            "staleRevision": 409,
+            "foreignSandbox": 401
+          }
+        }
+      }
+    },
+    "archiveComparison": {
+      "files": 22,
+      "result": "Exact source/build bytes match; native Bun package.json formatting compared as JSON values."
+    }
+  }
+}

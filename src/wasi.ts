@@ -256,6 +256,7 @@ export const wasi = Effect.fn("wasi.execute")(function* (
   const state = {
     checkpointFuel: 0,
     capturedBytes: 0,
+    inputActiveUntil: 0,
     resumeFuel: 0,
     session: initial,
     dirty: checkpoint !== initial.head.manifest,
@@ -278,6 +279,10 @@ export const wasi = Effect.fn("wasi.execute")(function* (
     });
     yield* capture(stdio, partial);
     state.capturedBytes = stdio.stdout.byteLength + stdio.stderr.byteLength;
+    if (stdinMode === "pty") {
+      state.inputActiveUntil = (yield* Clock.currentTimeMillis) + 2000;
+      yield* notify();
+    }
     return true;
   });
   const openFile = Effect.fn("wasi.openFile")(function* (
@@ -420,7 +425,12 @@ export const wasi = Effect.fn("wasi.execute")(function* (
         return yield* Schedule.toStepWithSleep(
           Schedule.exponential("16 millis").pipe(
             Schedule.modifyDelay(({ duration }) =>
-              Effect.succeed(Duration.min(duration, Duration.seconds(1))),
+              Effect.gen(function* () {
+                const now = yield* Clock.currentTimeMillis;
+                if (now < state.inputActiveUntil)
+                  return Duration.min(duration, Duration.millis(128));
+                return Duration.min(duration, Duration.seconds(1));
+              }),
             ),
             Schedule.map(() => undefined),
           ),

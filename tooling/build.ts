@@ -289,6 +289,7 @@ await Effect.runPromise(
       "session",
       "sink",
       "tty-read",
+      "tty-cursor",
       "tty-invalid",
       "tty-rights",
       "recovery-cooked",

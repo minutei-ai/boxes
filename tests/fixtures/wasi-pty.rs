@@ -111,6 +111,7 @@ pub extern "C" fn __wasi_signal_trampoline(signal: u32) {
     case = "session",
     case = "sink",
     case = "tty-read",
+    case = "tty-cursor",
     case = "tty-invalid",
     case = "tty-rights",
     case = "recovery-cooked",
@@ -274,6 +275,18 @@ pub extern "C" fn _start() {
             read(&mut byte, 1, u32::MAX);
             proc_exit(76);
         }
+        if cfg!(case = "tty-cursor") {
+            let mut data = [0u8; 16];
+            if set_raw_mode(1) != 0 || read(data.as_mut_ptr(), 16, 2950) != 0 {
+                proc_exit(111);
+            }
+            send(1, b"\x1b[6n");
+            if read(data.as_mut_ptr(), 16, 2000) != 6 || &data[..6] != b"\x1b[1;1R" {
+                proc_exit(112);
+            }
+            send(1, b"cursor-ready\n");
+            proc_exit(0);
+        }
         if cfg!(case = "tty-read") {
             let mut data = [0u8; 16];
             let mut before = 0u64;
@@ -368,6 +381,7 @@ pub extern "C" fn _start() {
     case = "session",
     case = "sink",
     case = "tty-read",
+    case = "tty-cursor",
     case = "tty-invalid",
     case = "tty-rights",
     case = "recovery-cooked",

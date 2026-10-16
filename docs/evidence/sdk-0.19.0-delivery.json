@@ -333,6 +333,13 @@
       "status": "completed",
       "conclusion": "success",
       "commit": "03c509fff462914b086b66250da904e06b10e6ec"
+    },
+    "deliveryProofs": {
+      "runId": 38951103639,
+      "url": "https://github.com/minutei-ai/boxes/actions/runs/38951103639",
+      "status": "completed",
+      "conclusion": "success",
+      "commit": "43b33b710e33a61d48894cbe04233b5ed9edf152"
     }
   },
   "deployment": {

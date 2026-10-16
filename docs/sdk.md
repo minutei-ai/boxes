@@ -2,16 +2,18 @@
 
 The `@minutei-ai/boxes` SDK targets Effect 4 and ordinary Cloudflare Workers. Its primary transport is a native Cloudflare service binding. Effect HttpClient owns request construction, interruption and transport errors. The package contains generated ESM and TypeScript declarations; Rust, Alchemy, server bindings and credentials are excluded. All request/response Schemas come from the same owner as the server. Schema exports are available from `@minutei-ai/boxes/contracts`.
 
-Experimental SDK/runtime 0.19.0 adds an Alchemy-provisioned software image in R2: the eight pinned upstream defaults, the corrected Boxes shell and jq. Fresh sandboxes inherit the catalog without package downloads or private software copies. Supported commands execute through `process.execFile` without manage permission. Native local and production service-binding proofs cover all ten packages and fourteen execution cases, not every command or option. The [delivery evidence](evidence/sdk-0.19.0-delivery.json) records deployment and proofs, including a production Reedline cursor-position timeout. Reliable interactive terminal latency, remaining coreutils ABIs, cross-process record locks and complete AgentOS parity stay open.
+Experimental SDK/runtime 0.19.1 retains an Alchemy-provisioned software image in R2: the eight pinned upstream defaults, the corrected Boxes shell and jq. Fresh sandboxes inherit the catalog without package downloads or private software copies. Supported commands execute through `process.execFile` without manage permission. Native local and production service-binding proofs cover all ten packages and fourteen execution cases, not every command or option. The [delivery evidence](evidence/sdk-0.19.0-delivery.json) records deployment and proofs, including a production Reedline cursor-position timeout. Reliable interactive terminal latency, remaining coreutils ABIs, cross-process record locks and complete AgentOS parity stay open.
+
+Version 0.19.1 adds an output-driven PTY input activity window: polling sleeps stay at most 128 ms for two seconds after changed output, then retain the one-second idle ceiling. The [native regression](evidence/pty-cursor-local.json) checks an acknowledged cursor reply against the guest's unchanged two-second deadline. This does not establish production latency or rendered-terminal reliability. See the [0.19.1 delivery record](evidence/sdk-0.19.1-delivery.json) for publication and deployment status.
 
 Public content does not spend the 64 MiB private-byte quota. Copies retain shared block references; modified private blocks consume that quota. Duplicate installation still returns EEXIST. After uninstall/reinstall, command ownership follows package order; use `software.link` to explicitly select an overlapping command. Custom runtime deployments and tests must supply `SOFTWARE_BASE`, using null for a bare filesystem or the verified base digest produced by the supplied Alchemy stack. Global image garbage collection remains open.
 
 Native exec/fexec retains validated cwd, and native clock reads preserve the I/O counter while fuel, deadlines and capability expiry still bound execution. The ordinary Worker enables Alchemy Smart Placement for fetch handlers; Cloudflare excludes RPC methods and named entrypoints. Service bindings retain their native transport. Same-build cooperative recovery, terminal controls, persistent contexts and scoped capability enforcement remain available. Use matching SDK/runtime archives. Production delivery and consumer validation are tracked separately from the [local image evidence](evidence/default-software-full-local.json).
 
-Install the SDK archive from the [experimental 0.19.0 release](https://github.com/minutei-ai/boxes/releases/tag/sdk-v0.19.0):
+Install the SDK archive from the [experimental 0.19.1 release](https://github.com/minutei-ai/boxes/releases/tag/sdk-v0.19.1):
 
 ```sh
-bun add https://github.com/minutei-ai/boxes/releases/download/sdk-v0.19.0/minutei-ai-boxes-0.19.0.tgz
+bun add https://github.com/minutei-ai/boxes/releases/download/sdk-v0.19.1/minutei-ai-boxes-0.19.1.tgz
 ```
 
 Use the service binding from the Minutei Worker environment:

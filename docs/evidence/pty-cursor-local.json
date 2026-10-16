@@ -1,0 +1,88 @@
+{
+  "status": "Local scheduling regression fixed; production Reedline validation remains open.",
+  "measuredAt": "2026-10-16T19:02:45.411005+00:00",
+  "baselineCommit": "43b33b710e33a61d48894cbe04233b5ed9edf152",
+  "runtime": "Native Alchemy workerd, R2 and Queue with real Effect Clock; no mocked bindings, frozen time or altered guest timeout.",
+  "reproduction": {
+    "idleBeforeQueryMs": 2950,
+    "guestReadDeadlineMs": 2000,
+    "delayAfterObservedQueryMs": 1500,
+    "reply": "ESC[1;1R",
+    "assertions": [
+      "Acknowledged write offset is six bytes before the two-second response budget.",
+      "Guest consumes all six reply bytes before its unchanged real deadline.",
+      "Guest exits zero and publishes exactly the query plus cursor-ready marker."
+    ],
+    "baseline": {
+      "runs": 3,
+      "passed": 0,
+      "failed": 3,
+      "guestExitCode": 112,
+      "seconds": [6.65, 6.61, 6.64],
+      "finalHarnessRuns": 1,
+      "exploratoryRuns": 2
+    },
+    "fixedFocused": {
+      "runs": 6,
+      "passed": 6,
+      "failed": 0,
+      "assertions": 72,
+      "seconds": 25.72,
+      "cursorRuns": 3,
+      "existingInputEofCancellationRuns": 3
+    }
+  },
+  "change": {
+    "outputWake": true,
+    "activityWindowMs": 2000,
+    "activeSleepCeilingMs": 128,
+    "idleSleepCeilingMs": 1000,
+    "initialExponentialSleepMs": 16,
+    "durableInputFormat": "unchanged",
+    "guestDeadline": "unchanged",
+    "guestClock": "unchanged"
+  },
+  "filesSha256": {
+    "src/wasi.ts": "82190da74fb01e6e35ba527352c96ec97de87cfca69ac891c20a473eefd436a4",
+    "tests/tty-cursor.test.ts": "e3ea7c0ca2c13c9e3e1fa6d56d84f779b04dbe80c77d8be00117a3ff5e8e9531",
+    "tests/fixtures/wasi-pty.rs": "d938b0237b9473343cb8cd4dee384a30d93f7a18cf7061c5b4ea417615876c5c",
+    "dist/wasi-pty-tty-cursor.wasm": "7d9f89ab370940af5daeb3654c9ccf64794712481414142be52e47730abfae5c"
+  },
+  "fullCheck": {
+    "command": "bun run check",
+    "exitCode": 0,
+    "tests": 413,
+    "files": 90,
+    "failed": 0,
+    "assertions": 5922,
+    "testSeconds": 222.24,
+    "buildTypecheckClippyCargoTests": "passed"
+  },
+  "limits": [
+    "The controlled delay reproduces the feeder scheduling defect, not the complete production network path.",
+    "Production Reedline, rendered terminal behavior and production latency/billing comparisons remain unproved.",
+    "The activity window increases R2 polling while terminal output is active; actual production request counts and cost are not measured."
+  ],
+  "benchmark": {
+    "command": "bun run bench",
+    "exitCode": 0,
+    "rawReportSha256": "92f060b7a963071505215f71cc752833ee216cf00ea013f952a6719ca793734a",
+    "scope": "Native local workerd warm workloads; SDK compilation overlapped the beginning of this run and the shared host was not isolated. No before/after latency, R2 request-cost or production performance claim is made.",
+    "wasiPublication": {
+      "samples": 25,
+      "rootPublications": 25
+    },
+    "batchPublication": {
+      "filesPerSample": 8,
+      "samples": 25,
+      "sequentialPublications": 200,
+      "batchPublications": 25
+    },
+    "contentDeduplication": {
+      "singleFileWrites": 25,
+      "uniqueBlocks": 1,
+      "singleFileLogicalBytesWritten": 6553600,
+      "storedBlockBytes": 262144
+    }
+  }
+}
