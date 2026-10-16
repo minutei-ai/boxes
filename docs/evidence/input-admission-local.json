@@ -1,5 +1,5 @@
 {
-  "status": "Local full native check passed; 0.19.2 publication and production validation pending.",
+  "status": "Native request-count and concurrency regression fixed and delivered in 0.19.2; production transport and consumer evidence belongs to sdk-0.19.2-delivery.json.",
   "measuredAt": "2026-10-16T19:31:55.114564+00:00",
   "baselineCommit": "ebfe8ebc53ff597ff540a750b3d2f19d16f66cfc",
   "productionTrigger": {
@@ -66,7 +66,7 @@
   "limits": [
     "The successful append drops one R2 request; this is not a production latency or billing comparison.",
     "Metadata reads can already be in flight when a lifetime check rejects a disposed sandbox.",
-    "The 0.19.1 production HTTP cursor failures remain open until the new path is delivered and verified."
+    "Successful production binding/HTTP cases are recorded separately; they do not erase the historical 0.19.1 failures or prove transport-wide latency guarantees."
   ],
   "existingRecoveryRegression": "tests/terminal-resize.test.ts deletes the real input head, rejects readonly initialization, recovers with execute authority and checks resize/close ETag races.",
   "benchmark": {
