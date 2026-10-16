@@ -1,0 +1,15 @@
+Boxes sh third-party dependency notices Components:
+{{#each crates}}
+  {{package.name}}
+  {{package.version}}:
+  {{license}}
+{{/each}}
+
+License texts:
+{{#each overview}}
+  {{name}}
+  ({{id}})
+
+  {{{text}}}
+
+{{/each}}
