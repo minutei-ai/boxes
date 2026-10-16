@@ -2,7 +2,7 @@
 +++ b/toolchain/crates/wasi-ext/src/lib.rs
 @@ -117,6 +117,18 @@
      ) -> Errno;
- 
+
      /// Replace the current process image. Success never returns.
 +    fn proc_exec_v2(
 +        exec_path_ptr: *const u8,
@@ -22,7 +22,7 @@
 @@ -503,6 +515,33 @@
      exec_with_cloexec(exec_path, argv, envp, &[])
  }
- 
+
 +pub fn exec_in(
 +    exec_path: &[u8],
 +    argv: &[u8],

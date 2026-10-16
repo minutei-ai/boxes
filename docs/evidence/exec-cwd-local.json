@@ -9,7 +9,7 @@
     "tests/exec-cwd.test.ts": "de911d784c4697c30d10531a660eb637d75c61eadf1b4ab8a0b6ddf444b5374a",
     "tests/fixtures/wasi-exec-cwd.rs": "370b3ae5339932bf883269fd48da2daa1b5a47beedcce58fdc2ce850207436d9",
     "tooling/shell-cwd-proof.ts": "c68cf8f135f865b4e216d00811e2f2f0bd2a446e20a3e7aff8f91f38740228fe",
-    "tooling/guest-patches/wasi-ext-exec-cwd.patch": "c0231225b3d116113aa74de083b14c1404582c392bb2f578d8ad846058db7a0d",
+    "tooling/guest-patches/wasi-ext-exec-cwd.patch": "1e8a304173fa54e808e5c7c99a4d0c1cf6b1ec7be82aa34ef4e4404ce7c41164",
     "tooling/guest-patches/brush-exec-cwd.patch": "e7c85316b39edbc0eb8bf9c1e7d19a0be5df74f78e0238cf4605fc01d070b6b3"
   },
   "upstream": {
@@ -234,7 +234,8 @@
       "result": "passed",
       "report": "docs/evidence/exec-cwd-benchmark-local.json",
       "limit": "General local workload baseline, not a before/after cwd benchmark or production performance/cost comparison."
-    }
+    },
+    "guestPatchApplication": "Forward application to the pinned pristine source and reverse-check against the built source passed; resulting Rust source bytes match exactly."
   },
   "behavior": [
     "Absolute, UTF-8, NUL-free cwd bounded to 4096 bytes before copying",
