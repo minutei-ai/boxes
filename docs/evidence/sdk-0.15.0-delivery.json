@@ -1,0 +1,13 @@
+{
+  "status": "Prepared and locally validated 0.15.0 candidate; publication, source/tag CI, deployment and consumer update pending.",
+  "version": "0.15.0",
+  "localEvidence": "docs/evidence/sdk-0.15.0-local.json",
+  "release": null,
+  "deployment": null,
+  "minutei": {
+    "version": "0.14.0",
+    "newVersionInstalled": false,
+    "push": false,
+    "deploy": false
+  }
+}

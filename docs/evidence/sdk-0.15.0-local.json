@@ -1,0 +1,281 @@
+{
+  "status": "Prepared experimental 0.15.0 SDK/runtime archives. Local verification passed; publication, source/tag CI and production deployment remain separate gates.",
+  "version": "0.15.0",
+  "baseCommit": "0b652dfea146a17f9b2d47043f1563c1e00fa5b2",
+  "baseCI": {
+    "url": "https://github.com/minutei-ai/boxes/actions/runs/38886018298",
+    "conclusion": "success",
+    "tests": 398,
+    "assertions": 5405,
+    "seconds": 140.22
+  },
+  "scope": [
+    "Native guest tcgetattr/tcsetattr and independent six-flag/seven-byte terminal policy",
+    "Effect SDK, native service binding and scoped guest terminal configuration/observation; input-head v3 unconditional cutover",
+    "Same-build checkpoint preservation and new desired revisions overriding raw recovery",
+    "Conditional cancellation reconciles real completion without replay"
+  ],
+  "verification": {
+    "fullCheck": {
+      "command": "bun run check",
+      "tests": 399,
+      "files": 80,
+      "assertions": 5396,
+      "seconds": 200.65,
+      "failures": 0,
+      "includes": [
+        "Runtime and SDK builds",
+        "TypeScript",
+        "Workspace Clippy with warnings denied",
+        "Workspace Cargo tests",
+        "Native Alchemy workerd/R2/Queue suite"
+      ]
+    },
+    "format": {
+      "command": "bun run format:check",
+      "result": "passed"
+    },
+    "archives": [
+      {
+        "name": "minutei-ai-boxes-0.15.0.tgz",
+        "bytes": 77087,
+        "sha256": "8c79da1da45ff5bd308ec87ec5e81afaab74b0abd157cf4d0063a591fe2bd328",
+        "files": 16,
+        "license": "Apache-2.0",
+        "credentialScan": "passed"
+      },
+      {
+        "name": "minutei-ai-boxes-runtime-0.15.0.tgz",
+        "bytes": 5540884,
+        "sha256": "0e59d58239e4aac3fbfd59c0198bcd3ffc6d1543eb9b75089f9905e19a2e0ca0",
+        "files": 8,
+        "license": "Apache-2.0",
+        "credentialScan": "passed"
+      }
+    ],
+    "archiveBuildMatch": "23 files match source/build bytes. The runtime manifest is normalized by Bun pack and matches the generator structurally. All 24 archived files are covered.",
+    "packageProof": {
+      "version": "0.15.0",
+      "transport": "native Alchemy workerd service binding and Agent RPC; local R2 and Queue",
+      "proof": "SDK archive exports and consumer declarations; runtime archive; filesystem snapshot restore; hard-link metadata; RPC callbacks and cooperative disposal; ephemeral context disposal with 1024 files and concurrent closes; persistent driver contexts and cancellation; scoped authority",
+      "terminal": {
+        "initial": {
+          "cols": 80,
+          "rows": 24,
+          "revision": 0
+        },
+        "resized": {
+          "cols": 100,
+          "rows": 30,
+          "revision": 2
+        },
+        "terminal": {
+          "id": "terminal-live",
+          "status": "exited",
+          "sourceHash": "a8a6480394435899e061e452f41d433ae5dcff92bcf00e197b8faea415137b28",
+          "language": "wasm",
+          "startedAt": 1792146861825,
+          "finishedAt": 1792146862274,
+          "output": {
+            "stdout": "ready\neof-ready\nwinch\nafter-one\nwinch\ndone\n",
+            "stderr": "",
+            "result": null,
+            "exitCode": 0
+          }
+        },
+        "agent": {
+          "id": "terminal-agent",
+          "status": "exited",
+          "sourceHash": "0bc9adff0ae13ee1bef54d4ae1ab07254e340a996cec8b6a418fe919151d4056",
+          "language": "typescript",
+          "startedAt": 1792146862149,
+          "finishedAt": 1792146862223,
+          "output": {
+            "stdout": "",
+            "stderr": "",
+            "result": {
+              "cols": 100,
+              "rows": 30,
+              "revision": 2
+            },
+            "exitCode": 0
+          }
+        },
+        "input": {
+          "offset": 0,
+          "total": 0,
+          "closed": true
+        },
+        "staleRevision": 409,
+        "foreignSandbox": 401,
+        "foreground": {
+          "id": "terminal-foreground",
+          "status": "exited",
+          "sourceHash": "ba142b7baf1b3995c8c0c79e34cbbaa5a5918c22842d94de6aaed64be41b3dc3",
+          "language": "wasm",
+          "startedAt": 1792146862316,
+          "finishedAt": 1792146862360,
+          "output": {
+            "stdout": "interrupt\npair-done\n",
+            "stderr": "",
+            "result": null,
+            "exitCode": 0
+          }
+        },
+        "rawOwners": {
+          "id": "terminal-raw-owners",
+          "status": "exited",
+          "sourceHash": "47334effdf47f9cd168641c5b517244045a26912fab8c5f7dd63d11088783fc2",
+          "language": "wasm",
+          "startedAt": 1792146862602,
+          "finishedAt": 1792146862776,
+          "output": {
+            "stdout": "raw-owners-restored\n",
+            "stderr": "",
+            "result": null,
+            "exitCode": 0
+          }
+        },
+        "termios": {
+          "id": "terminal-termios",
+          "status": "exited",
+          "sourceHash": "10c8332bd7f638de1770e1493da38074a0b06d618c198f589d69c36c835c641f",
+          "language": "wasm",
+          "startedAt": 1792146862792,
+          "finishedAt": 1792146862835,
+          "output": {
+            "stdout": "termios-verified\n",
+            "stderr": "",
+            "result": null,
+            "exitCode": 0
+          }
+        },
+        "attributes": {
+          "initial": {
+            "desired": {
+              "attributes": null,
+              "revision": 0
+            },
+            "observed": {
+              "attributes": {
+                "icrnl": true,
+                "opost": true,
+                "onlcr": true,
+                "icanon": true,
+                "echo": true,
+                "isig": true,
+                "cc": [3, 28, 26, 4, 127, 21, 23]
+              },
+              "revision": 0
+            },
+            "settled": false
+          },
+          "guest": {
+            "desired": {
+              "attributes": {
+                "icrnl": false,
+                "opost": false,
+                "onlcr": false,
+                "icanon": false,
+                "echo": false,
+                "isig": false,
+                "cc": [1, 2, 3, 4, 5, 6, 7]
+              },
+              "revision": 1
+            },
+            "observed": {
+              "attributes": {
+                "icrnl": false,
+                "opost": false,
+                "onlcr": false,
+                "icanon": false,
+                "echo": true,
+                "isig": false,
+                "cc": [1, 2, 3, 4, 5, 6, 7]
+              },
+              "revision": 1
+            },
+            "settled": false
+          },
+          "final": {
+            "desired": {
+              "attributes": {
+                "icrnl": true,
+                "opost": true,
+                "onlcr": true,
+                "icanon": true,
+                "echo": false,
+                "isig": true,
+                "cc": [1, 2, 3, 4, 5, 6, 7]
+              },
+              "revision": 3
+            },
+            "observed": {
+              "attributes": {
+                "icrnl": true,
+                "opost": true,
+                "onlcr": true,
+                "icanon": true,
+                "echo": false,
+                "isig": true,
+                "cc": [1, 2, 3, 4, 5, 6, 7]
+              },
+              "revision": 3
+            },
+            "settled": true
+          },
+          "process": {
+            "id": "terminal-attributes",
+            "status": "exited",
+            "sourceHash": "631b044078fbac8a03ddea47e5b1ef2185f919c6289a76ec7112a84ab6c8b3b0",
+            "language": "wasm",
+            "startedAt": 1792146862879,
+            "finishedAt": 1792146863593,
+            "output": {
+              "stdout": "attributes-ready\r\nraw-ok\nguest-changed\nconfigured-again\neof-ready\nterminal-done\r\n",
+              "stderr": "",
+              "result": null,
+              "exitCode": 0
+            }
+          },
+          "staleRevision": 409,
+          "foreignSandbox": 401
+        }
+      }
+    },
+    "cancellationEvidence": "docs/evidence/cancellation-completion-local.json",
+    "nativeAttributeEvidence": "docs/evidence/terminal-attributes-local.json"
+  },
+  "workerAssets": {
+    "index.js": {
+      "bytes": 378165,
+      "sha256": "df47771c687266e6d6603cbdd6c5b7f23162cd47ad37c9d9a71137c73ec1b7ff"
+    },
+    "cirro_kernel_bg.wasm": {
+      "bytes": 1139581,
+      "sha256": "1d3d1811805905af3c00e8afedd696c22d585db7538877306c28e7b099725e92"
+    },
+    "cirro_guest_bg.wasm": {
+      "bytes": 1129863,
+      "sha256": "b773b74626b08bd1083860081ccd2a3d0fdff80dcd97b5ec13ed7c6e2148ef22"
+    },
+    "cirro_compiler_bg.wasm": {
+      "bytes": 1943596,
+      "sha256": "27d9b0022a634ed4eef47b6561ad38cafde3522c17e834afed1264440678bf2f"
+    },
+    "cirro_wasi_bg.wasm": {
+      "bytes": 1694774,
+      "sha256": "f313c56d827cc0238dd21a4583e43c745756de0340e1a0994c349b53f66b4f25"
+    },
+    "cirro_python_bg.wasm": {
+      "bytes": 10719083,
+      "sha256": "8aa6aec5ab6fb0623637e2b6dda7318f4934e4736f4a97e45ca3312bf32e529c"
+    }
+  },
+  "limits": [
+    "Full AgentOS parity remains open in docs/parity.md.",
+    "No new published release, production deployment or Minutei update is proved by this local record.",
+    "The earlier full Minutei tenant lifecycle timeout also occurred with the old 0.13.0 baseline and remains unresolved; local Code Mode proof is separate.",
+    "Local throughput results do not prove production speed, maximum memory or cost relative to AgentOS."
+  ]
+}

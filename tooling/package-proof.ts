@@ -240,6 +240,7 @@ await Effect.runPromise(
         (value) => Effect.promise(() => value.dispose()),
       );
       const request = Effect.fn("packageProof.request")(function* (query: string, id: string) {
+        yield* Effect.logInfo({ phase: "package-proof.request", query, sandboxId: id });
         const response = yield* Effect.promise(() =>
           fetch(new URL(query, proxy.env.ORIGINS.standard), {
             method: "POST",

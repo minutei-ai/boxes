@@ -25,5 +25,13 @@ export const terminalProofSources = Effect.fn("proof.terminalSources")(function*
   const foregroundSource = Buffer.from(
     yield* Effect.promise(() => Bun.file("dist/wasi-tty-foreground-pair.wasm").arrayBuffer()),
   ).toString("base64");
-  return { source, foregroundSource, rawOwners };
+  const attributeSources = {
+    pair: Buffer.from(
+      yield* Effect.promise(() => Bun.file("dist/wasi-termios-pair.wasm").arrayBuffer()),
+    ).toString("base64"),
+    api: Buffer.from(
+      yield* Effect.promise(() => Bun.file("dist/wasi-termios-api.wasm").arrayBuffer()),
+    ).toString("base64"),
+  };
+  return { source, foregroundSource, rawOwners, attributeSources };
 });

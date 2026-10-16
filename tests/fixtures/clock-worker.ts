@@ -6,13 +6,63 @@ import { PLATFORM_PROXY_PREFIX } from "@alchemy.run/cloudflare-runtime/core/plat
 import type { Fetcher } from "@cloudflare/workers-types/experimental";
 import { consume, handleRequest } from "../../src/index";
 export { Agent } from "../../src/index";
-import { ProcessDelivery, StoredRun } from "../../src/contracts";
+import { ProcessCancelAction, ProcessDelivery, StoredRun } from "../../src/contracts";
 import { tick } from "../../src/cron";
 import { reconcile } from "../../src/process";
 import type { Env } from "../../src/resources";
 
 type TestEnv = Env & { SELF: Fetcher };
 export class Control extends WorkerEntrypoint<TestEnv> {
+  cancelAfterCompletion(sandboxId: string, token: string, id: string) {
+    const native = this.env;
+    const key = `processes/${sandboxId}/${id}.json`;
+    const state = { deliveries: 0 };
+    const bindings = {
+      ...native,
+      OBJECTS: new Proxy(native.OBJECTS, {
+        get(target, property) {
+          if (property === "put")
+            return async (...args: Parameters<Env["OBJECTS"]["put"]>) => {
+              if (args[0] === key && state.deliveries === 0) {
+                const object = await target.head(key);
+                if (object === null) return target.put(...args);
+                state.deliveries += 1;
+                await native.SELF.queue("executions", [
+                  {
+                    id: "cancel-completion-race",
+                    timestamp: new Date(Effect.runSync(Clock.currentTimeMillis)),
+                    attempts: 1,
+                    body: Schema.encodeSync(ProcessDelivery)({ key, eTag: object.etag }),
+                  },
+                ]);
+              }
+              return target.put(...args);
+            };
+          const value = Reflect.get(target, property, target);
+          if (typeof value === "function") return value.bind(target);
+          return value;
+        },
+      }),
+    };
+    const request = new Request(`https://boxes.test/v1/sandboxes/${sandboxId}/action`, {
+      method: "POST",
+      headers: { authorization: `Bearer ${token}`, "content-type": "application/json" },
+      body: Schema.encodeSync(Schema.fromJsonString(ProcessCancelAction))({
+        op: "process.cancel",
+        id,
+      }),
+    });
+    return Effect.runPromise(
+      Effect.gen(function* () {
+        const response = yield* handleRequest(request, bindings);
+        return {
+          status: response.status,
+          body: yield* Effect.promise(() => response.text()),
+          deliveries: state.deliveries,
+        };
+      }),
+    );
+  }
   repair() {
     const counts = { receiptReads: 0 };
     const bindings = {

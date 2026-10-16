@@ -5,6 +5,8 @@ import {
   InputReceipt,
   RunRecord,
   TerminalGeometry,
+  TerminalAttributes,
+  TerminalAttributeStatus,
   WasmProgram,
 } from "../../src/contracts";
 
@@ -12,6 +14,10 @@ export const TerminalProofInput = AgentRequest.mapFields((fields) => ({
   ...Struct.pick(fields, ["sandboxId", "token"]),
   source: WasmProgram.fields.source,
   foregroundSource: WasmProgram.fields.source,
+  attributeSources: Schema.Struct({
+    pair: WasmProgram.fields.source,
+    api: WasmProgram.fields.source,
+  }),
   rawOwners: Schema.Struct({
     parent: WasmProgram.fields.source,
     children: Schema.Struct({
@@ -36,6 +42,15 @@ export const TerminalProof = Schema.Struct({
   foreignSandbox: Schema.Literal(401),
   foreground: RunRecord,
   rawOwners: RunRecord,
+  termios: RunRecord,
+  attributes: Schema.Struct({
+    initial: TerminalAttributeStatus,
+    guest: TerminalAttributeStatus,
+    final: TerminalAttributeStatus,
+    process: RunRecord,
+    staleRevision: Schema.Literal(409),
+    foreignSandbox: Schema.Literal(401),
+  }),
 });
 
 export const terminalProof = Effect.fn("proof.terminal")(function* (
@@ -44,6 +59,7 @@ export const terminalProof = Effect.fn("proof.terminal")(function* (
   source: typeof TerminalProofInput.Type.source,
   foregroundSource: typeof TerminalProofInput.Type.foregroundSource,
   owners: typeof TerminalProofInput.Type.rawOwners,
+  attributeSources: typeof TerminalProofInput.Type.attributeSources,
 ) {
   yield* client.action(sandboxId, {
     op: "process.spawn",
@@ -193,6 +209,179 @@ export const terminalProof = Effect.fn("proof.terminal")(function* (
     rawOwners.output.stderr !== ""
   )
     return yield* Effect.die("Raw owner exit/exec recovery proof failed");
+  const termios = yield* client.action(sandboxId, {
+    op: "process.run",
+    id: "terminal-termios",
+    language: "wasm",
+    source: attributeSources.pair,
+  });
+  if (
+    termios.status !== "exited" ||
+    termios.output?.exitCode !== 0 ||
+    termios.output.stdout !== "termios-verified\n" ||
+    termios.output.stderr !== ""
+  )
+    return yield* Effect.die("Native terminal attribute ABI proof failed");
+  yield* client.action(sandboxId, {
+    op: "process.spawn",
+    stdinMode: "pty",
+    execution: {
+      op: "process.run",
+      id: "terminal-attributes",
+      language: "wasm",
+      source: attributeSources.api,
+    },
+  });
+  const attributesPage = client.action(sandboxId, {
+    op: "process.output.readLive",
+    id: "terminal-attributes",
+    after: null,
+    maxBytes: 4096,
+    maxEvents: 32,
+  });
+  const attributeMarker = Effect.fn("proof.terminal.attributeMarker")((marker: string) =>
+    Effect.repeat(attributesPage, {
+      until: (page) =>
+        Effect.succeed(
+          Buffer.concat(page.events.map((event) => Buffer.from(event.data, "base64"))).includes(
+            Buffer.from(marker),
+          ),
+        ),
+      schedule: Schedule.spaced("100 millis"),
+    }).pipe(Effect.timeout("25 seconds")),
+  );
+  const observeAttributes = client.action(sandboxId, {
+    op: "process.terminal.attributes",
+    id: "terminal-attributes",
+    timeoutMs: 25000,
+  });
+  yield* attributeMarker("attributes-ready\r\n");
+  const initialAttributes = yield* observeAttributes;
+  if (
+    initialAttributes.desired.attributes !== null ||
+    initialAttributes.desired.revision !== 0 ||
+    initialAttributes.observed.revision !== 0 ||
+    !initialAttributes.observed.attributes.icanon ||
+    initialAttributes.settled
+  )
+    return yield* Effect.die("Unexpected initial native terminal attributes");
+  const raw = Schema.decodeUnknownSync(TerminalAttributes)({
+    icrnl: false,
+    opost: false,
+    onlcr: false,
+    icanon: false,
+    echo: false,
+    isig: false,
+    cc: [1, 2, 3, 4, 5, 6, 7],
+  });
+  const equivalent = Schema.toEquivalence(TerminalAttributes);
+  const configured = yield* client.action(sandboxId, {
+    op: "process.terminal.configure",
+    id: "terminal-attributes",
+    revision: 0,
+    attributes: raw,
+  });
+  if (configured.revision !== 1 || !equivalent(configured.attributes, raw))
+    return yield* Effect.die("Terminal desired attributes were not retained");
+  const applied = yield* observeAttributes;
+  if (applied.observed.revision !== 1 || !equivalent(applied.observed.attributes, raw))
+    return yield* Effect.die("Terminal desired attributes were not applied");
+  yield* client.action(sandboxId, {
+    op: "process.stdin.write",
+    id: "terminal-attributes",
+    offset: 0,
+    content: "X",
+    encoding: "utf8",
+  });
+  yield* attributeMarker("guest-changed\n");
+  const guestAttributes = yield* observeAttributes;
+  if (
+    guestAttributes.desired.revision !== 1 ||
+    guestAttributes.desired.attributes === null ||
+    !equivalent(guestAttributes.desired.attributes, raw) ||
+    guestAttributes.observed.revision !== 1 ||
+    !equivalent(guestAttributes.observed.attributes, { ...raw, echo: true })
+  )
+    return yield* Effect.die("Observation did not preserve independent guest attributes");
+  const staleAttributes = yield* client
+    .action(sandboxId, {
+      op: "process.terminal.configure",
+      id: "terminal-attributes",
+      revision: 0,
+      attributes: raw,
+    })
+    .pipe(Effect.result);
+  if (
+    staleAttributes._tag !== "Failure" ||
+    staleAttributes.failure._tag !== "BoxesError" ||
+    staleAttributes.failure.status !== 409
+  )
+    return yield* Effect.die("Stale terminal attribute configuration was not rejected");
+  const foreignAttributes = yield* client
+    .action(`${sandboxId}-other`, {
+      op: "process.terminal.attributes",
+      id: "terminal-attributes",
+      timeoutMs: 0,
+    })
+    .pipe(Effect.result);
+  if (
+    foreignAttributes._tag !== "Failure" ||
+    foreignAttributes.failure._tag !== "BoxesError" ||
+    foreignAttributes.failure.status !== 401
+  )
+    return yield* Effect.die("Foreign terminal attributes remained readable");
+  yield* client.action(sandboxId, {
+    op: "process.terminal.configure",
+    id: "terminal-attributes",
+    revision: 1,
+    attributes: raw,
+  });
+  const reapplied = yield* observeAttributes;
+  if (reapplied.observed.revision !== 2 || !equivalent(reapplied.observed.attributes, raw))
+    return yield* Effect.die("Explicit terminal reconfiguration did not supersede guest changes");
+  yield* client.action(sandboxId, {
+    op: "process.stdin.write",
+    id: "terminal-attributes",
+    offset: 1,
+    content: "Y",
+    encoding: "utf8",
+  });
+  yield* client.action(sandboxId, {
+    op: "process.stdin.close",
+    id: "terminal-attributes",
+    offset: 2,
+  });
+  yield* attributeMarker("eof-ready\n");
+  const cooked = { ...raw, icrnl: true, opost: true, onlcr: true, icanon: true, isig: true };
+  yield* client.action(sandboxId, {
+    op: "process.terminal.configure",
+    id: "terminal-attributes",
+    revision: 2,
+    attributes: cooked,
+  });
+  const attributesProcess = yield* client.action(sandboxId, {
+    op: "process.wait",
+    id: "terminal-attributes",
+    timeoutMs: 25000,
+  });
+  if (
+    attributesProcess.status !== "exited" ||
+    attributesProcess.output?.exitCode !== 0 ||
+    attributesProcess.output.stdout !==
+      "attributes-ready\r\nraw-ok\nguest-changed\nconfigured-again\neof-ready\nterminal-done\r\n" ||
+    attributesProcess.output.stderr !== ""
+  )
+    return yield* Effect.die("Native terminal configuration after EOF failed");
+  const finalAttributes = yield* observeAttributes;
+  if (
+    !finalAttributes.settled ||
+    finalAttributes.desired.revision !== 3 ||
+    finalAttributes.desired.attributes === null ||
+    !equivalent(finalAttributes.desired.attributes, cooked) ||
+    finalAttributes.observed.revision !== 3 ||
+    !equivalent(finalAttributes.observed.attributes, cooked)
+  )
+    return yield* Effect.die("Final native terminal attributes were not retained");
   return {
     initial,
     resized,
@@ -203,5 +392,14 @@ export const terminalProof = Effect.fn("proof.terminal")(function* (
     foreignSandbox: foreign.failure.status,
     foreground,
     rawOwners,
+    termios,
+    attributes: {
+      initial: initialAttributes,
+      guest: guestAttributes,
+      final: finalAttributes,
+      process: attributesProcess,
+      staleRevision: staleAttributes.failure.status,
+      foreignSandbox: foreignAttributes.failure.status,
+    },
   } as const;
 });

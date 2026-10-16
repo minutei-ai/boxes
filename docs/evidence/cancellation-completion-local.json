@@ -1,0 +1,32 @@
+{
+  "status": "Locally verified native cancellation reconciliation. No production deployment yet.",
+  "baseCommit": "0b652dfea146a17f9b2d47043f1563c1e00fa5b2",
+  "reproduction": {
+    "archiveFailure": "Initial 0.15.0 package proof failed with BoxesError: Execution changed during cancellation. Five subsequent ordinary proofs passed; the concentrated persistent-context run reproduced the same error at its third read phase.",
+    "nativeGate": "The local Control fixture forwards all real R2 calls and delivers the actual native Queue job immediately before the cancellation conditional put. The Queue runs the real QuickJS guest to exit with result 42. No receipt, result or failed write is mocked.",
+    "before": {
+      "status": 409,
+      "previousStatus": "queued",
+      "observedStatus": "exited",
+      "test": "bun test tests/cancel-completion.test.ts"
+    },
+    "identity": "A first Queue claim legitimately changes startedAt to actual entry time. Running or checkpointed identities retain their timestamp check; a fresh queued identity is matched by ID and archived source hash."
+  },
+  "change": "Only a confirmed null cancellation CAS causes a fresh receipt read. The same execution already cancelling or settled returns its actual public summary without rewriting or rerunning it. A still-queued, still-running, missing or changed identity remains CONFLICT. Unknown storage failures propagate without replay.",
+  "verification": {
+    "targeted": {
+      "command": "bun test tests/cancel-completion.test.ts tests/persistent-driver.test.ts tests/pty.test.ts",
+      "tests": 4,
+      "assertions": 44,
+      "seconds": 8.83,
+      "failures": 0
+    },
+    "regression": "The deterministic native completion interleaving passed after the fix; result 42 is retained and repeated cancellation leaves the receipt ETag unchanged.",
+    "stress": "32 create/read pairs of the real persistent driver passed in one native archive-proof runtime, followed by complete terminal geometry, foreground, raw-owner, guest termios and attribute-control proofs.",
+    "cleanup": "Temporary DEBUG-boxes-cancel-race instrumentation was removed from source and the audited runtime archive."
+  },
+  "limits": [
+    "Still-active conflicts remain explicit 409 responses. This is not an unconditional retry or suppression policy.",
+    "No ambiguous-write fault injection or production claim."
+  ]
+}

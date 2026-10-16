@@ -1007,13 +1007,38 @@ export const cancel = Effect.fn("process.cancel")(function* (
       }),
     catch: (cause) => new StorageFailure({ cause }),
   });
-  if (receipt === null)
+  const published = yield* Effect.gen(function* () {
+    if (receipt !== null) return updated;
+    const current = yield* Effect.tryPromise({
+      try: () => env.OBJECTS.get(key),
+      catch: (cause) => new StorageFailure({ cause }),
+    });
+    if (current !== null) {
+      if (current.size > 8_388_608)
+        return yield* new StorageFailure({ cause: "Oversized process receipt" });
+      const observed = yield* Schema.decodeUnknownEffect(Schema.fromJsonString(StoredRun))(
+        yield* Effect.tryPromise({
+          try: () => current.text(),
+          catch: (cause) => new StorageFailure({ cause }),
+        }),
+      );
+      if (
+        observed.id === stored.id &&
+        observed.sourceHash === stored.sourceHash &&
+        (observed.startedAt === stored.startedAt ||
+          (stored.status === "queued" && stored.checkpoint === null)) &&
+        observed.status !== "queued" &&
+        observed.status !== "running"
+      )
+        return observed;
+    }
     return yield* new Fault({
       code: "CONFLICT",
       status: 409,
       message: "Execution changed during cancellation; inspect process.get",
     });
-  return Struct.omit(updated, [
+  });
+  return Struct.omit(published, [
     "authority",
     "deadlineAt",
     "output",
