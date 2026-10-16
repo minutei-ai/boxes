@@ -2,12 +2,12 @@
 
 The `@minutei-ai/boxes` SDK targets Effect 4 and ordinary Cloudflare Workers. Its primary transport is a native Cloudflare service binding. Effect HttpClient owns request construction, interruption and transport errors. The package contains generated ESM and TypeScript declarations; Rust, Alchemy, server bindings and credentials are excluded. All request/response Schemas come from the same owner as the server. Schema exports are available from `@minutei-ai/boxes/contracts`.
 
-Version 0.16.0 is an experimental SDK/runtime with process discovery by external stdin mode, native guest terminal attributes, revisioned configuration and fresh attribute observations through Effect service bindings. It includes terminal control-key signals, guest foreground transfer, process-owned raw-mode restoration and absolute checkpoint lease deadlines. It includes queued WASI PTYs, timed reads, R2-backed resize and SIGWINCH, and same-build cooperative recovery. It retains descriptor-based scripts, shared inodes, scoped binding/RPC and automatic ephemeral-context reclamation. Complete AgentOS parity and production performance/cost remain open. Use matching SDK/runtime archives.
+Version 0.17.0 is an experimental SDK/runtime with explicit working-directory admission for native exec/fexec. Its separately published Rust shell candidate supplies that directory; the default digest-pinned shell has not been replaced. The ordinary Worker uses Alchemy Smart Placement for fetch requests; Cloudflare excludes RPC methods and named entrypoints from that optimization. Process discovery, native terminal attributes, queued WASI PTYs, same-build cooperative recovery, scoped binding/RPC and automatic ephemeral-context reclamation remain available. Complete AgentOS parity and production performance/cost remain open. Use matching SDK/runtime archives.
 
-Install the SDK archive from the [experimental 0.16.0 release](https://github.com/minutei-ai/boxes/releases/tag/sdk-v0.16.0). Publication, deployment and native remote proof are tracked separately in the [delivery evidence](evidence/sdk-0.16.0-delivery.json):
+Install the SDK archive from the [experimental 0.17.0 release](https://github.com/minutei-ai/boxes/releases/tag/sdk-v0.17.0). Publication, deployment and native remote proof are tracked separately in the [delivery evidence](evidence/sdk-0.17.0-delivery.json):
 
 ```sh
-bun add https://github.com/minutei-ai/boxes/releases/download/sdk-v0.16.0/minutei-ai-boxes-0.16.0.tgz
+bun add https://github.com/minutei-ai/boxes/releases/download/sdk-v0.17.0/minutei-ai-boxes-0.17.0.tgz
 ```
 
 Use the service binding from the Minutei Worker environment:

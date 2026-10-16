@@ -1,0 +1,635 @@
+{
+  "status": "Published experimental guest candidate with local native package proof. Default shell replacement and remote guest proof remain open; publication and runtime deployment are recorded separately in sdk-0.17.0-delivery.json.",
+  "version": "0.17.0",
+  "sourceCommit": "8a3c4b62706fa3f62be9a0990d68428ec327289e",
+  "measuredAt": "2026-10-16T14:04:35.610172+00:00",
+  "sourceInputsSha256": {
+    "tooling/guest-pack/src/main.rs": "26f02cb02b9df02b19b083ffd525f33b11968b79eee5f0e7e4b8ef2694695df6",
+    "tooling/guest-pack/build.rs": "9b73f90bb659458032c4495150a3083ac7dd129e3e631517af62e522f1c085f7",
+    "tooling/guest-pack/Cargo.toml": "04e08b0abb541415ed27c7c2ba2eb281fdb384b7a35b59d0ba5359753cac46d8",
+    "tooling/guest-patches/about.toml": "78e88b990d3d8b299f6568427b68f39f66a442f4cbaaf3b0a1c2cd59b6221c51",
+    "tooling/guest-patches/notices.hbs": "2176428c4d5aa1134d67809b5ebf82bf56350e8b69d7da85a53a1fd51515589b",
+    "tooling/guest-patches/NOTICE": "525cac472c7dd9c7cfc8366dcc033314c02503d3475fdcd8b96090e594fdf52a",
+    "tooling/guest-patches/wasi-ext-exec-cwd.patch": "1e8a304173fa54e808e5c7c99a4d0c1cf6b1ec7be82aa34ef4e4404ce7c41164",
+    "tooling/guest-patches/brush-exec-cwd.patch": "e7c85316b39edbc0eb8bf9c1e7d19a0be5df74f78e0238cf4605fc01d070b6b3",
+    "tooling/shell-cwd-proof.ts": "5ee8df0a70952371adac11e306c7910a547cfcb8a5ec930819e8278d0f75fc5d",
+    "tests/guest-pack.test.ts": "93c72dfbbbb8bc4f81161aa2950ca36aaa293bb07e0b2d4bc8815cf56c589086",
+    "Cargo.lock": "ac31e82bf233d7014d2a4231c177266e39365f83b716f0a8d203a43011b7b122"
+  },
+  "upstream": {
+    "repository": "https://github.com/rivet-dev/agentos",
+    "commit": "4d48628304c1ddedafc9d55f60752093fcf6f3d2",
+    "sourceArchive": {
+      "name": "rivet-agentos-4d48628304c1dded.tar.gz",
+      "sha256": "75f66ce9bad9c1ef5e04e2247f8a4808b11de0c3a8d9cfe6a10c28f1aa9d2519",
+      "bytes": 20885703
+    },
+    "toolchain": "nightly-2026-03-01",
+    "wasiSdk": "25",
+    "wasiLibc": "574b88da481569b65a237cb80daf9a2d5aeaf82d",
+    "llvmRuntimes": "19.1.5",
+    "lockfileSha256": "ec962a07b9bf89df3f29b260c5f036f1ac5a9603bb4727ac957b09ca01785d79",
+    "lockfileUnchanged": true,
+    "vendorConfiguration": "Moved the native Cargo source-replacement configuration to the repository ancestor shared by the toolchain and cmd-sh manifest; both native builds and cargo-about resolve the patched vendor tree.",
+    "boxesSourceInputs": {
+      "name": "boxes-sh-0.17.0-source-inputs.tar.gz",
+      "bytes": 32657,
+      "sha256": "dfa7c52b94ffef3208cb95025dac8a61500aa29055ebce81f34cb15fe8b80f87",
+      "contents": "Pinned Boxes guest patches, native packer, generated-format inputs, build recipe and Cargo lockfile; the full Boxes checkout remains available at sourceCommit."
+    }
+  },
+  "licenseGeneration": {
+    "tool": "cargo-about 0.9.2",
+    "toolArchiveSha256": "9099a59e820c38a68b9d65f300662a567d56562f9a10f6aa4c7e86c17c2566af",
+    "locked": true,
+    "target": "wasm32-wasip1",
+    "crates": 205,
+    "distinctSelectedLicenseTexts": 53,
+    "supplementalNotices": "Unchanged supplied Rust standard-library inventory and runtime licenses, wasi-libc, LLVM, Brush and Rivet licenses; vendored libm license and number_prefix v0.4.0 LICENCE retained alongside cargo-about canonical fallbacks. All eight root NOTICE/COPYRIGHT files found in the selected cargo-about package inventory are retained unchanged under package/version-specific names.",
+    "numberPrefixLicence": {
+      "url": "https://raw.githubusercontent.com/ogham/rust-number-prefix/v0.4.0/LICENCE",
+      "sha256": "df8d11b64ecce43b1229cd72745c59513b54ba39f05e3ec7c06780617b7b1fcc"
+    }
+  },
+  "package": {
+    "bytes": 4349290,
+    "name": "sh",
+    "noticeBytes": 861943,
+    "sha256": "1922d7987e34c080abe1c8edf85e0d01c4f5dccaefafe1dada5735c6e64eb2ec",
+    "shellSha256": "22c8e751be3799d221b6068082a87bf14477d249f9989069497a0910fba53432",
+    "version": "0.17.0"
+  },
+  "packageDeterminism": "Two native builder invocations produced byte-identical packages.",
+  "installedNotices": "All 28 notice files read through the native service binding match their source bytes and SHA-256 digests.",
+  "nativePackageProof": {
+    "artifactFormat": "aospkg",
+    "artifactSha256": "1922d7987e34c080abe1c8edf85e0d01c4f5dccaefafe1dada5735c6e64eb2ec",
+    "shellSha256": "22c8e751be3799d221b6068082a87bf14477d249f9989069497a0910fba53432",
+    "notices": [
+      {
+        "path": "LLVM-LICENSE.TXT",
+        "sha256": "8d85c1057d742e597985c7d4e6320b015a9139385cff4cbae06ffc0ebe89afee",
+        "bytes": 15141
+      },
+      {
+        "path": "LLVM-libcxx-LICENSE.TXT",
+        "sha256": "539dd7aed86e8a4f12cbdd0e6c50c189c7d74847e4fecc64ce2c6ee3a01da38b",
+        "bytes": 16703
+      },
+      {
+        "path": "LLVM-libcxxabi-LICENSE.TXT",
+        "sha256": "e2b35be49f7284a45b7baca8fc7b3ab7440e7902392b2528a457816b5bb2a15c",
+        "bytes": 16706
+      },
+      {
+        "path": "LLVM-libunwind-LICENSE.TXT",
+        "sha256": "b5efebcaca80879234098e52d1725e6d9eb8fb96a19fce625d39184b705f7b6d",
+        "bytes": 16706
+      },
+      {
+        "path": "NOTICE",
+        "sha256": "525cac472c7dd9c7cfc8366dcc033314c02503d3475fdcd8b96090e594fdf52a",
+        "bytes": 1525
+      },
+      {
+        "path": "Rivet-LICENSE-APACHE-2.0",
+        "sha256": "ae5364873a3070eac72eeed3f128e531ac971946eac544cc4e5536cd8ac6e0e9",
+        "bytes": 10769
+      },
+      {
+        "path": "Rust-COPYRIGHT-library.html",
+        "sha256": "90567e2718bf7fd65a71a3a43c5596488e80e5f51ed02bfea6fec54458b5f3d1",
+        "bytes": 425661
+      },
+      {
+        "path": "Rust-compiler-builtins-LICENSE.txt",
+        "sha256": "ab6eec6caf0fa5775e411c7a8bc6a45c4ef2956b0980b157ab74fc5cd62a928b",
+        "bytes": 15078
+      },
+      {
+        "path": "Rust-libm-LICENSE.txt",
+        "sha256": "3823dda7cf046602f4b4e77ec8e227863dc4736037cc85bb33d9f19febe16bb7",
+        "bytes": 14088
+      },
+      {
+        "path": "THIRD-PARTY-LICENSES.txt",
+        "sha256": "ffa967456c230c7bc73fe5624c8b8367c0313878b51c100e2fd5e77c9d982a9b",
+        "bytes": 274559
+      },
+      {
+        "path": "brush-LICENSE-MIT",
+        "sha256": "1c2618836a777ebc734928c5a8b3aba0e98a7726d88cb7bdb227c7889e86e902",
+        "bytes": 1071
+      },
+      {
+        "path": "cached-0.56.0-COPYRIGHT",
+        "sha256": "8cef07d222d9332eabdb748e2284945320c5f9cb320acbe8a3b31fb3161ed2bd",
+        "bytes": 333
+      },
+      {
+        "path": "cloudlibc-LICENSE",
+        "sha256": "c8b789cf5a746611e6300a0cc7750dbf92b61912a709d04e639245f7290656d0",
+        "bytes": 1292
+      },
+      {
+        "path": "libm-LICENSE.txt",
+        "sha256": "3823dda7cf046602f4b4e77ec8e227863dc4736037cc85bb33d9f19febe16bb7",
+        "bytes": 14088
+      },
+      {
+        "path": "musl-COPYRIGHT",
+        "sha256": "f9bc4423732350eb0b3f7ed7e91d530298476f8fec0c6c427a1c04ade22655af",
+        "bytes": 6204
+      },
+      {
+        "path": "musl-fts-COPYING",
+        "sha256": "55af87e4017668f54467a3380e7ebbac5e672d8c763bfe95e6fc882a6fdc4046",
+        "bytes": 1514
+      },
+      {
+        "path": "number_prefix-0.4.0-LICENCE",
+        "sha256": "df8d11b64ecce43b1229cd72745c59513b54ba39f05e3ec7c06780617b7b1fcc",
+        "bytes": 1070
+      },
+      {
+        "path": "rand-0.9.5-COPYRIGHT",
+        "sha256": "90eb64f0279b0d9432accfa6023ff803bc4965212383697eee27a0f426d5f8d5",
+        "bytes": 569
+      },
+      {
+        "path": "rand_chacha-0.9.0-COPYRIGHT",
+        "sha256": "90eb64f0279b0d9432accfa6023ff803bc4965212383697eee27a0f426d5f8d5",
+        "bytes": 569
+      },
+      {
+        "path": "rand_core-0.9.5-COPYRIGHT",
+        "sha256": "90eb64f0279b0d9432accfa6023ff803bc4965212383697eee27a0f426d5f8d5",
+        "bytes": 569
+      },
+      {
+        "path": "unicode-segmentation-1.13.3-COPYRIGHT",
+        "sha256": "23860c2a7b5d96b21569afedf033469bab9fe14a1b24a35068b8641c578ce24d",
+        "bytes": 321
+      },
+      {
+        "path": "unicode-width-0.2.2-COPYRIGHT",
+        "sha256": "23860c2a7b5d96b21569afedf033469bab9fe14a1b24a35068b8641c578ce24d",
+        "bytes": 321
+      },
+      {
+        "path": "unicode-xid-0.2.6-COPYRIGHT",
+        "sha256": "23860c2a7b5d96b21569afedf033469bab9fe14a1b24a35068b8641c578ce24d",
+        "bytes": 321
+      },
+      {
+        "path": "utf8_iter-1.0.4-COPYRIGHT",
+        "sha256": "c30152c94a6d75e021adbc52b3a52470366a46edb917e17deae3259251af244c",
+        "bytes": 1742
+      },
+      {
+        "path": "wasi-libc-LICENSE",
+        "sha256": "2711a8b5a5cdfef0e639f96c1aca12ae23d7d64a02d0507f1bdf14d2b27bbc3a",
+        "bytes": 910
+      },
+      {
+        "path": "wasi-libc-LICENSE-APACHE",
+        "sha256": "a60eea817514531668d7e00765731449fe14d059d3249e0bc93b36de45f759f2",
+        "bytes": 10847
+      },
+      {
+        "path": "wasi-libc-LICENSE-APACHE-LLVM",
+        "sha256": "268872b9816f90fd8e85db5a28d33f8150ebb8dd016653fb39ef1f94f2686bc5",
+        "bytes": 12243
+      },
+      {
+        "path": "wasi-libc-LICENSE-MIT",
+        "sha256": "23f18e03dc49df91622fe2a76176497404e46ced8a715d9d2b67a7446571cca3",
+        "bytes": 1023
+      }
+    ],
+    "wasiRuntimeSha256": "24906ba091af0dce87c7e6e324beb36975b6f88c759b4108d62f575208058f34",
+    "transport": "native Alchemy workerd Agent service binding and local R2",
+    "processes": [
+      {
+        "id": "direct",
+        "result": {
+          "id": "direct",
+          "status": "exited",
+          "sourceHash": "ac15e1303cc719258d4329d60564bae2569a2a74b79c1b8445f7974de281fde0",
+          "language": "wasm",
+          "startedAt": 1792159692464,
+          "finishedAt": 1792159693250,
+          "output": {
+            "stdout": "/tmp/context|/tmp/context/script|hello\n",
+            "stderr": "",
+            "result": null,
+            "exitCode": 0
+          }
+        }
+      },
+      {
+        "id": "absolute",
+        "result": {
+          "id": "absolute",
+          "status": "exited",
+          "sourceHash": "973ba4b884c8e968eaaf6952e640529821f5c622467cfd58ac8b1148ae996160",
+          "language": "wasm",
+          "startedAt": 1792159693303,
+          "finishedAt": 1792159693948,
+          "output": {
+            "stdout": "/tmp/context\n",
+            "stderr": "",
+            "result": null,
+            "exitCode": 0
+          }
+        }
+      },
+      {
+        "id": "symlink",
+        "result": {
+          "id": "symlink",
+          "status": "exited",
+          "sourceHash": "ea73aa82411235bf14dcaf1c00a595e425d7e89050d4cd62d95a025503e2f22a",
+          "language": "wasm",
+          "startedAt": 1792159694000,
+          "finishedAt": 1792159694629,
+          "output": {
+            "stdout": "/tmp/context|/tmp/link/script|hello\n",
+            "stderr": "",
+            "result": null,
+            "exitCode": 0
+          }
+        }
+      },
+      {
+        "id": "spoofed-pwd",
+        "result": {
+          "id": "spoofed-pwd",
+          "status": "exited",
+          "sourceHash": "efbf0ef2c46ccd101fe40d3d2bab22dcf51e57d9347dccb2c7b6c9c1b1297d3d",
+          "language": "wasm",
+          "startedAt": 1792159694688,
+          "finishedAt": 1792159695420,
+          "output": {
+            "stdout": "/tmp/context|/tmp/context/script|hello\n",
+            "stderr": "",
+            "result": null,
+            "exitCode": 0
+          }
+        }
+      },
+      {
+        "id": "empty-environment",
+        "result": {
+          "id": "empty-environment",
+          "status": "exited",
+          "sourceHash": "b9afeb45b12f09e2e49b289187465a8f258c3e0abd479dd26a0d3cb4d2523c38",
+          "language": "wasm",
+          "startedAt": 1792159695468,
+          "finishedAt": 1792159696080,
+          "output": {
+            "stdout": "/tmp/context|/tmp/context/script|hello\n",
+            "stderr": "",
+            "result": null,
+            "exitCode": 0
+          }
+        }
+      }
+    ]
+  },
+  "nativeRawProof": {
+    "artifactFormat": "wasm",
+    "artifactSha256": "22c8e751be3799d221b6068082a87bf14477d249f9989069497a0910fba53432",
+    "shellSha256": "22c8e751be3799d221b6068082a87bf14477d249f9989069497a0910fba53432",
+    "notices": [],
+    "wasiRuntimeSha256": "24906ba091af0dce87c7e6e324beb36975b6f88c759b4108d62f575208058f34",
+    "transport": "native Alchemy workerd Agent service binding and local R2",
+    "processes": [
+      {
+        "id": "direct",
+        "result": {
+          "id": "direct",
+          "status": "exited",
+          "sourceHash": "e44a92bff0b3be0105b452c12ac8286c905c68517ffa1693c3d59029909ad177",
+          "language": "wasm",
+          "startedAt": 1792159273676,
+          "finishedAt": 1792159274557,
+          "output": {
+            "stdout": "/tmp/context|/tmp/context/script|hello\n",
+            "stderr": "",
+            "result": null,
+            "exitCode": 0
+          }
+        }
+      },
+      {
+        "id": "absolute",
+        "result": {
+          "id": "absolute",
+          "status": "exited",
+          "sourceHash": "7bb4d0986a8f0e0d1b231b629843f339af604b8af4eb8db289d0c7b6325991ed",
+          "language": "wasm",
+          "startedAt": 1792159274611,
+          "finishedAt": 1792159275207,
+          "output": {
+            "stdout": "/tmp/context\n",
+            "stderr": "",
+            "result": null,
+            "exitCode": 0
+          }
+        }
+      },
+      {
+        "id": "symlink",
+        "result": {
+          "id": "symlink",
+          "status": "exited",
+          "sourceHash": "56848632cf27af66be81b8f2f970af11d3395ecf78b28d125d695d27cbf45e61",
+          "language": "wasm",
+          "startedAt": 1792159275273,
+          "finishedAt": 1792159275935,
+          "output": {
+            "stdout": "/tmp/context|/tmp/link/script|hello\n",
+            "stderr": "",
+            "result": null,
+            "exitCode": 0
+          }
+        }
+      },
+      {
+        "id": "spoofed-pwd",
+        "result": {
+          "id": "spoofed-pwd",
+          "status": "exited",
+          "sourceHash": "4413d34b4cba754ce44dbf3d70a26cf4311a697af72e432616f8a66b70090da2",
+          "language": "wasm",
+          "startedAt": 1792159276002,
+          "finishedAt": 1792159276650,
+          "output": {
+            "stdout": "/tmp/context|/tmp/context/script|hello\n",
+            "stderr": "",
+            "result": null,
+            "exitCode": 0
+          }
+        }
+      },
+      {
+        "id": "empty-environment",
+        "result": {
+          "id": "empty-environment",
+          "status": "exited",
+          "sourceHash": "6e187b1d0a788ee09db1ace7784ad1b9758f1b200e1bdc938974c79149f04b67",
+          "language": "wasm",
+          "startedAt": 1792159276707,
+          "finishedAt": 1792159277242,
+          "output": {
+            "stdout": "/tmp/context|/tmp/context/script|hello\n",
+            "stderr": "",
+            "result": null,
+            "exitCode": 0
+          }
+        }
+      }
+    ]
+  },
+  "verification": {
+    "fullCheck": {
+      "command": "bun run check",
+      "status": "passed",
+      "bunTests": 403,
+      "files": 84,
+      "assertions": 5801,
+      "bunTestSeconds": 238.39,
+      "rustTests": 78
+    },
+    "format": "bun run format:check and git diff --check passed",
+    "packerRegression": {
+      "tests": 1,
+      "assertions": 24,
+      "testMilliseconds": 24.74,
+      "covers": [
+        "missing NOTICE rejected",
+        "byte-identical native builds",
+        "kernel Wasm admission of canonical sorted index",
+        "long tar paths with GNU headers",
+        "exact file readback and immutable modes",
+        "symlink notice rejected before output"
+      ]
+    },
+    "exactArchivesProof": {
+      "version": "0.17.0",
+      "transport": "native Alchemy workerd service binding and Agent RPC; local R2 and Queue",
+      "proof": "SDK archive exports and consumer declarations; runtime archive; filesystem snapshot restore; hard-link metadata; RPC callbacks and cooperative disposal; ephemeral context disposal with 1024 files and concurrent closes; persistent driver contexts and cancellation; scoped authority",
+      "terminal": {
+        "inventory": {
+          "running": {
+            "id": "terminal-live",
+            "status": "running",
+            "sourceHash": "a8a6480394435899e061e452f41d433ae5dcff92bcf00e197b8faea415137b28",
+            "language": "wasm",
+            "startedAt": 1792159309209,
+            "finishedAt": null,
+            "stdinMode": "pty"
+          },
+          "settled": {
+            "id": "terminal-live",
+            "status": "exited",
+            "sourceHash": "a8a6480394435899e061e452f41d433ae5dcff92bcf00e197b8faea415137b28",
+            "language": "wasm",
+            "startedAt": 1792159309209,
+            "finishedAt": 1792159309907,
+            "stdinMode": "pty"
+          }
+        },
+        "initial": {
+          "cols": 80,
+          "rows": 24,
+          "revision": 0
+        },
+        "resized": {
+          "cols": 100,
+          "rows": 30,
+          "revision": 2
+        },
+        "terminal": {
+          "id": "terminal-live",
+          "status": "exited",
+          "sourceHash": "a8a6480394435899e061e452f41d433ae5dcff92bcf00e197b8faea415137b28",
+          "language": "wasm",
+          "startedAt": 1792159309209,
+          "finishedAt": 1792159309907,
+          "output": {
+            "stdout": "ready\neof-ready\nwinch\nafter-one\nwinch\ndone\n",
+            "stderr": "",
+            "result": null,
+            "exitCode": 0
+          }
+        },
+        "agent": {
+          "id": "terminal-agent",
+          "status": "exited",
+          "sourceHash": "0bc9adff0ae13ee1bef54d4ae1ab07254e340a996cec8b6a418fe919151d4056",
+          "language": "typescript",
+          "startedAt": 1792159309766,
+          "finishedAt": 1792159309855,
+          "output": {
+            "stdout": "",
+            "stderr": "",
+            "result": {
+              "cols": 100,
+              "rows": 30,
+              "revision": 2
+            },
+            "exitCode": 0
+          }
+        },
+        "input": {
+          "offset": 0,
+          "total": 0,
+          "closed": true
+        },
+        "staleRevision": 409,
+        "foreignSandbox": 401,
+        "foreground": {
+          "id": "terminal-foreground",
+          "status": "exited",
+          "sourceHash": "ba142b7baf1b3995c8c0c79e34cbbaa5a5918c22842d94de6aaed64be41b3dc3",
+          "language": "wasm",
+          "startedAt": 1792159309949,
+          "finishedAt": 1792159309995,
+          "output": {
+            "stdout": "interrupt\npair-done\n",
+            "stderr": "",
+            "result": null,
+            "exitCode": 0
+          }
+        },
+        "rawOwners": {
+          "id": "terminal-raw-owners",
+          "status": "exited",
+          "sourceHash": "47334effdf47f9cd168641c5b517244045a26912fab8c5f7dd63d11088783fc2",
+          "language": "wasm",
+          "startedAt": 1792159310204,
+          "finishedAt": 1792159310383,
+          "output": {
+            "stdout": "raw-owners-restored\n",
+            "stderr": "",
+            "result": null,
+            "exitCode": 0
+          }
+        },
+        "termios": {
+          "id": "terminal-termios",
+          "status": "exited",
+          "sourceHash": "10c8332bd7f638de1770e1493da38074a0b06d618c198f589d69c36c835c641f",
+          "language": "wasm",
+          "startedAt": 1792159310399,
+          "finishedAt": 1792159310445,
+          "output": {
+            "stdout": "termios-verified\n",
+            "stderr": "",
+            "result": null,
+            "exitCode": 0
+          }
+        },
+        "attributes": {
+          "initial": {
+            "desired": {
+              "attributes": null,
+              "revision": 0
+            },
+            "observed": {
+              "attributes": {
+                "icrnl": true,
+                "opost": true,
+                "onlcr": true,
+                "icanon": true,
+                "echo": true,
+                "isig": true,
+                "cc": [3, 28, 26, 4, 127, 21, 23]
+              },
+              "revision": 0
+            },
+            "settled": false
+          },
+          "guest": {
+            "desired": {
+              "attributes": {
+                "icrnl": false,
+                "opost": false,
+                "onlcr": false,
+                "icanon": false,
+                "echo": false,
+                "isig": false,
+                "cc": [1, 2, 3, 4, 5, 6, 7]
+              },
+              "revision": 1
+            },
+            "observed": {
+              "attributes": {
+                "icrnl": false,
+                "opost": false,
+                "onlcr": false,
+                "icanon": false,
+                "echo": true,
+                "isig": false,
+                "cc": [1, 2, 3, 4, 5, 6, 7]
+              },
+              "revision": 1
+            },
+            "settled": false
+          },
+          "final": {
+            "desired": {
+              "attributes": {
+                "icrnl": true,
+                "opost": true,
+                "onlcr": true,
+                "icanon": true,
+                "echo": false,
+                "isig": true,
+                "cc": [1, 2, 3, 4, 5, 6, 7]
+              },
+              "revision": 3
+            },
+            "observed": {
+              "attributes": {
+                "icrnl": true,
+                "opost": true,
+                "onlcr": true,
+                "icanon": true,
+                "echo": false,
+                "isig": true,
+                "cc": [1, 2, 3, 4, 5, 6, 7]
+              },
+              "revision": 3
+            },
+            "settled": true
+          },
+          "process": {
+            "id": "terminal-attributes",
+            "status": "exited",
+            "sourceHash": "631b044078fbac8a03ddea47e5b1ef2185f919c6289a76ec7112a84ab6c8b3b0",
+            "language": "wasm",
+            "startedAt": 1792159310489,
+            "finishedAt": 1792159311185,
+            "output": {
+              "stdout": "attributes-ready\r\nraw-ok\nguest-changed\nconfigured-again\neof-ready\nterminal-done\r\n",
+              "stderr": "",
+              "result": null,
+              "exitCode": 0
+            }
+          },
+          "staleRevision": 409,
+          "foreignSandbox": 401
+        }
+      }
+    }
+  },
+  "limits": [
+    "The default and digest-pinned public sh remain the original Rivet artifact; the published Boxes shell candidate is not yet selected by consumers.",
+    "Strict POSIX empty-environment preservation and general C libc cwd synchronization remain open.",
+    "The new package has local binding proof; this record does not establish its remote execution, interactive recovery or production performance.",
+    "Existing full-suite timeout flakiness occurred locally and in an earlier CI run; this successful local run does not prove its cause or elimination."
+  ]
+}
