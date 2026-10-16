@@ -551,8 +551,10 @@ mod tests {
         assert_eq!(output["stdout"], "two\n");
         assert_eq!(output["result"], 41);
         assert_eq!(output["exitCode"], 0);
-        assert!(guest.begin_program(&second, 1000).is_err());
-        assert_eq!(completed(&mut guest), output);
+        guest.begin_program(&second, 1000).unwrap();
+        let repeated = completed(&mut guest);
+        assert_eq!(repeated["stdout"], "two\n");
+        assert_eq!(repeated["result"], 42);
         let third = retained_program(
             "/three.js",
             "export default () => globalThis.bump()",
@@ -561,7 +563,117 @@ mod tests {
         guest.begin_program(&third, 1000).unwrap();
         let output = completed(&mut guest);
         assert_eq!(output["stdout"], "three\n");
-        assert_eq!(output["result"], 42);
+        assert_eq!(output["result"], 43);
+    }
+
+    #[test]
+    fn repeated_entry_keeps_its_logical_filename_and_url() {
+        let path = "/tmp/café #one.mjs";
+        let program = retained_program(
+            path,
+            "export default () => { globalThis.calls = (globalThis.calls || 0) + 1; return {calls:globalThis.calls,filename:import.meta.filename,url:import.meta.url}; }",
+            "one",
+        );
+        let mut guest = Guest::create(&program, 8_388_608, 1000, 4096).unwrap();
+        for expected in 1..=3 {
+            if expected > 1 {
+                guest.begin_program(&program, 1000).unwrap();
+            }
+            let output = completed(&mut guest);
+            assert_eq!(output["result"]["calls"], expected);
+            assert_eq!(output["result"]["filename"], path);
+            assert_eq!(
+                output["result"]["url"],
+                "file:///tmp/caf%C3%A9%20%23one.mjs"
+            );
+        }
+        let captured: serde_json::Value =
+            serde_json::from_str(&guest.registry.borrow().program().unwrap()).unwrap();
+        assert_ne!(captured["entry"], path);
+        assert_eq!(captured["modules"][2]["filePath"], path);
+        assert_eq!(captured["modules"].as_array().unwrap().len(), 3);
+    }
+
+    #[test]
+    fn repeated_entry_uses_new_source_and_preserves_old_dynamic_import_closures() {
+        let path = "/tmp/main.mjs";
+        let first = retained_program(
+            path,
+            "export default async () => { globalThis.oldImport = () => import.meta.__cirroImport('/tmp/main.mjs','./dep.js'); return (await globalThis.oldImport()).value; }",
+            "one",
+        );
+        let mut guest = Guest::create(&first, 8_388_608, 1000, 4096).unwrap();
+        let request: serde_json::Value = serde_json::from_str(&guest.advance().unwrap()).unwrap();
+        assert_eq!(request["kind"], "module");
+        assert_eq!(request["base"], path);
+        guest.settle_module(&serde_json::json!({"entry":"/tmp/dep-one.js","modules":[{"name":"/tmp/dep-one.js","source":"export const value=1;","imports":[]}]}).to_string()).unwrap();
+        assert_eq!(completed(&mut guest)["result"], 1);
+        let second = retained_program(
+            path,
+            "export default async () => (await import.meta.__cirroImport('/tmp/main.mjs','./dep.js')).value;",
+            "two",
+        );
+        guest.begin_program(&second, 1000).unwrap();
+        let request: serde_json::Value = serde_json::from_str(&guest.advance().unwrap()).unwrap();
+        assert_eq!(request["kind"], "module");
+        assert_ne!(request["base"], path);
+        assert_eq!(
+            request["base"]
+                .as_str()
+                .unwrap()
+                .rsplit_once('/')
+                .unwrap()
+                .0,
+            "/tmp"
+        );
+        guest.settle_module(&serde_json::json!({"entry":"/tmp/dep-two.js","modules":[{"name":"/tmp/dep-two.js","source":"export const value=2;","imports":[]}]}).to_string()).unwrap();
+        assert_eq!(completed(&mut guest)["result"], 2);
+        let third = retained_program(
+            path,
+            "export default async () => (await globalThis.oldImport()).value;",
+            "three",
+        );
+        guest.begin_program(&third, 1000).unwrap();
+        assert_eq!(completed(&mut guest)["result"], 1);
+    }
+
+    #[test]
+    fn repeated_entry_keeps_static_and_dynamic_canonical_imports_on_the_same_cached_module() {
+        let first = retained_program(
+            "/self.mjs",
+            "export const value=1; export default () => value;",
+            "one",
+        );
+        let mut guest = Guest::create(&first, 8_388_608, 1000, 4096).unwrap();
+        assert_eq!(completed(&mut guest)["result"], 1);
+        let second = serde_json::json!({"env":{},"language":"javascript","entry":"/self.mjs","mode":"function","modules":[{"name":"/self.mjs","source":"import {value as before} from './self.mjs'; export const value=2; export default async () => ({static:before,dynamic:(await import.meta.__cirroImport('/self.mjs','./self.mjs')).value,local:value});","imports":[{"specifier":"./self.mjs","target":"/self.mjs"}]}]}).to_string();
+        guest.begin_program(&second, 1000).unwrap();
+        assert_eq!(
+            completed(&mut guest)["result"],
+            serde_json::json!({"static":1,"dynamic":1,"local":2})
+        );
+    }
+
+    #[test]
+    fn repeated_maximum_filename_does_not_truncate_its_identity_or_metadata() {
+        let path = format!("/{}", "a".repeat(4095));
+        let program = retained_program(
+            &path,
+            "export default () => import.meta.filename.length;",
+            "one",
+        );
+        let mut guest = Guest::create(&program, 8_388_608, 1000, 4096).unwrap();
+        assert_eq!(completed(&mut guest)["result"], 4096);
+        guest.begin_program(&program, 1000).unwrap();
+        assert_eq!(completed(&mut guest)["result"], 4096);
+        assert!(
+            guest
+                .registry
+                .borrow()
+                .program()
+                .unwrap()
+                .contains("#boxes-entry-")
+        );
     }
 
     #[test]
@@ -628,20 +740,20 @@ mod tests {
             Guest::create(&bundle("/one.js", dependency), 8_388_608, 1000, 4096).unwrap();
         assert_eq!(completed(&mut guest)["result"], 1);
         guest
-            .begin_program(&bundle("/two.js", dependency), 1000)
+            .begin_program(&bundle("/one.js", dependency), 1000)
             .unwrap();
         assert_eq!(completed(&mut guest)["result"], 2);
         assert!(
             guest
                 .begin_program(
-                    &bundle("/three.js", "export const increment = () => 100;"),
+                    &bundle("/one.js", "export const increment = () => 100;"),
                     1000
                 )
                 .is_err()
         );
         assert_eq!(completed(&mut guest)["result"], 2);
         guest
-            .begin_program(&bundle("/three.js", dependency), 1000)
+            .begin_program(&bundle("/one.js", dependency), 1000)
             .unwrap();
         assert_eq!(completed(&mut guest)["result"], 3);
     }

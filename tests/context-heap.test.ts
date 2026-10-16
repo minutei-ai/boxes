@@ -252,11 +252,11 @@ test(
             program: {
               language: "javascript",
               env: { ROUND: "first" },
-              entry: "/first.js",
+              entry: "/tmp/repeated.js",
               mode: "function",
               modules: [
                 {
-                  name: "/first.js",
+                  name: "/tmp/repeated.js",
                   imports: [],
                   source:
                     "export default async ({tools,console}) => { console.log(process.env.ROUND); let value = 40; globalThis.next = () => { console.log('closure'); return ++value; }; const reply = await tools.call({op:'host.call',name:'echo',input:2}); return globalThis.next() + reply; }",
@@ -278,14 +278,14 @@ test(
             program: {
               language: "javascript",
               env: { ROUND: "second" },
-              entry: "/second.js",
+              entry: "/tmp/repeated.js",
               mode: "function",
               modules: [
                 {
-                  name: "/second.js",
+                  name: "/tmp/repeated.js",
                   imports: [],
                   source:
-                    "export default ({console}) => { console.log(process.env.ROUND); return globalThis.next(); }",
+                    "export default ({console}) => { console.log(process.env.ROUND); return {answer:globalThis.next(),round:'second',filename:import.meta.filename,url:import.meta.url}; }",
                 },
               ],
             },
@@ -301,7 +301,12 @@ test(
           expect(second.output).toEqual({
             stdout: "second\nclosure\n",
             stderr: "",
-            result: 42,
+            result: {
+              answer: 42,
+              round: "second",
+              filename: "/tmp/repeated.js",
+              url: "file:///tmp/repeated.js",
+            },
             exitCode: 0,
           });
           expect(second.hash).not.toBe(saved.hash);
@@ -318,14 +323,14 @@ test(
             program: {
               language: "javascript",
               env: { ROUND: "third" },
-              entry: "/third.js",
+              entry: "/tmp/repeated.js",
               mode: "function",
               modules: [
                 {
-                  name: "/third.js",
+                  name: "/tmp/repeated.js",
                   imports: [],
                   source:
-                    "export default ({console}) => { console.log(process.env.ROUND); return globalThis.next(); }",
+                    "export default ({console}) => { console.log(process.env.ROUND); return {answer:globalThis.next(),round:'third',filename:import.meta.filename,url:import.meta.url}; }",
                 },
               ],
             },
@@ -335,7 +340,12 @@ test(
           expect(third.output).toEqual({
             stdout: "third\nclosure\n",
             stderr: "",
-            result: 43,
+            result: {
+              answer: 43,
+              round: "third",
+              filename: "/tmp/repeated.js",
+              url: "file:///tmp/repeated.js",
+            },
             exitCode: 0,
           });
           expect(third.hash).not.toBe(second.hash);

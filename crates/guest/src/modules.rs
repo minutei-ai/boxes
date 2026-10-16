@@ -38,6 +38,8 @@ impl Mode {
 #[serde(deny_unknown_fields)]
 pub(crate) struct Source {
     name: String,
+    #[serde(default, skip_serializing_if = "Option::is_none", rename = "filePath")]
+    file_path: Option<String>,
     source: String,
     imports: Vec<Import>,
 }
@@ -65,8 +67,11 @@ pub(crate) struct Registry {
 }
 
 fn validate(source: &Source, names: &BTreeSet<&str>) -> std::result::Result<(), String> {
+    let file_path = source.file_path.as_deref().unwrap_or(&source.name);
     if !source.name.starts_with('/')
-        || source.name.len() > 4096
+        || source.name.len() > 8192
+        || !file_path.starts_with('/')
+        || file_path.len() > 4096
         || source.source.len() > 1_048_576
         || source.imports.len() > 128
     {
@@ -155,15 +160,43 @@ impl Registry {
     }
 
     pub(crate) fn begin(&mut self, program: Program) -> std::result::Result<(), String> {
-        let incoming = Self::new(program)?;
+        let mut incoming = Self::new(program)?;
+        let mut revision = self
+            .revision
+            .checked_add(1)
+            .ok_or("Module revision exhausted")?;
         if self.indices.contains_key(&incoming.program.entry) {
-            return Err("A retained execution requires a new entry module identity".into());
+            let original = incoming.program.entry.clone();
+            let mut identity = format!("{original}#boxes-entry-{revision}");
+            for _ in 0..=self.indices.len() + incoming.indices.len() {
+                if !self.indices.contains_key(&identity)
+                    && !incoming.indices.contains_key(&identity)
+                {
+                    break;
+                }
+                revision = revision.checked_add(1).ok_or("Module revision exhausted")?;
+                identity = format!("{original}#boxes-entry-{revision}");
+            }
+            if self.indices.contains_key(&identity) || incoming.indices.contains_key(&identity) {
+                return Err("Entry identity collision budget exceeded".into());
+            }
+            let index = *incoming
+                .indices
+                .get(&original)
+                .ok_or("Missing entry module")?;
+            let entry = &mut incoming.program.modules[index];
+            if entry.file_path.is_none() {
+                entry.file_path = Some(original.clone());
+            }
+            entry.name = identity.clone();
+            incoming.program.entry = identity;
         }
         let mut modules = self.program.modules.clone();
         for source in incoming.program.modules {
             if let Some(index) = self.indices.get(&source.name) {
                 let cached = &self.program.modules[*index];
                 if cached.source != source.source
+                    || cached.file_path != source.file_path
                     || source
                         .imports
                         .iter()
@@ -184,10 +217,7 @@ impl Registry {
             mode: incoming.program.mode,
             modules,
         })?;
-        updated.revision = self
-            .revision
-            .checked_add(1)
-            .ok_or("Module revision exhausted")?;
+        updated.revision = revision;
         *self = updated;
         Ok(())
     }
@@ -306,19 +336,23 @@ impl Loader for Modules {
                 .indices
                 .get(name)
                 .ok_or_else(|| Error::new_loading(name))?;
-            registry.program.modules[*index].source.clone()
+            registry.program.modules[*index].clone()
         };
-        let module = Module::declare(ctx.clone(), name, source)?;
+        let file_path = source.file_path.as_deref().unwrap_or(&source.name);
+        let module = Module::declare(ctx.clone(), name, source.source.as_bytes())?;
         let meta = module.meta()?;
         let mut url = url::Url::parse("file:///").map_err(|_| Error::new_loading(name))?;
         url.path_segments_mut()
             .map_err(|_| Error::new_loading(name))?
             .clear()
-            .extend(name.split('/').skip(1));
+            .extend(file_path.split('/').skip(1));
         meta.set("url", url.as_str())?;
-        meta.set("filename", name)?;
+        meta.set("filename", file_path)?;
         let helper: Function = ctx.globals().get("__cirroImport")?;
-        meta.set("__cirroImport", helper)?;
+        let bind: Function = ctx
+            .eval("(helper,base)=>(_ignored,specifier,options)=>helper(base,specifier,options)")?;
+        let bound: Function = bind.call((helper, name))?;
+        meta.set("__cirroImport", bound)?;
         Ok(module)
     }
 }
@@ -330,6 +364,7 @@ mod tests {
     fn source(name: &str) -> Source {
         Source {
             name: name.to_string(),
+            file_path: None,
             source: "export const value=42;".into(),
             imports: vec![],
         }
@@ -377,6 +412,24 @@ mod tests {
     }
 
     #[test]
+    fn repeated_entry_skips_user_module_identity_collisions_without_replacing_them() {
+        let mut registry = Registry::new(Program {
+            env: BTreeMap::new(),
+            language: "javascript".into(),
+            entry: "/main.mjs".into(),
+            mode: Mode::Module,
+            modules: vec![source("/main.mjs"), source("/main.mjs#boxes-entry-1")],
+        })
+        .unwrap();
+        let before: Program = serde_json::from_str(&registry.program().unwrap()).unwrap();
+        registry.begin(before).unwrap();
+        assert_eq!(registry.program.entry, "/main.mjs#boxes-entry-2");
+        assert_eq!(registry.revision, 2);
+        assert_eq!(registry.names().len(), 3);
+        assert!(registry.indices.contains_key("/main.mjs#boxes-entry-1"));
+    }
+
+    #[test]
     fn cumulative_module_limit_rejects_without_mutating_the_registry() {
         let modules = (0..128)
             .map(|index| source(&format!("/{index}.mjs")))
@@ -401,6 +454,13 @@ mod tests {
                 )
                 .is_err()
         );
+        let before = registry.program().unwrap();
+        assert!(
+            registry
+                .begin(serde_json::from_str(&before).unwrap())
+                .is_err()
+        );
+        assert_eq!(registry.program().unwrap(), before);
         assert_eq!(registry.revision, 0);
         assert_eq!(registry.names().len(), 128);
     }

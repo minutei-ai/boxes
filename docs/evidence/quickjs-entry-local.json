@@ -1,0 +1,65 @@
+{
+  "status": "Unreleased native QuickJS repeated-entry support. Public contexts admission, execution integration and durable exclusive ownership remain open. Published SDK/runtime and production remain 0.19.2.",
+  "measuredAt": "2026-10-16T21:27:51.300371+00:00",
+  "baseCommit": "5f0eaac0c7f614e40ae4a154c4c1ab9ca93fb78e",
+  "sourceSha256": {
+    "crates/guest/src/lib.rs": "358da2ae406aa58e3237f2730456eb9c97c0a27f47f3f4e9e3c18bf449ec36c3",
+    "crates/guest/src/modules.rs": "6e33eeaae8c7c58a79a23d009605c6e4a484bbab6a8123eb2ac23fe64ff76600",
+    "src/contracts.ts": "6feba30ded4afc52a1a6f773740170215c6349e0e54194178dd8963c8ffec353",
+    "tests/context-heap.test.ts": "7f6f82efb47b86a3d40227e061828f2d238a9e2eee9bfb7aeb29cd037dac7998"
+  },
+  "nativeRuntime": {
+    "sha256": "a9ea68539c0c079f418fa25a6fa496116fcd4c8bb830ac3321dbe8f355fb41c5"
+  },
+  "behavior": {
+    "entry": "Reusing a known logical entry path creates a fresh native ESM identity and executes its newly supplied source. Generation is bounded, checked for overflow and skips identities occupied by user modules.",
+    "metadata": "The original logical filePath supplies import.meta.filename and URL-encoded import.meta.url. Native identities may be up to 8 KiB so a 4 KiB filename is not truncated by the private generation suffix. Filesystem input paths retain their 4 KiB bound.",
+    "imports": "Canonical imported modules retain identity and state. Static and dynamic imports of the same canonical path use the same cached module, including a canonical import of a previously executed entry.",
+    "retainedFunctions": "Each module metadata helper closes over its owning native identity. A function retained from an earlier entry keeps that entry import cache, even when a new execution reuses the logical filename.",
+    "compiler": "The compiled dynamic-import calling convention is unchanged. The owning loader binds the native identity while accepting the existing compiled base argument. Ordinary canonical-module records retain their existing encoding; generated retained entries carry their logical filePath in the owning Program Schema.",
+    "sourceCapture": "ModuleSource owns optional logical filePath metadata for a generated entry identity. Ordinary canonical modules use their own name and omit that field. Captured source graphs retain generated identities and logical metadata, with the same total 128-module and 8 MiB bounds.",
+    "admission": "Changed non-entry cached module sources and non-quiescent execution remain rejected. Failed graph validation leaves the prior registry and output intact."
+  },
+  "checks": [
+    {
+      "command": "Initial cargo test -p cirro-guest",
+      "exitCode": 101,
+      "result": "12 passed and one obsolete assertion failed: it required reused entry rejection. The test now requires successful same-entry reexecution with fresh output and the incremented retained closure."
+    },
+    {
+      "command": "cargo test -p cirro-guest",
+      "exitCode": 0,
+      "result": "18 tests passed, 0 failed in 0.03 seconds. Covers repeated source/filename/URL, Unicode and reserved characters, retained dynamic-import closures, canonical static/dynamic cache equality, 4 KiB filename, collision avoidance and transactional graph-budget rejection."
+    },
+    {
+      "command": "TMPDIR=<writable-scratch> bun run check",
+      "exitCode": 0,
+      "result": "Build, SDK build, TypeScript, Clippy with warnings denied, all workspace Rust tests and native Alchemy workerd tests passed. Bun: 417 pass, 0 fail, 5987 assertions across 92 files in 238.78 seconds."
+    },
+    {
+      "command": "bun run format:check",
+      "exitCode": 0,
+      "result": "Oxfmt, cargo fmt and Rust fixture formatting passed."
+    }
+  ],
+  "replacementProof": {
+    "transport": "Native Alchemy workerd and real R2 pages; each previous Worker is fully closed before replacement.",
+    "logicalPath": "/tmp/repeated.js",
+    "worker1": "Retains a lexical variable and a closure, then parks on an echo callback.",
+    "worker2": "Completes the first operation with result 43, then executes new source at the same logical path. The retained closure returns 42; output contains only second/closure and metadata remains file:///tmp/repeated.js.",
+    "worker3": "Restores the second paged heap and executes another new source at the same path. The retained closure returns 43, the explicit round marker is third and filename/URL remain unchanged.",
+    "persistence": "Pages are content addressed, validated before native adoption and uploaded only for newly encountered hashes. Native R2 calls and inventories are checked by the fixture."
+  },
+  "limits": [
+    "This is native local proof; no new release, deployment or production context API is claimed.",
+    "Full Node/package resolution, execution options and retained Python globals remain open.",
+    "Public context lifecycle operations, scoped authority, exclusive ownership and interrupted-operation settlement remain open.",
+    "Runtime heaps require an exact binary digest; cross-build heap migration remains unsupported.",
+    "No production latency, throughput, billing or total-parity claim follows from these tests."
+  ],
+  "parentCI": {
+    "commit": "5f0eaac0c7f614e40ae4a154c4c1ab9ca93fb78e",
+    "run": "https://github.com/minutei-ai/boxes/actions/runs/38968201310",
+    "conclusion": "success"
+  }
+}

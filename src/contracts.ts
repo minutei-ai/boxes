@@ -562,22 +562,24 @@ export const ModuleImports = Schema.Array(Schema.String.check(Schema.isMaxLength
   Schema.isMaxLength(128),
 );
 export const ModuleCompilation = Schema.Struct({ source: ScriptSource, imports: ModuleImports });
+export const ModuleIdentity = Schema.String.check(Schema.isMinLength(1), Schema.isMaxLength(8192));
 export const ModuleRequest = Schema.Struct({
-  base: Path,
+  base: ModuleIdentity,
   specifier: Path,
-  known: Schema.Array(Path).check(Schema.isMaxLength(128)),
+  known: Schema.Array(ModuleIdentity).check(Schema.isMaxLength(128)),
 });
 export const ModuleSource = Schema.Struct({
-  name: Path,
+  name: ModuleIdentity,
+  filePath: Schema.optionalKey(Path),
   source: ScriptSource,
-  imports: Schema.Array(Schema.Struct({ specifier: Path, target: Path })).check(
+  imports: Schema.Array(Schema.Struct({ specifier: Path, target: ModuleIdentity })).check(
     Schema.isMaxLength(128),
   ),
 });
 export const ScriptProgram = Schema.Struct({
   env: Environment,
   language: Schema.Literals(["javascript", "typescript"]),
-  entry: Path,
+  entry: ModuleIdentity,
   mode: Schema.Literals(["function", "module", "evaluate"]),
   modules: Schema.Array(ModuleSource).check(Schema.isMinLength(1), Schema.isMaxLength(128)),
 });
