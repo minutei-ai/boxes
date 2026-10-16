@@ -505,7 +505,15 @@ export const wasi = Effect.fn("wasi.execute")(function* (
                         try: () => guest.file_data(fd),
                         catch: (cause) => new WasmFailure({ cause }),
                       });
-                      return { bytes, argv: input.argv };
+                      return yield* loadExecutable(
+                        env,
+                        capability,
+                        kernel,
+                        `/dev/fd/${fd}`,
+                        input.argv,
+                        input.cwd,
+                        Buffer.from(bytes.buffer, bytes.byteOffset, bytes.byteLength),
+                      );
                     }
                     if (input.path === null)
                       return yield* new Fault({

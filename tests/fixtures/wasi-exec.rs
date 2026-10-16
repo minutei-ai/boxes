@@ -63,6 +63,15 @@ unsafe extern "C" {
 unsafe extern "C" {
     fn proc_exit(code: u32);
     fn fd_close(fd: u32) -> u32;
+    fn path_unlink_file(fd: u32, path: *const u8, length: u32) -> u32;
+    fn path_rename(
+        fd: u32,
+        path: *const u8,
+        length: u32,
+        target_fd: u32,
+        target: *const u8,
+        target_length: u32,
+    ) -> u32;
     fn path_open(
         fd: u32,
         lookup: u32,
@@ -245,7 +254,11 @@ pub extern "C" fn run() -> i32 {
             }
             if *argv[1] == b'f' {
                 let mut offset = 0;
-                if fd_seek(12, 0, 1, &mut offset) != 0 || offset != 2 {
+                if *argv[1].add(1) == b'd' {
+                    if fd_seek(12, 0, 1, &mut offset) != 8 {
+                        return 30;
+                    }
+                } else if fd_seek(12, 0, 1, &mut offset) != 0 || offset != 2 {
                     return 30;
                 }
             }
@@ -328,7 +341,15 @@ pub extern "C" fn run() -> i32 {
                 b"kept\0loop0\0".as_slice()
             } else if cfg!(case = "children") {
                 b"kept\0children\0".as_slice()
-            } else if cfg!(case = "fexec") {
+            } else if cfg!(any(case = "fexec-cloexec", case = "fexec-closed")) {
+                b"kept\0fd-closed\0".as_slice()
+            } else if cfg!(any(
+                case = "fexec",
+                case = "fexec-unlink",
+                case = "fexec-rename",
+                case = "fexec-cloexec",
+                case = "fexec-closed"
+            )) {
                 b"kept\0fexec\0".as_slice()
             } else if cfg!(case = "signal") {
                 b"kept\0signal\0".as_slice()
@@ -352,7 +373,13 @@ pub extern "C" fn run() -> i32 {
             } else {
                 b"/tmp/next.wasm".as_slice()
             };
-            let status = if cfg!(case = "fexec") {
+            let status = if cfg!(any(
+                case = "fexec",
+                case = "fexec-unlink",
+                case = "fexec-rename",
+                case = "fexec-cloexec",
+                case = "fexec-closed"
+            )) {
                 let path = b"tmp/next.wasm";
                 let mut executable = 0;
                 if path_open(
@@ -361,7 +388,7 @@ pub extern "C" fn run() -> i32 {
                     path.as_ptr(),
                     path.len() as u32,
                     0,
-                    38,
+                    2 | 4 | 32 | (1 << 21),
                     0,
                     0,
                     &mut executable,
@@ -370,10 +397,94 @@ pub extern "C" fn run() -> i32 {
                 {
                     return 24;
                 }
+                if cfg!(case = "fexec-unlink")
+                    && path_unlink_file(3, path.as_ptr(), path.len() as u32) != 0
+                {
+                    return 42;
+                }
+                if cfg!(case = "fexec-rename") {
+                    let target = b"tmp/renamed-script";
+                    if path_rename(
+                        3,
+                        path.as_ptr(),
+                        path.len() as u32,
+                        3,
+                        target.as_ptr(),
+                        target.len() as u32,
+                    ) != 0
+                    {
+                        return 43;
+                    }
+                }
+                if cfg!(case = "fexec-cloexec") && fd_setfd(12, 1) != 0 {
+                    return 44;
+                }
                 let mut offset = 0;
                 if fd_seek(12, 2, 0, &mut offset) != 0 {
                     return 25;
                 }
+                let alias = b"dev/fd/12";
+                let mut opened = 0;
+                if path_open(
+                    3,
+                    1,
+                    alias.as_ptr(),
+                    alias.len() as u32,
+                    0,
+                    2,
+                    0,
+                    0,
+                    &mut opened,
+                ) != 0
+                    || !matches!(read(opened), Ok(0 | b'#'))
+                    || fd_close(opened) != 0
+                    || fd_seek(12, 0, 1, &mut offset) != 0
+                    || offset != 2
+                {
+                    return 45;
+                }
+                for (follow, flags, rights, errno) in [
+                    (0, 0, 2, 32),
+                    (1, 1, 2, 58),
+                    (1, 0, 64, 58),
+                    (1, 0, 1 << 22, 76),
+                ] {
+                    if path_open(
+                        3,
+                        follow,
+                        alias.as_ptr(),
+                        alias.len() as u32,
+                        flags,
+                        rights,
+                        0,
+                        0,
+                        &mut opened,
+                    ) != errno
+                    {
+                        return 46;
+                    }
+                }
+                let missing = b"dev/fd/91";
+                if path_open(
+                    3,
+                    1,
+                    missing.as_ptr(),
+                    missing.len() as u32,
+                    0,
+                    2,
+                    0,
+                    0,
+                    &mut opened,
+                ) != 44
+                {
+                    return 47;
+                }
+                let script_closed = [5u32, 12];
+                let closed = if cfg!(case = "fexec-closed") {
+                    script_closed.as_slice()
+                } else {
+                    closed.as_slice()
+                };
                 proc_fexec(
                     12,
                     argv.as_ptr(),
@@ -381,7 +492,7 @@ pub extern "C" fn run() -> i32 {
                     env.as_ptr(),
                     env.len() as u32,
                     closed.as_ptr(),
-                    1,
+                    closed.len() as u32,
                 )
             } else if cfg!(case = "badfd") {
                 proc_fexec(
@@ -411,6 +522,12 @@ pub extern "C" fn run() -> i32 {
             let mut flags = 0;
             if read(5) != Ok(b'B') || fd_getfd(6, &mut flags) != 0 || flags != 1 {
                 return 26;
+            }
+            if cfg!(case = "fexec-cloexec") && (fd_getfd(12, &mut flags) != 0 || flags != 1) {
+                return 48;
+            }
+            if cfg!(case = "fexec-closed") && (fd_getfd(12, &mut flags) != 0 || flags != 0) {
+                return 49;
             }
             status as i32
         }

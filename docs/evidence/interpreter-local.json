@@ -1,5 +1,5 @@
 {
-  "status": "Source implementation validated locally; not included in the published 0.10.1 archives or current production Worker.",
+  "status": "Local evidence for the initial interpreter implementation, subsequently included in the published and deployed experimental SDK/runtime 0.11.0.",
   "baseCommit": "f05a477cb1a104c21ce4576cfc68eba9dc773b39",
   "change": "Host process.execFile, built-in shell dispatch and WASI path exec/spawn share the bounded executable loader. Rust owns header parsing and process replacement/child state; Effect owns R2 loading and permission/argument checks. Binary argv is preserved unchanged; shebang argv inserts the interpreter, optional argument and script path. Native spawn rejects malformed images with WASI ENOEXEC (45).",
   "nativeProof": {
@@ -62,5 +62,6 @@
   "receiptReadResolution": {
     "status": "Resolved in the native fixture resource owner; R2 inspection now executes inside the Worker owning the bucket.",
     "evidence": "native-r2-owner-local.json"
-  }
+  },
+  "deliveryEvidence": "docs/evidence/sdk-0.11.0-delivery.json"
 }

@@ -712,6 +712,17 @@ fn buffered_bytes(state: &State) -> usize {
         .sum()
 }
 
+fn descriptor_alias(path: &str) -> Result<Option<u32>, Failure> {
+    let Some(number) = path.strip_prefix("/dev/fd/") else {
+        return Ok(None);
+    };
+    let fd = number.parse::<u32>().map_err(|_| Failure::Errno(44))?;
+    if fd.to_string() != number {
+        return Err(Failure::Errno(44));
+    }
+    Ok(Some(fd))
+}
+
 fn descriptor_path(state: &State, descriptor: &Descriptor) -> Result<Option<String>, Failure> {
     if let Some(cache) = descriptor.cache {
         return Ok(state
@@ -1212,12 +1223,23 @@ fn dispatch(caller: &mut Caller<'_, State>, name: &str, args: &[u64]) -> Result<
                 return Err(Failure::Errno(28));
             }
             let list = bytes(caller, a[5 + shift], a[6 + shift] * 4)?;
-            let closed = list
+            let closed: BTreeSet<u32> = list
                 .as_chunks::<4>()
                 .0
                 .iter()
                 .map(|part| u32::from_le_bytes(*part))
                 .collect();
+            if let Some(fd) = fd {
+                let state = caller.data();
+                let descriptor = state.descriptors.get(&fd).ok_or(Failure::Errno(8))?;
+                let cache = descriptor.cache.ok_or(Failure::Errno(8))?;
+                let file = state.files.get(&cache).ok_or(Failure::Errno(8))?.borrow();
+                if file.bytes.starts_with(b"#!")
+                    && (state.cloexec.contains(&fd) || closed.contains(&fd))
+                {
+                    return Err(Failure::Errno(44));
+                }
+            }
             suspend(
                 caller,
                 Request::Exec {
@@ -2549,6 +2571,26 @@ fn dispatch(caller: &mut Caller<'_, State>, name: &str, args: &[u64]) -> Result<
                 return Err(Failure::Errno(28));
             }
             let (path, base) = directory_path(caller, a[0] as u32, a[2], a[3], 1 << 18)?;
+            if let Some(fd) = descriptor_alias(&path)? {
+                if a[1] & 1 == 0 {
+                    return Err(Failure::Errno(58));
+                }
+                let descriptor = caller
+                    .data()
+                    .descriptors
+                    .get(&fd)
+                    .ok_or(Failure::Errno(44))?;
+                let cache = descriptor.cache.ok_or(Failure::Errno(58))?;
+                let metadata = caller
+                    .data()
+                    .files
+                    .get(&cache)
+                    .ok_or(Failure::Errno(8))?
+                    .borrow()
+                    .metadata;
+                put(caller, a[4], &metadata[..64])?;
+                return Ok(0);
+            }
             suspend(
                 caller,
                 Request::PathStat {
@@ -2840,6 +2882,39 @@ fn dispatch(caller: &mut Caller<'_, State>, name: &str, args: &[u64]) -> Result<
             let raw = bytes(caller, a[2], a[3])?;
             let raw = std::str::from_utf8(&raw).map_err(|_| Failure::Errno(25))?;
             let path = confined(&base, raw)?;
+            if let Some(fd) = descriptor_alias(&path)? {
+                if a[1] & 1 == 0 {
+                    return Err(Failure::Errno(32));
+                }
+                if a[4] != 0 || args[5] & 64 != 0 || args[6] != 0 || a[7] != 0 {
+                    return Err(Failure::Errno(58));
+                }
+                let source = caller
+                    .data()
+                    .descriptors
+                    .get(&fd)
+                    .ok_or(Failure::Errno(44))?;
+                if source.directory || source.cache.is_none() {
+                    return Err(Failure::Errno(58));
+                }
+                if args[5] & !source.rights != 0 || !source.read {
+                    return Err(Failure::Errno(76));
+                }
+                let descriptor = Descriptor {
+                    rights: args[5],
+                    inheriting: 0,
+                    write: false,
+                    flags: Rc::new(Cell::new(0)),
+                    offset: Rc::new(Cell::new(0)),
+                    ..source.clone()
+                };
+                let next = (4..MAX_FILES as u32 + 4)
+                    .find(|candidate| !caller.data().descriptors.contains_key(candidate))
+                    .ok_or(Failure::Errno(33))?;
+                caller.data_mut().descriptors.insert(next, descriptor);
+                put(caller, a[8], &next.to_le_bytes())?;
+                return Ok(0);
+            }
             let read = args[5] & 2 != 0;
             let write = args[5] & 64 != 0;
             let directory = a[4] & 2 != 0;

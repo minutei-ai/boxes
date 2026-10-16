@@ -1,0 +1,52 @@
+{
+  "status": "Source implementation verified locally; not included in the published SDK/runtime 0.11.0 or deployed Worker.",
+  "baseCommit": "a76b62063eccfc7ef7f7228a1c0f9397dec2e2ce",
+  "change": "Native WASI fexec dispatch resolves shebang scripts through the same bounded loader as path exec. Rust owns process-local regular-file aliases, descriptor rights, independent offsets and close-on-exec admission. Effect reads the original executable descriptor bytes and loads bounded interpreters; the descriptor buffer view avoids a second host-side byte copy.",
+  "cases": [
+    "Real published sh reads the inherited /dev/fd/12 script, preserves arguments and environment, and commits its file effect.",
+    "Open script remains executable after its original pathname is renamed or unlinked.",
+    "Alias reads start at offset zero without changing the original offset of two.",
+    "Alias write, create and no-follow opens fail; rights cannot exceed those on the original descriptor; absent descriptor numbers return ENOENT.",
+    "CLOEXEC and explicit-close script descriptors fail ENOENT before replacement; the old frame and existing shared data offset and CLOEXEC flags survive.",
+    "Existing binary fexec, native path exec, start traps, signals, pending children and bounded interpreter behavior remain covered."
+  ],
+  "owners": {
+    "rust": "crates/wasi/src/lib.rs",
+    "loader": "src/executable.ts",
+    "transport": "src/wasi.ts",
+    "nativeFixture": "tests/fixtures/wasi-exec.rs",
+    "publishedInterpreterTest": "tests/published-shell.test.ts",
+    "binaryAndFailureTest": "tests/exec.test.ts"
+  },
+  "semanticsReference": "https://www.man7.org/linux/man-pages/man3/fexecve.3.html",
+  "limits": [
+    "Only regular-file, read-only descriptor aliases and followed metadata are supported; no devfs mount, directory or pipe alias support.",
+    "Direct libc cd/exec synchronization, other interpreter runtimes, PTY and remaining AgentOS parity gates stay open.",
+    "Production proof and archive distribution for this source increment remain pending. The published 0.11.0 artifacts are unchanged.",
+    "Native test timings do not establish production latency, throughput or cost."
+  ],
+  "verification": {
+    "fullNativeCheck": {
+      "command": "bun run check",
+      "tests": 352,
+      "files": 65,
+      "assertions": 4798,
+      "seconds": 155.54,
+      "failures": 0,
+      "includes": [
+        "build",
+        "SDK build",
+        "TypeScript",
+        "Cargo Clippy",
+        "Cargo tests",
+        "native workerd suite"
+      ]
+    },
+    "format": "bun run format:check passed.",
+    "binaryCloseOnExec": "Both CLOEXEC and explicit-close binary fexec cases pass, with the source descriptor absent in the replacement image. Script cases return ENOENT and preserve the original source descriptor and its flags."
+  },
+  "runtimeAssetsSha256": {
+    "index.js": "f7e9c9ea3ff28c52e04c715f512c64784161b8f5a595d75db6a2041b2e98c43a",
+    "cirro_wasi_bg.wasm": "719f3bfa9fcaec2a9552f1d17b1fecdaf4a1753edc3f78b628c0791451fd0cff"
+  }
+}

@@ -12,7 +12,14 @@ export const loadExecutable = Effect.fn("executable.load")(function* (
   entry: string,
   argv: typeof WasmConfiguration.Type.argv,
   cwd: string,
+  captured?: Buffer,
 ) {
+  if (captured !== undefined && captured.length > wasmModuleBytes)
+    return yield* new Fault({
+      code: "EFBIG",
+      status: 413,
+      message: "Executable exceeds its module byte limit",
+    });
   const initialPath = yield* kernelCall(() => kernel.canonical(entry, cwd));
   const result = yield* Effect.reduce(
     [0, 1, 2, 3, 4],
@@ -20,22 +27,25 @@ export const loadExecutable = Effect.fn("executable.load")(function* (
     (state, depth) =>
       Effect.gen(function* () {
         if (Option.isSome(state.bytes)) return state;
-        const stat = yield* kernelCall(() => kernel.stat(state.entry, true)).pipe(
-          Effect.flatMap(Schema.decodeUnknownEffect(Schema.fromJsonString(FileStat))),
-        );
-        if (stat.kind !== "file" || (stat.mode & 0o111) === 0)
-          return yield* new Fault({
-            code: "EACCES",
-            status: 403,
-            message: "Executable image is not executable",
-          });
-        if (stat.size > wasmModuleBytes)
-          return yield* new Fault({
-            code: "EFBIG",
-            status: 413,
-            message: "Executable exceeds its module byte limit",
-          });
-        const data = yield* read(env, capability.sandboxId, kernel, state.entry);
+        const data = yield* Effect.gen(function* () {
+          if (depth === 0 && captured !== undefined) return captured;
+          const stat = yield* kernelCall(() => kernel.stat(state.entry, true)).pipe(
+            Effect.flatMap(Schema.decodeUnknownEffect(Schema.fromJsonString(FileStat))),
+          );
+          if (stat.kind !== "file" || (stat.mode & 0o111) === 0)
+            return yield* new Fault({
+              code: "EACCES",
+              status: 403,
+              message: "Executable image is not executable",
+            });
+          if (stat.size > wasmModuleBytes)
+            return yield* new Fault({
+              code: "EFBIG",
+              status: 413,
+              message: "Executable exceeds its module byte limit",
+            });
+          return yield* read(env, capability.sandboxId, kernel, state.entry);
+        });
         if (data.subarray(0, 4).equals(Buffer.from([0, 97, 115, 109])))
           return { ...state, bytes: Option.some(data) };
         if (depth === 4)

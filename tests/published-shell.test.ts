@@ -87,6 +87,53 @@ test(
           );
         }
         yield* client.action(id, {
+          op: "filesystem.writeFile",
+          path: "/tmp/data",
+          content: "ABC",
+          encoding: "utf8",
+        });
+        for (const mode of [
+          "fexec",
+          "fexec-unlink",
+          "fexec-rename",
+          "fexec-cloexec",
+          "fexec-closed",
+        ]) {
+          yield* client.action(id, {
+            op: "filesystem.writeFile",
+            path: "/tmp/next.wasm",
+            content:
+              '#!/opt/cirro/bin/sh\nprintf "%s|%s|%s\\n" "$0" "$1" "$COLOR"; printf descriptor > /tmp/from-descriptor',
+            encoding: "utf8",
+          });
+          yield* client.action(id, { op: "filesystem.chmod", path: "/tmp/next.wasm", mode: 493 });
+          const source = Buffer.from(
+            yield* Effect.promise(() => Bun.file(`dist/wasi-exec-${mode}.wasm`).arrayBuffer()),
+          ).toString("base64");
+          const result = yield* client.action(id, {
+            op: "process.run",
+            id: `script-${mode}`,
+            language: "wasm",
+            source,
+          });
+          expect(result.status).toBe("exited");
+          expect(result.output?.exitCode).toBe(0);
+          expect(result.output?.stderr).toBe("");
+          if (mode === "fexec-cloexec" || mode === "fexec-closed") {
+            expect(result.output?.result).toBe(44);
+            expect(result.output?.stdout).toBe("");
+          } else {
+            expect(result.output?.stdout).toBe("/dev/fd/12|fexec|blue\n");
+            const persisted = yield* client.action(id, {
+              op: "filesystem.readFile",
+              path: "/tmp/from-descriptor",
+            });
+            expect(Buffer.from(persisted.content, persisted.encoding).toString("utf8")).toBe(
+              "descriptor",
+            );
+          }
+        }
+        yield* client.action(id, {
           op: "filesystem.mkdir",
           path: "/tmp/context",
           recursive: false,

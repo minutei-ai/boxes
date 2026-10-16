@@ -629,6 +629,25 @@
         },
         "previousReceiptRetained": true
       }
+    },
+    "deliveryCI": {
+      "url": "https://github.com/minutei-ai/boxes/actions/runs/38831195512",
+      "sourceCommit": "a76b62063eccfc7ef7f7228a1c0f9397dec2e2ce",
+      "conclusion": "success"
+    },
+    "releaseTagCI": {
+      "url": "https://github.com/minutei-ai/boxes/actions/runs/38831149022",
+      "sourceCommit": "fc12361fec3cd63dbb6974a559d7495aa2467965",
+      "conclusion": "failure",
+      "observation": "349 native tests passed; disposal authority assertion received a native HttpClientError TransportError instead of its expected HTTP 401 response on a local workerd request. This run did not establish the underlying socket failure. The separate source and delivery CI runs succeeded; this transport failure is retained as an unresolved intermittent CI observation.",
+      "localRepeat": {
+        "command": "bun test --rerun-each 5 --test-name-pattern 'disposal is durable' tests/dispose.test.ts",
+        "tests": 5,
+        "failures": 0,
+        "assertions": 75,
+        "seconds": 8.04,
+        "limit": "The CI transport failure did not reproduce locally. Passing repetitions do not establish its cause or eliminate intermittency."
+      }
     }
   },
   "limits": [

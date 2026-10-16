@@ -97,6 +97,8 @@ for (const [mode, result, exit, stdout] of [
   ["path", 7, 0, "1B"],
   ["start", 7, 0, "Z1B"],
   ["fexec", 7, 0, "1B"],
+  ["fexec-cloexec", 7, 0, "1B"],
+  ["fexec-closed", 7, 0, "1B"],
   ["child", 0, 0, "2B"],
   ["children", 7, 0, "1B"],
   ["loop", 7, 0, "1B"],
@@ -134,35 +136,42 @@ test("a trapping start belongs to the new image and never resumes the old exec f
 });
 
 test("failed script exec preserves the old frame, shared descriptor offsets and close-on-exec flags", async () => {
-  const source = Buffer.from(
-    await Bun.file(join(import.meta.dir, "../dist/wasi-exec-path.wasm")).arrayBuffer(),
-  ).toString("base64");
-  for (const item of [
-    { id: "script-loop", content: "#!/tmp/next.wasm\n", errno: 32 },
-    { id: "script-missing", content: "#!/tmp/absent-interpreter\n", errno: 44 },
-    { id: "script-empty", content: "#! \t\n", errno: 45 },
-    { id: "script-denied", content: "#!/tmp/data\n", errno: 2 },
-  ]) {
-    expect(
-      (
-        await act({
-          op: "filesystem.writeFile",
-          path: "/tmp/next.wasm",
-          content: item.content,
-          encoding: "utf8",
-        })
-      ).status,
-    ).toBe(200);
-    expect((await act({ op: "filesystem.chmod", path: "/tmp/next.wasm", mode: 493 })).status).toBe(
-      200,
-    );
-    const response = await act({ op: "process.run", id: item.id, language: "wasm", source });
-    expect(response.status).toBe(200);
-    const record = Schema.decodeUnknownSync(RunRecord)(await response.json());
-    expect(record.status).toBe("exited");
-    expect(record.output?.result).toBe(item.errno);
-    expect(record.output?.exitCode).toBe(0);
-    expect(record.output?.stdout).toBe("");
+  for (const mode of ["path", "fexec"]) {
+    const source = Buffer.from(
+      await Bun.file(join(import.meta.dir, `../dist/wasi-exec-${mode}.wasm`)).arrayBuffer(),
+    ).toString("base64");
+    for (const item of [
+      { id: "script-loop", content: "#!/tmp/next.wasm\n", errno: 32 },
+      { id: "script-missing", content: "#!/tmp/absent-interpreter\n", errno: 44 },
+      { id: "script-empty", content: "#! \t\n", errno: 45 },
+      { id: "script-denied", content: "#!/tmp/data\n", errno: 2 },
+    ]) {
+      expect(
+        (
+          await act({
+            op: "filesystem.writeFile",
+            path: "/tmp/next.wasm",
+            content: item.content,
+            encoding: "utf8",
+          })
+        ).status,
+      ).toBe(200);
+      expect(
+        (await act({ op: "filesystem.chmod", path: "/tmp/next.wasm", mode: 493 })).status,
+      ).toBe(200);
+      const response = await act({
+        op: "process.run",
+        id: `${mode}-${item.id}`,
+        language: "wasm",
+        source,
+      });
+      expect(response.status).toBe(200);
+      const record = Schema.decodeUnknownSync(RunRecord)(await response.json());
+      expect(record.status).toBe("exited");
+      expect(record.output?.result).toBe(item.errno);
+      expect(record.output?.exitCode).toBe(0);
+      expect(record.output?.stdout).toBe("");
+    }
   }
   expect(
     (
