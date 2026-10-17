@@ -1,0 +1,2665 @@
+{
+  "status": "published and deployed; production migration, binding and storage proofs passed",
+  "version": "0.24.0",
+  "implementationCommit": "8ab3e17a1072f263bf7e24859f80e93cc9689744",
+  "sourceCommit": "74fac9f87ebf206abb5a3e30f64f9551d341d291",
+  "tag": {
+    "name": "sdk-v0.24.0",
+    "annotatedObject": "945fe0550cc38c89fe56817a0f954bb37600aad7",
+    "target": "74fac9f87ebf206abb5a3e30f64f9551d341d291"
+  },
+  "changes": [
+    "Rust-compressed, bounded R2 packs retain logical 64 KiB page digests for Python, QuickJS and Wasmi heaps.",
+    "Unconditional legacy-page migration preserves VM bytes, handles, generations and existing authority; active leases defer conversion.",
+    "Migration checks active process leases before skipping claims whose checkpoint reference was cleared during execution.",
+    "Interpreter binaries match 0.23.0; this storage cutover preserves existing contexts without reset."
+  ],
+  "localEvidence": "memory-packs-local.json",
+  "publication": {
+    "url": "https://github.com/minutei-ai/boxes/releases/tag/sdk-v0.24.0",
+    "publishedAt": "2026-10-17T03:31:49Z",
+    "prerelease": true,
+    "latest": false,
+    "anonymousDownloadsMatchValidatedCandidates": true,
+    "assets": [
+      {
+        "file": "minutei-ai-boxes-0.24.0.tgz",
+        "bytes": 86009,
+        "sha256": "be75891bfed5d1fd995c2be91d751859f1b12aa75dec49fa4c35d53cffa2cb7d"
+      },
+      {
+        "file": "minutei-ai-boxes-runtime-0.24.0.tgz",
+        "bytes": 5859520,
+        "sha256": "1526a3e3ec13c454122003b1fa43ed173ff8e6d8f9b0a88cc6b6222bbefd2f9e"
+      },
+      {
+        "file": "SHA256SUMS",
+        "bytes": 196,
+        "sha256": "40545d025dd1ba9d297d10f4d5f97cdd4034abc44d661c7cf365a1af633ebc9c"
+      }
+    ]
+  },
+  "ci": {
+    "source": {
+      "run": 38998663825,
+      "url": "https://github.com/minutei-ai/boxes/actions/runs/38998663825",
+      "commit": "74fac9f87ebf206abb5a3e30f64f9551d341d291",
+      "status": "success",
+      "tests": 439,
+      "failures": 0,
+      "assertions": 6449,
+      "files": 99,
+      "nativeTestSeconds": 186.74
+    },
+    "tag": {
+      "run": 38999116600,
+      "url": "https://github.com/minutei-ai/boxes/actions/runs/38999116600",
+      "commit": "74fac9f87ebf206abb5a3e30f64f9551d341d291",
+      "status": "success",
+      "tests": 439,
+      "failures": 0,
+      "assertions": 6456,
+      "files": 99,
+      "nativeTestSeconds": 173.59
+    },
+    "priorSource": {
+      "run": 38998263403,
+      "commit": "df7e266dea778721fe5de6caf661c56ff6fcd649",
+      "status": "success"
+    },
+    "correctedFailure": {
+      "run": 38997818171,
+      "commit": "8ab3e17a1072f263bf7e24859f80e93cc9689744",
+      "result": "429 passed; ten failures followed the first detached-process test exceeding the default 5-second outer lifetime and Bun terminating its workerd.",
+      "fix": "The affected test has a 15-second outer bound covering its existing 10-second native observation budget. Product deadlines and assertions remain unchanged."
+    }
+  },
+  "nativeMigrationRegression": {
+    "red": "The real workerd/R2 fixture returned retryAfterMs 0 for a running claim with a null checkpoint reference; the required active-lease delay was 1000.",
+    "fixCommit": "74fac9f87ebf206abb5a3e30f64f9551d341d291",
+    "directedTests": 29,
+    "failures": 0,
+    "assertions": 421,
+    "typecheck": "passed",
+    "activeLeaseGuardSha256": "f7db83b38621a457e4b1afbddebf1a9be3498282e38a6bbb88ac28a4480bcceb"
+  },
+  "archiveValidation": {
+    "packageProof": {
+      "version": "0.24.0",
+      "transport": "native Alchemy workerd service binding and Agent RPC; local R2 and Queue",
+      "proof": "SDK archive exports and consumer declarations; runtime archive; filesystem snapshot restore; hard-link metadata; RPC callbacks and cooperative disposal; ephemeral context disposal with 1024 files and concurrent closes; persistent driver contexts and cancellation; retained native heaps and current callback authority; scoped authority",
+      "terminal": {
+        "inventory": {
+          "running": {
+            "id": "terminal-live",
+            "context": null,
+            "status": "running",
+            "sourceHash": "a8a6480394435899e061e452f41d433ae5dcff92bcf00e197b8faea415137b28",
+            "language": "wasm",
+            "startedAt": 1792207448676,
+            "finishedAt": null,
+            "stdinMode": "pty"
+          },
+          "settled": {
+            "id": "terminal-live",
+            "context": null,
+            "status": "exited",
+            "sourceHash": "a8a6480394435899e061e452f41d433ae5dcff92bcf00e197b8faea415137b28",
+            "language": "wasm",
+            "startedAt": 1792207448676,
+            "finishedAt": 1792207449168,
+            "stdinMode": "pty"
+          },
+          "pages": 4
+        },
+        "initial": {
+          "cols": 80,
+          "rows": 24,
+          "revision": 0
+        },
+        "resized": {
+          "cols": 100,
+          "rows": 30,
+          "revision": 2
+        },
+        "terminal": {
+          "id": "terminal-live",
+          "context": null,
+          "status": "exited",
+          "sourceHash": "a8a6480394435899e061e452f41d433ae5dcff92bcf00e197b8faea415137b28",
+          "language": "wasm",
+          "startedAt": 1792207448676,
+          "finishedAt": 1792207449168,
+          "output": {
+            "stdout": "ready\neof-ready\nwinch\nafter-one\nwinch\ndone\n",
+            "stderr": "",
+            "result": null,
+            "exitCode": 0
+          }
+        },
+        "agent": {
+          "id": "terminal-agent",
+          "context": null,
+          "status": "exited",
+          "sourceHash": "0bc9adff0ae13ee1bef54d4ae1ab07254e340a996cec8b6a418fe919151d4056",
+          "language": "typescript",
+          "startedAt": 1792207449040,
+          "finishedAt": 1792207449074,
+          "output": {
+            "stdout": "",
+            "stderr": "",
+            "result": {
+              "cols": 100,
+              "rows": 30,
+              "revision": 2
+            },
+            "exitCode": 0
+          }
+        },
+        "input": {
+          "offset": 0,
+          "total": 0,
+          "closed": true
+        },
+        "staleRevision": 409,
+        "foreignSandbox": 401,
+        "foreground": {
+          "id": "terminal-foreground",
+          "context": null,
+          "status": "exited",
+          "sourceHash": "ba142b7baf1b3995c8c0c79e34cbbaa5a5918c22842d94de6aaed64be41b3dc3",
+          "language": "wasm",
+          "startedAt": 1792207449225,
+          "finishedAt": 1792207449271,
+          "output": {
+            "stdout": "interrupt\npair-done\n",
+            "stderr": "",
+            "result": null,
+            "exitCode": 0
+          }
+        },
+        "rawOwners": {
+          "id": "terminal-raw-owners",
+          "context": null,
+          "status": "exited",
+          "sourceHash": "47334effdf47f9cd168641c5b517244045a26912fab8c5f7dd63d11088783fc2",
+          "language": "wasm",
+          "startedAt": 1792207449504,
+          "finishedAt": 1792207449651,
+          "output": {
+            "stdout": "raw-owners-restored\n",
+            "stderr": "",
+            "result": null,
+            "exitCode": 0
+          }
+        },
+        "termios": {
+          "id": "terminal-termios",
+          "context": null,
+          "status": "exited",
+          "sourceHash": "10c8332bd7f638de1770e1493da38074a0b06d618c198f589d69c36c835c641f",
+          "language": "wasm",
+          "startedAt": 1792207449665,
+          "finishedAt": 1792207449708,
+          "output": {
+            "stdout": "termios-verified\n",
+            "stderr": "",
+            "result": null,
+            "exitCode": 0
+          }
+        },
+        "attributes": {
+          "initial": {
+            "desired": {
+              "attributes": null,
+              "revision": 0
+            },
+            "observed": {
+              "attributes": {
+                "icrnl": true,
+                "opost": true,
+                "onlcr": true,
+                "icanon": true,
+                "echo": true,
+                "isig": true,
+                "cc": [3, 28, 26, 4, 127, 21, 23]
+              },
+              "revision": 0
+            },
+            "settled": false
+          },
+          "guest": {
+            "desired": {
+              "attributes": {
+                "icrnl": false,
+                "opost": false,
+                "onlcr": false,
+                "icanon": false,
+                "echo": false,
+                "isig": false,
+                "cc": [1, 2, 3, 4, 5, 6, 7]
+              },
+              "revision": 1
+            },
+            "observed": {
+              "attributes": {
+                "icrnl": false,
+                "opost": false,
+                "onlcr": false,
+                "icanon": false,
+                "echo": true,
+                "isig": false,
+                "cc": [1, 2, 3, 4, 5, 6, 7]
+              },
+              "revision": 1
+            },
+            "settled": false
+          },
+          "final": {
+            "desired": {
+              "attributes": {
+                "icrnl": true,
+                "opost": true,
+                "onlcr": true,
+                "icanon": true,
+                "echo": false,
+                "isig": true,
+                "cc": [1, 2, 3, 4, 5, 6, 7]
+              },
+              "revision": 3
+            },
+            "observed": {
+              "attributes": {
+                "icrnl": true,
+                "opost": true,
+                "onlcr": true,
+                "icanon": true,
+                "echo": false,
+                "isig": true,
+                "cc": [1, 2, 3, 4, 5, 6, 7]
+              },
+              "revision": 3
+            },
+            "settled": true
+          },
+          "process": {
+            "id": "terminal-attributes",
+            "context": null,
+            "status": "exited",
+            "sourceHash": "631b044078fbac8a03ddea47e5b1ef2185f919c6289a76ec7112a84ab6c8b3b0",
+            "language": "wasm",
+            "startedAt": 1792207449748,
+            "finishedAt": 1792207450468,
+            "output": {
+              "stdout": "attributes-ready\r\nraw-ok\nguest-changed\nconfigured-again\neof-ready\nterminal-done\r\n",
+              "stderr": "",
+              "result": null,
+              "exitCode": 0
+            }
+          },
+          "staleRevision": 409,
+          "foreignSandbox": 401
+        }
+      },
+      "retainedContexts": [
+        {
+          "phase": "create",
+          "context": {
+            "id": "retained",
+            "language": "javascript",
+            "generation": 0,
+            "state": "idle",
+            "createdAt": 1792207439155,
+            "updatedAt": 1792207439407,
+            "executionId": "retained-first",
+            "deadlineAt": null
+          },
+          "records": [
+            {
+              "id": "retained-seed",
+              "context": {
+                "id": "retained",
+                "generation": 0
+              },
+              "status": "exited",
+              "sourceHash": "488ea9e6613986c876e109697e04010a3e6d16a8b89107feef55c722cbf3cdc0",
+              "language": "javascript",
+              "startedAt": 1792207439179,
+              "finishedAt": 1792207439253,
+              "output": {
+                "stdout": "",
+                "stderr": "",
+                "result": null,
+                "exitCode": 0
+              }
+            },
+            {
+              "id": "retained-first",
+              "context": {
+                "id": "retained",
+                "generation": 0
+              },
+              "status": "exited",
+              "sourceHash": "c737d8cb92926ce3263c827bacf2533abd4d84128402215f8854442f180ee25e",
+              "language": "typescript",
+              "startedAt": 1792207439282,
+              "finishedAt": 1792207439430,
+              "output": {
+                "stdout": "",
+                "stderr": "",
+                "result": {
+                  "counter": 41,
+                  "tool": 11
+                },
+                "exitCode": 0
+              }
+            }
+          ],
+          "callbacks": 1,
+          "deleted": false,
+          "driver": {
+            "value": 41,
+            "closedDenied": true
+          },
+          "python": {
+            "context": {
+              "id": "retained-python",
+              "language": "python",
+              "generation": 0,
+              "state": "idle",
+              "createdAt": 1792207435929,
+              "updatedAt": 1792207438889,
+              "executionId": "python-initial-value",
+              "deadlineAt": null
+            },
+            "records": [
+              {
+                "id": "python-seed",
+                "context": {
+                  "id": "retained-python",
+                  "generation": 0
+                },
+                "status": "exited",
+                "sourceHash": "c1ac3bc4418d432733a7b909d7a2672a71e52fc15ebcfc11cf129f027ae65236",
+                "language": "python",
+                "startedAt": 1792207435971,
+                "finishedAt": 1792207438128,
+                "output": {
+                  "stdout": "",
+                  "stderr": "",
+                  "result": null,
+                  "exitCode": 0
+                }
+              },
+              {
+                "id": "python-initial-value",
+                "context": {
+                  "id": "retained-python",
+                  "generation": 0
+                },
+                "status": "exited",
+                "sourceHash": "34a6a5152d55b824ea1d1442f093ca78f465171937d6d3ac0c360043d658aced",
+                "language": "python",
+                "startedAt": 1792207438180,
+                "finishedAt": 1792207438906,
+                "output": {
+                  "stdout": "",
+                  "stderr": "",
+                  "result": 41,
+                  "exitCode": 0
+                }
+              }
+            ],
+            "deleted": false
+          }
+        },
+        {
+          "phase": "resume",
+          "context": {
+            "id": "retained",
+            "language": "javascript",
+            "generation": 1,
+            "state": "idle",
+            "createdAt": 1792207439155,
+            "updatedAt": 1792207442971,
+            "executionId": "retained-cleared",
+            "deadlineAt": null
+          },
+          "records": [
+            {
+              "id": "retained-next",
+              "context": {
+                "id": "retained",
+                "generation": 0
+              },
+              "status": "exited",
+              "sourceHash": "3c22822d46020f61fe10c63a93980c727ad77aed61725d9db04ecb258923c2e9",
+              "language": "typescript",
+              "startedAt": 1792207442567,
+              "finishedAt": 1792207442689,
+              "output": {
+                "stdout": "resumed\n",
+                "stderr": "",
+                "result": {
+                  "counter": 42,
+                  "tool": 42
+                },
+                "exitCode": 0
+              }
+            },
+            {
+              "id": "retained-denied",
+              "context": {
+                "id": "retained",
+                "generation": 0
+              },
+              "status": "exited",
+              "sourceHash": "f50b5c5b802ebe9743e9168ae29de3e0d7f4f086af80941aeda60afff8280ca6",
+              "language": "typescript",
+              "startedAt": 1792207442734,
+              "finishedAt": 1792207442868,
+              "output": {
+                "stdout": "",
+                "stderr": "",
+                "result": "FORBIDDEN",
+                "exitCode": 0
+              }
+            },
+            {
+              "id": "retained-cleared",
+              "context": {
+                "id": "retained",
+                "generation": 1
+              },
+              "status": "exited",
+              "sourceHash": "f8bd8ff550ea459186702ffdcb169dc0e5b5076958ff032c59e77c248c01a345",
+              "language": "javascript",
+              "startedAt": 1792207442906,
+              "finishedAt": 1792207442986,
+              "output": {
+                "stdout": "",
+                "stderr": "",
+                "result": "undefined",
+                "exitCode": 0
+              }
+            }
+          ],
+          "callbacks": 1,
+          "deleted": true,
+          "driver": {
+            "value": 42,
+            "closedDenied": true
+          },
+          "python": {
+            "context": {
+              "id": "retained-python",
+              "language": "python",
+              "generation": 1,
+              "state": "idle",
+              "createdAt": 1792207435929,
+              "updatedAt": 1792207442389,
+              "executionId": "python-cleared",
+              "deadlineAt": null
+            },
+            "records": [
+              {
+                "id": "python-resume",
+                "context": {
+                  "id": "retained-python",
+                  "generation": 0
+                },
+                "status": "exited",
+                "sourceHash": "a6a808662104029e97fc8491cddbe04d3fcb42bc6e4c8d8d6ef8444963e5f400",
+                "language": "python",
+                "startedAt": 1792207439770,
+                "finishedAt": 1792207441201,
+                "output": {
+                  "stdout": "",
+                  "stderr": "",
+                  "result": [
+                    42,
+                    "current",
+                    "c2VlZA==",
+                    [
+                      {
+                        "text": "a\u00e7\u00e3o",
+                        "value": 42
+                      },
+                      ["box", "native"],
+                      1,
+                      42,
+                      2
+                    ],
+                    false
+                  ],
+                  "exitCode": 0
+                }
+              },
+              {
+                "id": "python-denied",
+                "context": {
+                  "id": "retained-python",
+                  "generation": 0
+                },
+                "status": "exited",
+                "sourceHash": "63a2b8d98ae2c0e392ad6454615067f431ba23fa09b8fec01604a03de4b0cb06",
+                "language": "python",
+                "startedAt": 1792207441254,
+                "finishedAt": 1792207442032,
+                "output": {
+                  "stdout": "",
+                  "stderr": "",
+                  "result": "FORBIDDEN",
+                  "exitCode": 0
+                }
+              },
+              {
+                "id": "python-cleared",
+                "context": {
+                  "id": "retained-python",
+                  "generation": 1
+                },
+                "status": "exited",
+                "sourceHash": "703d590e2831eb0a587bb76aa83bf423dbd948db3193606373ad9255c295fe15",
+                "language": "python",
+                "startedAt": 1792207442075,
+                "finishedAt": 1792207442399,
+                "output": {
+                  "stdout": "",
+                  "stderr": "",
+                  "result": false,
+                  "exitCode": 0
+                }
+              }
+            ],
+            "deleted": true
+          }
+        }
+      ],
+      "detachedContexts": [
+        {
+          "phase": "create",
+          "callbacks": 1,
+          "queued": [
+            {
+              "id": "detached-queued-js",
+              "context": {
+                "id": "detached-js",
+                "generation": 0
+              },
+              "status": "queued",
+              "sourceHash": "37706cbb9f0f63c57d6eba15c2542cd0998e68d4289f7dc40a99b0939366b3be",
+              "language": "typescript",
+              "startedAt": 1792207445322,
+              "finishedAt": null,
+              "output": null
+            },
+            {
+              "id": "detached-queued-python",
+              "context": {
+                "id": "detached-python",
+                "generation": 0
+              },
+              "status": "queued",
+              "sourceHash": "34a6a5152d55b824ea1d1442f093ca78f465171937d6d3ac0c360043d658aced",
+              "language": "python",
+              "startedAt": 1792207445498,
+              "finishedAt": null,
+              "output": null
+            }
+          ],
+          "schedule": {
+            "op": "cron.schedule",
+            "id": "detached-once",
+            "schedule": "2026-10-17T03:24:07.811Z",
+            "execution": {
+              "op": "javascript.evaluate",
+              "id": "detached-tick",
+              "contextId": "detached-cron",
+              "expression": "globalThis.next()"
+            },
+            "overlap": "queue",
+            "context": {
+              "id": "detached-cron",
+              "generation": 0
+            },
+            "state": "active",
+            "createdAt": 1792207445817,
+            "nextRun": 1792207447811,
+            "lastRun": null,
+            "runCount": 0,
+            "lastProcessId": null,
+            "error": null
+          }
+        },
+        {
+          "phase": "verify",
+          "queued": [
+            {
+              "id": "detached-queued-js",
+              "context": {
+                "id": "detached-js",
+                "generation": 0
+              },
+              "status": "exited",
+              "sourceHash": "2cbd6c79cde051e3455293463e8bab3b6b61598599f5551277f192cc692c97ca",
+              "language": "typescript",
+              "startedAt": 1792207445342,
+              "finishedAt": 1792207445467,
+              "output": {
+                "stdout": "",
+                "stderr": "",
+                "result": {
+                  "value": 41,
+                  "denied": "FORBIDDEN"
+                },
+                "exitCode": 0
+              }
+            },
+            {
+              "id": "detached-queued-python",
+              "context": {
+                "id": "detached-python",
+                "generation": 0
+              },
+              "status": "exited",
+              "sourceHash": "34a6a5152d55b824ea1d1442f093ca78f465171937d6d3ac0c360043d658aced",
+              "language": "python",
+              "startedAt": 1792207445513,
+              "finishedAt": 1792207445802,
+              "output": {
+                "stdout": "",
+                "stderr": "",
+                "result": 41,
+                "exitCode": 0
+              }
+            }
+          ],
+          "continued": [
+            {
+              "id": "detached-next-js",
+              "context": {
+                "id": "detached-js",
+                "generation": 0
+              },
+              "status": "exited",
+              "sourceHash": "78b5570582a5cd9b4dc8fb8de493fb9b71c046aee9a7867a7934204cdd2926e3",
+              "language": "javascript",
+              "startedAt": 1792207448207,
+              "finishedAt": 1792207448291,
+              "output": {
+                "stdout": "",
+                "stderr": "",
+                "result": 42,
+                "exitCode": 0
+              }
+            },
+            {
+              "id": "detached-next-python",
+              "context": {
+                "id": "detached-python",
+                "generation": 0
+              },
+              "status": "exited",
+              "sourceHash": "34a6a5152d55b824ea1d1442f093ca78f465171937d6d3ac0c360043d658aced",
+              "language": "python",
+              "startedAt": 1792207448320,
+              "finishedAt": 1792207448593,
+              "output": {
+                "stdout": "",
+                "stderr": "",
+                "result": 42,
+                "exitCode": 0
+              }
+            }
+          ],
+          "schedule": {
+            "op": "cron.schedule",
+            "id": "detached-once",
+            "schedule": "2026-10-17T03:24:07.811Z",
+            "execution": {
+              "op": "javascript.evaluate",
+              "id": "detached-tick",
+              "contextId": "detached-cron",
+              "expression": "globalThis.next()"
+            },
+            "overlap": "queue",
+            "context": {
+              "id": "detached-cron",
+              "generation": 0
+            },
+            "state": "completed",
+            "createdAt": 1792207445817,
+            "nextRun": null,
+            "lastRun": 1792207447811,
+            "runCount": 1,
+            "lastProcessId": "cron-283bcb4339610c81ae1d49f64c1ae952872562190b2291eef9cedb0327",
+            "error": null
+          },
+          "scheduledProcess": {
+            "id": "cron-283bcb4339610c81ae1d49f64c1ae952872562190b2291eef9cedb0327",
+            "context": {
+              "id": "detached-cron",
+              "generation": 0
+            },
+            "status": "exited",
+            "sourceHash": "459851de8b6eee45f01c06c485e09bf72217d7e67b8f588a75fc0ed3d192958b",
+            "language": "javascript",
+            "startedAt": 1792207448039,
+            "finishedAt": 1792207448164,
+            "output": {
+              "stdout": "",
+              "stderr": "",
+              "result": 41,
+              "exitCode": 0
+            }
+          },
+          "staleSchedule": {
+            "op": "cron.schedule",
+            "id": "detached-stale-once",
+            "schedule": "2026-10-17T03:24:07.811Z",
+            "execution": {
+              "op": "process.run",
+              "id": "detached-stale-tick",
+              "language": "javascript",
+              "source": "export default async({tools})=>tools.call({op:'filesystem.writeFile',path:'/detached-stale-entered',content:'bad',encoding:'utf8'})",
+              "contextId": "detached-stale"
+            },
+            "overlap": "allow",
+            "context": {
+              "id": "detached-stale",
+              "generation": 0
+            },
+            "state": "failed",
+            "createdAt": 1792207445832,
+            "nextRun": null,
+            "lastRun": null,
+            "runCount": 0,
+            "lastProcessId": null,
+            "error": "Execution belongs to another context generation"
+          },
+          "staleContext": {
+            "id": "detached-stale",
+            "language": "javascript",
+            "generation": 1,
+            "state": "idle",
+            "createdAt": 1792207444684,
+            "updatedAt": 1792207445844,
+            "executionId": null,
+            "deadlineAt": null
+          },
+          "staleFileExists": false
+        }
+      ]
+    },
+    "workerInputsMatchRuntimeArchive": [
+      {
+        "file": "cirro_compiler_bg.wasm",
+        "sha256": "27d9b0022a634ed4eef47b6561ad38cafde3522c17e834afed1264440678bf2f"
+      },
+      {
+        "file": "cirro_guest_bg.wasm",
+        "sha256": "dcf1a9d66b4c3a11106076c3e9d5fa1f596b8846a811dfeec9ecf3a8744af01f"
+      },
+      {
+        "file": "cirro_kernel_bg.wasm",
+        "sha256": "b6a47273a35b12f7691e2f27dfac54d02b33dccaded0824da5389c68da9db186"
+      },
+      {
+        "file": "cirro_python_bg.wasm",
+        "sha256": "e16a80501af46363e7a5bc1552b32fd0afd84000145a755da9ef5076756ae1cc"
+      },
+      {
+        "file": "cirro_wasi_bg.wasm",
+        "sha256": "0d1fd49eb2d515f724ad1067dec002f07d009d056bb6091402807b8ac5110090"
+      },
+      {
+        "file": "index.js",
+        "sha256": "7e6751cf8afc27a32a5a1be76e5c805ee4e2196cf63f17ec39b51b95135d20de"
+      }
+    ]
+  },
+  "production": {
+    "profile": "minutei",
+    "stackIdentity": "cirro",
+    "worker": "cirro-sandbox-prod-rs7wexxow56rmsoz",
+    "bucket": "cirro-objects-prod-vbk2p6ruhs2m645y",
+    "url": "https://cirro-sandbox-prod-rs7wexxow56rmsoz.manoel-carvalhoneto.workers.dev",
+    "placement": {
+      "mode": "smart"
+    },
+    "workerType": "ordinary Cloudflare Worker",
+    "deployCommand": "bunx alchemy deploy alchemy.run.ts --stage prod --profile minutei --yes",
+    "deployExitCode": 0,
+    "deployReportedSeconds": 698.3,
+    "softwareImageActionSeconds": 371.2,
+    "workerUploadSeconds": 12.1,
+    "migrationSeconds": 313.3,
+    "migrations": {
+      "environment-v1": {
+        "migrated": 0,
+        "reportedPages": 61
+      },
+      "/v1/migrations/wasm-inputs-v1": {
+        "migrated": 0,
+        "reportedPages": 0
+      },
+      "/v1/migrations/process-receipts-v2": {
+        "migrated": 0,
+        "reportedPages": 0
+      },
+      "process-index-v7": {
+        "migrated": 0,
+        "reportedPages": 31
+      },
+      "input-terminal-v3": {
+        "migrated": 0,
+        "reportedPages": 1
+      },
+      "process-deadlines-v1": {
+        "migrated": 0,
+        "reportedPages": 31
+      },
+      "filesystem-v5": {
+        "migrated": 0,
+        "reportedPages": 70
+      },
+      "memory-packs-v1": {
+        "migrated": 3,
+        "reportedPages": 243
+      },
+      "context-language-v1": {
+        "migrated": 0,
+        "reportedPages": 9
+      },
+      "cron-contexts-v2": {
+        "migrated": 0,
+        "reportedPages": 1
+      }
+    },
+    "before": {
+      "measuredAt": 1792208098804,
+      "profile": "minutei",
+      "id": "memory-packs-cutover-cb0ce37e-cfbe-4076-b988-2949f16a0d02",
+      "worker": "cirro-sandbox-prod-rs7wexxow56rmsoz",
+      "bucketName": "cirro-objects-prod-vbk2p6ruhs2m645y",
+      "placement": {
+        "mode": "smart"
+      },
+      "contexts": [
+        {
+          "id": "javascript",
+          "generation": 0,
+          "state": "idle",
+          "codec": null,
+          "memoryBytes": 1572864,
+          "pages": 24,
+          "runtime": "dcf1a9d66b4c3a11106076c3e9d5fa1f596b8846a811dfeec9ecf3a8744af01f"
+        },
+        {
+          "id": "python",
+          "generation": 0,
+          "state": "idle",
+          "codec": null,
+          "memoryBytes": 11206656,
+          "pages": 171,
+          "runtime": "e16a80501af46363e7a5bc1552b32fd0afd84000145a755da9ef5076756ae1cc"
+        }
+      ],
+      "process": {
+        "id": "waiting-final",
+        "status": "running",
+        "deadlineAt": 1792208936881,
+        "checkpointCount": 1,
+        "checkpoint": null
+      },
+      "checkpoint": null,
+      "counts": {
+        "objects": 258,
+        "rawPages": 214,
+        "packs": 0,
+        "progress": 0,
+        "bytes": 22943694
+      }
+    },
+    "during": {
+      "measuredAt": 1792208737809,
+      "profile": "minutei",
+      "id": "memory-packs-cutover-cb0ce37e-cfbe-4076-b988-2949f16a0d02",
+      "worker": "cirro-sandbox-prod-rs7wexxow56rmsoz",
+      "bucketName": "cirro-objects-prod-vbk2p6ruhs2m645y",
+      "placement": {
+        "mode": "smart"
+      },
+      "contexts": [
+        {
+          "id": "javascript",
+          "generation": 0,
+          "state": "idle",
+          "codec": "zlib-packs-v1",
+          "memoryBytes": 1572864,
+          "pages": 24,
+          "runtime": "dcf1a9d66b4c3a11106076c3e9d5fa1f596b8846a811dfeec9ecf3a8744af01f"
+        },
+        {
+          "id": "python",
+          "generation": 0,
+          "state": "idle",
+          "codec": "zlib-packs-v1",
+          "memoryBytes": 11206656,
+          "pages": 171,
+          "runtime": "e16a80501af46363e7a5bc1552b32fd0afd84000145a755da9ef5076756ae1cc"
+        }
+      ],
+      "process": {
+        "id": "waiting-final",
+        "status": "queued",
+        "deadlineAt": 1792208936881,
+        "checkpointCount": 14,
+        "checkpoint": "be28a7a245308c84c0308a3690c0154e4a95fcd5f2c25844327cec715d94a697"
+      },
+      "checkpoint": {
+        "version": 1,
+        "heap": "d2b31d857d275c88d2736e11d6292993d3c1e173e77d9c2e6d6543eaee0a59c0"
+      },
+      "counts": {
+        "objects": 286,
+        "rawPages": 214,
+        "packs": 13,
+        "progress": 2,
+        "bytes": 33071359
+      }
+    },
+    "cutover": {
+      "measuredAt": 1792208880174,
+      "id": "memory-packs-cutover-cb0ce37e-cfbe-4076-b988-2949f16a0d02",
+      "seedSdkVersion": "0.23.0",
+      "verifySdkVersion": "0.24.0",
+      "python": {
+        "id": "after-python",
+        "context": {
+          "id": "python",
+          "generation": 0
+        },
+        "status": "exited",
+        "sourceHash": "2d937af40c9eea18d425ff74613d3f68dd8b0a993659ee03a1d8c524db463768",
+        "language": "python",
+        "startedAt": 1792208870967,
+        "finishedAt": 1792208871965,
+        "output": {
+          "stdout": "",
+          "stderr": "",
+          "result": [
+            42,
+            {
+              "value": 42
+            },
+            ["box", "native"],
+            1
+          ],
+          "exitCode": 0
+        }
+      },
+      "javascript": {
+        "id": "after-js",
+        "context": {
+          "id": "javascript",
+          "generation": 0
+        },
+        "status": "exited",
+        "sourceHash": "211089a84f021f03ac3afe9a47c03e77dc2c56c7c9c07be64bc92e10e5cb198d",
+        "language": "javascript",
+        "startedAt": 1792208873274,
+        "finishedAt": 1792208874175,
+        "output": {
+          "stdout": "",
+          "stderr": "",
+          "result": 42,
+          "exitCode": 0
+        }
+      },
+      "contexts": [
+        {
+          "id": "javascript",
+          "language": "javascript",
+          "generation": 0,
+          "state": "idle",
+          "createdAt": 1792206870539,
+          "updatedAt": 1792208873827,
+          "executionId": "after-js",
+          "deadlineAt": null
+        },
+        {
+          "id": "python",
+          "language": "python",
+          "generation": 0,
+          "state": "idle",
+          "createdAt": 1792206861653,
+          "updatedAt": 1792208871783,
+          "executionId": "after-python",
+          "deadlineAt": null
+        }
+      ],
+      "before": {
+        "state": "running",
+        "checkpoints": 17,
+        "resumable": false,
+        "deadlineAt": 1792208936881
+      },
+      "wasi": {
+        "id": "waiting-final",
+        "context": null,
+        "status": "exited",
+        "sourceHash": "5c8dbe60dc5df476c83947c83ed578bc6608a3290a97a8765694f2bd682b1274",
+        "language": "wasm",
+        "startedAt": 1792208036881,
+        "finishedAt": 1792208878793,
+        "output": {
+          "stdout": "ready\nbefore:after\nbytes=12\n",
+          "stderr": "",
+          "result": null,
+          "exitCode": 0
+        }
+      },
+      "resetPerformed": false,
+      "tokenExcluded": true
+    },
+    "after": {
+      "measuredAt": 1792209008264,
+      "profile": "minutei",
+      "id": "memory-packs-cutover-cb0ce37e-cfbe-4076-b988-2949f16a0d02",
+      "worker": "cirro-sandbox-prod-rs7wexxow56rmsoz",
+      "bucketName": "cirro-objects-prod-vbk2p6ruhs2m645y",
+      "placement": {
+        "mode": "smart"
+      },
+      "contexts": [
+        {
+          "id": "javascript",
+          "generation": 0,
+          "state": "idle",
+          "codec": "zlib-packs-v1",
+          "memoryBytes": 1572864,
+          "pages": 24,
+          "runtime": "dcf1a9d66b4c3a11106076c3e9d5fa1f596b8846a811dfeec9ecf3a8744af01f"
+        },
+        {
+          "id": "python",
+          "generation": 0,
+          "state": "idle",
+          "codec": "zlib-packs-v1",
+          "memoryBytes": 12320768,
+          "pages": 188,
+          "runtime": "e16a80501af46363e7a5bc1552b32fd0afd84000145a755da9ef5076756ae1cc"
+        }
+      ],
+      "process": {
+        "id": "waiting-final",
+        "status": "exited",
+        "deadlineAt": null,
+        "checkpointCount": 17,
+        "checkpoint": null
+      },
+      "checkpoint": null,
+      "counts": {
+        "objects": 319,
+        "rawPages": 214,
+        "packs": 33,
+        "progress": 3,
+        "bytes": 37589235
+      }
+    },
+    "binding": {
+      "measuredAt": 1792209273116,
+      "profile": "minutei",
+      "targetWorker": "cirro-sandbox-prod-rs7wexxow56rmsoz",
+      "sandboxId": "remote-binding-644994ec-9b7e-475e-93a9-cca022377b1c",
+      "previewOrigin": "https://boxes-binding-644994ec-9b7e-475e-93a9-cca022377b1c.manoel-carvalhoneto.workers.dev",
+      "replacementPreviewOrigin": "https://boxes-replacement-644994ec-9b7e-475e-93a9-cca022377b1c.manoel-carvalhoneto.workers.dev",
+      "consumerBundleSha256": "44033100483e47b4f64a5deabd7f7e923ce14e2d526526843b4bb60981888447",
+      "sdkVersion": "0.24.0",
+      "shellPackage": {
+        "packageId": "1922d7987e34c080abe1c8edf85e0d01c4f5dccaefafe1dada5735c6e64eb2ec",
+        "digest": "sha256:1922d7987e34c080abe1c8edf85e0d01c4f5dccaefafe1dada5735c6e64eb2ec",
+        "sizeBytes": 4349290,
+        "manifest": {
+          "name": "sh",
+          "version": "0.17.0",
+          "provides": null,
+          "commands": [
+            {
+              "command": "sh",
+              "entry": "bin/sh"
+            }
+          ],
+          "man_pages": []
+        }
+      },
+      "defaultSoftware": {
+        "catalog": [
+          {
+            "name": "sh",
+            "version": "0.17.0",
+            "digest": "sha256:1922d7987e34c080abe1c8edf85e0d01c4f5dccaefafe1dada5735c6e64eb2ec",
+            "sizeBytes": 4349290
+          },
+          {
+            "name": "jq",
+            "version": "0.3.3",
+            "digest": "sha256:edb1cf0bbcf663d177916592d2f1b4361a02966dbf2eb44e3e61ea2a399bb43a",
+            "sizeBytes": 716972
+          },
+          {
+            "name": "coreutils",
+            "version": "0.3.4",
+            "digest": "sha256:4bee17be5e65fab4195ab794e0a175021738c8fbe4363312b6987b57ec4b395d",
+            "sizeBytes": 67400857
+          },
+          {
+            "name": "sed",
+            "version": "0.3.4",
+            "digest": "sha256:627c66cd792dbf7d8be470957f8fabb601480f10bb8e4688f01125e174c3b94a",
+            "sizeBytes": 1268400
+          },
+          {
+            "name": "grep",
+            "version": "0.3.4",
+            "digest": "sha256:7cfda6adf263ab53a82d6615889be50b7378ec763105a44b7791d1ad07df3d86",
+            "sizeBytes": 425270
+          },
+          {
+            "name": "gawk",
+            "version": "0.3.4",
+            "digest": "sha256:a448662d870f46b78a091b1bff689697d47c5e535ece11042e9394ed64305716",
+            "sizeBytes": 1186481
+          },
+          {
+            "name": "findutils",
+            "version": "0.3.4",
+            "digest": "sha256:a76c3acfd9124669f8476f6d5acb8799b8606b126518f05c4d508e144898036a",
+            "sizeBytes": 1783546
+          },
+          {
+            "name": "diffutils",
+            "version": "0.3.4",
+            "digest": "sha256:c63f665fb9e8eb7cae4162d9d58f496d931d0e55c6d9e3aa6c1a841412a781e1",
+            "sizeBytes": 140985
+          },
+          {
+            "name": "tar",
+            "version": "0.3.5",
+            "digest": "sha256:a1db07c4e8113f1acb65651f470d362a87f4a18ba346c553c418c151f1e4e9f9",
+            "sizeBytes": 220336
+          },
+          {
+            "name": "gzip",
+            "version": "0.3.4",
+            "digest": "sha256:76edafcb28727c6efe36ef73b74b3c14fbc16fa5962c706b163266c39c347597",
+            "sizeBytes": 413494
+          }
+        ],
+        "runs": [
+          {
+            "id": "coreutils",
+            "context": null,
+            "status": "exited",
+            "sourceHash": "eca41609765d6e7f921001f9e1f6a460bd0a09a1de0b4b4af11a01f13fd6c0db",
+            "language": "wasm",
+            "startedAt": 1792209039622,
+            "finishedAt": 1792209040693,
+            "output": {
+              "stdout": "native:image\n",
+              "stderr": "",
+              "result": null,
+              "exitCode": 0
+            }
+          },
+          {
+            "id": "bracket",
+            "context": null,
+            "status": "exited",
+            "sourceHash": "817cd62523a1d2c4abab0e1a79bf02a1a5ed6ecd224e04ce3d373fbd6a328c9e",
+            "language": "wasm",
+            "startedAt": 1792209041543,
+            "finishedAt": 1792209041897,
+            "output": {
+              "stdout": "",
+              "stderr": "",
+              "result": null,
+              "exitCode": 0
+            }
+          },
+          {
+            "id": "bracket-false",
+            "context": null,
+            "status": "exited",
+            "sourceHash": "6c436617930b722c02e8d6397da61dbe94b59510206ffb15b913ce4fc3dd5881",
+            "language": "wasm",
+            "startedAt": 1792209042653,
+            "finishedAt": 1792209043005,
+            "output": {
+              "stdout": "",
+              "stderr": "",
+              "result": null,
+              "exitCode": 1
+            }
+          },
+          {
+            "id": "sed",
+            "context": null,
+            "status": "exited",
+            "sourceHash": "dc4c1ecd5431df58e4098bc625c5a9f2c772fbdda5a07b04fd7cc0822feaaecd",
+            "language": "wasm",
+            "startedAt": 1792209043703,
+            "finishedAt": 1792209044591,
+            "output": {
+              "stdout": "new new\n",
+              "stderr": "",
+              "result": null,
+              "exitCode": 0
+            }
+          },
+          {
+            "id": "grep",
+            "context": null,
+            "status": "exited",
+            "sourceHash": "aea60905f716e759bfc37b30dbe445ab3d8f52a830f13908ede2c29a5feb4ed9",
+            "language": "wasm",
+            "startedAt": 1792209045573,
+            "finishedAt": 1792209046188,
+            "output": {
+              "stdout": "needle\n",
+              "stderr": "",
+              "result": null,
+              "exitCode": 0
+            }
+          },
+          {
+            "id": "gawk",
+            "context": null,
+            "status": "exited",
+            "sourceHash": "467ccfb890b4a3de7fb75de0e91cc6b3b769cd7296ca71bdd6f35500542d16df",
+            "language": "wasm",
+            "startedAt": 1792209046755,
+            "finishedAt": 1792209047369,
+            "output": {
+              "stdout": "12\n",
+              "stderr": "",
+              "result": null,
+              "exitCode": 0
+            }
+          },
+          {
+            "id": "findutils",
+            "context": null,
+            "status": "exited",
+            "sourceHash": "747926362cf82d9013e55c02126b926ac199a8853785b3a03580f0dc8e2d36fa",
+            "language": "wasm",
+            "startedAt": 1792209048037,
+            "finishedAt": 1792209049233,
+            "output": {
+              "stdout": "/tmp/seed.txt\n",
+              "stderr": "",
+              "result": null,
+              "exitCode": 0
+            }
+          },
+          {
+            "id": "diffutils",
+            "context": null,
+            "status": "exited",
+            "sourceHash": "9adf5b9e58087d27ab24e52f164eceb7eb4c2b0fddbac00b13e89e695f77660b",
+            "language": "wasm",
+            "startedAt": 1792209049992,
+            "finishedAt": 1792209050885,
+            "output": {
+              "stdout": "1c1\n< alpha\n---\n> beta\n",
+              "stderr": "",
+              "result": null,
+              "exitCode": 1
+            }
+          },
+          {
+            "id": "tar-write",
+            "context": null,
+            "status": "exited",
+            "sourceHash": "7b8b72513a047c2504b21fcf09688b70a68af22b6246ece7ff4176d892723b31",
+            "language": "wasm",
+            "startedAt": 1792209051516,
+            "finishedAt": 1792209052606,
+            "output": {
+              "stdout": "",
+              "stderr": "",
+              "result": null,
+              "exitCode": 0
+            }
+          },
+          {
+            "id": "tar-read",
+            "context": null,
+            "status": "exited",
+            "sourceHash": "9bca072eafa20c905bfa2028c48b155edb9825177c442c520cfbf5b970aacdba",
+            "language": "wasm",
+            "startedAt": 1792209053302,
+            "finishedAt": 1792209054076,
+            "output": {
+              "stdout": "seed.txt\n",
+              "stderr": "",
+              "result": null,
+              "exitCode": 0
+            }
+          },
+          {
+            "id": "gzip-write",
+            "context": null,
+            "status": "exited",
+            "sourceHash": "a97369a615447222e8b8030fbf139a4d5c57082eb1f115027d747df6a228e172",
+            "language": "wasm",
+            "startedAt": 1792209054576,
+            "finishedAt": 1792209055421,
+            "output": {
+              "stdout": "",
+              "stderr": "",
+              "result": null,
+              "exitCode": 0
+            }
+          },
+          {
+            "id": "gzip-read",
+            "context": null,
+            "status": "exited",
+            "sourceHash": "a3ac3c4f5c33ba5e52d7fb11e1104e2388016fce995b496a2cb8f55e231e6c3f",
+            "language": "wasm",
+            "startedAt": 1792209055944,
+            "finishedAt": 1792209056983,
+            "output": {
+              "stdout": "compressed content\n",
+              "stderr": "",
+              "result": null,
+              "exitCode": 0
+            }
+          },
+          {
+            "id": "jq",
+            "context": null,
+            "status": "exited",
+            "sourceHash": "d77590d33552b0262181e70ea17bf9b855ee3544facfb6e230deec399b6e0847",
+            "language": "wasm",
+            "startedAt": 1792209057591,
+            "finishedAt": 1792209058397,
+            "output": {
+              "stdout": "42\n",
+              "stderr": "",
+              "result": null,
+              "exitCode": 0
+            }
+          },
+          {
+            "id": "sh",
+            "context": null,
+            "status": "exited",
+            "sourceHash": "d528475055f04f8272b10b31ed1d5e4643021fabe96e8881fbe385a3e54f18b4",
+            "language": "wasm",
+            "startedAt": 1792209059309,
+            "finishedAt": 1792209060274,
+            "output": {
+              "stdout": "shell-ready\n",
+              "stderr": "",
+              "result": null,
+              "exitCode": 0
+            }
+          }
+        ]
+      },
+      "sdkModulesSha256": {
+        "../../src/sdk": "4a7d7a586f5655f382c2d5cbfe0d1e37b0f3df94889685750b4fdb4175110f1b",
+        "../../src/sdk-rpc": "17f888d441c2a9302e71e633de96912bdda5140712aeda76f9119d4d682b5651",
+        "../../src/sdk-tanstack": "f5f46c61a557c114e4b34a636b81d1c2e76024d79e6d431cd49b34bd945e3cac",
+        "../../src/contracts": "d9a1c725b153daafbf644f44a190b82ed879b504e1320e8e0a88c30f0421cac0"
+      },
+      "inlineDeadline": {
+        "requestedMs": 15000,
+        "startedAt": 1792209061731,
+        "recovery": {
+          "state": "running",
+          "checkpoints": 0,
+          "resumable": false,
+          "deadlineAt": 1792209076731
+        }
+      },
+      "proof": {
+        "measuredAt": 1792209088000,
+        "callback": {
+          "id": "rpc-callback",
+          "context": null,
+          "status": "exited",
+          "sourceHash": "75090090f42e508d6542184bce91b43c775c128d2ccfc04977bc226f5980cf7d",
+          "language": "typescript",
+          "startedAt": 1792209061731,
+          "finishedAt": 1792209064911,
+          "output": {
+            "stdout": "",
+            "stderr": "",
+            "result": {
+              "answer": 42,
+              "transport": "native RPC"
+            },
+            "exitCode": 0
+          }
+        },
+        "voidCallback": {
+          "id": "rpc-void",
+          "context": null,
+          "status": "exited",
+          "sourceHash": "0216a3fc5e53bcf477f59bda2cb4dc00f2f8f938fc8658ed498f019dcfbca5fa",
+          "language": "typescript",
+          "startedAt": 1792209065674,
+          "finishedAt": 1792209067079,
+          "output": {
+            "stdout": "",
+            "stderr": "",
+            "result": {
+              "wasUndefined": true,
+              "freshGlobals": true
+            },
+            "exitCode": 0
+          }
+        },
+        "interpreters": [
+          {
+            "id": "shebang-direct",
+            "context": null,
+            "status": "exited",
+            "sourceHash": "c79c9e8e573cb1313c5cadf0ce32e86376c9b0e2c2845ff9d215230fdca80a8c",
+            "language": "wasm",
+            "startedAt": 1792209069386,
+            "finishedAt": 1792209070578,
+            "output": {
+              "stdout": "/tmp/installed-script|a b|shebang-direct|input line\n",
+              "stderr": "",
+              "result": null,
+              "exitCode": 0
+            }
+          },
+          {
+            "id": "shebang-spawn",
+            "context": null,
+            "status": "exited",
+            "sourceHash": "00febb3abb8a7c3e2a09ec67df0d3ee957624168a9aa3c4b4b03a8f155564a7e",
+            "language": "wasm",
+            "startedAt": 1792209071324,
+            "finishedAt": 1792209073525,
+            "output": {
+              "stdout": "/tmp/installed-script|a b|shebang-spawn|input line\nafter",
+              "stderr": "",
+              "result": null,
+              "exitCode": 0
+            }
+          },
+          {
+            "id": "shebang-exec",
+            "context": null,
+            "status": "exited",
+            "sourceHash": "9195481d8a248dc8bc7a6eb041f0e13513d1ae651c91bf6ff69db89511219498",
+            "language": "wasm",
+            "startedAt": 1792209074313,
+            "finishedAt": 1792209076094,
+            "output": {
+              "stdout": "/tmp/installed-script|a b|shebang-exec|input line\n",
+              "stderr": "",
+              "result": null,
+              "exitCode": 0
+            }
+          }
+        ],
+        "interpreterFile": {
+          "content": "c2hlYmFuZy1leGVj",
+          "encoding": "base64",
+          "size": 12
+        },
+        "shellCwd": [
+          {
+            "id": "direct",
+            "result": {
+              "id": "direct",
+              "context": null,
+              "status": "exited",
+              "sourceHash": "ac15e1303cc719258d4329d60564bae2569a2a74b79c1b8445f7974de281fde0",
+              "language": "wasm",
+              "startedAt": 1792209079081,
+              "finishedAt": 1792209080332,
+              "output": {
+                "stdout": "/tmp/context|/tmp/context/script|hello\n",
+                "stderr": "",
+                "result": null,
+                "exitCode": 0
+              }
+            }
+          },
+          {
+            "id": "absolute",
+            "result": {
+              "id": "absolute",
+              "context": null,
+              "status": "exited",
+              "sourceHash": "973ba4b884c8e968eaaf6952e640529821f5c622467cfd58ac8b1148ae996160",
+              "language": "wasm",
+              "startedAt": 1792209081182,
+              "finishedAt": 1792209082036,
+              "output": {
+                "stdout": "/tmp/context\n",
+                "stderr": "",
+                "result": null,
+                "exitCode": 0
+              }
+            }
+          },
+          {
+            "id": "symlink",
+            "result": {
+              "id": "symlink",
+              "context": null,
+              "status": "exited",
+              "sourceHash": "ea73aa82411235bf14dcaf1c00a595e425d7e89050d4cd62d95a025503e2f22a",
+              "language": "wasm",
+              "startedAt": 1792209082748,
+              "finishedAt": 1792209083725,
+              "output": {
+                "stdout": "/tmp/context|/tmp/link/script|hello\n",
+                "stderr": "",
+                "result": null,
+                "exitCode": 0
+              }
+            }
+          },
+          {
+            "id": "spoofed-pwd",
+            "result": {
+              "id": "spoofed-pwd",
+              "context": null,
+              "status": "exited",
+              "sourceHash": "efbf0ef2c46ccd101fe40d3d2bab22dcf51e57d9347dccb2c7b6c9c1b1297d3d",
+              "language": "wasm",
+              "startedAt": 1792209084461,
+              "finishedAt": 1792209085710,
+              "output": {
+                "stdout": "/tmp/context|/tmp/context/script|hello\n",
+                "stderr": "",
+                "result": null,
+                "exitCode": 0
+              }
+            }
+          },
+          {
+            "id": "empty-environment",
+            "result": {
+              "id": "empty-environment",
+              "context": null,
+              "status": "exited",
+              "sourceHash": "b9afeb45b12f09e2e49b289187465a8f258c3e0abd479dd26a0d3cb4d2523c38",
+              "language": "wasm",
+              "startedAt": 1792209086704,
+              "finishedAt": 1792209087527,
+              "output": {
+                "stdout": "/tmp/context|/tmp/context/script|hello\n",
+                "stderr": "",
+                "result": null,
+                "exitCode": 0
+              }
+            }
+          }
+        ],
+        "file": {
+          "content": "bmF0aXZlIENsb3VkZmxhcmUgYmluZGluZw==",
+          "encoding": "base64",
+          "size": 25
+        },
+        "calls": [
+          {
+            "op": "host.call",
+            "name": "answer",
+            "input": {
+              "value": 21
+            }
+          },
+          {
+            "op": "host.call",
+            "name": "void"
+          }
+        ],
+        "managementDenied": 403,
+        "wrongSandboxDenied": 401
+      },
+      "descriptors": [
+        {
+          "run": {
+            "id": "descriptor-fexec",
+            "context": null,
+            "status": "exited",
+            "sourceHash": "0c8e786835f8ab9b3cbb4f71bb0f9dd9917b582ad1eb4f38c6d6ea2ce03c1779",
+            "language": "wasm",
+            "startedAt": 1792209090572,
+            "finishedAt": 1792209092026,
+            "output": {
+              "stdout": "/dev/fd/12|fexec|blue\n",
+              "stderr": "",
+              "result": null,
+              "exitCode": 0
+            }
+          },
+          "file": {
+            "content": "ZmV4ZWM=",
+            "encoding": "base64",
+            "size": 5
+          }
+        },
+        {
+          "run": {
+            "id": "descriptor-fexec-unlink",
+            "context": null,
+            "status": "exited",
+            "sourceHash": "d7884d7a020822394129d672fa05fe1b1f6595ea7f285e67efac13c8c54a135b",
+            "language": "wasm",
+            "startedAt": 1792209094270,
+            "finishedAt": 1792209096494,
+            "output": {
+              "stdout": "/dev/fd/12|fexec|blue\n",
+              "stderr": "",
+              "result": null,
+              "exitCode": 0
+            }
+          },
+          "file": {
+            "content": "ZmV4ZWMtdW5saW5r",
+            "encoding": "base64",
+            "size": 12
+          }
+        },
+        {
+          "run": {
+            "id": "descriptor-fexec-rename",
+            "context": null,
+            "status": "exited",
+            "sourceHash": "5252bf965c8a33706f36dfeb3936a9cf90179665b93b3d48f045d6d0f87c5c28",
+            "language": "wasm",
+            "startedAt": 1792209098300,
+            "finishedAt": 1792209100199,
+            "output": {
+              "stdout": "/dev/fd/12|fexec|blue\n",
+              "stderr": "",
+              "result": null,
+              "exitCode": 0
+            }
+          },
+          "file": {
+            "content": "ZmV4ZWMtcmVuYW1l",
+            "encoding": "base64",
+            "size": 12
+          }
+        },
+        {
+          "run": {
+            "id": "descriptor-fexec-cloexec",
+            "context": null,
+            "status": "exited",
+            "sourceHash": "eb6b5667f0c2002fb8bbacc86d9d2983b4532a613db8f38843879e671c868e02",
+            "language": "wasm",
+            "startedAt": 1792209102271,
+            "finishedAt": 1792209102819,
+            "output": {
+              "stdout": "",
+              "stderr": "",
+              "result": 44,
+              "exitCode": 0
+            }
+          },
+          "file": {
+            "content": "ZmV4ZWMtcmVuYW1l",
+            "encoding": "base64",
+            "size": 12
+          }
+        },
+        {
+          "run": {
+            "id": "descriptor-fexec-closed",
+            "context": null,
+            "status": "exited",
+            "sourceHash": "6ee56814462c45c8da4aae9696c84790e89f45dd9f76c2c5514aa4b6cf26f28e",
+            "language": "wasm",
+            "startedAt": 1792209104603,
+            "finishedAt": 1792209104958,
+            "output": {
+              "stdout": "",
+              "stderr": "",
+              "result": 44,
+              "exitCode": 0
+            }
+          },
+          "file": {
+            "content": "ZmV4ZWMtcmVuYW1l",
+            "encoding": "base64",
+            "size": 12
+          }
+        }
+      ],
+      "terminal": {
+        "inventory": {
+          "running": {
+            "id": "terminal-live",
+            "context": null,
+            "status": "running",
+            "sourceHash": "a8a6480394435899e061e452f41d433ae5dcff92bcf00e197b8faea415137b28",
+            "language": "wasm",
+            "startedAt": 1792209213053,
+            "finishedAt": null,
+            "stdinMode": "pty"
+          },
+          "settled": {
+            "id": "terminal-live",
+            "context": null,
+            "status": "exited",
+            "sourceHash": "a8a6480394435899e061e452f41d433ae5dcff92bcf00e197b8faea415137b28",
+            "language": "wasm",
+            "startedAt": 1792209213053,
+            "finishedAt": 1792209221217,
+            "stdinMode": "pty"
+          },
+          "pages": 4
+        },
+        "initial": {
+          "cols": 80,
+          "rows": 24,
+          "revision": 0
+        },
+        "resized": {
+          "cols": 100,
+          "rows": 30,
+          "revision": 2
+        },
+        "terminal": {
+          "id": "terminal-live",
+          "context": null,
+          "status": "exited",
+          "sourceHash": "a8a6480394435899e061e452f41d433ae5dcff92bcf00e197b8faea415137b28",
+          "language": "wasm",
+          "startedAt": 1792209213053,
+          "finishedAt": 1792209221217,
+          "output": {
+            "stdout": "ready\neof-ready\nwinch\nafter-one\nwinch\ndone\n",
+            "stderr": "",
+            "result": null,
+            "exitCode": 0
+          }
+        },
+        "agent": {
+          "id": "terminal-agent",
+          "context": null,
+          "status": "exited",
+          "sourceHash": "0bc9adff0ae13ee1bef54d4ae1ab07254e340a996cec8b6a418fe919151d4056",
+          "language": "typescript",
+          "startedAt": 1792209219232,
+          "finishedAt": 1792209219681,
+          "output": {
+            "stdout": "",
+            "stderr": "",
+            "result": {
+              "cols": 100,
+              "rows": 30,
+              "revision": 2
+            },
+            "exitCode": 0
+          }
+        },
+        "input": {
+          "offset": 0,
+          "total": 0,
+          "closed": true
+        },
+        "staleRevision": 409,
+        "foreignSandbox": 401,
+        "foreground": {
+          "id": "terminal-foreground",
+          "context": null,
+          "status": "exited",
+          "sourceHash": "ba142b7baf1b3995c8c0c79e34cbbaa5a5918c22842d94de6aaed64be41b3dc3",
+          "language": "wasm",
+          "startedAt": 1792209223768,
+          "finishedAt": 1792209224313,
+          "output": {
+            "stdout": "interrupt\npair-done\n",
+            "stderr": "",
+            "result": null,
+            "exitCode": 0
+          }
+        },
+        "rawOwners": {
+          "id": "terminal-raw-owners",
+          "context": null,
+          "status": "exited",
+          "sourceHash": "47334effdf47f9cd168641c5b517244045a26912fab8c5f7dd63d11088783fc2",
+          "language": "wasm",
+          "startedAt": 1792209228581,
+          "finishedAt": 1792209230496,
+          "output": {
+            "stdout": "raw-owners-restored\n",
+            "stderr": "",
+            "result": null,
+            "exitCode": 0
+          }
+        },
+        "termios": {
+          "id": "terminal-termios",
+          "context": null,
+          "status": "exited",
+          "sourceHash": "10c8332bd7f638de1770e1493da38074a0b06d618c198f589d69c36c835c641f",
+          "language": "wasm",
+          "startedAt": 1792209230957,
+          "finishedAt": 1792209231704,
+          "output": {
+            "stdout": "termios-verified\n",
+            "stderr": "",
+            "result": null,
+            "exitCode": 0
+          }
+        },
+        "attributes": {
+          "initial": {
+            "desired": {
+              "attributes": null,
+              "revision": 0
+            },
+            "observed": {
+              "attributes": {
+                "icrnl": true,
+                "opost": true,
+                "onlcr": true,
+                "icanon": true,
+                "echo": true,
+                "isig": true,
+                "cc": [3, 28, 26, 4, 127, 21, 23]
+              },
+              "revision": 0
+            },
+            "settled": false
+          },
+          "guest": {
+            "desired": {
+              "attributes": {
+                "icrnl": false,
+                "opost": false,
+                "onlcr": false,
+                "icanon": false,
+                "echo": false,
+                "isig": false,
+                "cc": [1, 2, 3, 4, 5, 6, 7]
+              },
+              "revision": 1
+            },
+            "observed": {
+              "attributes": {
+                "icrnl": false,
+                "opost": false,
+                "onlcr": false,
+                "icanon": false,
+                "echo": true,
+                "isig": false,
+                "cc": [1, 2, 3, 4, 5, 6, 7]
+              },
+              "revision": 1
+            },
+            "settled": false
+          },
+          "final": {
+            "desired": {
+              "attributes": {
+                "icrnl": true,
+                "opost": true,
+                "onlcr": true,
+                "icanon": true,
+                "echo": false,
+                "isig": true,
+                "cc": [1, 2, 3, 4, 5, 6, 7]
+              },
+              "revision": 3
+            },
+            "observed": {
+              "attributes": {
+                "icrnl": true,
+                "opost": true,
+                "onlcr": true,
+                "icanon": true,
+                "echo": false,
+                "isig": true,
+                "cc": [1, 2, 3, 4, 5, 6, 7]
+              },
+              "revision": 3
+            },
+            "settled": true
+          },
+          "process": {
+            "id": "terminal-attributes",
+            "context": null,
+            "status": "exited",
+            "sourceHash": "631b044078fbac8a03ddea47e5b1ef2185f919c6289a76ec7112a84ab6c8b3b0",
+            "language": "wasm",
+            "startedAt": 1792209238435,
+            "finishedAt": 1792209255467,
+            "output": {
+              "stdout": "attributes-ready\r\nraw-ok\nguest-changed\nconfigured-again\neof-ready\nterminal-done\r\n",
+              "stderr": "",
+              "result": null,
+              "exitCode": 0
+            }
+          },
+          "staleRevision": 409,
+          "foreignSandbox": 401
+        }
+      },
+      "detachedContexts": {
+        "created": {
+          "phase": "create",
+          "callbacks": 1,
+          "queued": [
+            {
+              "id": "detached-queued-js",
+              "context": {
+                "id": "detached-js",
+                "generation": 0
+              },
+              "status": "queued",
+              "sourceHash": "37706cbb9f0f63c57d6eba15c2542cd0998e68d4289f7dc40a99b0939366b3be",
+              "language": "typescript",
+              "startedAt": 1792209030029,
+              "finishedAt": null,
+              "output": null
+            },
+            {
+              "id": "detached-queued-python",
+              "context": {
+                "id": "detached-python",
+                "generation": 0
+              },
+              "status": "queued",
+              "sourceHash": "34a6a5152d55b824ea1d1442f093ca78f465171937d6d3ac0c360043d658aced",
+              "language": "python",
+              "startedAt": 1792209032099,
+              "finishedAt": null,
+              "output": null
+            }
+          ],
+          "schedule": {
+            "op": "cron.schedule",
+            "id": "detached-once",
+            "schedule": "2026-10-17T03:50:35.402Z",
+            "execution": {
+              "op": "javascript.evaluate",
+              "id": "detached-tick",
+              "contextId": "detached-cron",
+              "expression": "globalThis.next()"
+            },
+            "overlap": "queue",
+            "context": {
+              "id": "detached-cron",
+              "generation": 0
+            },
+            "state": "active",
+            "createdAt": 1792209033972,
+            "nextRun": 1792209035402,
+            "lastRun": null,
+            "runCount": 0,
+            "lastProcessId": null,
+            "error": null
+          }
+        },
+        "verified": {
+          "phase": "verify",
+          "queued": [
+            {
+              "id": "detached-queued-js",
+              "context": {
+                "id": "detached-js",
+                "generation": 0
+              },
+              "status": "exited",
+              "sourceHash": "2cbd6c79cde051e3455293463e8bab3b6b61598599f5551277f192cc692c97ca",
+              "language": "typescript",
+              "startedAt": 1792209032369,
+              "finishedAt": 1792209034979,
+              "output": {
+                "stdout": "",
+                "stderr": "",
+                "result": {
+                  "value": 41,
+                  "denied": "FORBIDDEN"
+                },
+                "exitCode": 0
+              }
+            },
+            {
+              "id": "detached-queued-python",
+              "context": {
+                "id": "detached-python",
+                "generation": 0
+              },
+              "status": "exited",
+              "sourceHash": "34a6a5152d55b824ea1d1442f093ca78f465171937d6d3ac0c360043d658aced",
+              "language": "python",
+              "startedAt": 1792209035745,
+              "finishedAt": 1792209038588,
+              "output": {
+                "stdout": "",
+                "stderr": "",
+                "result": 41,
+                "exitCode": 0
+              }
+            }
+          ],
+          "continued": [
+            {
+              "id": "detached-next-js",
+              "context": {
+                "id": "detached-js",
+                "generation": 0
+              },
+              "status": "exited",
+              "sourceHash": "78b5570582a5cd9b4dc8fb8de493fb9b71c046aee9a7867a7934204cdd2926e3",
+              "language": "javascript",
+              "startedAt": 1792209263560,
+              "finishedAt": 1792209266404,
+              "output": {
+                "stdout": "",
+                "stderr": "",
+                "result": 42,
+                "exitCode": 0
+              }
+            },
+            {
+              "id": "detached-next-python",
+              "context": {
+                "id": "detached-python",
+                "generation": 0
+              },
+              "status": "exited",
+              "sourceHash": "34a6a5152d55b824ea1d1442f093ca78f465171937d6d3ac0c360043d658aced",
+              "language": "python",
+              "startedAt": 1792209268109,
+              "finishedAt": 1792209271335,
+              "output": {
+                "stdout": "",
+                "stderr": "",
+                "result": 42,
+                "exitCode": 0
+              }
+            }
+          ],
+          "schedule": {
+            "op": "cron.schedule",
+            "id": "detached-once",
+            "schedule": "2026-10-17T03:50:35.402Z",
+            "execution": {
+              "op": "javascript.evaluate",
+              "id": "detached-tick",
+              "contextId": "detached-cron",
+              "expression": "globalThis.next()"
+            },
+            "overlap": "queue",
+            "context": {
+              "id": "detached-cron",
+              "generation": 0
+            },
+            "state": "completed",
+            "createdAt": 1792209033972,
+            "nextRun": null,
+            "lastRun": 1792209035402,
+            "runCount": 1,
+            "lastProcessId": "cron-9e66645c44f5a853b57d3b752ad4dac1e00deb1fbb01ce71fa7795bc17",
+            "error": null
+          },
+          "scheduledProcess": {
+            "id": "cron-9e66645c44f5a853b57d3b752ad4dac1e00deb1fbb01ce71fa7795bc17",
+            "context": {
+              "id": "detached-cron",
+              "generation": 0
+            },
+            "status": "exited",
+            "sourceHash": "459851de8b6eee45f01c06c485e09bf72217d7e67b8f588a75fc0ed3d192958b",
+            "language": "javascript",
+            "startedAt": 1792209042888,
+            "finishedAt": 1792209045248,
+            "output": {
+              "stdout": "",
+              "stderr": "",
+              "result": 41,
+              "exitCode": 0
+            }
+          },
+          "staleSchedule": {
+            "op": "cron.schedule",
+            "id": "detached-stale-once",
+            "schedule": "2026-10-17T03:50:35.402Z",
+            "execution": {
+              "op": "process.run",
+              "id": "detached-stale-tick",
+              "language": "javascript",
+              "source": "export default async({tools})=>tools.call({op:'filesystem.writeFile',path:'/detached-stale-entered',content:'bad',encoding:'utf8'})",
+              "contextId": "detached-stale"
+            },
+            "overlap": "allow",
+            "context": {
+              "id": "detached-stale",
+              "generation": 0
+            },
+            "state": "failed",
+            "createdAt": 1792209035073,
+            "nextRun": null,
+            "lastRun": null,
+            "runCount": 0,
+            "lastProcessId": null,
+            "error": "Execution belongs to another context generation"
+          },
+          "staleContext": {
+            "id": "detached-stale",
+            "language": "javascript",
+            "generation": 1,
+            "state": "idle",
+            "createdAt": 1792209012411,
+            "updatedAt": 1792209035833,
+            "executionId": null,
+            "deadlineAt": null
+          },
+          "staleFileExists": false
+        }
+      },
+      "retainedContexts": {
+        "created": {
+          "phase": "create",
+          "context": {
+            "id": "retained",
+            "language": "javascript",
+            "generation": 0,
+            "state": "idle",
+            "createdAt": 1792209139531,
+            "updatedAt": 1792209148106,
+            "executionId": "retained-first",
+            "deadlineAt": null
+          },
+          "records": [
+            {
+              "id": "retained-seed",
+              "context": {
+                "id": "retained",
+                "generation": 0
+              },
+              "status": "exited",
+              "sourceHash": "488ea9e6613986c876e109697e04010a3e6d16a8b89107feef55c722cbf3cdc0",
+              "language": "javascript",
+              "startedAt": 1792209141385,
+              "finishedAt": 1792209143984,
+              "output": {
+                "stdout": "",
+                "stderr": "",
+                "result": null,
+                "exitCode": 0
+              }
+            },
+            {
+              "id": "retained-first",
+              "context": {
+                "id": "retained",
+                "generation": 0
+              },
+              "status": "exited",
+              "sourceHash": "c737d8cb92926ce3263c827bacf2533abd4d84128402215f8854442f180ee25e",
+              "language": "typescript",
+              "startedAt": 1792209145700,
+              "finishedAt": 1792209149449,
+              "output": {
+                "stdout": "",
+                "stderr": "",
+                "result": {
+                  "counter": 41,
+                  "tool": 11
+                },
+                "exitCode": 0
+              }
+            }
+          ],
+          "callbacks": 1,
+          "deleted": false,
+          "driver": {
+            "value": 41,
+            "closedDenied": true
+          },
+          "python": {
+            "context": {
+              "id": "retained-python",
+              "language": "python",
+              "generation": 0,
+              "state": "idle",
+              "createdAt": 1792209119377,
+              "updatedAt": 1792209131842,
+              "executionId": "python-initial-value",
+              "deadlineAt": null
+            },
+            "records": [
+              {
+                "id": "python-seed",
+                "context": {
+                  "id": "retained-python",
+                  "generation": 0
+                },
+                "status": "exited",
+                "sourceHash": "c1ac3bc4418d432733a7b909d7a2672a71e52fc15ebcfc11cf129f027ae65236",
+                "language": "python",
+                "startedAt": 1792209121240,
+                "finishedAt": 1792209126632,
+                "output": {
+                  "stdout": "",
+                  "stderr": "",
+                  "result": null,
+                  "exitCode": 0
+                }
+              },
+              {
+                "id": "python-initial-value",
+                "context": {
+                  "id": "retained-python",
+                  "generation": 0
+                },
+                "status": "exited",
+                "sourceHash": "34a6a5152d55b824ea1d1442f093ca78f465171937d6d3ac0c360043d658aced",
+                "language": "python",
+                "startedAt": 1792209128371,
+                "finishedAt": 1792209132611,
+                "output": {
+                  "stdout": "",
+                  "stderr": "",
+                  "result": 41,
+                  "exitCode": 0
+                }
+              }
+            ],
+            "deleted": false
+          }
+        },
+        "resumed": {
+          "phase": "resume",
+          "context": {
+            "id": "retained",
+            "language": "javascript",
+            "generation": 1,
+            "state": "idle",
+            "createdAt": 1792209139531,
+            "updatedAt": 1792209206500,
+            "executionId": "retained-cleared",
+            "deadlineAt": null
+          },
+          "records": [
+            {
+              "id": "retained-next",
+              "context": {
+                "id": "retained",
+                "generation": 0
+              },
+              "status": "exited",
+              "sourceHash": "3c22822d46020f61fe10c63a93980c727ad77aed61725d9db04ecb258923c2e9",
+              "language": "typescript",
+              "startedAt": 1792209192627,
+              "finishedAt": 1792209197110,
+              "output": {
+                "stdout": "resumed\n",
+                "stderr": "",
+                "result": {
+                  "counter": 42,
+                  "tool": 42
+                },
+                "exitCode": 0
+              }
+            },
+            {
+              "id": "retained-denied",
+              "context": {
+                "id": "retained",
+                "generation": 0
+              },
+              "status": "exited",
+              "sourceHash": "f50b5c5b802ebe9743e9168ae29de3e0d7f4f086af80941aeda60afff8280ca6",
+              "language": "typescript",
+              "startedAt": 1792209198741,
+              "finishedAt": 1792209202130,
+              "output": {
+                "stdout": "",
+                "stderr": "",
+                "result": "FORBIDDEN",
+                "exitCode": 0
+              }
+            },
+            {
+              "id": "retained-cleared",
+              "context": {
+                "id": "retained",
+                "generation": 1
+              },
+              "status": "exited",
+              "sourceHash": "f8bd8ff550ea459186702ffdcb169dc0e5b5076958ff032c59e77c248c01a345",
+              "language": "javascript",
+              "startedAt": 1792209204844,
+              "finishedAt": 1792209207335,
+              "output": {
+                "stdout": "",
+                "stderr": "",
+                "result": "undefined",
+                "exitCode": 0
+              }
+            }
+          ],
+          "callbacks": 1,
+          "deleted": true,
+          "driver": {
+            "value": 42,
+            "closedDenied": true
+          },
+          "python": {
+            "context": {
+              "id": "retained-python",
+              "language": "python",
+              "generation": 1,
+              "state": "idle",
+              "createdAt": 1792209119377,
+              "updatedAt": 1792209183748,
+              "executionId": "python-cleared",
+              "deadlineAt": null
+            },
+            "records": [
+              {
+                "id": "python-resume",
+                "context": {
+                  "id": "retained-python",
+                  "generation": 0
+                },
+                "status": "exited",
+                "sourceHash": "a6a808662104029e97fc8491cddbe04d3fcb42bc6e4c8d8d6ef8444963e5f400",
+                "language": "python",
+                "startedAt": 1792209168189,
+                "finishedAt": 1792209172642,
+                "output": {
+                  "stdout": "",
+                  "stderr": "",
+                  "result": [
+                    42,
+                    "current",
+                    "c2VlZA==",
+                    [
+                      {
+                        "text": "a\u00e7\u00e3o",
+                        "value": 42
+                      },
+                      ["box", "native"],
+                      1,
+                      42,
+                      2
+                    ],
+                    false
+                  ],
+                  "exitCode": 0
+                }
+              },
+              {
+                "id": "python-denied",
+                "context": {
+                  "id": "retained-python",
+                  "generation": 0
+                },
+                "status": "exited",
+                "sourceHash": "63a2b8d98ae2c0e392ad6454615067f431ba23fa09b8fec01604a03de4b0cb06",
+                "language": "python",
+                "startedAt": 1792209174359,
+                "finishedAt": 1792209178400,
+                "output": {
+                  "stdout": "",
+                  "stderr": "",
+                  "result": "FORBIDDEN",
+                  "exitCode": 0
+                }
+              },
+              {
+                "id": "python-cleared",
+                "context": {
+                  "id": "retained-python",
+                  "generation": 1
+                },
+                "status": "exited",
+                "sourceHash": "703d590e2831eb0a587bb76aa83bf423dbd948db3193606373ad9255c295fe15",
+                "language": "python",
+                "startedAt": 1792209181191,
+                "finishedAt": 1792209184548,
+                "output": {
+                  "stdout": "",
+                  "stderr": "",
+                  "result": false,
+                  "exitCode": 0
+                }
+              }
+            ],
+            "deleted": true
+          }
+        }
+      },
+      "persistent": {
+        "created": {
+          "phase": "create",
+          "value": {
+            "content": "cGVyc2lzdGVudCBuYXRpdmUgYmluZGluZw==",
+            "encoding": "base64",
+            "freshGlobals": true,
+            "label": "create"
+          },
+          "callbacks": ["create"],
+          "closedContextDenied": true,
+          "writeDenied": null,
+          "lowMemoryDenied": true,
+          "policyMemoryDenied": true,
+          "allowedAllocation": 6000000
+        },
+        "resumed": {
+          "phase": "resume",
+          "value": {
+            "content": "cGVyc2lzdGVudCBuYXRpdmUgYmluZGluZw==",
+            "encoding": "base64",
+            "freshGlobals": true,
+            "label": "resume"
+          },
+          "callbacks": ["resume"],
+          "closedContextDenied": true,
+          "writeDenied": true,
+          "lowMemoryDenied": true,
+          "policyMemoryDenied": true,
+          "allowedAllocation": 6000000
+        },
+        "previousReceiptRetained": true
+      }
+    },
+    "storage": {
+      "measuredAt": 1792209012984,
+      "profile": "minutei",
+      "worker": "cirro-sandbox-prod-rs7wexxow56rmsoz",
+      "bucket": "cirro-objects-prod-vbk2p6ruhs2m645y",
+      "sandboxId": "software-storage-0901aa2b-781f-4a8c-8ebe-3e339d519f33",
+      "baseDigest": "e81f7f0e7a269a467614cbab3ccc0b18ff692f478219caff4b44bf3ea425aab3",
+      "placementMode": "smart",
+      "status": {
+        "id": "software-storage-0901aa2b-781f-4a8c-8ebe-3e339d519f33",
+        "generation": 0,
+        "filesystemBytes": 77754575,
+        "policy": {
+          "networkHosts": [],
+          "interruptBudget": 100000,
+          "memoryBytes": 8388608,
+          "maxOutputBytes": 1048576
+        }
+      },
+      "catalogPackages": 10,
+      "objectsAfterCreate": 1,
+      "privateSoftwareBlobsAfterCreate": 0,
+      "sharedObjectsBefore": 354,
+      "sharedObjectsAfterCollection": 354,
+      "reclaimed": true
+    },
+    "completedAt": "2026-10-17T03:46:42.415Z"
+  },
+  "cleanup": {
+    "cutover": {
+      "id": "memory-packs-cutover-cb0ce37e-cfbe-4076-b988-2949f16a0d02",
+      "reclaimed": true,
+      "steps": [
+        {
+          "phase": "processes",
+          "status": "pending",
+          "removed": 7,
+          "blocking": []
+        },
+        {
+          "phase": "inputs",
+          "status": "pending",
+          "removed": 0,
+          "blocking": []
+        },
+        {
+          "phase": "inputs",
+          "status": "pending",
+          "removed": 2,
+          "blocking": []
+        },
+        {
+          "phase": "schedules",
+          "status": "pending",
+          "removed": 0,
+          "blocking": []
+        },
+        {
+          "phase": "objects",
+          "status": "pending",
+          "removed": 0,
+          "blocking": []
+        },
+        {
+          "phase": "objects",
+          "status": "pending",
+          "removed": 318,
+          "blocking": []
+        },
+        {
+          "phase": "complete",
+          "status": "complete",
+          "removed": 0,
+          "blocking": []
+        }
+      ]
+    },
+    "ownedMarkers": {
+      "measuredAt": 1792209412066,
+      "ids": [
+        "memory-packs-cutover-cb0ce37e-cfbe-4076-b988-2949f16a0d02",
+        "remote-binding-644994ec-9b7e-475e-93a9-cca022377b1c",
+        "software-storage-0901aa2b-781f-4a8c-8ebe-3e339d519f33"
+      ],
+      "retained": [
+        "sandboxes/memory-packs-cutover-cb0ce37e-cfbe-4076-b988-2949f16a0d02/head.json",
+        "reclamations/memory-packs-cutover-cb0ce37e-cfbe-4076-b988-2949f16a0d02.json",
+        "sandboxes/remote-binding-644994ec-9b7e-475e-93a9-cca022377b1c/head.json",
+        "reclamations/remote-binding-644994ec-9b7e-475e-93a9-cca022377b1c.json",
+        "sandboxes/software-storage-0901aa2b-781f-4a8c-8ebe-3e339d519f33/head.json",
+        "reclamations/software-storage-0901aa2b-781f-4a8c-8ebe-3e339d519f33.json"
+      ],
+      "expectedMarkers": 6,
+      "complete": true
+    },
+    "finalAudit": {
+      "measuredAt": 1792209370291,
+      "profile": "minutei",
+      "worker": "cirro-sandbox-prod-rs7wexxow56rmsoz",
+      "bucket": "cirro-objects-prod-vbk2p6ruhs2m645y",
+      "placement": {
+        "mode": "smart"
+      },
+      "counts": {
+        "pages": 7,
+        "objects": 6084,
+        "processes": 1499,
+        "schedules": 2,
+        "contexts": 0,
+        "metadataAbsent": 2735
+      },
+      "formats": {
+        "run-v7": 1499,
+        "program-json-v2": 1397,
+        "program-json": 435,
+        "historical-source-text-v1": 16,
+        "cron-v2": 2
+      },
+      "statuses": {
+        "cancelled": 28,
+        "exited": 1362,
+        "failed": 109
+      },
+      "complete": true
+    },
+    "baselineProcessesRestored": true,
+    "baselineSchedulesRestored": true,
+    "remainingContexts": 0
+  },
+  "minutei": {
+    "status": "updated locally; no application push or deployment",
+    "consumerDependencyCommit": "2c19cf424f6370f5556f4df440f23a8b53c84dc6",
+    "changedPaths": ["apps/web/package.json", "bun.lock"],
+    "packageManager": "bun@1.4.0",
+    "install": "lockfile-only then frozen-lockfile; scripts disabled; native Nx sync checked separately",
+    "byteMatchedSdkFiles": 16,
+    "byteMatchedRuntimeFiles": 9,
+    "previousSdkCompatibility": {
+      "clientVersion": "0.23.0",
+      "runtimeVersion": "0.24.0",
+      "runtimeArchiveSha256": "1526a3e3ec13c454122003b1fa43ed173ff8e6d8f9b0a88cc6b6222bbefd2f9e",
+      "consumerCommit": "3a2f4b034b0b28eec740b507a7e0044a63acd02a",
+      "consumerBundleSha256": "c237951ec35b2a527cc40ec7a07169bc5863c57154ab41cea7b2f4406df58a4d",
+      "transport": "native workerd Agent service binding; actual Minutei Code Mode and tenant SQLite; local R2, KV and Queue",
+      "retention": true,
+      "isolatedRegistry": true,
+      "capabilities": true,
+      "consumerFixturesSha256": {
+        "boxes-retention.ts": "2f90aacc149345cf51ffefc0f00e468c51e00d75cbe7f3e3dd68c532714edf70",
+        "boxes-code.worker.ts": "c3d6f06ea5f5afe322076052267468c4702fe79aff596fa847d68bdc3045e5f4"
+      }
+    },
+    "matchingSdkAndRuntime": {
+      "clientVersion": "0.24.0",
+      "runtimeVersion": "0.24.0",
+      "runtimeArchiveSha256": "1526a3e3ec13c454122003b1fa43ed173ff8e6d8f9b0a88cc6b6222bbefd2f9e",
+      "consumerCommit": "3a2f4b034b0b28eec740b507a7e0044a63acd02a",
+      "consumerBundleSha256": "b1b7c3c5854a62811eb07db3a97dfc8accf61c32b7574e118d27ba13b1c5032d",
+      "transport": "native workerd Agent service binding; actual Minutei Code Mode and tenant SQLite; local R2, KV and Queue",
+      "retention": true,
+      "isolatedRegistry": true,
+      "capabilities": true,
+      "consumerFixturesSha256": {
+        "boxes-retention.ts": "2f90aacc149345cf51ffefc0f00e468c51e00d75cbe7f3e3dd68c532714edf70",
+        "boxes-code.worker.ts": "c3d6f06ea5f5afe322076052267468c4702fe79aff596fa847d68bdc3045e5f4"
+      }
+    },
+    "webTypecheck": {
+      "status": "passed",
+      "dependencyTasks": 29,
+      "criticalPathSeconds": 37.3
+    },
+    "nxSync": "passed",
+    "format": "passed"
+  },
+  "limitations": [
+    "Local physical GET/PUT counts cover the retained Python workload; production CPU, peak-memory, latency distributions and billing have not been compared.",
+    "The sequential shared-image publication took 371.2 seconds; this release does not establish faster deployment.",
+    "Named Agent RPC is exercised separately; Cloudflare Smart Placement applies to fetch handlers.",
+    "Closed backend replacement is covered by native local workerd/R2 tests. Two remote Cloudflare consumers prove consumer replacement and the production cutover, not arbitrary backend process crashes.",
+    "Minutei checks cover actual Code Mode/tenant fixtures and local bindings. Production app/authentication/model behavior and history Queue consumption remain unverified.",
+    "Full AgentOS parity, Python filesystem imports/pip and the remaining docs/parity.md gates stay open."
+  ]
+}

@@ -1,5 +1,5 @@
 {
-  "scope": "Local native Alchemy workerd and R2. Source implementation only; production remains SDK/runtime 0.23.0.",
+  "scope": "Local native Alchemy workerd and R2, measured before the 0.24.0 production rollout. Production was 0.23.0 at measurement time.",
   "baselineCommit": "c55df376e4b0a4359f01dc33f128a8274669d042",
   "format": {
     "codec": "zlib-packs-v1",
@@ -219,7 +219,7 @@
   "limitations": [
     "One local sample per Python phase; elapsed times are not an ABBA/BAAB distribution and do not establish latency improvement.",
     "Physical GET/PUT counts cover this synthetic retained-heap workload; no production CPU, peak-memory, request-billing or AgentOS cost comparison is proved.",
-    "No SDK/runtime release, production memory migration or Minutei deployment was performed for this source change.",
+    "This local report precedes SDK/runtime publication and production memory migration; see sdk-0.24.0-delivery.json for delivery. Minutei was updated locally without application deployment.",
     "Full AgentOS parity remains open in docs/parity.md.",
     "Legacy raw page objects remain until ordinary sandbox reclamation; migration does not immediately reclaim their storage."
   ],
@@ -252,5 +252,7 @@
         "resolution": "Consume the denied HTTP response and close the fixture-owned HTTP connections. The isolated migration probe and final complete suite passed without retries."
       }
     ]
-  }
+  },
+  "implementationCommit": "8ab3e17a1072f263bf7e24859f80e93cc9689744",
+  "productionFollowUp": "sdk-0.24.0-delivery.json"
 }
