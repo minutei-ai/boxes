@@ -1,0 +1,256 @@
+{
+  "scope": "Local native Alchemy workerd and R2. Source implementation only; production remains SDK/runtime 0.23.0.",
+  "baselineCommit": "c55df376e4b0a4359f01dc33f128a8274669d042",
+  "format": {
+    "codec": "zlib-packs-v1",
+    "logicalPageBytes": 65536,
+    "maximumPackPages": 16,
+    "maximumHeapPages": 1024,
+    "maximumMigrationPacksPerRequest": 4,
+    "heapManifestVersion": 2,
+    "executionCheckpointVersion": 2
+  },
+  "sourceFileSha256": {
+    "crates/kernel/src/memory.rs": "b9d40af3f543960be7a2230b77e0d87016e39ea4fe2941a6809341e761de1089",
+    "src/memory.ts": "82272ffea94e0d2123674ce8e75a9e818276260f5293d65279c75a8bd0f73acf",
+    "src/memory-migration.ts": "44ebf96d721e68eb2ba5b3871c250e05819ccbb74229bd0b0d99252232f6f2c0",
+    "src/contracts.ts": "ee91efd27786f2372fc1e6512997d1376763840bdcc9c9cee97252cfcbe3fa1a",
+    "src/checkpoint.ts": "e166b836bf83f3caf8fc6cb5eb901b443f523eb7842aa71b757edc1a937f1bb7",
+    "src/filesystem-migration.ts": "94310b7df836f12e84bf084a780b4ce51fc06ce24499483001f2599c6eb22640",
+    "alchemy.run.ts": "7f40aea3b8986b6967bcc6254e7fa25d6b01417aac776e5756ed6c7f2636bd61",
+    "tests/memory-migration.test.ts": "99dc2d469f6d82ad4a83a47e089f9b93acc7516a20623f46b8a5d47f518eb274",
+    "tests/recovery.test.ts": "a3ee1eed248e9c277b2cef35bed9f01007393d94f999f2bf05e3ecfd800499b6",
+    "tests/fixtures/legacy-memory.ts": "6ea5899e4df4c7cf48d131212868a07140d6d86251266d65a2401fd2ffc16d02",
+    "tooling/python-memory-proof.ts": "b986fe4d379b45eae7cb721b9ab1202a7a9417917107dcb6784ff753731495de"
+  },
+  "runtimeWasm": {
+    "dist/kernel/cirro_kernel_bg.wasm": {
+      "bytes": 1196063,
+      "sha256": "b6a47273a35b12f7691e2f27dfac54d02b33dccaded0824da5389c68da9db186"
+    },
+    "dist/python/cirro_python_bg.wasm": {
+      "bytes": 11038634,
+      "sha256": "e16a80501af46363e7a5bc1552b32fd0afd84000145a755da9ef5076756ae1cc"
+    },
+    "dist/wasi/cirro_wasi_bg.wasm": {
+      "bytes": 1707779,
+      "sha256": "0d1fd49eb2d515f724ad1067dec002f07d009d056bb6091402807b8ac5110090"
+    },
+    "dist/guest/cirro_guest_bg.wasm": {
+      "bytes": 1150616,
+      "sha256": "dcf1a9d66b4c3a11106076c3e9d5fa1f596b8846a811dfeec9ecf3a8744af01f"
+    }
+  },
+  "pythonR2Comparison": {
+    "workloadMatches": true,
+    "pythonBinaryMatches": true,
+    "allOutputsMatch": true,
+    "baseline": {
+      "measuredAt": 1792203290862,
+      "runtime": "Bun 1.4.3; native Alchemy workerd and local R2",
+      "scope": "Three native Python executions with each prior Worker closed before the next starts. Counts forward real R2 page gets; elapsed time includes the request and checkpoint publication, excludes Worker startup, and is not a production latency distribution.",
+      "workloadSha256": "bd923efded5e5abe73bdba428e68ae5c1266dbddfa99cc747b290ac776d74e35",
+      "pythonWasmSha256": "e16a80501af46363e7a5bc1552b32fd0afd84000145a755da9ef5076756ae1cc",
+      "measurements": [
+        {
+          "phase": 0,
+          "elapsedMs": 1885.693058,
+          "proof": {
+            "hash": "c5a5f6c64a1f98a9e4194aeae04e3b926a0db64b9854cee477d5406cd7110621",
+            "output": {
+              "stdout": "first\n",
+              "stderr": "",
+              "result": [41, 2, "first"],
+              "exitCode": 0
+            },
+            "nonquiescentDenied": true,
+            "duplicateHandleDenied": false,
+            "pageWrites": 144,
+            "pageReads": 0,
+            "memoryBytes": 11206656,
+            "uniquePages": 144
+          }
+        },
+        {
+          "phase": 1,
+          "elapsedMs": 777.778637,
+          "proof": {
+            "hash": "d1f15080684b0304b731357ff9c15403c8b9e374f4d37aff972af779098956f5",
+            "output": {
+              "stdout": "second\n",
+              "stderr": "",
+              "result": [
+                42,
+                "second",
+                null,
+                "/first.py",
+                {
+                  "text": "a\u00e7\u00e3o",
+                  "value": 42
+                },
+                ["box", "native"],
+                1,
+                42,
+                2
+              ],
+              "exitCode": 0
+            },
+            "nonquiescentDenied": false,
+            "duplicateHandleDenied": true,
+            "pageWrites": 46,
+            "pageReads": 144,
+            "memoryBytes": 12320768,
+            "uniquePages": 145
+          }
+        },
+        {
+          "phase": 2,
+          "elapsedMs": 527.56803,
+          "proof": {
+            "hash": "4c579dc527cfc37c7a96acaf62c4ede7f42a6f602b7b3fb6dce7362ec3ebde53",
+            "output": {
+              "stdout": "",
+              "stderr": "",
+              "result": [43, false],
+              "exitCode": 0
+            },
+            "nonquiescentDenied": false,
+            "duplicateHandleDenied": true,
+            "pageWrites": 20,
+            "pageReads": 145,
+            "memoryBytes": 12320768,
+            "uniquePages": 145
+          }
+        }
+      ]
+    },
+    "candidate": {
+      "measuredAt": 1792206232343,
+      "runtime": "Bun 1.4.3; native Alchemy workerd and local R2",
+      "scope": "Three native Python executions with each prior Worker closed before the next starts. Counts forward real R2 pack gets; elapsed time includes the request and checkpoint publication, excludes Worker startup, and is not a production latency distribution.",
+      "workloadSha256": "bd923efded5e5abe73bdba428e68ae5c1266dbddfa99cc747b290ac776d74e35",
+      "pythonWasmSha256": "e16a80501af46363e7a5bc1552b32fd0afd84000145a755da9ef5076756ae1cc",
+      "measurements": [
+        {
+          "phase": 0,
+          "elapsedMs": 831.05045,
+          "proof": {
+            "hash": "6b9c1680971fd7098169f7c34896d6076feaa1b8e161e4617cad5e6c87530a62",
+            "output": {
+              "stdout": "first\n",
+              "stderr": "",
+              "result": [41, 2, "first"],
+              "exitCode": 0
+            },
+            "nonquiescentDenied": true,
+            "duplicateHandleDenied": false,
+            "puts": 11,
+            "reads": 0,
+            "memoryBytes": 11206656,
+            "uniquePages": 144,
+            "packs": 11
+          }
+        },
+        {
+          "phase": 1,
+          "elapsedMs": 581.723318,
+          "proof": {
+            "hash": "6405165225ff62afad777b70e313e8de366a54214bd4ed5aa0504c981b2a3963",
+            "output": {
+              "stdout": "second\n",
+              "stderr": "",
+              "result": [
+                42,
+                "second",
+                null,
+                "/first.py",
+                {
+                  "text": "a\u00e7\u00e3o",
+                  "value": 42
+                },
+                ["box", "native"],
+                1,
+                42,
+                2
+              ],
+              "exitCode": 0
+            },
+            "nonquiescentDenied": false,
+            "duplicateHandleDenied": true,
+            "puts": 9,
+            "reads": 11,
+            "memoryBytes": 12320768,
+            "uniquePages": 145,
+            "packs": 12
+          }
+        },
+        {
+          "phase": 2,
+          "elapsedMs": 524.620759,
+          "proof": {
+            "hash": "4b5a35ba0bb077e02aaac3700793007fef07c19644a104f62f87f21ee48fc246",
+            "output": {
+              "stdout": "",
+              "stderr": "",
+              "result": [43, false],
+              "exitCode": 0
+            },
+            "nonquiescentDenied": false,
+            "duplicateHandleDenied": true,
+            "puts": 8,
+            "reads": 12,
+            "memoryBytes": 12320768,
+            "uniquePages": 145,
+            "packs": 12
+          }
+        }
+      ]
+    }
+  },
+  "provenBehavior": [
+    "Native Python and QuickJS closures resume after the original Worker closes without replay or generation reset.",
+    "Legacy pages are digest-checked before conversion and acknowledged packs are read back and compared before progress advances.",
+    "Partial layout conversion preserves the legacy root until completion and limits each call to four packs.",
+    "An active persisted context lease delays migration without replacing its record.",
+    "A real queued Wasmi continuation retains grant, checkpoint count and start time, defers the legacy header before claim, fences the old Queue ETag, and resumes once after conversion.",
+    "Native WASI family, pipe, EOF, wait-status and corruption proofs cover the compressed pager.",
+    "Configuration and filesystem conversions preserve legacy heap-version markers until the memory owner performs its cutover."
+  ],
+  "limitations": [
+    "One local sample per Python phase; elapsed times are not an ABBA/BAAB distribution and do not establish latency improvement.",
+    "Physical GET/PUT counts cover this synthetic retained-heap workload; no production CPU, peak-memory, request-billing or AgentOS cost comparison is proved.",
+    "No SDK/runtime release, production memory migration or Minutei deployment was performed for this source change.",
+    "Full AgentOS parity remains open in docs/parity.md.",
+    "Legacy raw page objects remain until ordinary sandbox reclamation; migration does not immediately reclaim their storage."
+  ],
+  "checks": {
+    "full": {
+      "command": "bun run check",
+      "result": "passed",
+      "tests": 439,
+      "failures": 0,
+      "assertions": 6432,
+      "files": 99,
+      "nativeTestSeconds": 260.65,
+      "logSha256": "8f7d12bb234825fe6826a4408a251e082a87d80e018a337533207ce8154e0e17"
+    },
+    "format": {
+      "command": "bun run format:check",
+      "result": "passed"
+    },
+    "diff": {
+      "command": "git diff --check",
+      "result": "passed"
+    },
+    "earlierAttempts": [
+      {
+        "result": "438 passed, one failed in the configuration checkpoint fixture",
+        "resolution": "Decode and assert the preserved legacy parent version until the memory migration owns its conversion."
+      },
+      {
+        "result": "26 directed tests passed; one native platform-proxy call failed with ECONNRESET",
+        "resolution": "Consume the denied HTTP response and close the fixture-owned HTTP connections. The isolated migration probe and final complete suite passed without retries."
+      }
+    ]
+  }
+}

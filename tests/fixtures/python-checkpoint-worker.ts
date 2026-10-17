@@ -28,6 +28,20 @@ export default {
           const input = yield* Schema.decodeUnknownEffect(
             Schema.fromJsonString(PythonCheckpointRequest),
           )(yield* Effect.promise(() => request.text()));
+          const observed = { reads: 0 };
+          const objects = new Proxy(env.OBJECTS, {
+            get(target, property) {
+              if (property === "get")
+                return (...args: Parameters<Env["OBJECTS"]["get"]>) => {
+                  if (args[0].startsWith("sandboxes/python-heap-proof/checkpoint-packs/"))
+                    observed.reads += 1;
+                  return target.get(...args);
+                };
+              const value = Reflect.get(target, property, target);
+              if (typeof value === "function") return value.bind(target);
+              return value;
+            },
+          });
           const bindings = createBindings();
           const state = bindings.initSync({ module: wasm });
           state.__cirro_limits(
@@ -51,7 +65,7 @@ export default {
             );
             if (metadata.runtime !== revision.sha256)
               return yield* Effect.die("Python runtime mismatch");
-            yield* restoreMemoryPages(env.OBJECTS, "python-heap-proof", state.memory, metadata);
+            yield* restoreMemoryPages(objects, "python-heap-proof", state.memory, metadata);
             return metadata;
           });
           const ownership = { consumed: false };
@@ -121,6 +135,7 @@ export default {
           );
           const metadata = {
             runtime: revision.sha256,
+            codec: saved.codec,
             memoryBytes: saved.memoryBytes,
             pages: saved.pages,
             handle,
@@ -142,7 +157,11 @@ export default {
               output: result.step.output,
               nonquiescentDenied: result.nonquiescentDenied,
               duplicateHandleDenied,
-              pageWrites: saved.pageWrites,
+              puts: saved.puts,
+              reads: observed.reads,
+              memoryBytes: saved.memoryBytes,
+              uniquePages: new Set(saved.pages).size,
+              packs: saved.packs,
             }),
             { headers: { "content-type": "application/json" } },
           );

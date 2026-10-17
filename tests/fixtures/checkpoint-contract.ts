@@ -15,7 +15,8 @@ export const CheckpointProof = Schema.Union([
     reads: Schema.Struct({
       pages: Schema.Int,
       uniquePages: Schema.Int,
-      pageRequests: Schema.Int,
+      packs: Schema.Int,
+      packRequests: Schema.Int,
     }),
   }),
 ]);

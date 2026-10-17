@@ -4,6 +4,7 @@ import { PLATFORM_PROXY_PREFIX } from "@alchemy.run/cloudflare-runtime/core/plat
 import wasm from "cirro:wasi";
 import { createBindings } from "../../dist/wasi/bindings";
 import { saveHeap, restoreHeap } from "../../src/checkpoint";
+import { memoryPackPlan } from "../../src/memory";
 import { WasmStep, SpawnStageResult, HeapSnapshot } from "../../src/contracts";
 import type { Env } from "../../src/resources";
 
@@ -77,13 +78,13 @@ export default {
               ]);
               return { op: "saved" as const, hash, before };
             }
-            const counts = { pageRequests: 0 };
+            const counts = { packRequests: 0 };
             const objects = new Proxy(env.OBJECTS, {
               get(target, property) {
                 if (property === "get")
                   return (...args: Parameters<Env["OBJECTS"]["get"]>) => {
-                    if (args[0].startsWith("sandboxes/checkpoint-test/checkpoint-pages/"))
-                      counts.pageRequests += 1;
+                    if (args[0].startsWith("sandboxes/checkpoint-test/checkpoint-packs/"))
+                      counts.packRequests += 1;
                     return target.get(...args);
                   };
                 const value = Reflect.get(target, property, target);
@@ -103,7 +104,8 @@ export default {
             const reads = {
               pages: snapshot.pages.length,
               uniquePages: new Set(snapshot.pages).size,
-              pageRequests: counts.pageRequests,
+              packs: (yield* memoryPackPlan(snapshot.pages)).length,
+              packRequests: counts.packRequests,
             };
             const handle = restored.handles[0];
             if (handle === undefined) return yield* Effect.die("Missing test checkpoint handle");

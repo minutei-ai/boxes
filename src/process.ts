@@ -906,6 +906,8 @@ export const dispatch = Effect.fn("process.dispatch")(function* (env: Env, body:
   }).pipe(Effect.result);
   if (context._tag === "Failure") {
     if (context.failure._tag !== "Fault") return yield* context.failure;
+    if (context.failure.code === "CHECKPOINT_MIGRATION_PENDING")
+      return yield* new ExecutionPending({ retryAfterSeconds: 15 });
     if (context.failure.code === "CONTEXT_BUSY" || context.failure.code === "CONFLICT")
       return yield* new ExecutionPending({ retryAfterSeconds: 1 });
   }

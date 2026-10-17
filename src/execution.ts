@@ -315,6 +315,7 @@ export const execute = Effect.fn("execution.run")(function* (
     );
     yield* finishContext(env, capability, context, {
       runtime: revision.sha256,
+      codec: saved.codec,
       memoryBytes: saved.memoryBytes,
       pages: saved.pages,
       handle,

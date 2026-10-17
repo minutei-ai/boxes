@@ -17,6 +17,11 @@ import {
 import { make } from "../src/sdk";
 import { runtime } from "../tooling/worker-test";
 
+const PreviousCheckpoint = ExecutionCheckpoint.mapFields((fields) => ({
+  ...fields,
+  version: Schema.Literal(1),
+}));
+
 test(
   "configuration cutover converts legacy inputs in bounded replayable pages without admitting old jobs",
   () =>
@@ -368,8 +373,9 @@ test(
             );
             if (saved === null) return yield* Effect.die("Missing converted checkpoint");
             const converted = yield* Schema.decodeUnknownEffect(
-              Schema.fromJsonString(ExecutionCheckpoint),
+              Schema.fromJsonString(PreviousCheckpoint),
             )(yield* Effect.promise(() => saved.text()));
+            expect(converted.version).toBe(1);
             expect(converted.head.version).toBe(3);
             expect(converted.head.environment).toEqual({});
             expect(converted.heap).toBe(checkpoint.heap);

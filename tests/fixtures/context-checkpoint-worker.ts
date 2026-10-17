@@ -30,7 +30,7 @@ const saveMemory = Effect.fn("contextFixture.saveMemory")(function* (
     get(target, property) {
       if (property === "put")
         return (...args: Parameters<Env["OBJECTS"]["put"]>) => {
-          if (args[0].startsWith("sandboxes/context-heap-proof/checkpoint-pages/"))
+          if (args[0].startsWith("sandboxes/context-heap-proof/checkpoint-packs/"))
             observed.writes += 1;
           return target.put(...args);
         };
@@ -40,11 +40,12 @@ const saveMemory = Effect.fn("contextFixture.saveMemory")(function* (
     },
   });
   const saved = yield* saveMemoryPages(traced, "context-heap-proof", memory, previous);
-  if (observed.writes !== saved.pageWrites)
+  if (observed.writes !== saved.puts)
     return yield* Effect.die("Native R2 writes differ from page accounting");
   const metadata = yield* Schema.decodeUnknownEffect(ContextMemory)({
     version: 2,
     runtime: revision.sha256,
+    codec: saved.codec,
     memoryBytes: saved.memoryBytes,
     pages: saved.pages,
     handle,
@@ -63,7 +64,8 @@ const saveMemory = Effect.fn("contextFixture.saveMemory")(function* (
     storage: {
       pages: saved.pages.length,
       uniquePages: new Set(saved.pages).size,
-      pageWrites: observed.writes,
+      packs: saved.packs,
+      puts: observed.writes,
     },
   };
 });
@@ -115,7 +117,7 @@ export default {
             );
             const inventory = yield* Effect.promise(() =>
               env.OBJECTS.list({
-                prefix: "sandboxes/memory-pages-proof/checkpoint-pages/",
+                prefix: "sandboxes/memory-pages-proof/checkpoint-packs/",
                 limit: 1000,
               }),
             );
@@ -125,22 +127,25 @@ export default {
               first: {
                 pages: first.pages.length,
                 uniquePages: new Set(first.pages).size,
-                pageWrites: first.pageWrites,
+                packs: first.packs,
+                puts: first.puts,
               },
               unchanged: {
                 pages: unchanged.pages.length,
                 uniquePages: new Set(unchanged.pages).size,
-                pageWrites: unchanged.pageWrites,
+                packs: unchanged.packs,
+                puts: unchanged.puts,
               },
               changed: {
                 pages: changed.pages.length,
                 uniquePages: new Set(changed.pages).size,
-                pageWrites: changed.pageWrites,
+                packs: changed.packs,
+                puts: changed.puts,
               },
               restoredBytes: [0, 65_536, 131_072].map(
                 (offset) => new Uint8Array(restored.buffer)[offset],
               ),
-              storedPages: inventory.objects.length,
+              storedPacks: inventory.objects.length,
               rejectedLayouts,
             };
           }

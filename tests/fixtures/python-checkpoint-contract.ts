@@ -16,5 +16,9 @@ export const PythonCheckpointProof = Schema.Struct({
   output: RunResult,
   nonquiescentDenied: Schema.Boolean,
   duplicateHandleDenied: Schema.Boolean,
-  pageWrites: Schema.Int,
+  puts: Schema.Int,
+  reads: Schema.Int,
+  memoryBytes: Schema.Int,
+  uniquePages: Schema.Int,
+  packs: Schema.Int,
 });

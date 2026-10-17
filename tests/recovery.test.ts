@@ -2,7 +2,7 @@ import { expect, test } from "bun:test";
 import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { Schema, Match, Struct } from "effect";
+import { Effect, Schema, Match, Struct } from "effect";
 import {
   RunRecord,
   StoredRun,
@@ -13,8 +13,20 @@ import {
   HeapSnapshot,
   StoredRunMetadata,
   RecoveryStatus,
+  MemoryMigrationInput,
+  MemoryMigrationReceipt,
 } from "../src/contracts";
 import { runtime } from "../tooling/worker-test";
+import { writeLegacyMemory } from "./fixtures/legacy-memory";
+
+const PriorHeap = HeapSnapshot.mapFields((fields) => ({
+  ...Struct.omit(fields, ["codec"]),
+  version: Schema.Literal(1),
+}));
+const PriorCheckpoint = ExecutionCheckpoint.mapFields((fields) => ({
+  ...fields,
+  version: Schema.Literal(1),
+}));
 const post = async (
   instance: ReturnType<typeof runtime>,
   path: string,
@@ -27,11 +39,11 @@ const post = async (
     body: JSON.stringify(body),
   });
 
-for (const mode of ["synced", "unsynced"] as const) {
+for (const mode of ["synced", "unsynced", "legacy-packed"] as const) {
   test(`a ${mode} checkpointed Queue claim resumes across Worker replacement without repeating file writes or entry`, async () => {
     const artifact = Match.value(mode).pipe(
-      Match.when("synced", () => "wasi-recovery.wasm"),
-      Match.orElse(() => "wasi-recovery-unsynced.wasm"),
+      Match.when("unsynced", () => "wasi-recovery-unsynced.wasm"),
+      Match.orElse(() => "wasi-recovery.wasm"),
     );
     const source = Buffer.from(
       await Bun.file(join(import.meta.dir, `../dist/${artifact}`)).arrayBuffer(),
@@ -101,13 +113,107 @@ for (const mode of ["synced", "unsynced"] as const) {
       op: "filesystem.readFile",
       path: "/tmp/recovery-counter",
     });
-    if (mode === "synced") {
+    if (mode !== "unsynced") {
       expect(observedFirst.status).toBe(200);
       const firstFile = Schema.decodeUnknownSync(FileContent)(await observedFirst.json());
       expect(Buffer.from(firstFile.content, firstFile.encoding).toString()).toBe("A");
     } else expect(observedFirst.status).toBe(404);
+    if (mode === "legacy-packed") {
+      const heapObject = await bucket.get(`sandboxes/recover/checkpoints/${checkpoint.heap}.json`);
+      if (heapObject === null) return expect(heapObject).not.toBeNull();
+      const heap = Schema.decodeUnknownSync(Schema.fromJsonString(HeapSnapshot))(
+        await heapObject.text(),
+      );
+      await Effect.runPromise(writeLegacyMemory(bucket, "recover", heap));
+      const heapBody = Schema.encodeSync(Schema.fromJsonString(PriorHeap))({
+        ...Struct.omit(heap, ["codec"]),
+        version: 1,
+      });
+      const heapHash = Buffer.from(
+        await crypto.subtle.digest("SHA-256", new TextEncoder().encode(heapBody)),
+      ).toString("hex");
+      await bucket.put(`sandboxes/recover/checkpoints/${heapHash}.json`, heapBody);
+      const body = Schema.encodeSync(Schema.fromJsonString(PriorCheckpoint))({
+        ...checkpoint,
+        version: 1,
+        heap: heapHash,
+      });
+      const hash = Buffer.from(
+        await crypto.subtle.digest("SHA-256", new TextEncoder().encode(body)),
+      ).toString("hex");
+      await bucket.put(`sandboxes/recover/execution-checkpoints/${hash}.json`, body);
+      await bucket.put(
+        key,
+        Schema.encodeSync(Schema.fromJsonString(StoredRun))({ ...paused, checkpoint: hash }),
+        {
+          onlyIf: { etagMatches: object.etag },
+          customMetadata: object.customMetadata,
+        },
+      );
+      const packs = await bucket.list({
+        prefix: "sandboxes/recover/checkpoint-packs/",
+        limit: 1000,
+      });
+      expect(packs.truncated).toBe(false);
+      await bucket.delete(packs.objects.map((entry) => entry.key));
+    }
     await first.dispose();
     const second = runtime(directory);
+    if (mode === "legacy-packed") {
+      const before = await (await second.objects).head(key);
+      if (before === null) return expect(before).not.toBeNull();
+      await (
+        await second.control
+      ).deliver("executions", [
+        {
+          id: "deferred-old-checkpoint",
+          timestamp: new Date(),
+          attempts: 1,
+          body: Schema.encodeSync(ProcessDelivery)({ key, eTag: before.etag }),
+        },
+      ]);
+      expect((await (await second.objects).head(key))?.etag).toBe(before.etag);
+      const cursors: (typeof MemoryMigrationReceipt.Type.cursor)[] = [null];
+      const progress = { calls: 0, migrated: 0 };
+      while (cursors.length > 0) {
+        const cursor = cursors.shift();
+        const response = await post(
+          second,
+          "/v1/migrations/memory-packs-v1",
+          "cirro-local-test-credential",
+          Schema.encodeSync(MemoryMigrationInput)({ cursor }),
+        );
+        expect(response.status).toBe(200);
+        const receipt = Schema.decodeUnknownSync(Schema.fromJsonString(MemoryMigrationReceipt))(
+          await response.text(),
+        );
+        progress.calls += 1;
+        progress.migrated += receipt.migrated;
+        if (receipt.cursor !== null) cursors.push(receipt.cursor);
+        if (progress.calls > 100) return expect(progress.calls).toBeLessThanOrEqual(100);
+      }
+      expect(progress.migrated).toBe(1);
+      const migrated = await (await second.objects).get(key);
+      if (migrated === null) return expect(migrated).not.toBeNull();
+      const record = Schema.decodeUnknownSync(Schema.fromJsonString(StoredRun))(
+        await migrated.text(),
+      );
+      expect(record.checkpointCount).toBe(paused.checkpointCount);
+      expect(record.startedAt).toBe(paused.startedAt);
+      expect(record.authority).toEqual(paused.authority);
+      expect(record.checkpoint).toBe(paused.checkpoint);
+      await (
+        await second.control
+      ).deliver("executions", [
+        {
+          id: "stale-before-migration",
+          timestamp: new Date(),
+          attempts: 2,
+          body: Schema.encodeSync(ProcessDelivery)({ key, eTag: before.etag }),
+        },
+      ]);
+      expect((await (await second.objects).head(key))?.etag).toBe(migrated.etag);
+    }
     const current = await (await second.objects).head(key);
     expect(current).not.toBeNull();
     if (current === null) return;

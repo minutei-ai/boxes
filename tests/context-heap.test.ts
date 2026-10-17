@@ -3,13 +3,21 @@ import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { Effect, Schema } from "effect";
-import { ErrorResponse } from "../src/contracts";
+import { checkpointMemoryCodec, checkpointPackPages, ErrorResponse } from "../src/contracts";
+import { initSync, pack_memory, unpack_memory } from "../dist/kernel/cirro_kernel";
+
 import { runtime } from "../tooling/worker-test";
 import {
   ContextCheckpointRequest,
   ContextCheckpointProof,
   ContextMemory,
 } from "./fixtures/context-checkpoint-contract";
+
+initSync({
+  module: new WebAssembly.Module(
+    await Bun.file(new URL("../dist/kernel/cirro_kernel_bg.wasm", import.meta.url)).arrayBuffer(),
+  ),
+});
 
 test(
   "R2 restores a QuickJS closure and pending promise after the original Worker closes",
@@ -97,19 +105,28 @@ test(
           const metadata = yield* Schema.decodeUnknownEffect(Schema.fromJsonString(ContextMemory))(
             yield* Effect.promise(() => manifest.text()),
           );
-          const blob = yield* Effect.promise(() =>
-            objects.get(`sandboxes/context-heap-proof/checkpoint-pages/${metadata.pages[0]}`),
-          );
+          const identity = metadata.pages.slice(0, checkpointPackPages).join("");
+          const packHash = Buffer.from(
+            yield* Effect.promise(() =>
+              crypto.subtle.digest(
+                "SHA-256",
+                new TextEncoder().encode(`${checkpointMemoryCodec}:${identity}`),
+              ),
+            ),
+          ).toString("hex");
+          const packKey = `sandboxes/context-heap-proof/checkpoint-packs/${packHash}`;
+          const blob = yield* Effect.promise(() => objects.get(packKey));
           if (blob === null) return yield* Effect.die("Missing native R2 context image");
           const original = yield* Effect.promise(() => blob.arrayBuffer());
-          const corrupt = new Uint8Array(original.slice(0));
-          corrupt[corrupt.byteLength - 1] ^= 1;
-          yield* Effect.promise(() =>
-            objects.put(
-              `sandboxes/context-heap-proof/checkpoint-pages/${metadata.pages[0]}`,
-              corrupt,
+          const raw = Uint8Array.from(
+            unpack_memory(
+              new Uint8Array(original),
+              Math.min(metadata.pages.length, checkpointPackPages) * 65536,
             ),
           );
+          raw[raw.byteLength - 1] ^= 1;
+          const corrupt = Uint8Array.from(pack_memory(raw));
+          yield* Effect.promise(() => objects.put(packKey, corrupt));
           const rejected = yield* Effect.promise(() =>
             fetch(url, {
               method: "POST",
@@ -127,12 +144,7 @@ test(
               yield* Effect.promise(() => rejected.text()),
             ),
           ).toEqual({ error: "STORAGE_FAILURE", message: "Context checkpoint validation failed" });
-          yield* Effect.promise(() =>
-            objects.put(
-              `sandboxes/context-heap-proof/checkpoint-pages/${metadata.pages[0]}`,
-              original,
-            ),
-          );
+          yield* Effect.promise(() => objects.put(packKey, original));
           const changed = Schema.encodeSync(Schema.fromJsonString(ContextMemory))({
             ...metadata,
             runtime: "0".repeat(64),
@@ -224,7 +236,7 @@ const transferContext = Effect.fn("contextTest.transfer")(function* (
         yield* Effect.promise(() => manifest.text()),
       );
       const inventory = yield* Effect.promise(() =>
-        objects.list({ prefix: "sandboxes/context-heap-proof/checkpoint-pages/", limit: 1000 }),
+        objects.list({ prefix: "sandboxes/context-heap-proof/checkpoint-packs/", limit: 1000 }),
       );
       expect(inventory.truncated).toBe(false);
       const manifests = yield* Effect.promise(() =>
@@ -232,7 +244,7 @@ const transferContext = Effect.fn("contextTest.transfer")(function* (
       );
       expect(manifests.truncated).toBe(false);
       expect(manifests.objects.every((object) => object.key.endsWith(".json"))).toBe(true);
-      return { ...proof, snapshot, storedPages: inventory.objects.length };
+      return { ...proof, snapshot, storedPacks: inventory.objects.length };
     }),
   );
 });
@@ -268,8 +280,8 @@ test(
           expect(saved.request).toEqual({ op: "host.call", name: "echo", input: 2 });
           const firstPages = new Set(saved.snapshot.pages);
           expect(saved.storage.uniquePages).toBe(firstPages.size);
-          expect(saved.storage.pageWrites).toBe(saved.storage.uniquePages);
-          expect(saved.storedPages).toBe(saved.storage.uniquePages);
+          expect(saved.storage.puts).toBe(saved.storage.packs);
+          expect(saved.storedPacks).toBe(saved.storage.packs);
           expect(saved.storage.uniquePages).toBeLessThan(saved.storage.pages);
           const second = yield* transferContext(directory, {
             op: "reenter",
@@ -312,11 +324,11 @@ test(
           expect(second.hash).not.toBe(saved.hash);
           const secondPages = new Set(second.snapshot.pages);
           expect(second.storage.uniquePages).toBe(secondPages.size);
-          expect(second.storage.pageWrites).toBe(
-            Array.from(secondPages).filter((hash) => !firstPages.has(hash)).length,
-          );
-          expect(second.storage.pageWrites).toBeLessThan(second.storage.uniquePages);
-          expect(second.storedPages).toBe(saved.storedPages + second.storage.pageWrites);
+          expect(Array.from(secondPages).some((hash) => firstPages.has(hash))).toBe(true);
+          expect(second.storage.puts).toBeGreaterThan(0);
+          expect(second.storage.puts).toBeLessThanOrEqual(second.storage.packs);
+          expect(second.storage.puts).toBeLessThan(second.storage.uniquePages);
+          expect(second.storedPacks).toBe(saved.storedPacks + second.storage.puts);
           const third = yield* transferContext(directory, {
             op: "continue",
             hash: second.hash,
@@ -351,11 +363,11 @@ test(
           expect(third.hash).not.toBe(second.hash);
           const thirdPages = new Set(third.snapshot.pages);
           expect(third.storage.uniquePages).toBe(thirdPages.size);
-          expect(third.storage.pageWrites).toBe(
-            Array.from(thirdPages).filter((hash) => !secondPages.has(hash)).length,
-          );
-          expect(third.storage.pageWrites).toBeLessThan(third.storage.uniquePages);
-          expect(third.storedPages).toBe(second.storedPages + third.storage.pageWrites);
+          expect(Array.from(thirdPages).some((hash) => secondPages.has(hash))).toBe(true);
+          expect(third.storage.puts).toBeGreaterThan(0);
+          expect(third.storage.puts).toBeLessThanOrEqual(third.storage.packs);
+          expect(third.storage.puts).toBeLessThan(third.storage.uniquePages);
+          expect(third.storedPacks).toBe(second.storedPacks + third.storage.puts);
         }),
       ),
     ),
@@ -390,11 +402,11 @@ test(
             Schema.fromJsonString(ContextCheckpointProof),
           )(yield* Effect.promise(() => response.text()));
           if (proof.op !== "pages") return yield* Effect.die("Missing native page proof");
-          expect(proof.first).toEqual({ pages: 3, uniquePages: 1, pageWrites: 1 });
-          expect(proof.unchanged).toEqual({ pages: 3, uniquePages: 1, pageWrites: 0 });
-          expect(proof.changed).toEqual({ pages: 3, uniquePages: 2, pageWrites: 1 });
+          expect(proof.first).toEqual({ pages: 3, uniquePages: 1, packs: 1, puts: 1 });
+          expect(proof.unchanged).toEqual({ pages: 3, uniquePages: 1, packs: 1, puts: 0 });
+          expect(proof.changed).toEqual({ pages: 3, uniquePages: 2, packs: 1, puts: 1 });
           expect(proof.restoredBytes).toEqual([0, 0, 42]);
-          expect(proof.storedPages).toBe(2);
+          expect(proof.storedPacks).toBe(2);
           expect(proof.rejectedLayouts).toEqual(
             Array.from({ length: 4 }, () => "Invalid checkpoint page layout"),
           );

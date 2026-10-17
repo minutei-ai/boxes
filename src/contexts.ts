@@ -70,6 +70,11 @@ export const referenceContext = Effect.fn("contexts.reference")(function* (
   return Struct.pick(record, ["id", "generation"]);
 });
 
+const ContextStorageHeader = StoredContext.mapFields((fields) => ({
+  language: Schema.optionalKey(fields.language),
+  heap: Schema.NullOr(ContextHeap.mapFields((heap) => ({ codec: Schema.optionalKey(heap.codec) }))),
+}));
+
 const readContext = Effect.fn("contexts.read")(function* (env: Env, sandboxId: string, id: string) {
   const object = yield* Effect.tryPromise({
     try: () => env.OBJECTS.get(`sandboxes/${sandboxId}/contexts/${id}.json`),
@@ -78,14 +83,22 @@ const readContext = Effect.fn("contexts.read")(function* (env: Env, sandboxId: s
   if (object === null) return null;
   if (object.size > 131_072)
     return yield* new StorageFailure({ cause: "Oversized context record" });
+  const body = yield* Effect.tryPromise({
+    try: () => object.text(),
+    catch: (cause) => new StorageFailure({ cause }),
+  });
+  const header = yield* Schema.decodeUnknownEffect(Schema.fromJsonString(ContextStorageHeader))(
+    body,
+  ).pipe(Effect.mapError((cause) => new StorageFailure({ cause })));
+  if (header.language === undefined || (header.heap !== null && header.heap.codec === undefined))
+    return yield* new Fault({
+      code: "CHECKPOINT_MIGRATION_PENDING",
+      status: 503,
+      message: "Context memory migration has not completed",
+    });
   const record = yield* Schema.decodeUnknownEffect(Schema.fromJsonString(StoredContext), {
     onExcessProperty: "error",
-  })(
-    yield* Effect.tryPromise({
-      try: () => object.text(),
-      catch: (cause) => new StorageFailure({ cause }),
-    }),
-  ).pipe(Effect.mapError((cause) => new StorageFailure({ cause })));
+  })(body).pipe(Effect.mapError((cause) => new StorageFailure({ cause })));
   if (record.id !== id) return yield* new StorageFailure({ cause: "Context identity mismatch" });
   return { record, etag: object.etag };
 });

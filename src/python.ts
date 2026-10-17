@@ -199,6 +199,7 @@ export const python = Effect.fn("python.execute")(function* (
     );
     yield* finishContext(env, capability, context, {
       runtime: revision.sha256,
+      codec: saved.codec,
       memoryBytes: saved.memoryBytes,
       pages: saved.pages,
       handle,

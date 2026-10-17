@@ -1192,14 +1192,35 @@ export const ContextMigrationReceipt = Schema.Struct({
   cursor: Schema.NullOr(ContextMigrationCursor),
 });
 export const MigrationReceipt = Schema.Struct({ migrated: Schema.Int });
+const MemoryMigrationCursor = Schema.Struct({
+  phase: Schema.Literals(["contexts", "processes"]),
+  continuation: Schema.NullOr(Schema.String.check(Schema.isMaxLength(2048))),
+});
+export const MemoryMigrationInput = Schema.Struct({
+  cursor: Schema.optionalKey(Schema.NullOr(MemoryMigrationCursor)),
+});
+export const MemoryMigrationReceipt = Schema.Struct({
+  migrated: Schema.Int,
+  cursor: Schema.NullOr(MemoryMigrationCursor),
+  retryAfterMs: Schema.Int.check(Schema.isBetween({ minimum: 0, maximum: 1000 })),
+});
 
 export const checkpointPageLimit = 1024;
+export const checkpointPackPages = 16;
+export const checkpointMemoryCodec = "zlib-packs-v1";
 export const MemoryPages = Schema.Struct({
+  codec: Schema.Literal(checkpointMemoryCodec),
   memoryBytes: Schema.Int.check(
     Schema.isBetween({ minimum: 65_536, maximum: checkpointPageLimit * 65_536 }),
   ),
   pages: Schema.Array(Digest).check(Schema.isMaxLength(checkpointPageLimit)),
-});
+}).check(
+  Schema.makeFilter(
+    (snapshot) =>
+      snapshot.memoryBytes % 65_536 === 0 &&
+      snapshot.pages.length === snapshot.memoryBytes / 65_536,
+  ),
+);
 export const ContextHeap = Schema.Struct({
   runtime: Digest,
   ...MemoryPages.fields,
@@ -1219,7 +1240,7 @@ export const StoredContext = Schema.Struct({
   }),
 );
 export const HeapSnapshot = Schema.Struct({
-  version: Schema.Literal(1),
+  version: Schema.Literal(2),
   runtime: Digest,
   ...MemoryPages.fields,
   handles: Schema.Array(
@@ -1231,7 +1252,7 @@ export const HeapSnapshot = Schema.Struct({
 });
 
 export const ExecutionCheckpoint = Schema.Struct({
-  version: Schema.Literal(1),
+  version: Schema.Literal(2),
   heap: Schema.String.check(Schema.isPattern(/^[a-f0-9]{64}$/)),
   manifest: Schema.String.check(Schema.isMaxLength(8_388_608)),
   head: Head,

@@ -2,15 +2,20 @@ import { Effect, Schema } from "effect";
 import { migrate_filesystem } from "../dist/kernel/cirro_kernel";
 import {
   Head,
+  ExecutionCheckpoint,
   Id,
   StoredRun,
   StoredRunMetadata,
   FilesystemMigrationInput,
   FilesystemMigrationReceipt,
 } from "./contracts";
-import { restoreExecutionCheckpoint, saveExecutionCheckpoint } from "./checkpoint";
 import { kernelCall, StorageFailure } from "./storage";
 import type { Env } from "./resources";
+
+const MigratingCheckpoint = ExecutionCheckpoint.mapFields((fields) => ({
+  ...fields,
+  version: Schema.Union([Schema.Literal(1), fields.version]),
+}));
 
 class FilesystemMigrationFailure extends Schema.TaggedError<FilesystemMigrationFailure>()(
   "FilesystemMigrationFailure",
@@ -118,7 +123,25 @@ export const migrateFilesystem = Effect.fn("migration.filesystem")(function* (
       const manifest = yield* kernelCall(() => migrate_filesystem(head.manifest));
       if (manifest !== head.manifest)
         return yield* new FilesystemMigrationFailure({ key: object.key });
-      const checkpoint = yield* restoreExecutionCheckpoint(env.OBJECTS, id, record.checkpoint);
+      const checkpointObject = yield* Effect.tryPromise({
+        try: () =>
+          env.OBJECTS.get(`sandboxes/${id}/execution-checkpoints/${record.checkpoint}.json`),
+        catch: (cause) => new StorageFailure({ cause }),
+      });
+      if (checkpointObject === null || checkpointObject.size > 16_777_216)
+        return yield* new FilesystemMigrationFailure({ key: object.key });
+      const checkpointBytes = yield* Effect.tryPromise({
+        try: () => checkpointObject.arrayBuffer(),
+        catch: (cause) => new StorageFailure({ cause }),
+      });
+      const checkpointHash = Buffer.from(
+        yield* Effect.promise(() => crypto.subtle.digest("SHA-256", checkpointBytes)),
+      ).toString("hex");
+      if (checkpointHash !== record.checkpoint)
+        return yield* new FilesystemMigrationFailure({ key: object.key });
+      const checkpoint = yield* Schema.decodeUnknownEffect(
+        Schema.fromJsonString(MigratingCheckpoint),
+      )(Buffer.from(checkpointBytes).toString());
       const checkpointHeadManifest = yield* kernelCall(() =>
         migrate_filesystem(checkpoint.head.manifest),
       );
@@ -144,12 +167,26 @@ export const migrateFilesystem = Effect.fn("migration.filesystem")(function* (
         etag === checkpoint.etag
       )
         return;
-      const reference = yield* saveExecutionCheckpoint(env.OBJECTS, id, {
-        ...checkpoint,
-        manifest: checkpointManifest,
-        head: checkpointHead,
-        etag,
-        checkpointManifest: publishedManifest,
+      const encoded = new TextEncoder().encode(
+        Schema.encodeSync(Schema.fromJsonString(MigratingCheckpoint))({
+          ...checkpoint,
+          manifest: checkpointManifest,
+          head: checkpointHead,
+          etag,
+          checkpointManifest: publishedManifest,
+        }),
+      );
+      if (encoded.length > 16_777_216)
+        return yield* new FilesystemMigrationFailure({ key: object.key });
+      const reference = Buffer.from(
+        yield* Effect.promise(() => crypto.subtle.digest("SHA-256", encoded)),
+      ).toString("hex");
+      yield* Effect.tryPromise({
+        try: () =>
+          env.OBJECTS.put(`sandboxes/${id}/execution-checkpoints/${reference}.json`, encoded, {
+            onlyIf: { etagDoesNotMatch: "*" },
+          }),
+        catch: (cause) => new StorageFailure({ cause }),
       });
       const metadata = yield* Schema.decodeUnknownEffect(StoredRunMetadata)(process.customMetadata);
       const changed = yield* Effect.tryPromise({

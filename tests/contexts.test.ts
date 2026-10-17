@@ -194,7 +194,7 @@ test(
           ).toHaveLength(0);
           expect(
             (yield* Effect.promise(() =>
-              objects.list({ prefix: "sandboxes/contexts/checkpoint-pages/" }),
+              objects.list({ prefix: "sandboxes/contexts/checkpoint-packs/" }),
             )).objects,
           ).toHaveLength(0);
         }),

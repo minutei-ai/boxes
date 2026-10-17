@@ -9,6 +9,8 @@ import {
   ContextRecord,
   ContextMigrationInput,
   ContextMigrationReceipt,
+  MemoryMigrationInput,
+  MemoryMigrationReceipt,
   ContextPage,
   AgentRequest,
   AgentReply,
@@ -63,6 +65,7 @@ import { migrateConfiguration } from "./configuration-migration";
 import { migrateCron } from "./cron-migration";
 import { CronMigrationInput, CronMigrationReceipt } from "./contracts";
 import { migrateContexts } from "./context-migration";
+import { migrateMemory } from "./memory-migration";
 import { migrateFilesystem } from "./filesystem-migration";
 import { migrateProcesses, migrateOutput, migrateDeadlines } from "./process-migration";
 import { migrateWasm } from "./wasm-migration";
@@ -128,6 +131,17 @@ const route = Effect.fn("api.route")(function* (request: Request, env: Env) {
         headers: { "content-type": "application/json", "cache-control": "no-store" },
       },
     );
+  }
+  if (url.pathname === "/v1/migrations/memory-packs-v1") {
+    yield* administrator(env, token);
+    const bytes = yield* readBounded(request.body, 4096);
+    const input = yield* Schema.decodeUnknownEffect(Schema.fromJsonString(MemoryMigrationInput), {
+      onExcessProperty: "error",
+    })(bytes.toString("utf8"));
+    const receipt = yield* migrateMemory(env, input);
+    return new Response(Schema.encodeSync(Schema.fromJsonString(MemoryMigrationReceipt))(receipt), {
+      headers: { "content-type": "application/json", "cache-control": "no-store" },
+    });
   }
   if (url.pathname === "/v1/migrations/context-language-v1") {
     yield* administrator(env, token);

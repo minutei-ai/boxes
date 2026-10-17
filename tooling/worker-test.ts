@@ -76,8 +76,8 @@ export const runtime = (persist: string, options: typeof Options.Type = {}) => {
   const engines = Match.value(artifact).pipe(
     Match.when("clock-worker", () => ["kernel", "wasi", "guest", "compiler", "python"]),
     Match.when("checkpoint-worker", () => ["kernel", "wasi"]),
-    Match.when("context-checkpoint-worker", () => ["guest"]),
-    Match.when("python-checkpoint-worker", () => ["python"]),
+    Match.when("context-checkpoint-worker", () => ["guest", "kernel"]),
+    Match.when("python-checkpoint-worker", () => ["python", "kernel"]),
     Match.exhaustive,
   );
   const modules = [

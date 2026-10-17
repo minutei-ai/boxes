@@ -405,7 +405,7 @@ export const wasi = Effect.fn("wasi.execute")(function* (
     yield* Scope.close(family, Exit.void);
     const heap = yield* saveHeap(env.OBJECTS, capability.sandboxId, native.exports.memory, handles);
     const reference = yield* saveExecutionCheckpoint(env.OBJECTS, capability.sandboxId, {
-      version: 1,
+      version: 2,
       heap,
       manifest,
       head: state.session.head,

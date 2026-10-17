@@ -19,8 +19,15 @@ export const saveHeap = Effect.fn("checkpoint.saveHeap")(function* (
     !handles.some((item) => item.pid === 1)
   )
     return yield* new StorageFailure({ cause: "Checkpoint handles do not identify one family" });
-  const { memoryBytes, pages } = yield* saveMemoryPages(objects, sandboxId, memory);
-  const snapshot = { version: 1 as const, runtime: revision.sha256, memoryBytes, pages, handles };
+  const { codec, memoryBytes, pages } = yield* saveMemoryPages(objects, sandboxId, memory);
+  const snapshot = {
+    version: 2 as const,
+    runtime: revision.sha256,
+    codec,
+    memoryBytes,
+    pages,
+    handles,
+  };
   const bytes = Buffer.from(Schema.encodeSync(Schema.fromJsonString(HeapSnapshot))(snapshot));
   const digest = yield* Effect.promise(() => crypto.subtle.digest("SHA-256", bytes));
   const hash = Buffer.from(digest).toString("hex");
@@ -101,7 +108,10 @@ export class CheckpointVersionPending extends Schema.TaggedError<CheckpointVersi
   "CheckpointVersionPending",
   {},
 ) {}
-const CheckpointVersion = Schema.Struct({ head: Schema.Struct({ version: Schema.Int }) });
+const CheckpointVersion = Schema.Struct({
+  version: Schema.Int,
+  head: Schema.Struct({ version: Schema.Int }),
+});
 export const restoreExecutionCheckpoint = Effect.fn("checkpoint.restoreExecution")(function* (
   objects: Env["OBJECTS"],
   sandboxId: string,
@@ -122,6 +132,7 @@ export const restoreExecutionCheckpoint = Effect.fn("checkpoint.restoreExecution
     return yield* new StorageFailure({ cause: "Execution checkpoint digest mismatch" });
   const text = Buffer.from(bytes).toString();
   const header = yield* Schema.decodeUnknownEffect(Schema.fromJsonString(CheckpointVersion))(text);
-  if (header.head.version !== 3) return yield* new CheckpointVersionPending({});
+  if (header.head.version !== 3 || header.version !== 2)
+    return yield* new CheckpointVersionPending({});
   return yield* Schema.decodeUnknownEffect(Schema.fromJsonString(ExecutionCheckpoint))(text);
 });

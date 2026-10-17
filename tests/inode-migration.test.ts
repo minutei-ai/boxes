@@ -21,6 +21,11 @@ initSync({
   ),
 });
 
+const PreviousCheckpoint = ExecutionCheckpoint.mapFields((fields) => ({
+  ...fields,
+  version: Schema.Literal(1),
+}));
+
 test(
   "filesystem cutover migrates retained checkpoint metadata, resumes a partial conversion and preserves stale CAS authority",
   () =>
@@ -129,7 +134,7 @@ test(
               savedAt: 0,
               fuelUsed: 0,
             };
-            const body = yield* Schema.encodeEffect(Schema.fromJsonString(ExecutionCheckpoint))(
+            const body = yield* Schema.encodeEffect(Schema.fromJsonString(PreviousCheckpoint))(
               checkpoint,
             );
             const hash = Buffer.from(
@@ -198,7 +203,7 @@ test(
             );
             if (saved === null) return yield* Effect.die("Missing checkpoint object");
             const restored = yield* Schema.decodeUnknownEffect(
-              Schema.fromJsonString(ExecutionCheckpoint),
+              Schema.fromJsonString(PreviousCheckpoint),
             )(yield* Effect.promise(() => saved.text()));
             expect(restored.manifest).toBe(migrate_filesystem(legacy));
             expect(restored.head.manifest).toBe(restored.manifest);

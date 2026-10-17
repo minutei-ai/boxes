@@ -14,7 +14,6 @@ import {
   Id,
 } from "./contracts";
 import { archive } from "./code";
-import { saveExecutionCheckpoint } from "./checkpoint";
 import { StorageFailure } from "./storage";
 import type { Env } from "./resources";
 
@@ -41,6 +40,7 @@ const PreviousProgram = Schema.Union([
 const MigratingProgram = Schema.Union([Program, PreviousProgram]);
 const MigratingCheckpoint = ExecutionCheckpoint.mapFields((fields) => ({
   ...fields,
+  version: Schema.Union([Schema.Literal(1), fields.version]),
   head: Schema.Union([Head, PreviousHead]),
 }));
 const normalizeHead = (head: typeof MigratingHead.Type): typeof Head.Type => {
@@ -308,11 +308,27 @@ export const migrateConfiguration = Effect.fn("migration.configuration")(functio
             if (encode(normalized) !== encode(head)) return prior.etag;
             return current.etag;
           });
-          return yield* saveExecutionCheckpoint(env.OBJECTS, id, {
-            ...prior,
-            head: normalized,
-            etag,
+          const encoded = Buffer.from(
+            Schema.encodeSync(Schema.fromJsonString(MigratingCheckpoint))({
+              ...prior,
+              head: normalized,
+              etag,
+            }),
+          );
+          if (encoded.length > 16_777_216)
+            return yield* new StorageFailure({
+              cause: "Execution checkpoint exceeds its metadata limit",
+            });
+          const digest = yield* Effect.promise(() => crypto.subtle.digest("SHA-256", encoded));
+          const reference = Buffer.from(digest).toString("hex");
+          yield* Effect.tryPromise({
+            try: () =>
+              env.OBJECTS.put(`sandboxes/${id}/execution-checkpoints/${reference}.json`, encoded, {
+                onlyIf: { etagDoesNotMatch: "*" },
+              }),
+            catch: (cause) => new StorageFailure({ cause }),
           });
+          return reference;
         }).pipe(decoding.withPermits(8));
         if (sourceHash === record.sourceHash && checkpoint === record.checkpoint) return;
         const updated = { ...record, sourceHash, checkpoint };

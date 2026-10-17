@@ -256,6 +256,7 @@ dependencies = [
 name = "cirro-kernel"
 version = "0.1.0"
 dependencies = [
+ "miniz_oxide",
  "regex",
  "serde",
  "serde_bare",

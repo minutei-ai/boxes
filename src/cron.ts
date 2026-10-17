@@ -248,6 +248,7 @@ const fire = Effect.fn("cron.fire")(function* (env: Env, key: string, now: numbe
   );
   if (launched._tag === "Failure") {
     if (launched.failure._tag === "Fault") {
+      if (launched.failure.code === "CHECKPOINT_MIGRATION_PENDING") return;
       yield* publish(
         env,
         key,

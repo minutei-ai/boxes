@@ -1,6 +1,8 @@
 mod shell;
 pub use shell::Shell;
+mod memory;
 mod software;
+pub use memory::{pack_memory, unpack_memory};
 
 use serde::ser::{SerializeSeq, Serializer};
 use serde::{Deserialize, Serialize};

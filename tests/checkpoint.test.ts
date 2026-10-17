@@ -4,13 +4,19 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { runtime } from "../tooling/worker-test";
 import { Schema } from "effect";
-import { HeapSnapshot } from "../src/contracts";
+import { checkpointMemoryCodec, checkpointPackPages, HeapSnapshot } from "../src/contracts";
+import { initSync, pack_memory, unpack_memory } from "../dist/kernel/cirro_kernel";
 import { CheckpointProof, CheckpointRequest } from "./fixtures/checkpoint-contract";
 
 const source = Buffer.from(
   await Bun.file(join(import.meta.dir, "../dist/wasi-slices-finite.wasm")).arrayBuffer(),
 ).toString("base64");
 const instance = (persist: string) => runtime(persist, { artifact: "checkpoint-worker" });
+initSync({
+  module: new WebAssembly.Module(
+    await Bun.file(new URL("../dist/kernel/cirro_kernel_bg.wasm", import.meta.url)).arrayBuffer(),
+  ),
+});
 const send = async (runtime: ReturnType<typeof instance>, input: typeof CheckpointRequest.Type) =>
   fetch(await runtime.ready, {
     method: "POST",
@@ -46,7 +52,8 @@ test("R2 heap pages resume Wasmi frames in a replacement workerd without reenter
   await second.dispose();
   await rm(directory, { recursive: true, force: true });
   expect(proof.reads.uniquePages).toBeLessThan(proof.reads.pages);
-  expect(proof.reads.pageRequests).toBe(proof.reads.uniquePages);
+  expect(proof.reads.packRequests).toBe(proof.reads.packs);
+  expect(proof.reads.packs).toBeLessThan(proof.reads.uniquePages);
 }, 15000);
 
 test("checkpoint integrity and Rust runtime identity are checked before native resume", async () => {
@@ -76,19 +83,21 @@ test("checkpoint integrity and Rust runtime identity are checked before native r
   const rejected = await send(runtime, { op: "resume", hash });
   expect(rejected.status).toBe(500);
   expect(await rejected.text()).toContain("another Rust runtime");
-  const page = Array.from(Map.groupBy(snapshot.pages, (hash) => hash)).find(
-    ([, pages]) => pages.length > 1,
-  )?.[0];
-  expect(page).toBeDefined();
-  if (page === undefined) return;
-  const pageKey = `sandboxes/checkpoint-test/checkpoint-pages/${page}`;
+  const hashes = snapshot.pages.slice(0, checkpointPackPages);
+  const packHash = Buffer.from(
+    await crypto.subtle.digest(
+      "SHA-256",
+      new TextEncoder().encode(`${checkpointMemoryCodec}:${hashes.join("")}`),
+    ),
+  ).toString("hex");
+  const pageKey = `sandboxes/checkpoint-test/checkpoint-packs/${packHash}`;
   const original = await bucket.get(pageKey);
   expect(original).not.toBeNull();
   if (original === null) return;
   const bytes = await original.arrayBuffer();
-  const corrupted = new Uint8Array(bytes.slice(0));
+  const corrupted = Uint8Array.from(unpack_memory(new Uint8Array(bytes), hashes.length * 65536));
   corrupted[0] = corrupted[0] ^ 1;
-  await bucket.put(pageKey, corrupted);
+  await bucket.put(pageKey, Uint8Array.from(pack_memory(corrupted)));
   const failed = await send(runtime, { op: "resume", hash: saved.hash });
   expect(failed.status).toBe(500);
   expect(await failed.text()).toContain("Checkpoint page digest mismatch");

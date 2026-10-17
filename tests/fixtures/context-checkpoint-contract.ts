@@ -18,7 +18,8 @@ export const ContextMemory = Schema.Struct({
 const PageStorage = Schema.Struct({
   pages: Schema.Int,
   uniquePages: Schema.Int,
-  pageWrites: Schema.Int,
+  packs: Schema.Int,
+  puts: Schema.Int,
 });
 const Resume = Schema.Struct({ hash: Digest, reply: Schema.Number });
 export const ContextCheckpointRequest = Schema.Union([
@@ -36,7 +37,7 @@ export const ContextCheckpointProof = Schema.Union([
     unchanged: PageStorage,
     changed: PageStorage,
     restoredBytes: Schema.Array(Schema.Int),
-    storedPages: Schema.Int,
+    storedPacks: Schema.Int,
     rejectedLayouts: Schema.Array(Schema.String),
   }),
   Schema.Struct({

@@ -108,7 +108,7 @@ test(
             .pipe(Effect.result);
           if (legacyRead._tag !== "Failure" || legacyRead.failure._tag !== "BoxesError")
             return yield* Effect.die("Runtime admitted a legacy context");
-          expect(legacyRead.failure.status).toBe(500);
+          expect(legacyRead.failure.status).toBe(503);
           const denied = yield* Effect.promise(() =>
             fetch(new URL("/v1/migrations/context-language-v1", url), {
               method: "POST",

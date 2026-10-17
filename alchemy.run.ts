@@ -18,6 +18,8 @@ import {
   FilesystemMigrationReceipt,
   ContextMigrationInput,
   ContextMigrationReceipt,
+  MemoryMigrationInput,
+  MemoryMigrationReceipt,
 } from "./src/contracts";
 
 const Deployment = Schema.Struct({
@@ -175,6 +177,38 @@ const migrate = Alchemy.Action(
           if (page.cursor !== null) inputCursors.push(page.cursor);
         }
         const configurationPrograms = yield* environmentMigration(configurationHeads.cursor);
+        const deadlines = { pages: 0, migrated: 0 };
+        const deadlineCursors: (typeof ProcessDeadlineMigrationReceipt.Type.cursor)[] = [null];
+        while (deadlineCursors.length > 0) {
+          const cursor = deadlineCursors.shift();
+          const page = yield* Effect.gen(function* () {
+            const response = yield* http.post(new URL("/v1/migrations/process-deadlines-v1", url), {
+              headers: { authorization: `Bearer ${Redacted.value(key)}` },
+              body: HttpBody.text(
+                Schema.encodeSync(Schema.fromJsonString(ProcessDeadlineMigrationInput))({ cursor }),
+                "application/json",
+              ),
+            });
+            if (response.status < 200 || response.status >= 300)
+              return yield* new MigrationStatusError({
+                status: response.status,
+                path: "/v1/migrations/process-deadlines-v1",
+              });
+            const text = yield* response.text;
+            return yield* Schema.decodeUnknownEffect(
+              Schema.fromJsonString(ProcessDeadlineMigrationReceipt),
+            )(text);
+          }).pipe(Effect.timeout("120 seconds"));
+          deadlines.pages += 1;
+          deadlines.migrated += page.migrated;
+          yield* Effect.logInfo({
+            migration: "process-deadlines-v1",
+            page: deadlines.pages,
+            migrated: page.migrated,
+            hasMore: page.cursor !== null,
+          });
+          if (page.cursor !== null) deadlineCursors.push(page.cursor);
+        }
         const filesystem = { pages: 0, migrated: 0 };
         const filesystemCursors: (typeof FilesystemMigrationReceipt.Type.cursor)[] = [null];
         while (filesystemCursors.length > 0) {
@@ -207,37 +241,37 @@ const migrate = Alchemy.Action(
           });
           if (page.cursor !== null) filesystemCursors.push(page.cursor);
         }
-        const deadlines = { pages: 0, migrated: 0 };
-        const deadlineCursors: (typeof ProcessDeadlineMigrationReceipt.Type.cursor)[] = [null];
-        while (deadlineCursors.length > 0) {
-          const cursor = deadlineCursors.shift();
+        const memory = { pages: 0, migrated: 0 };
+        const memoryCursors: (typeof MemoryMigrationReceipt.Type.cursor)[] = [null];
+        while (memoryCursors.length > 0) {
+          const cursor = memoryCursors.shift();
           const page = yield* Effect.gen(function* () {
-            const response = yield* http.post(new URL("/v1/migrations/process-deadlines-v1", url), {
+            const response = yield* http.post(new URL("/v1/migrations/memory-packs-v1", url), {
               headers: { authorization: `Bearer ${Redacted.value(key)}` },
               body: HttpBody.text(
-                Schema.encodeSync(Schema.fromJsonString(ProcessDeadlineMigrationInput))({ cursor }),
+                Schema.encodeSync(Schema.fromJsonString(MemoryMigrationInput))({ cursor }),
                 "application/json",
               ),
             });
             if (response.status < 200 || response.status >= 300)
               return yield* new MigrationStatusError({
                 status: response.status,
-                path: "/v1/migrations/process-deadlines-v1",
+                path: "/v1/migrations/memory-packs-v1",
               });
-            const text = yield* response.text;
-            return yield* Schema.decodeUnknownEffect(
-              Schema.fromJsonString(ProcessDeadlineMigrationReceipt),
-            )(text);
+            return yield* Schema.decodeUnknownEffect(Schema.fromJsonString(MemoryMigrationReceipt))(
+              yield* response.text,
+            );
           }).pipe(Effect.timeout("120 seconds"));
-          deadlines.pages += 1;
-          deadlines.migrated += page.migrated;
+          memory.pages += 1;
+          memory.migrated += page.migrated;
           yield* Effect.logInfo({
-            migration: "process-deadlines-v1",
-            page: deadlines.pages,
+            migration: "memory-packs-v1",
+            page: memory.pages,
             migrated: page.migrated,
             hasMore: page.cursor !== null,
           });
-          if (page.cursor !== null) deadlineCursors.push(page.cursor);
+          if (page.cursor !== null) memoryCursors.push(page.cursor);
+          if (page.retryAfterMs > 0) yield* Effect.sleep(page.retryAfterMs);
         }
         const contexts = { migrated: 0, pages: 0 };
         const contextCursors: (typeof ContextMigrationReceipt.Type.cursor)[] = [null];
@@ -301,6 +335,7 @@ const migrate = Alchemy.Action(
         }
         return {
           receipts,
+          memoryPackMigration: memory,
           contextLanguageMigration: contexts,
           cronContextMigration: schedules,
           filesystemMigration: filesystem,
