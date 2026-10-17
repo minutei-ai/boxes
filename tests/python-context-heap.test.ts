@@ -27,7 +27,7 @@ test(
               filePath: "/first.py",
               mode: "execute",
               source:
-                "import os, sys\ncached_env = os.environ\nwriter = sys.stdout.write\ndef factory():\n n = 40\n def next():\n  nonlocal n\n  n += 1\n  return n\n return next\nnext_value = factory()\nreply = await tools.call({'op':'host.call','name':'echo','input':2})\nprint('first')\n[next_value(), reply, os.getenv('MODE')]",
+                "import os, sys, json, re, functools\nfrom collections import Counter\ncounts = Counter(\"boxes\")\nfrom _thread import RLock\nsaved_lock=RLock()\nsaved_lock.acquire()\nsaved_lock.acquire()\n@functools.lru_cache(maxsize=8)\ndef cached(value):\n return value*2\nencoded = json.dumps({\"value\":cached(21),\"text\":\"ação\"},ensure_ascii=False)\ncached_env = os.environ\nwriter = sys.stdout.write\ndef factory():\n n = 40\n def next():\n  nonlocal n\n  n += 1\n  return n\n return next\nnext_value = factory()\nreply = await tools.call({'op':'host.call','name':'echo','input':2})\nprint('first')\n[next_value(), reply, os.getenv('MODE')]",
             }),
             PythonProgram.make({
               language: "python",
@@ -35,14 +35,15 @@ test(
               filePath: "/second.py",
               mode: "execute",
               source:
-                "writer('second\\n')\n[next_value(), cached_env.get('MODE'), cached_env.get('OLD'), next_value.__code__.co_filename]",
+                "writer('second\\n')\n[next_value(), cached_env.get('MODE'), cached_env.get('OLD'), next_value.__code__.co_filename, json.loads(encoded), re.findall(r'[a-z]+','box 42 native'), counts['x'], cached(21), saved_lock._recursion_count()]",
             }),
             PythonProgram.make({
               language: "python",
               env: { MODE: "third" },
               filePath: "/third.py",
               mode: "evaluate",
-              source: "next_value()",
+              source:
+                "(saved_lock.release(),saved_lock.release(),next_value(),saved_lock.locked())[2:]",
             }),
           ];
           yield* Effect.reduce(
@@ -84,10 +85,20 @@ test(
                   } else {
                     expect(proof.duplicateHandleDenied).toBe(true);
                     if (index === 1) {
-                      expect(proof.output.result).toEqual([42, "second", null, "/first.py"]);
+                      expect(proof.output.result).toEqual([
+                        42,
+                        "second",
+                        null,
+                        "/first.py",
+                        { value: 42, text: "ação" },
+                        ["box", "native"],
+                        1,
+                        42,
+                        2,
+                      ]);
                       expect(proof.output.stdout).toBe("second\n");
                     } else {
-                      expect(proof.output.result).toBe(43);
+                      expect(proof.output.result).toEqual([43, false]);
                       expect(proof.output.stdout).toBe("");
                     }
                   }

@@ -89,7 +89,7 @@ test(
                     op: "python.execute",
                     id: "seed-py",
                     contextId: language,
-                    source: "value=40\ndef bump():\n global value\n value+=1\n return value\n0",
+                    source: "value=40\ndef bump():\n global value\n value+=1\n return value",
                   });
                 const queued = yield* boxes.action("queued-contexts", {
                   op: "process.spawn",

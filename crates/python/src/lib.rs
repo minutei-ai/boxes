@@ -1,3 +1,4 @@
+mod locks;
 use rustpython_vm::builtins::{PyBaseException, PyCoroutine, PyDictRef};
 use rustpython_vm::scope::Scope;
 use rustpython_vm::{AsObject, Interpreter, PyObjectRef, VirtualMachine, compiler, py_serde};
@@ -204,13 +205,25 @@ impl PythonGuest {
         CREATED_GUESTS.with(|created| created.set(created.get().saturating_add(1)));
         let builder = Interpreter::builder(Default::default());
         let environment_module = environment::module_def(&builder.ctx);
+        let locks_module = locks::single_thread::module_def(&builder.ctx);
         let interpreter = builder
             .add_native_module(environment_module)
+            .add_native_module(locks_module)
             .add_frozen_modules(BOOTSTRAP)
             .add_frozen_modules(TOOLS)
             .build();
         let (stdout, stderr, scope, environment) = interpreter
             .enter(|vm| -> Result<_, String> {
+                let locks = locks_module
+                    .create_module(vm)
+                    .map_err(|_| "Python lock module creation failed")?;
+                locks_module
+                    .exec_module(vm, &locks)
+                    .map_err(|_| "Python lock module initialization failed")?;
+                vm.sys_module
+                    .get_attr("modules", vm)
+                    .and_then(|modules| modules.set_item("_thread", locks.into(), vm))
+                    .map_err(|_| "Python lock module registration failed")?;
                 let io = vm
                     .import("_io", 0)
                     .map_err(|_| "Python I/O module unavailable")?;
@@ -293,6 +306,28 @@ impl PythonGuest {
                     opts.allow_top_level_await = true;
                     let mode = if state.evaluate {
                         compiler::Mode::Eval
+                    } else if source.contains("def") || source.contains("class") {
+                        let prepared = compiler::prepare_barry_as_flufl_source(
+                            &source,
+                            compiler::parser::ParseOptions::from(compiler::parser::Mode::Module),
+                            opts.future_features.contains(
+                                compiler::core::bytecode::CodeFlags::FUTURE_BARRY_AS_BDFL,
+                            ),
+                        );
+                        match compiler::parser::parse_module(prepared.source()) {
+                            Ok(module)
+                                if matches!(
+                                    module.syntax().body.last(),
+                                    Some(
+                                        compiler::ast::Stmt::FunctionDef(_)
+                                            | compiler::ast::Stmt::ClassDef(_)
+                                    )
+                                ) =>
+                            {
+                                compiler::Mode::Exec
+                            }
+                            _ => compiler::Mode::BlockExpr,
+                        }
                     } else {
                         compiler::Mode::BlockExpr
                     };

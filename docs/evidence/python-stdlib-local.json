@@ -1,0 +1,2312 @@
+{
+  "scope": "Local native Wasm and closed/replacement Alchemy workerd with actual R2. This is not a production, CPython parity or cost claim. Source additions are unreleased; production remains 0.22.0.",
+  "reproduction": {
+    "definitions": "0.22.0 BlockExpr returns final function/class objects and JSON serialization fails. Native parser classifies final declarations for Exec; final expressions retain BlockExpr.",
+    "locks": "RustPython eagerly imports its frozen Python _thread during bootstrap. Registering a native module alone does not replace that sys.modules entry; the guest now installs its native definition after bootstrap and before user imports.",
+    "threadingFeature": "The upstream threading feature trapped on wasm32 during construction, including a one-billion-fuel diagnostic. It was removed; no fuel/memory limits were raised."
+  },
+  "coverage": [
+    "sync/async/decorated definitions and classes followed by native reentry",
+    "real pinned JSON/regex/functools/collections/enum/weakref execution",
+    "native RLock recursion, save/restore, usage errors and native-callable assertion",
+    "locks, JSON, regex, cached functions, collections and closure cells through three closed/replacement workerd instances with R2 pages",
+    "Queue duplicate delivery, busy lease retry and captured generations with native Queue and R2"
+  ],
+  "limitations": [
+    "Frozen library subset only; no pip/native extension loading or sandbox filesystem imports/open",
+    "Single virtual thread and native reentrant locks; no thread spawning",
+    "Python heap binary digest changes require explicit context reset",
+    "Local elapsed measurements share a host with build/test work and do not establish production performance",
+    "Cold import json/re consumed 7,010,490 metered instructions in a direct native ABI probe. It exhausted an unchanged 1,000,000-instruction fixture budget; Queue retention keeps its original small workload and budget, while the separate R2 heap test owns stdlib coverage."
+  ],
+  "benchmark": {
+    "runtime": "Bun 1.4.3",
+    "scope": "Native RustPython Wasm begin/step in Bun; quiescent retained interpreter per phase. Excludes Worker/R2, construction, cold startup and billing. Fuel includes begin and step. All outputs validated; phases alternate ABBA then BAAB.",
+    "variants": [
+      {
+        "label": "reference",
+        "sha256": "438ea33a3579525ec1d60be1cd25bea686c7faff7e75eef01b5e27f674a79bdb",
+        "bytes": 10732645
+      },
+      {
+        "label": "candidate",
+        "sha256": "e16a80501af46363e7a5bc1552b32fd0afd84000145a755da9ef5076756ae1cc",
+        "bytes": 11038634
+      }
+    ],
+    "workloads": [
+      {
+        "id": "evaluate",
+        "sourceSha256": "d9df54e53ff979c17083088b7503bbc3fd92d607f83e3ff15e49e4efb2c63574"
+      },
+      {
+        "id": "definitions",
+        "sourceSha256": "05ddcc85d895888660a0de590759b8a8544a042c878bbedf266c66148d895aad"
+      }
+    ],
+    "phases": [
+      "reference",
+      "candidate",
+      "candidate",
+      "reference",
+      "candidate",
+      "reference",
+      "reference",
+      "candidate"
+    ],
+    "warmups": 3,
+    "samples": [
+      {
+        "phase": 0,
+        "variant": "reference",
+        "workload": "evaluate",
+        "index": 0,
+        "elapsedMs": 2.583889,
+        "fuel": 29411,
+        "memoryBytes": 7798784
+      },
+      {
+        "phase": 0,
+        "variant": "reference",
+        "workload": "evaluate",
+        "index": 1,
+        "elapsedMs": 2.23779,
+        "fuel": 29381,
+        "memoryBytes": 7798784
+      },
+      {
+        "phase": 0,
+        "variant": "reference",
+        "workload": "evaluate",
+        "index": 2,
+        "elapsedMs": 1.502495,
+        "fuel": 29405,
+        "memoryBytes": 7798784
+      },
+      {
+        "phase": 0,
+        "variant": "reference",
+        "workload": "evaluate",
+        "index": 3,
+        "elapsedMs": 1.232247,
+        "fuel": 29406,
+        "memoryBytes": 7798784
+      },
+      {
+        "phase": 0,
+        "variant": "reference",
+        "workload": "evaluate",
+        "index": 4,
+        "elapsedMs": 1.154535,
+        "fuel": 29368,
+        "memoryBytes": 7798784
+      },
+      {
+        "phase": 0,
+        "variant": "reference",
+        "workload": "evaluate",
+        "index": 5,
+        "elapsedMs": 2.716388,
+        "fuel": 29373,
+        "memoryBytes": 7798784
+      },
+      {
+        "phase": 0,
+        "variant": "reference",
+        "workload": "evaluate",
+        "index": 6,
+        "elapsedMs": 2.312222,
+        "fuel": 29391,
+        "memoryBytes": 7798784
+      },
+      {
+        "phase": 0,
+        "variant": "reference",
+        "workload": "evaluate",
+        "index": 7,
+        "elapsedMs": 0.893453,
+        "fuel": 29376,
+        "memoryBytes": 7798784
+      },
+      {
+        "phase": 0,
+        "variant": "reference",
+        "workload": "evaluate",
+        "index": 8,
+        "elapsedMs": 0.943676,
+        "fuel": 29387,
+        "memoryBytes": 7798784
+      },
+      {
+        "phase": 0,
+        "variant": "reference",
+        "workload": "evaluate",
+        "index": 9,
+        "elapsedMs": 0.965157,
+        "fuel": 29410,
+        "memoryBytes": 7798784
+      },
+      {
+        "phase": 0,
+        "variant": "reference",
+        "workload": "evaluate",
+        "index": 10,
+        "elapsedMs": 0.907036,
+        "fuel": 29405,
+        "memoryBytes": 7798784
+      },
+      {
+        "phase": 0,
+        "variant": "reference",
+        "workload": "evaluate",
+        "index": 11,
+        "elapsedMs": 0.841188,
+        "fuel": 29375,
+        "memoryBytes": 7798784
+      },
+      {
+        "phase": 0,
+        "variant": "reference",
+        "workload": "evaluate",
+        "index": 12,
+        "elapsedMs": 1.229607,
+        "fuel": 29408,
+        "memoryBytes": 7798784
+      },
+      {
+        "phase": 0,
+        "variant": "reference",
+        "workload": "evaluate",
+        "index": 13,
+        "elapsedMs": 1.208038,
+        "fuel": 29393,
+        "memoryBytes": 7798784
+      },
+      {
+        "phase": 0,
+        "variant": "reference",
+        "workload": "evaluate",
+        "index": 14,
+        "elapsedMs": 1.115423,
+        "fuel": 29370,
+        "memoryBytes": 7798784
+      },
+      {
+        "phase": 0,
+        "variant": "reference",
+        "workload": "definitions",
+        "index": 0,
+        "elapsedMs": 12.945221,
+        "fuel": 586802,
+        "memoryBytes": 8912896
+      },
+      {
+        "phase": 0,
+        "variant": "reference",
+        "workload": "definitions",
+        "index": 1,
+        "elapsedMs": 10.761554,
+        "fuel": 586393,
+        "memoryBytes": 8912896
+      },
+      {
+        "phase": 0,
+        "variant": "reference",
+        "workload": "definitions",
+        "index": 2,
+        "elapsedMs": 11.252958,
+        "fuel": 587281,
+        "memoryBytes": 8912896
+      },
+      {
+        "phase": 0,
+        "variant": "reference",
+        "workload": "definitions",
+        "index": 3,
+        "elapsedMs": 10.177636,
+        "fuel": 586627,
+        "memoryBytes": 8912896
+      },
+      {
+        "phase": 0,
+        "variant": "reference",
+        "workload": "definitions",
+        "index": 4,
+        "elapsedMs": 6.912124,
+        "fuel": 586906,
+        "memoryBytes": 8912896
+      },
+      {
+        "phase": 0,
+        "variant": "reference",
+        "workload": "definitions",
+        "index": 5,
+        "elapsedMs": 6.484851,
+        "fuel": 586825,
+        "memoryBytes": 8912896
+      },
+      {
+        "phase": 0,
+        "variant": "reference",
+        "workload": "definitions",
+        "index": 6,
+        "elapsedMs": 7.509494,
+        "fuel": 587121,
+        "memoryBytes": 8912896
+      },
+      {
+        "phase": 0,
+        "variant": "reference",
+        "workload": "definitions",
+        "index": 7,
+        "elapsedMs": 6.466288,
+        "fuel": 587056,
+        "memoryBytes": 8912896
+      },
+      {
+        "phase": 0,
+        "variant": "reference",
+        "workload": "definitions",
+        "index": 8,
+        "elapsedMs": 6.240398,
+        "fuel": 587027,
+        "memoryBytes": 8912896
+      },
+      {
+        "phase": 0,
+        "variant": "reference",
+        "workload": "definitions",
+        "index": 9,
+        "elapsedMs": 6.120337,
+        "fuel": 587148,
+        "memoryBytes": 8912896
+      },
+      {
+        "phase": 0,
+        "variant": "reference",
+        "workload": "definitions",
+        "index": 10,
+        "elapsedMs": 5.970101,
+        "fuel": 586967,
+        "memoryBytes": 8912896
+      },
+      {
+        "phase": 0,
+        "variant": "reference",
+        "workload": "definitions",
+        "index": 11,
+        "elapsedMs": 6.075331,
+        "fuel": 586908,
+        "memoryBytes": 8912896
+      },
+      {
+        "phase": 0,
+        "variant": "reference",
+        "workload": "definitions",
+        "index": 12,
+        "elapsedMs": 5.911698,
+        "fuel": 587513,
+        "memoryBytes": 8912896
+      },
+      {
+        "phase": 0,
+        "variant": "reference",
+        "workload": "definitions",
+        "index": 13,
+        "elapsedMs": 6.293102,
+        "fuel": 587047,
+        "memoryBytes": 8912896
+      },
+      {
+        "phase": 0,
+        "variant": "reference",
+        "workload": "definitions",
+        "index": 14,
+        "elapsedMs": 8.84911,
+        "fuel": 587539,
+        "memoryBytes": 8912896
+      },
+      {
+        "phase": 1,
+        "variant": "candidate",
+        "workload": "evaluate",
+        "index": 0,
+        "elapsedMs": 1.85069,
+        "fuel": 29356,
+        "memoryBytes": 8060928
+      },
+      {
+        "phase": 1,
+        "variant": "candidate",
+        "workload": "evaluate",
+        "index": 1,
+        "elapsedMs": 1.922696,
+        "fuel": 29384,
+        "memoryBytes": 8060928
+      },
+      {
+        "phase": 1,
+        "variant": "candidate",
+        "workload": "evaluate",
+        "index": 2,
+        "elapsedMs": 1.078675,
+        "fuel": 29389,
+        "memoryBytes": 8060928
+      },
+      {
+        "phase": 1,
+        "variant": "candidate",
+        "workload": "evaluate",
+        "index": 3,
+        "elapsedMs": 1.067481,
+        "fuel": 29369,
+        "memoryBytes": 8060928
+      },
+      {
+        "phase": 1,
+        "variant": "candidate",
+        "workload": "evaluate",
+        "index": 4,
+        "elapsedMs": 1.137275,
+        "fuel": 29360,
+        "memoryBytes": 8060928
+      },
+      {
+        "phase": 1,
+        "variant": "candidate",
+        "workload": "evaluate",
+        "index": 5,
+        "elapsedMs": 2.193315,
+        "fuel": 29374,
+        "memoryBytes": 8060928
+      },
+      {
+        "phase": 1,
+        "variant": "candidate",
+        "workload": "evaluate",
+        "index": 6,
+        "elapsedMs": 1.563788,
+        "fuel": 29374,
+        "memoryBytes": 8060928
+      },
+      {
+        "phase": 1,
+        "variant": "candidate",
+        "workload": "evaluate",
+        "index": 7,
+        "elapsedMs": 1.004174,
+        "fuel": 29402,
+        "memoryBytes": 8060928
+      },
+      {
+        "phase": 1,
+        "variant": "candidate",
+        "workload": "evaluate",
+        "index": 8,
+        "elapsedMs": 0.790161,
+        "fuel": 29404,
+        "memoryBytes": 8060928
+      },
+      {
+        "phase": 1,
+        "variant": "candidate",
+        "workload": "evaluate",
+        "index": 9,
+        "elapsedMs": 0.851938,
+        "fuel": 29408,
+        "memoryBytes": 8060928
+      },
+      {
+        "phase": 1,
+        "variant": "candidate",
+        "workload": "evaluate",
+        "index": 10,
+        "elapsedMs": 0.782677,
+        "fuel": 29372,
+        "memoryBytes": 8060928
+      },
+      {
+        "phase": 1,
+        "variant": "candidate",
+        "workload": "evaluate",
+        "index": 11,
+        "elapsedMs": 0.807292,
+        "fuel": 29403,
+        "memoryBytes": 8060928
+      },
+      {
+        "phase": 1,
+        "variant": "candidate",
+        "workload": "evaluate",
+        "index": 12,
+        "elapsedMs": 0.789151,
+        "fuel": 29404,
+        "memoryBytes": 8060928
+      },
+      {
+        "phase": 1,
+        "variant": "candidate",
+        "workload": "evaluate",
+        "index": 13,
+        "elapsedMs": 0.785175,
+        "fuel": 29408,
+        "memoryBytes": 8060928
+      },
+      {
+        "phase": 1,
+        "variant": "candidate",
+        "workload": "evaluate",
+        "index": 14,
+        "elapsedMs": 0.788101,
+        "fuel": 29372,
+        "memoryBytes": 8060928
+      },
+      {
+        "phase": 1,
+        "variant": "candidate",
+        "workload": "definitions",
+        "index": 0,
+        "elapsedMs": 7.867469,
+        "fuel": 615731,
+        "memoryBytes": 9175040
+      },
+      {
+        "phase": 1,
+        "variant": "candidate",
+        "workload": "definitions",
+        "index": 1,
+        "elapsedMs": 8.345156,
+        "fuel": 615209,
+        "memoryBytes": 9175040
+      },
+      {
+        "phase": 1,
+        "variant": "candidate",
+        "workload": "definitions",
+        "index": 2,
+        "elapsedMs": 7.932855,
+        "fuel": 615695,
+        "memoryBytes": 9175040
+      },
+      {
+        "phase": 1,
+        "variant": "candidate",
+        "workload": "definitions",
+        "index": 3,
+        "elapsedMs": 7.06008,
+        "fuel": 615677,
+        "memoryBytes": 9175040
+      },
+      {
+        "phase": 1,
+        "variant": "candidate",
+        "workload": "definitions",
+        "index": 4,
+        "elapsedMs": 7.125254,
+        "fuel": 616263,
+        "memoryBytes": 9175040
+      },
+      {
+        "phase": 1,
+        "variant": "candidate",
+        "workload": "definitions",
+        "index": 5,
+        "elapsedMs": 9.82,
+        "fuel": 616074,
+        "memoryBytes": 9175040
+      },
+      {
+        "phase": 1,
+        "variant": "candidate",
+        "workload": "definitions",
+        "index": 6,
+        "elapsedMs": 10.546043,
+        "fuel": 615904,
+        "memoryBytes": 9175040
+      },
+      {
+        "phase": 1,
+        "variant": "candidate",
+        "workload": "definitions",
+        "index": 7,
+        "elapsedMs": 9.820884,
+        "fuel": 615757,
+        "memoryBytes": 9175040
+      },
+      {
+        "phase": 1,
+        "variant": "candidate",
+        "workload": "definitions",
+        "index": 8,
+        "elapsedMs": 7.408864,
+        "fuel": 616152,
+        "memoryBytes": 9175040
+      },
+      {
+        "phase": 1,
+        "variant": "candidate",
+        "workload": "definitions",
+        "index": 9,
+        "elapsedMs": 6.925664,
+        "fuel": 616231,
+        "memoryBytes": 9175040
+      },
+      {
+        "phase": 1,
+        "variant": "candidate",
+        "workload": "definitions",
+        "index": 10,
+        "elapsedMs": 6.443944,
+        "fuel": 616065,
+        "memoryBytes": 9175040
+      },
+      {
+        "phase": 1,
+        "variant": "candidate",
+        "workload": "definitions",
+        "index": 11,
+        "elapsedMs": 6.091211,
+        "fuel": 615787,
+        "memoryBytes": 9175040
+      },
+      {
+        "phase": 1,
+        "variant": "candidate",
+        "workload": "definitions",
+        "index": 12,
+        "elapsedMs": 6.593978,
+        "fuel": 616081,
+        "memoryBytes": 9175040
+      },
+      {
+        "phase": 1,
+        "variant": "candidate",
+        "workload": "definitions",
+        "index": 13,
+        "elapsedMs": 7.38691,
+        "fuel": 616196,
+        "memoryBytes": 9175040
+      },
+      {
+        "phase": 1,
+        "variant": "candidate",
+        "workload": "definitions",
+        "index": 14,
+        "elapsedMs": 7.567085,
+        "fuel": 615896,
+        "memoryBytes": 9175040
+      },
+      {
+        "phase": 2,
+        "variant": "candidate",
+        "workload": "evaluate",
+        "index": 0,
+        "elapsedMs": 0.923296,
+        "fuel": 29407,
+        "memoryBytes": 8060928
+      },
+      {
+        "phase": 2,
+        "variant": "candidate",
+        "workload": "evaluate",
+        "index": 1,
+        "elapsedMs": 7.138852,
+        "fuel": 29350,
+        "memoryBytes": 8060928
+      },
+      {
+        "phase": 2,
+        "variant": "candidate",
+        "workload": "evaluate",
+        "index": 2,
+        "elapsedMs": 0.679662,
+        "fuel": 29387,
+        "memoryBytes": 8060928
+      },
+      {
+        "phase": 2,
+        "variant": "candidate",
+        "workload": "evaluate",
+        "index": 3,
+        "elapsedMs": 0.638678,
+        "fuel": 29372,
+        "memoryBytes": 8060928
+      },
+      {
+        "phase": 2,
+        "variant": "candidate",
+        "workload": "evaluate",
+        "index": 4,
+        "elapsedMs": 0.600776,
+        "fuel": 29373,
+        "memoryBytes": 8060928
+      },
+      {
+        "phase": 2,
+        "variant": "candidate",
+        "workload": "evaluate",
+        "index": 5,
+        "elapsedMs": 0.597687,
+        "fuel": 29370,
+        "memoryBytes": 8060928
+      },
+      {
+        "phase": 2,
+        "variant": "candidate",
+        "workload": "evaluate",
+        "index": 6,
+        "elapsedMs": 0.621697,
+        "fuel": 29372,
+        "memoryBytes": 8060928
+      },
+      {
+        "phase": 2,
+        "variant": "candidate",
+        "workload": "evaluate",
+        "index": 7,
+        "elapsedMs": 0.639025,
+        "fuel": 29377,
+        "memoryBytes": 8060928
+      },
+      {
+        "phase": 2,
+        "variant": "candidate",
+        "workload": "evaluate",
+        "index": 8,
+        "elapsedMs": 0.648844,
+        "fuel": 29369,
+        "memoryBytes": 8060928
+      },
+      {
+        "phase": 2,
+        "variant": "candidate",
+        "workload": "evaluate",
+        "index": 9,
+        "elapsedMs": 0.637311,
+        "fuel": 29372,
+        "memoryBytes": 8060928
+      },
+      {
+        "phase": 2,
+        "variant": "candidate",
+        "workload": "evaluate",
+        "index": 10,
+        "elapsedMs": 0.615278,
+        "fuel": 29377,
+        "memoryBytes": 8060928
+      },
+      {
+        "phase": 2,
+        "variant": "candidate",
+        "workload": "evaluate",
+        "index": 11,
+        "elapsedMs": 0.598579,
+        "fuel": 29369,
+        "memoryBytes": 8060928
+      },
+      {
+        "phase": 2,
+        "variant": "candidate",
+        "workload": "evaluate",
+        "index": 12,
+        "elapsedMs": 0.860599,
+        "fuel": 29372,
+        "memoryBytes": 8060928
+      },
+      {
+        "phase": 2,
+        "variant": "candidate",
+        "workload": "evaluate",
+        "index": 13,
+        "elapsedMs": 1.028082,
+        "fuel": 29377,
+        "memoryBytes": 8060928
+      },
+      {
+        "phase": 2,
+        "variant": "candidate",
+        "workload": "evaluate",
+        "index": 14,
+        "elapsedMs": 0.723929,
+        "fuel": 29369,
+        "memoryBytes": 8060928
+      },
+      {
+        "phase": 2,
+        "variant": "candidate",
+        "workload": "definitions",
+        "index": 0,
+        "elapsedMs": 6.203599,
+        "fuel": 615201,
+        "memoryBytes": 9175040
+      },
+      {
+        "phase": 2,
+        "variant": "candidate",
+        "workload": "definitions",
+        "index": 1,
+        "elapsedMs": 5.183902,
+        "fuel": 615848,
+        "memoryBytes": 9175040
+      },
+      {
+        "phase": 2,
+        "variant": "candidate",
+        "workload": "definitions",
+        "index": 2,
+        "elapsedMs": 5.157075,
+        "fuel": 615950,
+        "memoryBytes": 9175040
+      },
+      {
+        "phase": 2,
+        "variant": "candidate",
+        "workload": "definitions",
+        "index": 3,
+        "elapsedMs": 5.148563,
+        "fuel": 615717,
+        "memoryBytes": 9175040
+      },
+      {
+        "phase": 2,
+        "variant": "candidate",
+        "workload": "definitions",
+        "index": 4,
+        "elapsedMs": 6.01856,
+        "fuel": 615674,
+        "memoryBytes": 9175040
+      },
+      {
+        "phase": 2,
+        "variant": "candidate",
+        "workload": "definitions",
+        "index": 5,
+        "elapsedMs": 5.108004,
+        "fuel": 615900,
+        "memoryBytes": 9175040
+      },
+      {
+        "phase": 2,
+        "variant": "candidate",
+        "workload": "definitions",
+        "index": 6,
+        "elapsedMs": 5.150479,
+        "fuel": 615307,
+        "memoryBytes": 9175040
+      },
+      {
+        "phase": 2,
+        "variant": "candidate",
+        "workload": "definitions",
+        "index": 7,
+        "elapsedMs": 5.24437,
+        "fuel": 616382,
+        "memoryBytes": 9175040
+      },
+      {
+        "phase": 2,
+        "variant": "candidate",
+        "workload": "definitions",
+        "index": 8,
+        "elapsedMs": 6.764658,
+        "fuel": 615610,
+        "memoryBytes": 9175040
+      },
+      {
+        "phase": 2,
+        "variant": "candidate",
+        "workload": "definitions",
+        "index": 9,
+        "elapsedMs": 4.975822,
+        "fuel": 616041,
+        "memoryBytes": 9175040
+      },
+      {
+        "phase": 2,
+        "variant": "candidate",
+        "workload": "definitions",
+        "index": 10,
+        "elapsedMs": 4.864222,
+        "fuel": 616061,
+        "memoryBytes": 9175040
+      },
+      {
+        "phase": 2,
+        "variant": "candidate",
+        "workload": "definitions",
+        "index": 11,
+        "elapsedMs": 4.804509,
+        "fuel": 615574,
+        "memoryBytes": 9175040
+      },
+      {
+        "phase": 2,
+        "variant": "candidate",
+        "workload": "definitions",
+        "index": 12,
+        "elapsedMs": 5.002468,
+        "fuel": 616385,
+        "memoryBytes": 9175040
+      },
+      {
+        "phase": 2,
+        "variant": "candidate",
+        "workload": "definitions",
+        "index": 13,
+        "elapsedMs": 4.931763,
+        "fuel": 616218,
+        "memoryBytes": 9175040
+      },
+      {
+        "phase": 2,
+        "variant": "candidate",
+        "workload": "definitions",
+        "index": 14,
+        "elapsedMs": 4.731078,
+        "fuel": 616613,
+        "memoryBytes": 9175040
+      },
+      {
+        "phase": 3,
+        "variant": "reference",
+        "workload": "evaluate",
+        "index": 0,
+        "elapsedMs": 0.597525,
+        "fuel": 29352,
+        "memoryBytes": 7798784
+      },
+      {
+        "phase": 3,
+        "variant": "reference",
+        "workload": "evaluate",
+        "index": 1,
+        "elapsedMs": 0.614258,
+        "fuel": 29375,
+        "memoryBytes": 7798784
+      },
+      {
+        "phase": 3,
+        "variant": "reference",
+        "workload": "evaluate",
+        "index": 2,
+        "elapsedMs": 0.595784,
+        "fuel": 29365,
+        "memoryBytes": 7798784
+      },
+      {
+        "phase": 3,
+        "variant": "reference",
+        "workload": "evaluate",
+        "index": 3,
+        "elapsedMs": 0.580854,
+        "fuel": 29378,
+        "memoryBytes": 7798784
+      },
+      {
+        "phase": 3,
+        "variant": "reference",
+        "workload": "evaluate",
+        "index": 4,
+        "elapsedMs": 0.574266,
+        "fuel": 29363,
+        "memoryBytes": 7798784
+      },
+      {
+        "phase": 3,
+        "variant": "reference",
+        "workload": "evaluate",
+        "index": 5,
+        "elapsedMs": 0.568783,
+        "fuel": 29351,
+        "memoryBytes": 7798784
+      },
+      {
+        "phase": 3,
+        "variant": "reference",
+        "workload": "evaluate",
+        "index": 6,
+        "elapsedMs": 0.570265,
+        "fuel": 29346,
+        "memoryBytes": 7798784
+      },
+      {
+        "phase": 3,
+        "variant": "reference",
+        "workload": "evaluate",
+        "index": 7,
+        "elapsedMs": 0.593922,
+        "fuel": 29364,
+        "memoryBytes": 7798784
+      },
+      {
+        "phase": 3,
+        "variant": "reference",
+        "workload": "evaluate",
+        "index": 8,
+        "elapsedMs": 0.597693,
+        "fuel": 29378,
+        "memoryBytes": 7798784
+      },
+      {
+        "phase": 3,
+        "variant": "reference",
+        "workload": "evaluate",
+        "index": 9,
+        "elapsedMs": 0.636345,
+        "fuel": 29360,
+        "memoryBytes": 7798784
+      },
+      {
+        "phase": 3,
+        "variant": "reference",
+        "workload": "evaluate",
+        "index": 10,
+        "elapsedMs": 0.598371,
+        "fuel": 29358,
+        "memoryBytes": 7798784
+      },
+      {
+        "phase": 3,
+        "variant": "reference",
+        "workload": "evaluate",
+        "index": 11,
+        "elapsedMs": 0.589869,
+        "fuel": 29372,
+        "memoryBytes": 7798784
+      },
+      {
+        "phase": 3,
+        "variant": "reference",
+        "workload": "evaluate",
+        "index": 12,
+        "elapsedMs": 0.879501,
+        "fuel": 29364,
+        "memoryBytes": 7798784
+      },
+      {
+        "phase": 3,
+        "variant": "reference",
+        "workload": "evaluate",
+        "index": 13,
+        "elapsedMs": 1.012312,
+        "fuel": 29355,
+        "memoryBytes": 7798784
+      },
+      {
+        "phase": 3,
+        "variant": "reference",
+        "workload": "evaluate",
+        "index": 14,
+        "elapsedMs": 0.826345,
+        "fuel": 29372,
+        "memoryBytes": 7798784
+      },
+      {
+        "phase": 3,
+        "variant": "reference",
+        "workload": "definitions",
+        "index": 0,
+        "elapsedMs": 5.047863,
+        "fuel": 586781,
+        "memoryBytes": 8912896
+      },
+      {
+        "phase": 3,
+        "variant": "reference",
+        "workload": "definitions",
+        "index": 1,
+        "elapsedMs": 5.128066,
+        "fuel": 586636,
+        "memoryBytes": 8912896
+      },
+      {
+        "phase": 3,
+        "variant": "reference",
+        "workload": "definitions",
+        "index": 2,
+        "elapsedMs": 5.156835,
+        "fuel": 586835,
+        "memoryBytes": 8912896
+      },
+      {
+        "phase": 3,
+        "variant": "reference",
+        "workload": "definitions",
+        "index": 3,
+        "elapsedMs": 5.068791,
+        "fuel": 586814,
+        "memoryBytes": 8912896
+      },
+      {
+        "phase": 3,
+        "variant": "reference",
+        "workload": "definitions",
+        "index": 4,
+        "elapsedMs": 6.724294,
+        "fuel": 586884,
+        "memoryBytes": 8912896
+      },
+      {
+        "phase": 3,
+        "variant": "reference",
+        "workload": "definitions",
+        "index": 5,
+        "elapsedMs": 8.838483,
+        "fuel": 587302,
+        "memoryBytes": 8912896
+      },
+      {
+        "phase": 3,
+        "variant": "reference",
+        "workload": "definitions",
+        "index": 6,
+        "elapsedMs": 5.432687,
+        "fuel": 586722,
+        "memoryBytes": 8912896
+      },
+      {
+        "phase": 3,
+        "variant": "reference",
+        "workload": "definitions",
+        "index": 7,
+        "elapsedMs": 5.143316,
+        "fuel": 587242,
+        "memoryBytes": 8912896
+      },
+      {
+        "phase": 3,
+        "variant": "reference",
+        "workload": "definitions",
+        "index": 8,
+        "elapsedMs": 5.167428,
+        "fuel": 587832,
+        "memoryBytes": 8912896
+      },
+      {
+        "phase": 3,
+        "variant": "reference",
+        "workload": "definitions",
+        "index": 9,
+        "elapsedMs": 4.668014,
+        "fuel": 586964,
+        "memoryBytes": 8912896
+      },
+      {
+        "phase": 3,
+        "variant": "reference",
+        "workload": "definitions",
+        "index": 10,
+        "elapsedMs": 5.034676,
+        "fuel": 586978,
+        "memoryBytes": 8912896
+      },
+      {
+        "phase": 3,
+        "variant": "reference",
+        "workload": "definitions",
+        "index": 11,
+        "elapsedMs": 5.683718,
+        "fuel": 587341,
+        "memoryBytes": 8912896
+      },
+      {
+        "phase": 3,
+        "variant": "reference",
+        "workload": "definitions",
+        "index": 12,
+        "elapsedMs": 4.628812,
+        "fuel": 587523,
+        "memoryBytes": 8912896
+      },
+      {
+        "phase": 3,
+        "variant": "reference",
+        "workload": "definitions",
+        "index": 13,
+        "elapsedMs": 5.114261,
+        "fuel": 586517,
+        "memoryBytes": 8912896
+      },
+      {
+        "phase": 3,
+        "variant": "reference",
+        "workload": "definitions",
+        "index": 14,
+        "elapsedMs": 4.595589,
+        "fuel": 586852,
+        "memoryBytes": 8912896
+      },
+      {
+        "phase": 4,
+        "variant": "candidate",
+        "workload": "evaluate",
+        "index": 0,
+        "elapsedMs": 0.574873,
+        "fuel": 29400,
+        "memoryBytes": 8060928
+      },
+      {
+        "phase": 4,
+        "variant": "candidate",
+        "workload": "evaluate",
+        "index": 1,
+        "elapsedMs": 0.541296,
+        "fuel": 29353,
+        "memoryBytes": 8060928
+      },
+      {
+        "phase": 4,
+        "variant": "candidate",
+        "workload": "evaluate",
+        "index": 2,
+        "elapsedMs": 0.558203,
+        "fuel": 29362,
+        "memoryBytes": 8060928
+      },
+      {
+        "phase": 4,
+        "variant": "candidate",
+        "workload": "evaluate",
+        "index": 3,
+        "elapsedMs": 0.557454,
+        "fuel": 29376,
+        "memoryBytes": 8060928
+      },
+      {
+        "phase": 4,
+        "variant": "candidate",
+        "workload": "evaluate",
+        "index": 4,
+        "elapsedMs": 0.522503,
+        "fuel": 29350,
+        "memoryBytes": 8060928
+      },
+      {
+        "phase": 4,
+        "variant": "candidate",
+        "workload": "evaluate",
+        "index": 5,
+        "elapsedMs": 0.527101,
+        "fuel": 29370,
+        "memoryBytes": 8060928
+      },
+      {
+        "phase": 4,
+        "variant": "candidate",
+        "workload": "evaluate",
+        "index": 6,
+        "elapsedMs": 0.491458,
+        "fuel": 29353,
+        "memoryBytes": 8060928
+      },
+      {
+        "phase": 4,
+        "variant": "candidate",
+        "workload": "evaluate",
+        "index": 7,
+        "elapsedMs": 0.493299,
+        "fuel": 29371,
+        "memoryBytes": 8060928
+      },
+      {
+        "phase": 4,
+        "variant": "candidate",
+        "workload": "evaluate",
+        "index": 8,
+        "elapsedMs": 0.506377,
+        "fuel": 29358,
+        "memoryBytes": 8060928
+      },
+      {
+        "phase": 4,
+        "variant": "candidate",
+        "workload": "evaluate",
+        "index": 9,
+        "elapsedMs": 0.510214,
+        "fuel": 29349,
+        "memoryBytes": 8060928
+      },
+      {
+        "phase": 4,
+        "variant": "candidate",
+        "workload": "evaluate",
+        "index": 10,
+        "elapsedMs": 0.487446,
+        "fuel": 29354,
+        "memoryBytes": 8060928
+      },
+      {
+        "phase": 4,
+        "variant": "candidate",
+        "workload": "evaluate",
+        "index": 11,
+        "elapsedMs": 0.524164,
+        "fuel": 29356,
+        "memoryBytes": 8060928
+      },
+      {
+        "phase": 4,
+        "variant": "candidate",
+        "workload": "evaluate",
+        "index": 12,
+        "elapsedMs": 0.477102,
+        "fuel": 29356,
+        "memoryBytes": 8060928
+      },
+      {
+        "phase": 4,
+        "variant": "candidate",
+        "workload": "evaluate",
+        "index": 13,
+        "elapsedMs": 0.485377,
+        "fuel": 29373,
+        "memoryBytes": 8060928
+      },
+      {
+        "phase": 4,
+        "variant": "candidate",
+        "workload": "evaluate",
+        "index": 14,
+        "elapsedMs": 0.470893,
+        "fuel": 29353,
+        "memoryBytes": 8060928
+      },
+      {
+        "phase": 4,
+        "variant": "candidate",
+        "workload": "definitions",
+        "index": 0,
+        "elapsedMs": 4.650243,
+        "fuel": 615903,
+        "memoryBytes": 9175040
+      },
+      {
+        "phase": 4,
+        "variant": "candidate",
+        "workload": "definitions",
+        "index": 1,
+        "elapsedMs": 4.564335,
+        "fuel": 615570,
+        "memoryBytes": 9175040
+      },
+      {
+        "phase": 4,
+        "variant": "candidate",
+        "workload": "definitions",
+        "index": 2,
+        "elapsedMs": 4.716483,
+        "fuel": 615902,
+        "memoryBytes": 9175040
+      },
+      {
+        "phase": 4,
+        "variant": "candidate",
+        "workload": "definitions",
+        "index": 3,
+        "elapsedMs": 4.596732,
+        "fuel": 615967,
+        "memoryBytes": 9175040
+      },
+      {
+        "phase": 4,
+        "variant": "candidate",
+        "workload": "definitions",
+        "index": 4,
+        "elapsedMs": 4.740686,
+        "fuel": 616585,
+        "memoryBytes": 9175040
+      },
+      {
+        "phase": 4,
+        "variant": "candidate",
+        "workload": "definitions",
+        "index": 5,
+        "elapsedMs": 4.666123,
+        "fuel": 615665,
+        "memoryBytes": 9175040
+      },
+      {
+        "phase": 4,
+        "variant": "candidate",
+        "workload": "definitions",
+        "index": 6,
+        "elapsedMs": 4.660898,
+        "fuel": 616120,
+        "memoryBytes": 9175040
+      },
+      {
+        "phase": 4,
+        "variant": "candidate",
+        "workload": "definitions",
+        "index": 7,
+        "elapsedMs": 4.620227,
+        "fuel": 615987,
+        "memoryBytes": 9175040
+      },
+      {
+        "phase": 4,
+        "variant": "candidate",
+        "workload": "definitions",
+        "index": 8,
+        "elapsedMs": 4.580132,
+        "fuel": 615523,
+        "memoryBytes": 9175040
+      },
+      {
+        "phase": 4,
+        "variant": "candidate",
+        "workload": "definitions",
+        "index": 9,
+        "elapsedMs": 7.836626,
+        "fuel": 615354,
+        "memoryBytes": 9175040
+      },
+      {
+        "phase": 4,
+        "variant": "candidate",
+        "workload": "definitions",
+        "index": 10,
+        "elapsedMs": 8.073061,
+        "fuel": 615931,
+        "memoryBytes": 9175040
+      },
+      {
+        "phase": 4,
+        "variant": "candidate",
+        "workload": "definitions",
+        "index": 11,
+        "elapsedMs": 4.580668,
+        "fuel": 615651,
+        "memoryBytes": 9175040
+      },
+      {
+        "phase": 4,
+        "variant": "candidate",
+        "workload": "definitions",
+        "index": 12,
+        "elapsedMs": 4.567274,
+        "fuel": 616341,
+        "memoryBytes": 9175040
+      },
+      {
+        "phase": 4,
+        "variant": "candidate",
+        "workload": "definitions",
+        "index": 13,
+        "elapsedMs": 5.182327,
+        "fuel": 615852,
+        "memoryBytes": 9175040
+      },
+      {
+        "phase": 4,
+        "variant": "candidate",
+        "workload": "definitions",
+        "index": 14,
+        "elapsedMs": 4.566151,
+        "fuel": 615909,
+        "memoryBytes": 9175040
+      },
+      {
+        "phase": 5,
+        "variant": "reference",
+        "workload": "evaluate",
+        "index": 0,
+        "elapsedMs": 0.48591,
+        "fuel": 29415,
+        "memoryBytes": 7798784
+      },
+      {
+        "phase": 5,
+        "variant": "reference",
+        "workload": "evaluate",
+        "index": 1,
+        "elapsedMs": 0.466346,
+        "fuel": 29385,
+        "memoryBytes": 7798784
+      },
+      {
+        "phase": 5,
+        "variant": "reference",
+        "workload": "evaluate",
+        "index": 2,
+        "elapsedMs": 0.473992,
+        "fuel": 29409,
+        "memoryBytes": 7798784
+      },
+      {
+        "phase": 5,
+        "variant": "reference",
+        "workload": "evaluate",
+        "index": 3,
+        "elapsedMs": 0.470041,
+        "fuel": 29410,
+        "memoryBytes": 7798784
+      },
+      {
+        "phase": 5,
+        "variant": "reference",
+        "workload": "evaluate",
+        "index": 4,
+        "elapsedMs": 0.506631,
+        "fuel": 29372,
+        "memoryBytes": 7798784
+      },
+      {
+        "phase": 5,
+        "variant": "reference",
+        "workload": "evaluate",
+        "index": 5,
+        "elapsedMs": 0.471567,
+        "fuel": 29377,
+        "memoryBytes": 7798784
+      },
+      {
+        "phase": 5,
+        "variant": "reference",
+        "workload": "evaluate",
+        "index": 6,
+        "elapsedMs": 0.496959,
+        "fuel": 29395,
+        "memoryBytes": 7798784
+      },
+      {
+        "phase": 5,
+        "variant": "reference",
+        "workload": "evaluate",
+        "index": 7,
+        "elapsedMs": 0.503832,
+        "fuel": 29380,
+        "memoryBytes": 7798784
+      },
+      {
+        "phase": 5,
+        "variant": "reference",
+        "workload": "evaluate",
+        "index": 8,
+        "elapsedMs": 0.486423,
+        "fuel": 29391,
+        "memoryBytes": 7798784
+      },
+      {
+        "phase": 5,
+        "variant": "reference",
+        "workload": "evaluate",
+        "index": 9,
+        "elapsedMs": 0.481337,
+        "fuel": 29414,
+        "memoryBytes": 7798784
+      },
+      {
+        "phase": 5,
+        "variant": "reference",
+        "workload": "evaluate",
+        "index": 10,
+        "elapsedMs": 0.471184,
+        "fuel": 29409,
+        "memoryBytes": 7798784
+      },
+      {
+        "phase": 5,
+        "variant": "reference",
+        "workload": "evaluate",
+        "index": 11,
+        "elapsedMs": 0.48476,
+        "fuel": 29379,
+        "memoryBytes": 7798784
+      },
+      {
+        "phase": 5,
+        "variant": "reference",
+        "workload": "evaluate",
+        "index": 12,
+        "elapsedMs": 0.481775,
+        "fuel": 29412,
+        "memoryBytes": 7798784
+      },
+      {
+        "phase": 5,
+        "variant": "reference",
+        "workload": "evaluate",
+        "index": 13,
+        "elapsedMs": 0.472246,
+        "fuel": 29397,
+        "memoryBytes": 7798784
+      },
+      {
+        "phase": 5,
+        "variant": "reference",
+        "workload": "evaluate",
+        "index": 14,
+        "elapsedMs": 0.481466,
+        "fuel": 29374,
+        "memoryBytes": 7798784
+      },
+      {
+        "phase": 5,
+        "variant": "reference",
+        "workload": "definitions",
+        "index": 0,
+        "elapsedMs": 4.355536,
+        "fuel": 586743,
+        "memoryBytes": 8912896
+      },
+      {
+        "phase": 5,
+        "variant": "reference",
+        "workload": "definitions",
+        "index": 1,
+        "elapsedMs": 4.294389,
+        "fuel": 586334,
+        "memoryBytes": 8912896
+      },
+      {
+        "phase": 5,
+        "variant": "reference",
+        "workload": "definitions",
+        "index": 2,
+        "elapsedMs": 4.309993,
+        "fuel": 587222,
+        "memoryBytes": 8912896
+      },
+      {
+        "phase": 5,
+        "variant": "reference",
+        "workload": "definitions",
+        "index": 3,
+        "elapsedMs": 4.298334,
+        "fuel": 586568,
+        "memoryBytes": 8912896
+      },
+      {
+        "phase": 5,
+        "variant": "reference",
+        "workload": "definitions",
+        "index": 4,
+        "elapsedMs": 4.635058,
+        "fuel": 586847,
+        "memoryBytes": 8912896
+      },
+      {
+        "phase": 5,
+        "variant": "reference",
+        "workload": "definitions",
+        "index": 5,
+        "elapsedMs": 4.360367,
+        "fuel": 586766,
+        "memoryBytes": 8912896
+      },
+      {
+        "phase": 5,
+        "variant": "reference",
+        "workload": "definitions",
+        "index": 6,
+        "elapsedMs": 4.265066,
+        "fuel": 587062,
+        "memoryBytes": 8912896
+      },
+      {
+        "phase": 5,
+        "variant": "reference",
+        "workload": "definitions",
+        "index": 7,
+        "elapsedMs": 4.320657,
+        "fuel": 586997,
+        "memoryBytes": 8912896
+      },
+      {
+        "phase": 5,
+        "variant": "reference",
+        "workload": "definitions",
+        "index": 8,
+        "elapsedMs": 4.21856,
+        "fuel": 586968,
+        "memoryBytes": 8912896
+      },
+      {
+        "phase": 5,
+        "variant": "reference",
+        "workload": "definitions",
+        "index": 9,
+        "elapsedMs": 4.253617,
+        "fuel": 587089,
+        "memoryBytes": 8912896
+      },
+      {
+        "phase": 5,
+        "variant": "reference",
+        "workload": "definitions",
+        "index": 10,
+        "elapsedMs": 4.422955,
+        "fuel": 586908,
+        "memoryBytes": 8912896
+      },
+      {
+        "phase": 5,
+        "variant": "reference",
+        "workload": "definitions",
+        "index": 11,
+        "elapsedMs": 4.183056,
+        "fuel": 586849,
+        "memoryBytes": 8912896
+      },
+      {
+        "phase": 5,
+        "variant": "reference",
+        "workload": "definitions",
+        "index": 12,
+        "elapsedMs": 4.142637,
+        "fuel": 587454,
+        "memoryBytes": 8912896
+      },
+      {
+        "phase": 5,
+        "variant": "reference",
+        "workload": "definitions",
+        "index": 13,
+        "elapsedMs": 4.851985,
+        "fuel": 586988,
+        "memoryBytes": 8912896
+      },
+      {
+        "phase": 5,
+        "variant": "reference",
+        "workload": "definitions",
+        "index": 14,
+        "elapsedMs": 4.038118,
+        "fuel": 587480,
+        "memoryBytes": 8912896
+      },
+      {
+        "phase": 6,
+        "variant": "reference",
+        "workload": "evaluate",
+        "index": 0,
+        "elapsedMs": 0.489554,
+        "fuel": 29353,
+        "memoryBytes": 7798784
+      },
+      {
+        "phase": 6,
+        "variant": "reference",
+        "workload": "evaluate",
+        "index": 1,
+        "elapsedMs": 0.464154,
+        "fuel": 29360,
+        "memoryBytes": 7798784
+      },
+      {
+        "phase": 6,
+        "variant": "reference",
+        "workload": "evaluate",
+        "index": 2,
+        "elapsedMs": 0.485727,
+        "fuel": 29345,
+        "memoryBytes": 7798784
+      },
+      {
+        "phase": 6,
+        "variant": "reference",
+        "workload": "evaluate",
+        "index": 3,
+        "elapsedMs": 0.437921,
+        "fuel": 29344,
+        "memoryBytes": 7798784
+      },
+      {
+        "phase": 6,
+        "variant": "reference",
+        "workload": "evaluate",
+        "index": 4,
+        "elapsedMs": 0.480599,
+        "fuel": 29344,
+        "memoryBytes": 7798784
+      },
+      {
+        "phase": 6,
+        "variant": "reference",
+        "workload": "evaluate",
+        "index": 5,
+        "elapsedMs": 0.448164,
+        "fuel": 29330,
+        "memoryBytes": 7798784
+      },
+      {
+        "phase": 6,
+        "variant": "reference",
+        "workload": "evaluate",
+        "index": 6,
+        "elapsedMs": 0.504857,
+        "fuel": 29347,
+        "memoryBytes": 7798784
+      },
+      {
+        "phase": 6,
+        "variant": "reference",
+        "workload": "evaluate",
+        "index": 7,
+        "elapsedMs": 0.460739,
+        "fuel": 29359,
+        "memoryBytes": 7798784
+      },
+      {
+        "phase": 6,
+        "variant": "reference",
+        "workload": "evaluate",
+        "index": 8,
+        "elapsedMs": 0.488382,
+        "fuel": 29336,
+        "memoryBytes": 7798784
+      },
+      {
+        "phase": 6,
+        "variant": "reference",
+        "workload": "evaluate",
+        "index": 9,
+        "elapsedMs": 0.458423,
+        "fuel": 29377,
+        "memoryBytes": 7798784
+      },
+      {
+        "phase": 6,
+        "variant": "reference",
+        "workload": "evaluate",
+        "index": 10,
+        "elapsedMs": 0.517221,
+        "fuel": 29352,
+        "memoryBytes": 7798784
+      },
+      {
+        "phase": 6,
+        "variant": "reference",
+        "workload": "evaluate",
+        "index": 11,
+        "elapsedMs": 0.436187,
+        "fuel": 29348,
+        "memoryBytes": 7798784
+      },
+      {
+        "phase": 6,
+        "variant": "reference",
+        "workload": "evaluate",
+        "index": 12,
+        "elapsedMs": 0.449853,
+        "fuel": 29384,
+        "memoryBytes": 7798784
+      },
+      {
+        "phase": 6,
+        "variant": "reference",
+        "workload": "evaluate",
+        "index": 13,
+        "elapsedMs": 0.457724,
+        "fuel": 29334,
+        "memoryBytes": 7798784
+      },
+      {
+        "phase": 6,
+        "variant": "reference",
+        "workload": "evaluate",
+        "index": 14,
+        "elapsedMs": 0.469749,
+        "fuel": 29317,
+        "memoryBytes": 7798784
+      },
+      {
+        "phase": 6,
+        "variant": "reference",
+        "workload": "definitions",
+        "index": 0,
+        "elapsedMs": 3.90408,
+        "fuel": 586375,
+        "memoryBytes": 8912896
+      },
+      {
+        "phase": 6,
+        "variant": "reference",
+        "workload": "definitions",
+        "index": 1,
+        "elapsedMs": 4.029655,
+        "fuel": 585914,
+        "memoryBytes": 8912896
+      },
+      {
+        "phase": 6,
+        "variant": "reference",
+        "workload": "definitions",
+        "index": 2,
+        "elapsedMs": 3.915522,
+        "fuel": 587116,
+        "memoryBytes": 8912896
+      },
+      {
+        "phase": 6,
+        "variant": "reference",
+        "workload": "definitions",
+        "index": 3,
+        "elapsedMs": 3.907939,
+        "fuel": 587104,
+        "memoryBytes": 8912896
+      },
+      {
+        "phase": 6,
+        "variant": "reference",
+        "workload": "definitions",
+        "index": 4,
+        "elapsedMs": 4.367912,
+        "fuel": 586292,
+        "memoryBytes": 8912896
+      },
+      {
+        "phase": 6,
+        "variant": "reference",
+        "workload": "definitions",
+        "index": 5,
+        "elapsedMs": 3.997376,
+        "fuel": 586674,
+        "memoryBytes": 8912896
+      },
+      {
+        "phase": 6,
+        "variant": "reference",
+        "workload": "definitions",
+        "index": 6,
+        "elapsedMs": 3.976268,
+        "fuel": 586742,
+        "memoryBytes": 8912896
+      },
+      {
+        "phase": 6,
+        "variant": "reference",
+        "workload": "definitions",
+        "index": 7,
+        "elapsedMs": 3.998114,
+        "fuel": 586875,
+        "memoryBytes": 8912896
+      },
+      {
+        "phase": 6,
+        "variant": "reference",
+        "workload": "definitions",
+        "index": 8,
+        "elapsedMs": 3.880796,
+        "fuel": 587037,
+        "memoryBytes": 8912896
+      },
+      {
+        "phase": 6,
+        "variant": "reference",
+        "workload": "definitions",
+        "index": 9,
+        "elapsedMs": 3.970354,
+        "fuel": 587278,
+        "memoryBytes": 8912896
+      },
+      {
+        "phase": 6,
+        "variant": "reference",
+        "workload": "definitions",
+        "index": 10,
+        "elapsedMs": 4.002925,
+        "fuel": 587243,
+        "memoryBytes": 8912896
+      },
+      {
+        "phase": 6,
+        "variant": "reference",
+        "workload": "definitions",
+        "index": 11,
+        "elapsedMs": 3.863044,
+        "fuel": 587310,
+        "memoryBytes": 8912896
+      },
+      {
+        "phase": 6,
+        "variant": "reference",
+        "workload": "definitions",
+        "index": 12,
+        "elapsedMs": 3.86532,
+        "fuel": 587477,
+        "memoryBytes": 8912896
+      },
+      {
+        "phase": 6,
+        "variant": "reference",
+        "workload": "definitions",
+        "index": 13,
+        "elapsedMs": 3.949299,
+        "fuel": 587655,
+        "memoryBytes": 8912896
+      },
+      {
+        "phase": 6,
+        "variant": "reference",
+        "workload": "definitions",
+        "index": 14,
+        "elapsedMs": 4.043338,
+        "fuel": 586662,
+        "memoryBytes": 8912896
+      },
+      {
+        "phase": 7,
+        "variant": "candidate",
+        "workload": "evaluate",
+        "index": 0,
+        "elapsedMs": 0.796662,
+        "fuel": 29383,
+        "memoryBytes": 8060928
+      },
+      {
+        "phase": 7,
+        "variant": "candidate",
+        "workload": "evaluate",
+        "index": 1,
+        "elapsedMs": 0.861068,
+        "fuel": 29394,
+        "memoryBytes": 8060928
+      },
+      {
+        "phase": 7,
+        "variant": "candidate",
+        "workload": "evaluate",
+        "index": 2,
+        "elapsedMs": 0.743015,
+        "fuel": 29444,
+        "memoryBytes": 8060928
+      },
+      {
+        "phase": 7,
+        "variant": "candidate",
+        "workload": "evaluate",
+        "index": 3,
+        "elapsedMs": 0.701707,
+        "fuel": 29382,
+        "memoryBytes": 8060928
+      },
+      {
+        "phase": 7,
+        "variant": "candidate",
+        "workload": "evaluate",
+        "index": 4,
+        "elapsedMs": 0.487233,
+        "fuel": 29395,
+        "memoryBytes": 8060928
+      },
+      {
+        "phase": 7,
+        "variant": "candidate",
+        "workload": "evaluate",
+        "index": 5,
+        "elapsedMs": 0.466582,
+        "fuel": 29388,
+        "memoryBytes": 8060928
+      },
+      {
+        "phase": 7,
+        "variant": "candidate",
+        "workload": "evaluate",
+        "index": 6,
+        "elapsedMs": 0.461431,
+        "fuel": 29380,
+        "memoryBytes": 8060928
+      },
+      {
+        "phase": 7,
+        "variant": "candidate",
+        "workload": "evaluate",
+        "index": 7,
+        "elapsedMs": 0.460036,
+        "fuel": 29356,
+        "memoryBytes": 8060928
+      },
+      {
+        "phase": 7,
+        "variant": "candidate",
+        "workload": "evaluate",
+        "index": 8,
+        "elapsedMs": 0.45076,
+        "fuel": 29368,
+        "memoryBytes": 8060928
+      },
+      {
+        "phase": 7,
+        "variant": "candidate",
+        "workload": "evaluate",
+        "index": 9,
+        "elapsedMs": 0.459715,
+        "fuel": 29398,
+        "memoryBytes": 8060928
+      },
+      {
+        "phase": 7,
+        "variant": "candidate",
+        "workload": "evaluate",
+        "index": 10,
+        "elapsedMs": 0.451355,
+        "fuel": 29388,
+        "memoryBytes": 8060928
+      },
+      {
+        "phase": 7,
+        "variant": "candidate",
+        "workload": "evaluate",
+        "index": 11,
+        "elapsedMs": 0.441257,
+        "fuel": 29380,
+        "memoryBytes": 8060928
+      },
+      {
+        "phase": 7,
+        "variant": "candidate",
+        "workload": "evaluate",
+        "index": 12,
+        "elapsedMs": 0.454895,
+        "fuel": 29356,
+        "memoryBytes": 8060928
+      },
+      {
+        "phase": 7,
+        "variant": "candidate",
+        "workload": "evaluate",
+        "index": 13,
+        "elapsedMs": 0.4501,
+        "fuel": 29368,
+        "memoryBytes": 8060928
+      },
+      {
+        "phase": 7,
+        "variant": "candidate",
+        "workload": "evaluate",
+        "index": 14,
+        "elapsedMs": 0.45084,
+        "fuel": 29398,
+        "memoryBytes": 8060928
+      },
+      {
+        "phase": 7,
+        "variant": "candidate",
+        "workload": "definitions",
+        "index": 0,
+        "elapsedMs": 4.042322,
+        "fuel": 615503,
+        "memoryBytes": 9175040
+      },
+      {
+        "phase": 7,
+        "variant": "candidate",
+        "workload": "definitions",
+        "index": 1,
+        "elapsedMs": 4.154339,
+        "fuel": 615438,
+        "memoryBytes": 9175040
+      },
+      {
+        "phase": 7,
+        "variant": "candidate",
+        "workload": "definitions",
+        "index": 2,
+        "elapsedMs": 4.071816,
+        "fuel": 616403,
+        "memoryBytes": 9175040
+      },
+      {
+        "phase": 7,
+        "variant": "candidate",
+        "workload": "definitions",
+        "index": 3,
+        "elapsedMs": 4.09617,
+        "fuel": 616249,
+        "memoryBytes": 9175040
+      },
+      {
+        "phase": 7,
+        "variant": "candidate",
+        "workload": "definitions",
+        "index": 4,
+        "elapsedMs": 4.111097,
+        "fuel": 616251,
+        "memoryBytes": 9175040
+      },
+      {
+        "phase": 7,
+        "variant": "candidate",
+        "workload": "definitions",
+        "index": 5,
+        "elapsedMs": 4.132435,
+        "fuel": 616386,
+        "memoryBytes": 9175040
+      },
+      {
+        "phase": 7,
+        "variant": "candidate",
+        "workload": "definitions",
+        "index": 6,
+        "elapsedMs": 4.181914,
+        "fuel": 616168,
+        "memoryBytes": 9175040
+      },
+      {
+        "phase": 7,
+        "variant": "candidate",
+        "workload": "definitions",
+        "index": 7,
+        "elapsedMs": 4.227814,
+        "fuel": 615775,
+        "memoryBytes": 9175040
+      },
+      {
+        "phase": 7,
+        "variant": "candidate",
+        "workload": "definitions",
+        "index": 8,
+        "elapsedMs": 4.06627,
+        "fuel": 616590,
+        "memoryBytes": 9175040
+      },
+      {
+        "phase": 7,
+        "variant": "candidate",
+        "workload": "definitions",
+        "index": 9,
+        "elapsedMs": 5.292497,
+        "fuel": 616110,
+        "memoryBytes": 9175040
+      },
+      {
+        "phase": 7,
+        "variant": "candidate",
+        "workload": "definitions",
+        "index": 10,
+        "elapsedMs": 5.214547,
+        "fuel": 616720,
+        "memoryBytes": 9175040
+      },
+      {
+        "phase": 7,
+        "variant": "candidate",
+        "workload": "definitions",
+        "index": 11,
+        "elapsedMs": 4.512622,
+        "fuel": 616086,
+        "memoryBytes": 9175040
+      },
+      {
+        "phase": 7,
+        "variant": "candidate",
+        "workload": "definitions",
+        "index": 12,
+        "elapsedMs": 4.153793,
+        "fuel": 616390,
+        "memoryBytes": 9175040
+      },
+      {
+        "phase": 7,
+        "variant": "candidate",
+        "workload": "definitions",
+        "index": 13,
+        "elapsedMs": 4.196448,
+        "fuel": 616111,
+        "memoryBytes": 9175040
+      },
+      {
+        "phase": 7,
+        "variant": "candidate",
+        "workload": "definitions",
+        "index": 14,
+        "elapsedMs": 4.165967,
+        "fuel": 616573,
+        "memoryBytes": 9175040
+      }
+    ]
+  },
+  "benchmarkSummary": [
+    {
+      "workload": "evaluate",
+      "variant": "reference",
+      "samples": 60,
+      "medianMs": 0.543002,
+      "p95Ms": 2.23779,
+      "medianFuel": 29374.5,
+      "memoryHighWaterBytes": 7798784
+    },
+    {
+      "workload": "evaluate",
+      "variant": "candidate",
+      "samples": 60,
+      "medianMs": 0.6184875000000001,
+      "p95Ms": 1.85069,
+      "medianFuel": 29372.5,
+      "memoryHighWaterBytes": 8060928
+    },
+    {
+      "workload": "definitions",
+      "variant": "reference",
+      "samples": 60,
+      "medianMs": 4.631935,
+      "p95Ms": 10.177636,
+      "medianFuel": 586967.5,
+      "memoryHighWaterBytes": 8912896
+    },
+    {
+      "workload": "definitions",
+      "variant": "candidate",
+      "samples": 60,
+      "medianMs": 4.989145000000001,
+      "p95Ms": 8.345156,
+      "medianFuel": 615958.5,
+      "memoryHighWaterBytes": 9175040
+    }
+  ],
+  "host": {
+    "system": "Linux",
+    "machine": "x86_64",
+    "release": "7.2.9-arch1-1"
+  },
+  "packageProof": {
+    "exitCode": 0,
+    "scope": "Released 0.22.0 SDK against unreleased locally packed runtime. Runtime package version is still 0.22.0; this candidate is not a published release.",
+    "transport": "native Alchemy workerd service binding and Agent RPC; local R2 and Queue",
+    "coverage": "SDK archive exports and consumer declarations; runtime archive; filesystem snapshot restore; hard-link metadata; RPC callbacks and cooperative disposal; ephemeral context disposal with 1024 files and concurrent closes; persistent driver contexts and cancellation; retained native heaps and current callback authority; scoped authority",
+    "pythonNoticesMatchSource": true,
+    "artifacts": {
+      "releasedSdk": {
+        "sha256": "e17b7283f444622ea437ac8bff6a2ff9d79437d8e0b89e5d9fadb80d97e071e0",
+        "bytes": 85366
+      },
+      "candidateRuntime": {
+        "sha256": "33a398d5c48b9df64bc3da4b706b6278e1b770e7bc0d9b7eba6d3a44eb1c2a1f",
+        "bytes": 5838330
+      }
+    }
+  },
+  "checks": [
+    {
+      "command": "bun test tests/python.test.ts tests/python-context-heap.test.ts tests/queued-contexts.test.ts",
+      "result": "10 passed, 0 failed, 81 assertions, 15.47 seconds; before the additional weak-reference operation assertion."
+    },
+    {
+      "command": "bun test tests/python.test.ts",
+      "result": "5 passed, 0 failed, 34 assertions, 0.990 seconds; includes WeakSet construction and the native-callable lock assertion."
+    },
+    {
+      "command": "bun run build && bun run build:sdk && bun run typecheck && cargo clippy --workspace --all-targets -- -D warnings && cargo test --workspace",
+      "result": "Passed in the initial check run before its Bun test phase; that test phase failed on the over-budget stdlib Queue fixture and is superseded by the final complete Bun run."
+    },
+    {
+      "command": "bun run test",
+      "result": "435 passed, 0 failed, 6321 assertions across 97 files, 264.70 seconds after restoring the Queue fixture workload to its original instruction ceiling."
+    },
+    {
+      "command": "bun run typecheck",
+      "result": "Passed after final TypeScript test changes."
+    }
+  ],
+  "sourceDigests": {
+    "crates/python/src/lib.rs": "0ebd4a0cabb636a261d00c99ee376088e01fa798c0409064a731a2562036ad1d",
+    "crates/python/src/locks.rs": "401d0af62a583f3ea8ab295775a81fc0241dd24fdd6d30c2e3af1d1d542c2c09",
+    "crates/python/build.rs": "e8fb376fb034354528a45ff67fdfc9dcc7eb8d4bfed561cb53021ca037ee10a6",
+    "tests/python.test.ts": "924464209f5c6f565c0670dc7a8b6b1f6658d80026fc72d5874fbb1a8fe2aef3",
+    "tests/python-context-heap.test.ts": "a79365a97c9b444fb4f143e4727cc5b03e6880e537337adc6a2ffa405ca64d88",
+    "tests/queued-contexts.test.ts": "837a55cc2808f9ad0320924d9f9269b247ec728d16551c2f28997c86af2bc894",
+    "licenses/python.txt": "0eec73cf94f810458f27bebc10d0cb2ad00643274f1a7fccaa5cb37887aa7f11"
+  }
+}

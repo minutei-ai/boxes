@@ -89,6 +89,11 @@ await Effect.runPromise(
         sdk.version !== runtimePackage.version
       )
         return yield* Effect.die("SDK and runtime package identities differ");
+      const pythonNotice = yield* Effect.promise(() =>
+        readFile(join(directory, "node_modules/@minutei-ai/boxes-runtime/PYTHON-LICENSE"), "utf8"),
+      );
+      if (pythonNotice !== (yield* Effect.promise(() => readFile("licenses/python.txt", "utf8"))))
+        return yield* Effect.die("Runtime archive Python notices differ from their source");
       const fixture = (yield* Effect.promise(() =>
         readFile("tests/fixtures/sdk-binding-worker.ts", "utf8"),
       ))

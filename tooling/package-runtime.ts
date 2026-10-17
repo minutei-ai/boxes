@@ -19,6 +19,7 @@ await mkdir(directory, { recursive: true });
 const assets = await readdir("dist/worker");
 for (const asset of assets) await copyFile(join("dist/worker", asset), join(directory, asset));
 await copyFile("LICENSE", join(directory, "LICENSE"));
+await copyFile("licenses/python.txt", join(directory, "PYTHON-LICENSE"));
 await Bun.write(
   join(directory, "package.json"),
   JSON.stringify({
@@ -27,7 +28,7 @@ await Bun.write(
     license: root.license,
     repository: root.repository,
     type: "module",
-    files: [...assets, "LICENSE"],
+    files: [...assets, "LICENSE", "PYTHON-LICENSE"],
     exports: { "./worker": "./index.js", "./package.json": "./package.json" },
   }),
 );
