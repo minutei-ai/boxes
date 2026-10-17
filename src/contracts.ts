@@ -506,6 +506,9 @@ export const ContextRecord = Schema.Struct({
   executionId: Schema.NullOr(Id),
   deadlineAt: Schema.NullOr(Schema.Int),
 });
+export const ContextReference = ContextRecord.mapFields((fields) =>
+  Struct.pick(fields, ["id", "generation"]),
+);
 export const ContextMetadata = Schema.Struct({ summary: Schema.fromJsonString(ContextRecord) });
 export const ContextPage = Schema.Struct({
   contexts: Schema.Array(ContextRecord),
@@ -578,6 +581,7 @@ export const CronAction = Schema.Union([
 ]);
 export const CronRecord = Schema.Struct({
   ...CronAction.members[0].fields,
+  context: Schema.NullOr(ContextReference),
   op: Schema.Literal("cron.schedule"),
   state: Schema.Literals(["active", "cancelled", "completed", "expired", "failed"]),
   createdAt: Schema.Int,
@@ -586,6 +590,12 @@ export const CronRecord = Schema.Struct({
   runCount: Schema.Int,
   lastProcessId: Schema.NullOr(Id),
   error: Schema.NullOr(Schema.String),
+});
+export const StoredCronMetadata = Schema.Struct({
+  format: Schema.Literal("cron-v2"),
+  summary: Schema.fromJsonString(
+    CronRecord.mapFields((fields) => Struct.pick(fields, ["state", "nextRun"])),
+  ),
 });
 export const StoredCron = Schema.Struct({
   ...CronRecord.fields,
@@ -888,6 +898,7 @@ export const WasmStep = Schema.Union([
 ]);
 export const RunRecord = Schema.Struct({
   id: Id,
+  context: Schema.NullOr(ContextReference),
   status: Schema.Literals(["queued", "running", "cancelling", "cancelled", "exited", "failed"]),
   sourceHash: Schema.String.check(Schema.isPattern(/^[a-f0-9]{64}$/)),
   language: Schema.Literals(["javascript", "typescript", "python", "shell", "wasm"]),
@@ -951,7 +962,7 @@ export const ProcessDescription = StoredRun.mapFields((fields) => ({
 export const StoredRunMetadata = RunMetadata.mapFields((fields) => ({
   ...fields,
   summary: Schema.fromJsonString(ProcessDescription),
-  format: Schema.Literal("run-v6"),
+  format: Schema.Literal("run-v7"),
 }));
 export const DispatchReceipt = Schema.Struct({ notifications: Schema.Int });
 export const ProcessDelivery = Schema.Struct({ key: Schema.String, eTag: Schema.String });
@@ -1127,6 +1138,13 @@ export const OutputMigrationInput = Schema.Struct({
 export const OutputMigrationReceipt = Schema.Struct({
   migrated: Schema.Int,
   cursor: Schema.NullOr(Schema.String),
+});
+export const CronMigrationInput = Schema.Struct({
+  cursor: Schema.optionalKey(Schema.NullOr(Schema.String.check(Schema.isMaxLength(2048)))),
+});
+export const CronMigrationReceipt = Schema.Struct({
+  migrated: Schema.Int,
+  cursor: Schema.NullOr(Schema.String.check(Schema.isMaxLength(2048))),
 });
 export const ProcessDeadlineMigrationInput = Schema.Struct({
   cursor: Schema.optionalKey(Schema.NullOr(Schema.String.check(Schema.isMaxLength(2048)))),

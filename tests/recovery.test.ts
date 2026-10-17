@@ -408,7 +408,7 @@ for (const mode of ["expired", "cancelled", "corrupt"] as const) {
         }),
         {
           customMetadata: Schema.encodeSync(StoredRunMetadata)({
-            format: "run-v6",
+            format: "run-v7",
             summary: {
               ...Struct.omit(context.paused, [
                 "output",

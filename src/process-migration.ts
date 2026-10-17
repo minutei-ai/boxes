@@ -1,6 +1,8 @@
 import { Effect, Schema, Struct } from "effect";
 import {
   RunRecord,
+  RunSummary,
+  ProcessDescription,
   RunMetadata,
   StoredRun,
   StoredRunMetadata,
@@ -12,6 +14,21 @@ import { StorageFailure } from "./storage";
 import type { Env } from "./resources";
 import { archiveOutput } from "./output";
 import { executionWindowMs, QueueFailure } from "./process";
+
+export const PreviousRunRecord = RunRecord.mapFields((fields) => Struct.omit(fields, ["context"]));
+const PreviousRunSummary = RunSummary.mapFields((fields) => Struct.omit(fields, ["context"]));
+export const PreviousRunMetadata = RunMetadata.mapFields((fields) => ({
+  ...fields,
+  summary: Schema.fromJsonString(PreviousRunSummary),
+}));
+const VersionSixStoredRun = StoredRun.mapFields((fields) => Struct.omit(fields, ["context"]));
+const VersionSixMetadata = StoredRunMetadata.mapFields((fields) => ({
+  ...fields,
+  format: Schema.Literal("run-v6"),
+  summary: Schema.fromJsonString(
+    ProcessDescription.mapFields((fields) => Struct.omit(fields, ["context"])),
+  ),
+}));
 
 export const migrateDeadlines = Effect.fn("migration.processDeadlines")(function* (
   env: Env,
@@ -124,7 +141,9 @@ export const migrateProcesses = Effect.fn("migration.processReceipts")(function*
             try: () => stored.text(),
             catch: (cause) => new StorageFailure({ cause }),
           });
-          const record = yield* Schema.decodeUnknownEffect(Schema.fromJsonString(RunRecord))(text);
+          const record = yield* Schema.decodeUnknownEffect(
+            Schema.fromJsonString(PreviousRunRecord),
+          )(text);
           const sandboxId = yield* Schema.decodeUnknownEffect(Id)(parts[1]);
           if (
             parts.length !== 4 ||
@@ -146,6 +165,7 @@ export const migrateProcesses = Effect.fn("migration.processReceipts")(function*
           });
           const encoded = Schema.encodeSync(Schema.fromJsonString(StoredRun))({
             ...record,
+            context: null,
             output,
             authority: null,
             deadlineAt: null,
@@ -175,8 +195,12 @@ export const migrateProcesses = Effect.fn("migration.processReceipts")(function*
               env.OBJECTS.put(key, encoded, {
                 onlyIf: { etagDoesNotMatch: "*" },
                 customMetadata: Schema.encodeSync(StoredRunMetadata)({
-                  format: "run-v6",
-                  summary: { ...Struct.omit(record, ["output"]), stdinMode: "closed" },
+                  format: "run-v7",
+                  summary: {
+                    ...Struct.omit(record, ["output"]),
+                    context: null,
+                    stdinMode: "closed",
+                  },
                 }),
               }),
             catch: (cause) => new StorageFailure({ cause }),
@@ -209,39 +233,40 @@ export const migrateProcesses = Effect.fn("migration.processReceipts")(function*
   return { migrated: migrated.count };
 });
 
-const InlineRun = RunRecord.mapFields((fields) => ({
+const InlineRun = PreviousRunRecord.mapFields((fields) => ({
   ...fields,
   authority: Schema.NullOr(Capability),
   deadlineAt: Schema.NullOr(Schema.Int),
 }));
-const InlineMetadata = RunMetadata.mapFields((fields) => ({
+const InlineMetadata = PreviousRunMetadata.mapFields((fields) => ({
   ...fields,
   format: Schema.Literal("run-v2"),
 }));
-const VersionFiveStoredRun = StoredRun.mapFields((fields) => ({
+const VersionFiveStoredRun = VersionSixStoredRun.mapFields((fields) => ({
   ...Struct.omit(fields, ["inputMode"]),
   stdinMode: fields.inputMode,
 }));
 const PreviousStoredRun = VersionFiveStoredRun.mapFields((fields) =>
   Struct.omit(fields, ["stdinMode", "checkpoint", "checkpointCount"]),
 );
-const PreviousMetadata = RunMetadata.mapFields((fields) => ({
+const PreviousMetadata = PreviousRunMetadata.mapFields((fields) => ({
   ...fields,
   format: Schema.Literal("run-v3"),
 }));
 const VersionFourStoredRun = VersionFiveStoredRun.mapFields((fields) =>
   Struct.omit(fields, ["checkpoint", "checkpointCount"]),
 );
-const VersionFourMetadata = RunMetadata.mapFields((fields) => ({
+const VersionFourMetadata = PreviousRunMetadata.mapFields((fields) => ({
   ...fields,
   format: Schema.Literal("run-v4"),
 }));
-const VersionFiveMetadata = RunMetadata.mapFields((fields) => ({
+const VersionFiveMetadata = PreviousRunMetadata.mapFields((fields) => ({
   ...fields,
   format: Schema.Literal("run-v5"),
 }));
 const MigrationMetadata = Schema.Union([
   StoredRunMetadata,
+  VersionSixMetadata,
   VersionFiveMetadata,
   VersionFourMetadata,
   PreviousMetadata,
@@ -270,7 +295,7 @@ export const migrateOutput = Effect.fn("migration.processIndex")(function* (
         const metadata = yield* Schema.decodeUnknownEffect(MigrationMetadata)(
           object.customMetadata,
         );
-        if (metadata.format === "run-v6") return;
+        if (metadata.format === "run-v7") return;
         const parts = object.key.split("/");
         const sandboxId = yield* Schema.decodeUnknownEffect(Id)(parts[1]);
         if (
@@ -291,7 +316,11 @@ export const migrateOutput = Effect.fn("migration.processIndex")(function* (
           try: () => stored.text(),
           catch: (cause) => new StorageFailure({ cause }),
         });
-        const converted = yield* Effect.gen(function* () {
+        const previous = yield* Effect.gen(function* () {
+          if (metadata.format === "run-v6")
+            return yield* Schema.decodeUnknownEffect(Schema.fromJsonString(VersionSixStoredRun), {
+              onExcessProperty: "error",
+            })(text);
           if (metadata.format === "run-v5") {
             const record = yield* Schema.decodeUnknownEffect(
               Schema.fromJsonString(VersionFiveStoredRun),
@@ -333,6 +362,11 @@ export const migrateOutput = Effect.fn("migration.processIndex")(function* (
             checkpointCount: 0,
           };
         });
+        if (metadata.format === "run-v6" && metadata.summary.stdinMode !== previous.inputMode)
+          return yield* new StorageFailure({
+            cause: "Process input mode does not match its indexed summary",
+          });
+        const converted = { ...previous, context: null };
         const summary = Struct.omit(converted, [
           "output",
           "authority",
@@ -341,7 +375,12 @@ export const migrateOutput = Effect.fn("migration.processIndex")(function* (
           "checkpoint",
           "checkpointCount",
         ]);
-        if (!Schema.toEquivalence(RunMetadata.fields.summary)(summary, metadata.summary))
+        if (
+          !Schema.toEquivalence(PreviousRunSummary)(
+            Struct.omit(summary, ["context"]),
+            metadata.summary,
+          )
+        )
           return yield* new StorageFailure({
             cause: "Process body does not match its indexed summary",
           });
@@ -351,7 +390,7 @@ export const migrateOutput = Effect.fn("migration.processIndex")(function* (
             env.OBJECTS.put(object.key, serialized, {
               onlyIf: { etagMatches: stored.etag },
               customMetadata: Schema.encodeSync(StoredRunMetadata)({
-                format: "run-v6",
+                format: "run-v7",
                 summary: { ...summary, stdinMode: converted.inputMode },
               }),
             }),

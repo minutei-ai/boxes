@@ -1,6 +1,7 @@
+import { PreviousRunRecord, PreviousRunMetadata } from "./process-migration";
 import { Effect, Schema, Struct } from "effect";
 import { archive } from "./code";
-import { RunRecord, RunMetadata, WasmProgram } from "./contracts";
+import { WasmProgram } from "./contracts";
 import { StorageFailure } from "./storage";
 import type { Env } from "./resources";
 
@@ -38,7 +39,9 @@ export const migrateWasm = Effect.fn("migration.wasmInputs")(function* (env: Env
       (object) =>
         Effect.gen(function* () {
           if (object.customMetadata?.summary !== undefined) {
-            const metadata = yield* Schema.decodeUnknownEffect(RunMetadata)(object.customMetadata);
+            const metadata = yield* Schema.decodeUnknownEffect(PreviousRunMetadata)(
+              object.customMetadata,
+            );
             if (metadata.summary.language !== "wasm") return;
           }
           const stored = yield* Effect.tryPromise({
@@ -51,7 +54,9 @@ export const migrateWasm = Effect.fn("migration.wasmInputs")(function* (env: Env
             try: () => stored.text(),
             catch: (cause) => new StorageFailure({ cause }),
           });
-          const record = yield* Schema.decodeUnknownEffect(Schema.fromJsonString(RunRecord))(text);
+          const record = yield* Schema.decodeUnknownEffect(
+            Schema.fromJsonString(PreviousRunRecord),
+          )(text);
           if (record.language !== "wasm") return;
           const prefix = object.key.slice(0, object.key.indexOf("/runs/"));
           const codeKey = `${prefix}/code/${record.sourceHash}`;
@@ -87,10 +92,10 @@ export const migrateWasm = Effect.fn("migration.wasmInputs")(function* (env: Env
             try: () =>
               env.OBJECTS.put(
                 object.key,
-                Schema.encodeSync(Schema.fromJsonString(RunRecord))(converted),
+                Schema.encodeSync(Schema.fromJsonString(PreviousRunRecord))(converted),
                 {
                   onlyIf: { etagMatches: stored.etag },
-                  customMetadata: Schema.encodeSync(RunMetadata)({
+                  customMetadata: Schema.encodeSync(PreviousRunMetadata)({
                     summary: Struct.omit(converted, ["output"]),
                   }),
                 },

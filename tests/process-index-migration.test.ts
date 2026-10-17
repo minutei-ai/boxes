@@ -7,6 +7,7 @@ import { FetchHttpClient } from "effect/http";
 import {
   OutputMigrationReceipt,
   RunMetadata,
+  RunSummary,
   StoredRun,
   StoredRunMetadata,
 } from "../src/contracts";
@@ -14,11 +15,14 @@ import { make } from "../src/sdk";
 import { runtime } from "../tooling/worker-test";
 
 const VersionFiveStoredRun = StoredRun.mapFields((fields) => ({
-  ...Struct.omit(fields, ["inputMode"]),
+  ...Struct.omit(fields, ["inputMode", "context"]),
   stdinMode: fields.inputMode,
 }));
 const VersionFiveMetadata = RunMetadata.mapFields((fields) => ({
   ...fields,
+  summary: Schema.fromJsonString(
+    RunSummary.mapFields((fields) => Struct.omit(fields, ["context"])),
+  ),
   format: Schema.Literal("run-v5"),
 }));
 
@@ -157,7 +161,7 @@ test(
             const metadata = yield* Schema.decodeUnknownEffect(StoredRunMetadata)(
               object.customMetadata,
             );
-            expect(metadata.format).toBe("run-v6");
+            expect(metadata.format).toBe("run-v7");
             expect(metadata.summary.stdinMode).toBe(retained.record.inputMode);
             expect(Struct.omit(metadata.summary, ["stdinMode"])).toEqual(
               Struct.omit(retained.record, [

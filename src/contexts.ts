@@ -6,6 +6,10 @@ import {
   Capability,
   ContextAction,
   ContextRecord,
+  ContextReference,
+  RunAction,
+  PythonAction,
+  ScriptAction,
   ContextHeap,
   ContextMetadata,
   Fault,
@@ -14,6 +18,57 @@ import {
 } from "./contracts";
 import { head, StorageFailure } from "./storage";
 import type { Env } from "./resources";
+
+export const contextLanguage = (action: typeof RunAction.Type) => {
+  if (Schema.is(PythonAction)(action)) return "python" as const;
+  if (Schema.is(ScriptAction)(action)) return "javascript" as const;
+  return null;
+};
+
+export const referenceContext = Effect.fn("contexts.reference")(function* (
+  env: Env,
+  capability: typeof Capability.Type,
+  action: typeof RunAction.Type,
+  expected: typeof ContextReference.Type | null = null,
+) {
+  if (!("contextId" in action) || action.contextId === undefined) {
+    if (expected !== null)
+      return yield* new Fault({
+        code: "CONTEXT_STALE",
+        status: 409,
+        message: "Execution lost its context identity",
+      });
+    return null;
+  }
+  yield* requirePermission(capability, "execute");
+  const language = contextLanguage(action);
+  if (language === null)
+    return yield* new Fault({
+      code: "UNSUPPORTED_RUNTIME",
+      status: 501,
+      message: "Execution cannot retain a language context",
+    });
+  const record = yield* getContext(env, capability, action.contextId);
+  if (record.language !== language)
+    return yield* new Fault({
+      code: "CONTEXT_LANGUAGE_MISMATCH",
+      status: 409,
+      message: "Execution language does not match its context",
+    });
+  if (record.state === "failed")
+    return yield* new Fault({
+      code: "CONTEXT_FAILED",
+      status: 409,
+      message: "Reset the failed context before enqueueing work",
+    });
+  if (expected !== null && (record.id !== expected.id || record.generation !== expected.generation))
+    return yield* new Fault({
+      code: "CONTEXT_STALE",
+      status: 409,
+      message: "Execution belongs to another context generation",
+    });
+  return Struct.pick(record, ["id", "generation"]);
+});
 
 const readContext = Effect.fn("contexts.read")(function* (env: Env, sandboxId: string, id: string) {
   const object = yield* Effect.tryPromise({
@@ -210,6 +265,7 @@ export const acquireContext = Effect.fn("contexts.acquire")(function* (
   deadlineAt: number,
   memoryLimitBytes: typeof Policy.Type.memoryBytes | null,
   language: typeof ContextRecord.Type.language,
+  expectedGeneration: typeof ContextReference.Type.generation | null = null,
 ) {
   yield* requirePermission(capability, "read");
   yield* requirePermission(capability, "execute");
@@ -217,6 +273,12 @@ export const acquireContext = Effect.fn("contexts.acquire")(function* (
   const current = yield* readContext(env, capability.sandboxId, id);
   if (current === null || current.record.state === "deleted")
     return yield* new Fault({ code: "ENOENT", status: 404, message: "Context does not exist" });
+  if (expectedGeneration !== null && current.record.generation !== expectedGeneration)
+    return yield* new Fault({
+      code: "CONTEXT_STALE",
+      status: 409,
+      message: "Execution belongs to another context generation",
+    });
   if (current.record.language !== language)
     return yield* new Fault({
       code: "CONTEXT_LANGUAGE_MISMATCH",

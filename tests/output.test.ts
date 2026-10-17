@@ -408,7 +408,7 @@ test("inline receipt migration preserves grants, deadlines, observed output and 
           const token = await setup(migration, "output-migration");
           const bucket = await migration.objects;
           const Inline = RunRecord.mapFields((fields) => ({
-            ...fields,
+            ...Struct.omit(fields, ["context"]),
             authority: Schema.NullOr(Capability),
             deadlineAt: Schema.NullOr(Schema.Int),
           }));
@@ -449,7 +449,7 @@ test("inline receipt migration preserves grants, deadlines, observed output and 
                   format: "run-v2",
                   summary: Schema.encodeSync(
                     Schema.fromJsonString(
-                      RunRecord.mapFields((fields) => Struct.omit(fields, ["output"])),
+                      RunRecord.mapFields((fields) => Struct.omit(fields, ["output", "context"])),
                     ),
                   )(Struct.omit(record, ["output", "authority", "deadlineAt"])),
                 },
@@ -458,7 +458,7 @@ test("inline receipt migration preserves grants, deadlines, observed output and 
           }
           const migrate = await post(
             migration,
-            "/v1/migrations/process-index-v6",
+            "/v1/migrations/process-index-v7",
             "cirro-local-test-credential",
             {},
           );
@@ -482,7 +482,7 @@ test("inline receipt migration preserves grants, deadlines, observed output and 
             expect(stored.authority).toEqual(grant);
             expect(stored.deadlineAt).toBe(123456);
             expect(Schema.decodeUnknownSync(StoredRunMetadata)(object.customMetadata).format).toBe(
-              "run-v6",
+              "run-v7",
             );
             const record = Schema.decodeUnknownSync(RunRecord)(
               await (
@@ -502,7 +502,7 @@ test("inline receipt migration preserves grants, deadlines, observed output and 
           }
           const repeated = await post(
             migration,
-            "/v1/migrations/process-index-v6",
+            "/v1/migrations/process-index-v7",
             "cirro-local-test-credential",
             {},
           );
@@ -510,7 +510,7 @@ test("inline receipt migration preserves grants, deadlines, observed output and 
           expect(Schema.decodeUnknownSync(MigrationReceipt)(await repeated.json())).toEqual({
             migrated: 0,
           });
-          expect((await post(migration, "/v1/migrations/process-index-v6", token, {})).status).toBe(
+          expect((await post(migration, "/v1/migrations/process-index-v7", token, {})).status).toBe(
             401,
           );
         }),
@@ -544,9 +544,11 @@ test("historical receipt migration remains resumable after fencing and a conflic
   expect(failed.status).toBe(500);
   const fenced = await bucket.get(legacy);
   if (fenced === null) return expect(fenced).not.toBeNull();
-  expect(Schema.decodeUnknownSync(Schema.fromJsonString(RunRecord))(await fenced.text())).toEqual(
-    record,
-  );
+  expect(
+    Schema.decodeUnknownSync(
+      Schema.fromJsonString(RunRecord.mapFields((fields) => Struct.omit(fields, ["context"]))),
+    )(await fenced.text()),
+  ).toEqual(Struct.omit(record, ["context"]));
   await bucket.delete(primary);
   const resumed = await post(
     mf,
@@ -580,17 +582,17 @@ test("version 3 chunked receipts migrate to explicit closed stdin without rewrit
   const metadata = Schema.decodeUnknownSync(StoredRunMetadata)(object.customMetadata);
   await bucket.put(
     key,
-    JSON.stringify(Struct.omit(record, ["inputMode", "checkpoint", "checkpointCount"])),
+    JSON.stringify(Struct.omit(record, ["inputMode", "checkpoint", "checkpointCount", "context"])),
     {
       customMetadata: {
         format: "run-v3",
-        summary: JSON.stringify(Struct.omit(metadata.summary, ["stdinMode"])),
+        summary: JSON.stringify(Struct.omit(metadata.summary, ["stdinMode", "context"])),
       },
     },
   );
   const migrated = await post(
     mf,
-    "/v1/migrations/process-index-v6",
+    "/v1/migrations/process-index-v7",
     "cirro-local-test-credential",
     {},
   );
@@ -602,9 +604,9 @@ test("version 3 chunked receipts migrate to explicit closed stdin without rewrit
   expect(updated.inputMode).toBe("closed");
   expect(updated.output).toEqual(record.output);
   expect(updated.sourceHash).toBe(record.sourceHash);
-  expect(Schema.decodeUnknownSync(StoredRunMetadata)(current.customMetadata).format).toBe("run-v6");
+  expect(Schema.decodeUnknownSync(StoredRunMetadata)(current.customMetadata).format).toBe("run-v7");
   expect(
-    (await post(mf, "/v1/migrations/process-index-v6", "cirro-local-test-credential", {})).status,
+    (await post(mf, "/v1/migrations/process-index-v7", "cirro-local-test-credential", {})).status,
   ).toBe(200);
 });
 test("receipt migration returns bounded page cursors and skips confirmed conversions on retry", async () => {
@@ -637,7 +639,7 @@ test("receipt migration returns bounded page cursors and skips confirmed convers
     const cursor = cursors.shift();
     const response = await post(
       instance,
-      "/v1/migrations/process-index-v6",
+      "/v1/migrations/process-index-v7",
       "cirro-local-test-credential",
       { cursor },
     );
@@ -655,10 +657,10 @@ test("receipt migration returns bounded page cursors and skips confirmed convers
   expect(progress.pages).toBe(3);
   expect(progress.migrated).toBe(101);
   const last = await bucket.get("processes/paged/old-100.json");
-  expect(last?.customMetadata?.format).toBe("run-v6");
+  expect(last?.customMetadata?.format).toBe("run-v7");
   const retry = await post(
     instance,
-    "/v1/migrations/process-index-v6",
+    "/v1/migrations/process-index-v7",
     "cirro-local-test-credential",
     {},
   );

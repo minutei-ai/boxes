@@ -1,0 +1,85 @@
+{
+  "status": "Source implementation validated locally. Published 0.21.0 and production remain unchanged; new archives and remote delivery are pending.",
+  "baseCommit": "fccd3ce6ae6a53b68456382ab7cb8131863d4e4c",
+  "change": "Capture retained language context ID and generation in detached processes and schedules; acquire the original generation on Queue delivery without capturing request-scoped callbacks.",
+  "persistence": {
+    "process": "run-v7 adds required nullable context reference to body and listing metadata",
+    "schedule": "cron-v2 adds required nullable context reference; existing scheduling projection stays at the same contract owner",
+    "migration": ["/v1/migrations/process-index-v7", "/v1/migrations/cron-contexts-v2"],
+    "deployment": "Unconditional paginated Alchemy migrations; existing runtime readers require current shapes."
+  },
+  "nativeProof": {
+    "runtime": "Alchemy workerd, real local R2 and native Queue delivery; original Worker disposed before replacement opens the same persistence directory",
+    "command": "bun test tests/queued-contexts.test.ts tests/queued-context-migration.test.ts tests/output.test.ts",
+    "result": "17 pass, 0 fail, 459 assertions across 3 files in 17.27 seconds",
+    "cases": [
+      "JavaScript closure and Python function retain native state across Worker replacement and duplicate Queue delivery; next invocation observes 42",
+      "A live native context lease causes retry after one second while the queued receipt and ETag remain unchanged; release admits the same original delivery once",
+      "Reset rejects an already queued generation before interpreter entry and preserves the new idle context",
+      "Recurring cron retains its captured generation through replacement, runs once and fails admission after reset without creating another process",
+      "v6 queued process migration preserves all prior fields, adds null context and fences a stale ETag write",
+      "52 genuine native cron schedules migrate in pages of 50 and 2, preserving authority, pending/history fields and metadata; converted page replay migrates zero; old ETag writes fail",
+      "Historical inline and chunked-output migrations preserve output bytes and their existing fencing/recovery behavior",
+      "An occurrence already accepted before a context reset remains discoverable after closing the Worker; scheduler recovery counts its existing receipt once and Queue delivery fails stale execution without touching the new context."
+    ]
+  },
+  "checks": {
+    "build": "passed",
+    "sdkBuild": "passed",
+    "typecheck": "passed",
+    "fullCheck": {
+      "command": "bun run check",
+      "exitCode": 0,
+      "build": "passed",
+      "sdkBuild": "passed",
+      "typecheck": "passed",
+      "clippy": "passed",
+      "cargoTest": "passed",
+      "nativeTests": {
+        "passed": 431,
+        "failed": 0,
+        "assertions": 6296,
+        "files": 97,
+        "elapsedSeconds": 214.43
+      },
+      "scope": "Full suite began before the final cron accepted-occurrence fix; the final rebuilt runtime and typecheck passed the focused follow-up below."
+    },
+    "diffCheck": "passed",
+    "finalFocused": {
+      "command": "bun test tests/queued-contexts.test.ts tests/queued-context-migration.test.ts tests/cron.test.ts tests/process-index-migration.test.ts",
+      "exitCode": 0,
+      "passed": 11,
+      "failed": 0,
+      "assertions": 561,
+      "files": 4,
+      "elapsedSeconds": 18.23
+    },
+    "finalTypecheck": "passed",
+    "finalRuntimeBuild": "passed"
+  },
+  "observedAndResolved": [
+    "Initial Python test seed ended with a function value; the existing JSON result boundary rejected it. The synthetic seed now finishes with numeric zero; interpreter behavior is unchanged.",
+    "Historical output fixtures decoded a fenced old receipt through the new required context shape; corrected the fixture to its explicit historical schema.",
+    "Busy-delivery proof initially inspected a nonexistent retryAll field; it now asserts the native retryBatch and retryMessages receipt.",
+    "A real pending cron occurrence with an already reserved process was incorrectly marked failed after reset because new admission rejected its generation before EEXIST. Reproduced natively with 1 failing assertion; recovery now reads the deterministic existing receipt on admission faults, verifies its captured context reference and records acceptance without replay."
+  ],
+  "limits": [
+    "No new archives, SDK publication, Alchemy deployment or production Queue/cron proof yet. Published 0.21.0 rejects detached context selectors.",
+    "Language execution completes in one Worker invocation; native WASI checkpoint handover does not imply JavaScript/Python in-flight recovery.",
+    "Context heap publication and process settlement are separate R2 writes; uncertain execution is never replayed.",
+    "Pre-cutover ETag fencing is verified; interactions with an old Worker still executing during production rollout remain unproven.",
+    "No Minutei push, deployment, browser/model validation or production latency/cost comparison."
+  ],
+  "files": {
+    "src/contexts.ts": "3cc3dedc7ff10e7007a061f0251d008afaf631f990fffb0245fc8c67a5a161a4",
+    "src/contracts.ts": "7416fdeda2967b6e23b3c60ccca0e9db63d489fb56b4cdcc4be444fd5637ca1e",
+    "src/process.ts": "2bf9ab4e598c855bf2490a8b8fe7010066f8eaeadd751b40816eda86c9c901e8",
+    "src/process-migration.ts": "c62a6ff8e2621dc684a7918839ed49eb118681870edc51e2cfa3e5b3fd00f455",
+    "src/cron.ts": "86d0c0b29a797d5f093627a135dd343d56ab11c6c00cfa6325409ef577a90dd8",
+    "src/cron-migration.ts": "01ca4cb5170f4675ccc297400d1bb773857da53a8852c674e1ecb7b9c3560fcb",
+    "src/index.ts": "bd9854205bba1d169297fa67e1dcf34485e1635828a018c82dd29e59c73fe0e9",
+    "alchemy.run.ts": "719c85a9f70ad3af2e0a7c2572c2b3dbc1b2d9adc1a5bc73f95cfa258f2f562f",
+    "tests/queued-contexts.test.ts": "b246b80456e5a489023aad2568763089d4cfe499b4ab8b8c1cb7c8c1e3646835",
+    "tests/queued-context-migration.test.ts": "8a155af9e41e97a8f7643e579c817197910baca405e2d0e4e925cc2432affca7"
+  }
+}

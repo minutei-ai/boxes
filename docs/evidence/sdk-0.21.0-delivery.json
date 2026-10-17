@@ -1,5 +1,5 @@
 {
-  "status": "Experimental 0.21.0 published and deployed; source/tag CI, exact public downloads, real old-context migration, production HTTP and complete native binding proofs, storage checks and local Minutei consumer passed. The native proof pagination fix is awaiting its main CI. Full AgentOS parity remains open.",
+  "status": "Experimental 0.21.0 published and deployed; source/tag CI, exact public downloads, real old-context migration, production HTTP and complete native binding proofs, storage checks and local Minutei consumer passed. The native proof pagination fix and final evidence commit passed main CI. Full AgentOS parity remains open.",
   "version": "0.21.0",
   "sourceBase": "0a4ad2e4e5e0a0c46b2f67e1ccaf18f65f09f2d6",
   "previousDelivery": "sdk-0.20.0-delivery.json",
@@ -346,7 +346,12 @@
     "proofCorrection": {
       "run": 38983860005,
       "commit": "b7f4844c6fdd18b065f7721bfa7367228f1bad33",
-      "status": "in_progress"
+      "status": "success"
+    },
+    "finalEvidence": {
+      "run": 38984150003,
+      "commit": "fccd3ce6ae6a53b68456382ab7cb8131863d4e4c",
+      "status": "success"
     }
   },
   "remoteBinding": {

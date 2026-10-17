@@ -6,8 +6,8 @@ import {
   Environment,
   Fault,
   RunAction,
-  ScriptAction,
-  PythonAction,
+  Program,
+  ContextReference,
   StoredRun,
   StoredRunMetadata,
   ProcessDelivery,
@@ -35,7 +35,7 @@ import type { Env } from "./resources";
 import type { HostBridge } from "./host";
 import { shell } from "./shell";
 import { restoreExecutionCheckpoint } from "./checkpoint";
-import { acquireContext } from "./contexts";
+import { acquireContext, contextLanguage, referenceContext } from "./contexts";
 import { archiveOutput, restoreOutput, readOutputRange } from "./output";
 
 export const executionWindowMs = 900_000;
@@ -48,6 +48,7 @@ const reserve = Effect.fn("process.reserve")(function* (
   inputMode: typeof StoredRun.Type.inputMode,
   timeoutMs: number | null,
   contextDeadline: number | null = null,
+  context: typeof ContextReference.Type | null = null,
 ) {
   yield* requirePermission(capability, "execute");
   const session = yield* open(env, capability.sandboxId);
@@ -94,6 +95,7 @@ const reserve = Effect.fn("process.reserve")(function* (
   });
   const record: typeof RunRecord.Type = {
     id: action.id,
+    context,
     status: launch.status,
     sourceHash,
     language: program.language,
@@ -115,7 +117,7 @@ const reserve = Effect.fn("process.reserve")(function* (
       env.OBJECTS.put(key, Schema.encodeSync(Schema.fromJsonString(StoredRun))(stored), {
         onlyIf: { etagDoesNotMatch: "*" },
         customMetadata: Schema.encodeSync(StoredRunMetadata)({
-          format: "run-v6",
+          format: "run-v7",
           summary: { ...Struct.omit(record, ["output"]), stdinMode: inputMode },
         }),
       }),
@@ -135,7 +137,10 @@ const reserve = Effect.fn("process.reserve")(function* (
       Buffer.from(program.stdin, "base64"),
       inputMode,
     );
-  const prepared: ReturnType<typeof restore> = Effect.succeed(program);
+  const prepared: Effect.Effect<
+    typeof Program.Type,
+    Fault | Effect.Error<ReturnType<typeof restore>>
+  > = Effect.succeed(program);
   return {
     record,
     inputMode,
@@ -252,7 +257,7 @@ const complete = Effect.fn("process.complete")(function* (
         env.OBJECTS.put(key, Schema.encodeSync(Schema.fromJsonString(StoredRun))(stored), {
           onlyIf: { etagMatches: publication.etag },
           customMetadata: Schema.encodeSync(StoredRunMetadata)({
-            format: "run-v6",
+            format: "run-v7",
             summary: { ...Struct.omit(record, ["output"]), stdinMode: reservation.inputMode },
           }),
         }),
@@ -385,7 +390,7 @@ const complete = Effect.fn("process.complete")(function* (
           {
             onlyIf: { etagMatches: publication.etag },
             customMetadata: Schema.encodeSync(StoredRunMetadata)({
-              format: "run-v6",
+              format: "run-v7",
               summary: {
                 ...Struct.omit({ ...record, status: "queued" as const }, ["output"]),
                 stdinMode: reservation.inputMode,
@@ -525,7 +530,7 @@ const complete = Effect.fn("process.complete")(function* (
           {
             onlyIf: { etagMatches: current.etag },
             customMetadata: Schema.encodeSync(StoredRunMetadata)({
-              format: "run-v6",
+              format: "run-v7",
               summary: { ...Struct.omit(finished, ["output"]), stdinMode: reservation.inputMode },
             }),
           },
@@ -575,11 +580,7 @@ export const run = Effect.fn("process.run")(function* (
       });
       const context = yield* Effect.gen(function* () {
         if (selectedContext === null) return null;
-        const language = yield* Effect.sync(() => {
-          if (Schema.is(PythonAction)(action)) return "python" as const;
-          if (Schema.is(ScriptAction)(action)) return "javascript" as const;
-          return null;
-        });
+        const language = contextLanguage(action);
         if (language === null)
           return yield* new Fault({
             code: "UNSUPPORTED_RUNTIME",
@@ -599,6 +600,10 @@ export const run = Effect.fn("process.run")(function* (
           language,
         );
       });
+      const reference = yield* Effect.sync(() => {
+        if (context === null) return null;
+        return Struct.pick(context.record, ["id", "generation"]);
+      });
       const reservation = yield* Effect.scoped(
         reserve(
           env,
@@ -608,6 +613,7 @@ export const run = Effect.fn("process.run")(function* (
           "closed",
           timeoutMs,
           context?.record.deadlineAt ?? null,
+          reference,
         ),
       );
       return yield* complete(
@@ -834,7 +840,7 @@ export const dispatch = Effect.fn("process.dispatch")(function* (env: Env, body:
         env.OBJECTS.put(event.key, Schema.encodeSync(Schema.fromJsonString(StoredRun))(failed), {
           onlyIf: { etagMatches: object.etag },
           customMetadata: Schema.encodeSync(StoredRunMetadata)({
-            format: "run-v6",
+            format: "run-v7",
             summary: {
               ...Struct.omit(failed, [
                 "output",
@@ -873,6 +879,44 @@ export const dispatch = Effect.fn("process.dispatch")(function* (env: Env, body:
     if (checkpoint._tag === "Failure" && checkpoint.failure._tag === "CheckpointVersionPending")
       return yield* new ExecutionPending({ retryAfterSeconds: 15 });
   }
+  const context = yield* Effect.gen(function* () {
+    if (stored.context === null) return null;
+    const language = yield* Effect.sync(() => {
+      if (stored.language === "python") return "python" as const;
+      if (stored.language === "javascript" || stored.language === "typescript")
+        return "javascript" as const;
+      return null;
+    });
+    if (language === null)
+      return yield* new Fault({
+        code: "UNSUPPORTED_RUNTIME",
+        status: 501,
+        message: "Queued context runtime is unsupported",
+      });
+    return yield* acquireContext(
+      env,
+      capability,
+      stored.context.id,
+      stored.id,
+      stored.deadlineAt ?? now + executionWindowMs,
+      null,
+      language,
+      stored.context.generation,
+    );
+  }).pipe(Effect.result);
+  if (context._tag === "Failure") {
+    if (context.failure._tag !== "Fault") return yield* context.failure;
+    if (context.failure.code === "CONTEXT_BUSY" || context.failure.code === "CONFLICT")
+      return yield* new ExecutionPending({ retryAfterSeconds: 1 });
+  }
+  const contextLease = yield* Effect.sync(() => {
+    if (context._tag === "Success") return context.success;
+    return null;
+  });
+  const prepared = yield* Effect.sync(() => {
+    if (context._tag === "Failure") return Effect.fail(context.failure);
+    return Effect.fromResult(program);
+  });
   const running = {
     ...stored,
     status: "running" as const,
@@ -882,14 +926,14 @@ export const dispatch = Effect.fn("process.dispatch")(function* (env: Env, body:
     }),
     authority: null,
     checkpoint: null,
-    deadlineAt: stored.deadlineAt ?? now + executionWindowMs,
+    deadlineAt: contextLease?.record.deadlineAt ?? stored.deadlineAt ?? now + executionWindowMs,
   };
   const claimed = yield* Effect.tryPromise({
     try: () =>
       env.OBJECTS.put(event.key, Schema.encodeSync(Schema.fromJsonString(StoredRun))(running), {
         onlyIf: { etagMatches: object.etag },
         customMetadata: Schema.encodeSync(StoredRunMetadata)({
-          format: "run-v6",
+          format: "run-v7",
           summary: {
             ...Struct.omit(running, [
               "output",
@@ -933,11 +977,14 @@ export const dispatch = Effect.fn("process.dispatch")(function* (env: Env, body:
       checkpoint: stored.checkpoint,
       checkpointCount: stored.checkpointCount,
       retainedOutput: running.output,
-      program: Effect.fromResult(program),
+      program: prepared,
     },
     Math.max(1, Math.min(840_000, running.deadlineAt - now - 1000)),
+    null,
+    null,
+    contextLease,
   );
-});
+}, Effect.scoped);
 
 export class QueueFailure extends Schema.TaggedError<QueueFailure>()("QueueFailure", {
   cause: Schema.Unknown,
@@ -948,14 +995,12 @@ export const spawn = Effect.fn("process.spawn")(function* (
   capability: typeof Capability.Type,
   action: typeof RunAction.Type,
   inputMode: typeof StoredRun.Type.inputMode,
+  expected: typeof ContextReference.Type | null = null,
 ) {
-  if ("contextId" in action && action.contextId !== undefined)
-    return yield* new Fault({
-      code: "UNSUPPORTED_RUNTIME",
-      status: 501,
-      message: "Queued retained contexts are not implemented",
-    });
-  const reservation = yield* Effect.scoped(reserve(env, capability, action, true, inputMode, null));
+  const context = yield* referenceContext(env, capability, action, expected);
+  const reservation = yield* Effect.scoped(
+    reserve(env, capability, action, true, inputMode, null, null, context),
+  );
   yield* Effect.tryPromise({
     try: () =>
       env.EVENTS.send(
@@ -1089,7 +1134,7 @@ export const cancel = Effect.fn("process.cancel")(function* (
       env.OBJECTS.put(key, Schema.encodeSync(Schema.fromJsonString(StoredRun))(updated), {
         onlyIf: { etagMatches: object.etag },
         customMetadata: Schema.encodeSync(StoredRunMetadata)({
-          format: "run-v6",
+          format: "run-v7",
           summary: {
             ...Struct.omit(updated, [
               "output",

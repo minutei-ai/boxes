@@ -1,3 +1,4 @@
+import { CronMigrationInput, CronMigrationReceipt } from "./src/contracts";
 import * as Alchemy from "alchemy";
 import * as Cloudflare from "alchemy/Cloudflare";
 import { Clock, Config, Effect, Layer, Redacted, Schedule, Schema } from "effect";
@@ -115,7 +116,7 @@ const migrate = Alchemy.Action(
         while (cursors.length > 0) {
           const cursor = cursors.shift();
           const page = yield* Effect.gen(function* () {
-            const response = yield* http.post(new URL("/v1/migrations/process-index-v6", url), {
+            const response = yield* http.post(new URL("/v1/migrations/process-index-v7", url), {
               headers: { authorization: `Bearer ${Redacted.value(key)}` },
               body: HttpBody.text(
                 Schema.encodeSync(Schema.fromJsonString(OutputMigrationInput))({ cursor }),
@@ -125,7 +126,7 @@ const migrate = Alchemy.Action(
             if (response.status < 200 || response.status >= 300)
               return yield* new MigrationStatusError({
                 status: response.status,
-                path: "/v1/migrations/process-index-v6",
+                path: "/v1/migrations/process-index-v7",
               });
             const text = yield* response.text;
             return yield* Schema.decodeUnknownEffect(Schema.fromJsonString(OutputMigrationReceipt))(
@@ -135,7 +136,7 @@ const migrate = Alchemy.Action(
           progress.pages += 1;
           progress.migrated += page.migrated;
           yield* Effect.logInfo({
-            migration: "process-index-v6",
+            migration: "process-index-v7",
             page: progress.pages,
             migrated: page.migrated,
             hasMore: page.cursor !== null,
@@ -268,9 +269,40 @@ const migrate = Alchemy.Action(
           });
           if (page.cursor !== null) contextCursors.push(page.cursor);
         }
+        const schedules = { migrated: 0, pages: 0 };
+        const scheduleCursors: (typeof CronMigrationReceipt.Type.cursor)[] = [null];
+        while (scheduleCursors.length > 0) {
+          const cursor = scheduleCursors.shift();
+          const page = yield* Effect.gen(function* () {
+            const response = yield* http.post(new URL("/v1/migrations/cron-contexts-v2", url), {
+              headers: { authorization: `Bearer ${Redacted.value(key)}` },
+              body: HttpBody.text(
+                Schema.encodeSync(Schema.fromJsonString(CronMigrationInput))({ cursor }),
+                "application/json",
+              ),
+            });
+            if (response.status < 200 || response.status >= 300)
+              return yield* new MigrationStatusError({
+                status: response.status,
+                path: "/v1/migrations/cron-contexts-v2",
+              });
+            return yield* Schema.decodeUnknownEffect(Schema.fromJsonString(CronMigrationReceipt))(
+              yield* response.text,
+            );
+          }).pipe(Effect.timeout("120 seconds"));
+          schedules.migrated += page.migrated;
+          schedules.pages += 1;
+          yield* Effect.logInfo({
+            migration: "cron-contexts-v2",
+            ...schedules,
+            hasMore: page.cursor !== null,
+          });
+          if (page.cursor !== null) scheduleCursors.push(page.cursor);
+        }
         return {
           receipts,
           contextLanguageMigration: contexts,
+          cronContextMigration: schedules,
           filesystemMigration: filesystem,
           environmentMigration: { heads: configurationHeads, programs: configurationPrograms },
           processIndexMigration: progress,

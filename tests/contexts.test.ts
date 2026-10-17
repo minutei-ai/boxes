@@ -333,10 +333,10 @@ test(
               },
             },
           ] as const) {
-            const rejected = yield* boxes.action("failures", action).pipe(Effect.result);
+            const rejected = yield* restricted.action("failures", action).pipe(Effect.result);
             if (rejected._tag !== "Failure" || rejected.failure._tag !== "BoxesError")
-              return yield* Effect.die("Unsupported detached context was admitted");
-            expect(rejected.failure.status).toBe(501);
+              return yield* Effect.die("Unauthorized detached context was admitted");
+            expect(rejected.failure.status).toBe(403);
           }
           expect(
             (yield* boxes.action("failures", {

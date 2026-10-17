@@ -624,7 +624,7 @@ test("claimed execution with a lost observation becomes failed after its platfor
   };
   await bucket.put(object.key, Schema.encodeSync(Schema.fromJsonString(StoredRun))(lost), {
     customMetadata: Schema.encodeSync(StoredRunMetadata)({
-      format: "run-v6",
+      format: "run-v7",
       summary: {
         ...Struct.omit(lost, [
           "authority",

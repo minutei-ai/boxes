@@ -1,16 +1,18 @@
 import { Clock, Cron, Effect, Schema, Struct } from "effect";
 import { CryptoFailure, requirePermission } from "./auth";
-import { Capability, CronAction, CronRecord, CronPage, Fault, StoredCron } from "./contracts";
+import {
+  Capability,
+  CronAction,
+  CronRecord,
+  CronPage,
+  Fault,
+  StoredCron,
+  StoredCronMetadata,
+} from "./contracts";
 import { head, StorageFailure } from "./storage";
+import { referenceContext } from "./contexts";
 import { inspect, spawn } from "./process";
 import type { Env } from "./resources";
-
-const Metadata = Schema.Struct({
-  format: Schema.Literal("cron-v1"),
-  summary: Schema.fromJsonString(
-    Schema.Struct(Struct.pick(CronRecord.fields, ["state", "nextRun"])),
-  ),
-});
 
 const nextRun = Effect.fn("cron.nextRun")(function* (schedule: string, after: number) {
   const text = schedule.trim();
@@ -78,8 +80,8 @@ const publish = Effect.fn("cron.publish")(function* (
     try: () =>
       env.OBJECTS.put(key, Schema.encodeSync(Schema.fromJsonString(StoredCron))(stored), {
         onlyIf: condition,
-        customMetadata: Schema.encodeSync(Metadata)({
-          format: "cron-v1",
+        customMetadata: Schema.encodeSync(StoredCronMetadata)({
+          format: "cron-v2",
           summary: { state: stored.state, nextRun: stored.nextRun },
         }),
       }),
@@ -113,14 +115,9 @@ export const cron = Effect.fn("cron.action")(function* (
   }
   const key = `${prefix}${action.id}.json`;
   if (action.op === "cron.schedule") {
-    if ("contextId" in action.execution && action.execution.contextId !== undefined)
-      return yield* new Fault({
-        code: "UNSUPPORTED_RUNTIME",
-        status: 501,
-        message: "Scheduled retained contexts are not implemented",
-      });
     yield* requirePermission(capability, "execute");
     yield* requirePermission(capability, "read");
+    const context = yield* referenceContext(env, capability, action.execution);
     const now = yield* Clock.currentTimeMillis;
     const due = yield* nextRun(action.schedule, now);
     if (due === null || due >= capability.expiresAt)
@@ -131,6 +128,7 @@ export const cron = Effect.fn("cron.action")(function* (
       });
     const stored: typeof StoredCron.Type = {
       ...action,
+      context,
       state: "active",
       createdAt: now,
       nextRun: due,
@@ -220,11 +218,32 @@ const fire = Effect.fn("cron.fire")(function* (env: Env, key: string, now: numbe
     catch: (cause) => new CryptoFailure({ cause }),
   });
   const id = `cron-${Buffer.from(digest).toString("hex").slice(0, 58)}`;
-  const launched = yield* spawn(env, job.authority, { ...job.execution, id }, "closed").pipe(
-    Effect.catchTag("Fault", (failure) => {
-      if (failure.code === "EEXIST") return inspect(env, job.authority, id);
-      return Effect.fail(failure);
-    }),
+  const launched = yield* spawn(
+    env,
+    job.authority,
+    { ...job.execution, id },
+    "closed",
+    job.context,
+  ).pipe(
+    Effect.catchTag("Fault", (failure) =>
+      inspect(env, job.authority, id).pipe(
+        Effect.flatMap((record) => {
+          if (!Schema.toEquivalence(CronRecord.fields.context)(record.context, job.context))
+            return Effect.fail(
+              new Fault({
+                code: "CONFLICT",
+                status: 409,
+                message: "Reserved occurrence belongs to another context",
+              }),
+            );
+          return Effect.succeed(record);
+        }),
+        Effect.catchTag("Fault", (observed) => {
+          if (observed.code === "ENOENT") return Effect.fail(failure);
+          return Effect.fail(observed);
+        }),
+      ),
+    ),
     Effect.result,
   );
   if (launched._tag === "Failure") {
@@ -285,7 +304,9 @@ export const tick = Effect.fn("cron.tick")(function* (env: Env) {
       page.objects,
       (object) =>
         Effect.gen(function* () {
-          const metadata = yield* Schema.decodeUnknownEffect(Metadata)(object.customMetadata);
+          const metadata = yield* Schema.decodeUnknownEffect(StoredCronMetadata)(
+            object.customMetadata,
+          );
           if (
             metadata.summary.state !== "active" ||
             metadata.summary.nextRun === null ||

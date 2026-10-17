@@ -60,6 +60,8 @@ import { guestAction } from "./capabilities";
 import { createContext, getContext, listContexts, changeContext } from "./contexts";
 import { migrateInput } from "./input-migration";
 import { migrateConfiguration } from "./configuration-migration";
+import { migrateCron } from "./cron-migration";
+import { CronMigrationInput, CronMigrationReceipt } from "./contracts";
 import { migrateContexts } from "./context-migration";
 import { migrateFilesystem } from "./filesystem-migration";
 import { migrateProcesses, migrateOutput, migrateDeadlines } from "./process-migration";
@@ -159,7 +161,7 @@ const route = Effect.fn("api.route")(function* (request: Request, env: Env) {
       headers: { "content-type": "application/json", "cache-control": "no-store" },
     });
   }
-  if (url.pathname === "/v1/migrations/process-index-v6") {
+  if (url.pathname === "/v1/migrations/process-index-v7") {
     yield* administrator(env, token);
     const bytes = yield* readBounded(request.body, 4096);
     const input = yield* Schema.decodeUnknownEffect(Schema.fromJsonString(OutputMigrationInput), {
@@ -167,6 +169,17 @@ const route = Effect.fn("api.route")(function* (request: Request, env: Env) {
     })(bytes.toString("utf8"));
     const receipt = yield* migrateOutput(env, input.cursor ?? null);
     return new Response(Schema.encodeSync(Schema.fromJsonString(OutputMigrationReceipt))(receipt), {
+      headers: { "content-type": "application/json", "cache-control": "no-store" },
+    });
+  }
+  if (url.pathname === "/v1/migrations/cron-contexts-v2") {
+    yield* administrator(env, token);
+    const bytes = yield* readBounded(request.body, 4096);
+    const input = yield* Schema.decodeUnknownEffect(Schema.fromJsonString(CronMigrationInput), {
+      onExcessProperty: "error",
+    })(bytes.toString("utf8"));
+    const receipt = yield* migrateCron(env, input.cursor ?? null);
+    return new Response(Schema.encodeSync(Schema.fromJsonString(CronMigrationReceipt))(receipt), {
       headers: { "content-type": "application/json", "cache-control": "no-store" },
     });
   }

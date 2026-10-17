@@ -173,7 +173,7 @@ test(
                     Schema.encodeSync(Schema.fromJsonString(StoredRun))(record),
                     {
                       customMetadata: Schema.encodeSync(StoredRunMetadata)({
-                        format: "run-v6",
+                        format: "run-v7",
                         summary: {
                           ...Struct.omit(record, [
                             "output",
@@ -209,7 +209,7 @@ test(
               Schema.encodeSync(Schema.fromJsonString(StoredRun))(future),
               {
                 customMetadata: Schema.encodeSync(StoredRunMetadata)({
-                  format: "run-v6",
+                  format: "run-v7",
                   summary: {
                     ...Struct.omit(future, [
                       "output",
@@ -393,7 +393,7 @@ test(
               Schema.encodeSync(Schema.fromJsonString(StoredRun))(inconsistent),
               {
                 customMetadata: Schema.encodeSync(StoredRunMetadata)({
-                  format: "run-v6",
+                  format: "run-v7",
                   summary: {
                     stdinMode: inconsistent.inputMode,
                     ...Struct.omit(inconsistent, [

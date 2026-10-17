@@ -34,6 +34,32 @@ const ContextMigrationTrace = ContextMigrationReceipt.mapFields((fields) => ({
 
 type TestEnv = Env & { SELF: Fetcher };
 export class Control extends WorkerEntrypoint<TestEnv> {
+  contextBusyDelivery(
+    sandboxId: string,
+    token: string,
+    id: string,
+    messages: Parameters<Fetcher["queue"]>[1],
+  ) {
+    const bindings = this.env;
+    return Effect.runPromise(
+      Effect.scoped(
+        Effect.gen(function* () {
+          const capability = yield* authorize(bindings, token, sandboxId);
+          const now = yield* Clock.currentTimeMillis;
+          yield* acquireContext(
+            bindings,
+            capability,
+            id,
+            "blocking",
+            now + 60000,
+            null,
+            "javascript",
+          );
+          return yield* Effect.promise(() => bindings.SELF.queue("executions", messages));
+        }),
+      ),
+    );
+  }
   contextClaims(sandboxId: string, token: string, id: string, now: number) {
     const bindings = this.env;
     return Effect.runPromise(
@@ -168,7 +194,7 @@ export class Control extends WorkerEntrypoint<TestEnv> {
         },
       }),
     };
-    const request = new Request("https://boxes.test/v1/migrations/process-index-v6", {
+    const request = new Request("https://boxes.test/v1/migrations/process-index-v7", {
       method: "POST",
       headers: { authorization: `Bearer ${token}`, "content-type": "application/json" },
       body: Schema.encodeSync(Schema.fromJsonString(OutputMigrationInput))({ cursor }),

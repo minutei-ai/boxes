@@ -7,6 +7,7 @@ import {
   HeapSnapshot,
   ProcessDelivery,
   RunMetadata,
+  RunSummary,
   StoredRun,
   TerminalAttributes,
 } from "../src/contracts";
@@ -14,11 +15,14 @@ import { make } from "../src/sdk";
 import { runtime } from "../tooling/worker-test";
 
 const VersionFiveStoredRun = StoredRun.mapFields((fields) => ({
-  ...Struct.omit(fields, ["inputMode"]),
+  ...Struct.omit(fields, ["inputMode", "context"]),
   stdinMode: fields.inputMode,
 }));
 const VersionFiveMetadata = RunMetadata.mapFields((fields) => ({
   ...fields,
+  summary: Schema.fromJsonString(
+    RunSummary.mapFields((fields) => Struct.omit(fields, ["context"])),
+  ),
   format: Schema.Literal("run-v5"),
 }));
 
