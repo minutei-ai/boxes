@@ -34,73 +34,75 @@ export const VerifiedRetainedBindingProof = RetainedBindingProof.check(
       ) ||
       proof.records.some((record) => record.status !== "exited" || record.output?.exitCode !== 0)
     )
-      return false;
+      return `Retained execution did not complete: ${Schema.encodeSync(Schema.fromJsonString(RetainedBindingProof))(proof)}`;
     if (proof.phase === "create")
       return (
-        proof.driver.value === 41 &&
-        proof.python.records.length === 2 &&
-        proof.python.records[0]?.output?.result === null &&
+        (proof.driver.value === 41 &&
+          proof.python.records.length === 2 &&
+          proof.python.records[0]?.output?.result === null &&
+          Schema.is(
+            Schema.Tuple([
+              Schema.Literal(41),
+              Schema.Literal(41),
+              Schema.Literal(42),
+              Schema.Literal("café"),
+              Schema.Literal("ação"),
+            ]),
+          )(proof.python.records[1]?.output?.result) &&
+          !proof.python.deleted &&
+          proof.python.context.generation === 0 &&
+          !proof.deleted &&
+          proof.context.generation === 0 &&
+          proof.records.length === 2 &&
+          Schema.is(Schema.Struct({ counter: Schema.Literal(41), tool: Schema.Literal(11) }))(
+            proof.records[1]?.output?.result,
+          )) ||
+        `Retained creation differs: ${Schema.encodeSync(Schema.fromJsonString(RetainedBindingProof))(proof)}`
+      );
+    return (
+      (proof.driver.value === 42 &&
+        proof.python.records.length === 3 &&
         Schema.is(
           Schema.Tuple([
-            Schema.Literal(41),
-            Schema.Literal(41),
+            Schema.Literal(42),
+            Schema.Literal("current"),
+            Schema.Literal("c2VlZA=="),
+            Schema.Tuple([
+              Schema.Struct({ value: Schema.Literal(42), text: Schema.Literal("ação") }),
+              Schema.Tuple([Schema.Literal("box"), Schema.Literal("native")]),
+              Schema.Literal(1),
+              Schema.Literal(42),
+              Schema.Literal(2),
+            ]),
+            Schema.Literal(false),
+            Schema.Literal(42),
             Schema.Literal(42),
             Schema.Literal("café"),
             Schema.Literal("ação"),
+            Schema.Literal(true),
+          ]),
+        )(proof.python.records[0]?.output?.result) &&
+        Schema.is(
+          Schema.Tuple([
+            Schema.Literal("FORBIDDEN"),
+            Schema.Literal("FORBIDDEN"),
+            Schema.Literal("c2VlZA=="),
+            Schema.Literal("c2VlZA=="),
           ]),
         )(proof.python.records[1]?.output?.result) &&
-        !proof.python.deleted &&
-        proof.python.context.generation === 0 &&
-        !proof.deleted &&
-        proof.context.generation === 0 &&
-        proof.records.length === 2 &&
-        Schema.is(Schema.Struct({ counter: Schema.Literal(41), tool: Schema.Literal(11) }))(
-          proof.records[1]?.output?.result,
-        )
-      );
-    return (
-      proof.driver.value === 42 &&
-      proof.python.records.length === 3 &&
-      Schema.is(
-        Schema.Tuple([
-          Schema.Literal(42),
-          Schema.Literal("current"),
-          Schema.Literal("c2VlZA=="),
-          Schema.Tuple([
-            Schema.Struct({ value: Schema.Literal(42), text: Schema.Literal("ação") }),
-            Schema.Tuple([Schema.Literal("box"), Schema.Literal("native")]),
-            Schema.Literal(1),
-            Schema.Literal(42),
-            Schema.Literal(2),
-          ]),
-          Schema.Literal(false),
-          Schema.Literal(42),
-          Schema.Literal(42),
-          Schema.Literal("café"),
-          Schema.Literal("ação"),
-          Schema.Literal(true),
-        ]),
-      )(proof.python.records[0]?.output?.result) &&
-      Schema.is(
-        Schema.Tuple([
-          Schema.Literal("FORBIDDEN"),
-          Schema.Literal("FORBIDDEN"),
-          Schema.Literal("c2VlZA=="),
-          Schema.Literal("c2VlZA=="),
-        ]),
-      )(proof.python.records[1]?.output?.result) &&
-      proof.python.records[2]?.output?.result === false &&
-      proof.python.deleted &&
-      proof.python.context.generation === 1 &&
-      proof.deleted &&
-      proof.context.generation === 1 &&
-      proof.records.length === 3 &&
-      Schema.is(Schema.Struct({ counter: Schema.Literal(42), tool: Schema.Literal(42) }))(
-        proof.records[0]?.output?.result,
-      ) &&
-      proof.records[0]?.output?.stdout === "resumed\n" &&
-      proof.records[1]?.output?.result === "FORBIDDEN" &&
-      proof.records[2]?.output?.result === "undefined"
+        proof.python.records[2]?.output?.result === false &&
+        proof.python.deleted &&
+        proof.python.context.generation === 1 &&
+        proof.deleted &&
+        proof.context.generation === 1 &&
+        proof.records.length === 3 &&
+        Schema.is(Schema.Struct({ counter: Schema.Literal(42), tool: Schema.Literal(42) }))(
+          proof.records[0]?.output?.result,
+        ) &&
+        proof.records[0]?.output?.stdout === "resumed\n" &&
+        proof.records[1]?.output?.result === "FORBIDDEN" &&
+        proof.records[2]?.output?.result === "undefined") ||
+      `Retained recovery differs: ${Schema.encodeSync(Schema.fromJsonString(RetainedBindingProof))(proof)}`
     );
   }),
 );
