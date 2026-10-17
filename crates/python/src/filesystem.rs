@@ -8,7 +8,7 @@ unsafe extern "C" {
     fn response(pointer: *mut u8, length: usize) -> i32;
 }
 
-fn exchange(vm: &VirtualMachine, action: &Value) -> PyResult<Value> {
+pub(crate) fn exchange(vm: &VirtualMachine, action: &Value) -> PyResult<Value> {
     let input =
         serde_json::to_vec(action).map_err(|error| vm.new_runtime_error(error.to_string()))?;
     if input.len() > 1_048_576 {
@@ -52,7 +52,7 @@ fn exchange(vm: &VirtualMachine, action: &Value) -> PyResult<Value> {
     Err(fault(vm, code, message)?)
 }
 
-fn fault(
+pub(crate) fn fault(
     vm: &VirtualMachine,
     code: &str,
     message: &str,
@@ -66,6 +66,10 @@ fn fault(
         "EACCES" | "FORBIDDEN" | "UNAUTHORIZED" => (exceptions.permission_error, Some(13)),
         "EPERM" => (exceptions.permission_error, Some(1)),
         "ETIMEDOUT" => (exceptions.timeout_error, Some(110)),
+        "EBADF" => (exceptions.os_error, Some(9)),
+        "EINVAL" => (exceptions.os_error, Some(22)),
+        "EMFILE" => (exceptions.os_error, Some(24)),
+        "ENOTSUP" => (exceptions.os_error, Some(95)),
         _ => (exceptions.os_error, None),
     };
     let error = vm
@@ -87,6 +91,17 @@ pub mod native {
     fn call(action: PyObjectRef, vm: &VirtualMachine) -> PyResult {
         let action = py_serde::serialize(vm, &action, serde_json::value::Serializer)
             .map_err(|error| vm.new_value_error(error.to_string()))?;
+        if action
+            .get("op")
+            .and_then(Value::as_str)
+            .is_some_and(|op| op.starts_with("python.file."))
+        {
+            return Err(fault(
+                vm,
+                "FORBIDDEN",
+                "Native descriptor requests are private",
+            )?);
+        }
         let value = exchange(vm, &action)?;
         py_serde::deserialize(vm, &value).map_err(|error| vm.new_runtime_error(error.to_string()))
     }
@@ -192,7 +207,26 @@ class _Finder:
    return spec
   return None
 
+def open(*args, **kwargs):
+ import _pyio
+ import io
+ import _io as native
+ import builtins
+ for name in ('BufferedReader','BufferedWriter','BufferedRandom','BufferedRWPair','TextIOWrapper'):
+  setattr(_pyio, name, getattr(native, name))
+ io.FileIO = _pyio.FileIO
+ io.open = _pyio.open
+ native.open = _pyio.open
+ builtins.open = _pyio.open
+ return _pyio.open(*args, **kwargs)
+
 def install(filename):
+ import builtins
+ import _io as native
+ builtins.open = open
+ native.open = open
+ if 'io' in _sys.modules:
+  _sys.modules['io'].open = open
  _sys.meta_path.append(_Finder())
  _sys.path.insert(0, filename.rpartition('/')[0] or '/')
 "#,

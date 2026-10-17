@@ -49,8 +49,14 @@
     "Benchmark source fixture remains unchanged; lock coverage is added only by the checkpoint test"
   ],
   "delivery": {
-    "sourcePush": "pending",
-    "remoteCi": "pending",
+    "sourcePush": {
+      "commit": "db0028d11207d108a2e7139eb72341c8e7d44b2d",
+      "branch": "main"
+    },
+    "remoteCi": {
+      "runId": 39013219016,
+      "conclusion": "success"
+    },
     "release": "not performed",
     "deployment": "not performed"
   }

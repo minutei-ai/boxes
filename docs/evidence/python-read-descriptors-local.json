@@ -1,0 +1,158 @@
+{
+  "status": "unpublished source; native read-descriptor and open tests passed; parallel regression timeouts remain recorded; no release or deployment",
+  "measuredAt": "2026-10-17T12:09:11.941058+00:00",
+  "sourceBase": "db0028d11207d108a2e7139eb72341c8e7d44b2d",
+  "sourceSha256": {
+    "crates/python/build.rs": "0ca52422f7a8c3bfbef17740982ee06c1319690c0ad1a0ce12c8c6d650b6b5c9",
+    "crates/python/src/lib.rs": "bf30b5108dba2a3de0feed45e8ca64050a7f7f580f4aac813a08447930260a73",
+    "crates/python/src/os.rs": "0953cda77cbf29953343cb75b05aa0c5bc3af45243a12b399409602aa188dd0f",
+    "crates/python/src/filesystem.rs": "136ac2b559af2bb4c297afe52e4a940744627ff14c5b79dbc03e30c31cfab8c7",
+    "src/python-files.ts": "867affddd6b22ef234e9306d62ef52f3a6841a3cce4e3975a0fe7e07dbb6dccd",
+    "src/python.ts": "87fac266d3757aeb1d53f36ab9d34a0676cbed88effcaa8afdf0c2b80f29a6e5",
+    "src/storage.ts": "1f031b0ae658b1fed6c2b12b9010afb3a52004627748c3a3b4f68f7aee643e84",
+    "tests/python-descriptors.test.ts": "6595a7267959a9dcb4f789c55e99047d03c4b847720ede1f864ef4ee31d51954"
+  },
+  "baseline": {
+    "runtimeVersion": "0.25.0",
+    "pythonWasmSha256": "4e1878eedc95dece9518550c836f5930e1478977bff5f467c9ac1993fadad124",
+    "nativeAbiResult": {
+      "exitCode": 1,
+      "exception": "UnsupportedOperation",
+      "message": "Couldnt get FileIO; io.open not supported on this platform"
+    },
+    "scope": "Real public native Wasm, filesystem finder enabled. Native open rejects platform support before filesystem access; this is not a baseline R2 read.",
+    "logSha256": "07f8b1931aacc17620d0434f21c249001ac803b8fe240fdb430ae233f0f5c1ba"
+  },
+  "implementation": {
+    "descriptors": "Native RustPython os module owns opaque descriptor payloads and shared Rc open descriptions in interpreter memory. No new external descriptor or lease resource.",
+    "admission": "Kernel path/mode read admission, RustPython FsPath conversion, UTF-8 paths, explicit unsupported flag/dir_fd rejection before file mutation. Opens and duplicates are non-inheritable by default.",
+    "read": "Current scoped read permission and expiry checked per private host call. Linked inodes refresh metadata/references. Detached files retain last-observed immutable references and report nlink zero. Public _boxes_io.call rejects the private namespace.",
+    "bounds": {
+      "descriptorSlots": [
+        3,
+        127
+      ],
+      "blockReferencesPerSnapshot": 64,
+      "readBytesPerCall": 262144,
+      "concurrentBlockReads": 2,
+      "sharedHostRequestLimit": 256
+    },
+    "lifetime": "Each private host operation releases its filesystem kernel in its own native Effect scope. Descriptors, buffered bytes and decoder state use existing R2 native heap packs.",
+    "stdlib": "Pinned unchanged io/_pyio/stat modules, native _io buffers/codecs, lazy open binding installation and explicit interpreter UTF-8 mode.",
+    "requestSchema": "The combined native filesystem request Schema is created once per Worker, preserving its parser identity across host calls."
+  },
+  "candidate": {
+    "pythonWasmBytes": 19641659,
+    "pythonWasmSha256": "f2b0a63bed7c7c0e6dab0dfef7e3b50cc9a1cc2f0d984a829626896aed912fa8",
+    "requiresExplicitPythonContextReset": true,
+    "unchangedNativeBinaries": [
+      "kernel",
+      "guest",
+      "compiler",
+      "wasi"
+    ],
+    "workerBundleSha256": "3f291c69b1cb2b84fd2c51fa65ca1501696eb95b112af5869ac66b340ed96c6b"
+  },
+  "coverage": [
+    "Binary bytes including NUL and invalid UTF-8, short reads and EOF",
+    "Native stat tuple/attributes and nanoseconds",
+    "dup shared offsets, separate-open independence, inheritance flags",
+    "Mode narrowing after admission, new-open denial, rename and unlink without path recreation",
+    "Native descriptors and an open text stream restored after closing the original Worker",
+    "Default/explicit UTF-8, universal newlines, binary/unbuffered readall/readinto, closefd false and close state",
+    "Negative lengths/seeks, invalid readinto buffers, closed descriptors, 125-descriptor ceiling and hole reuse",
+    "Unsupported writes by pathname, non-null dir_fd and forged private calls fail; marker paths remain absent"
+  ],
+  "checks": {
+    "build": "passed",
+    "typecheck": "passed",
+    "clippy": "cargo clippy -p cirro-python --target wasm32-unknown-unknown -- -D warnings: passed",
+    "descriptorTests": {
+      "command": "bun test tests/python-descriptors.test.ts",
+      "passed": 2,
+      "failed": 0,
+      "assertions": 16,
+      "seconds": 13.74,
+      "logSha256": "9a15480566359fe5c915ab75dee6fd2f5c86b35dfefff0d9024b911ecc8c62a7",
+      "scope": "Before the schema-hoisting and duplicate-based boundary-fixture changes; final native Python binary is unchanged."
+    },
+    "initialNativeSuite": {
+      "passed": 12,
+      "failed": 0,
+      "assertions": 123,
+      "seconds": 21.36,
+      "scope": "Before final non-inheritable default and per-request scope adjustments; final parallel runs below also passed all 12 Python cases."
+    },
+    "isolatedCancellation": {
+      "passed": 7,
+      "failed": 0,
+      "assertions": 186,
+      "seconds": 19.22,
+      "logSha256": "dcf9e65639056dcff00b9431dcb30fee9bb816796905c06a27b4796f268f0185",
+      "scope": "Same final binary, assertions and timeouts; no automatic retry or timeout changes."
+    },
+    "postSchemaHoist": {
+      "passed": 2,
+      "failed": 0,
+      "assertions": 16,
+      "seconds": 39.19,
+      "logSha256": "8b86bcff36f0732a0698f064d679a678a6d3095398e585a23f897f6316a33d26",
+      "scope": "Final Worker source; prior repeated-open boundary fixture."
+    },
+    "boundaryFixtureOptimization": {
+      "behavior": "Open one native read descriptor, duplicate it 124 times, reject both open and dup at capacity, close a hole and reopen into it, then close every descriptor. Separate-open offset independence remains covered by the earlier scenario.",
+      "boundaryHostOpenCallsBefore": 126,
+      "boundaryHostOpenCallsAfter": 2,
+      "latestLocalAttempt": {
+        "passed": 0,
+        "failed": 2,
+        "seconds": 64.48,
+        "logSha256": "eeac6ffaa7fe00ddaf55051d24d7a6896e3bebc25d3916821b2ccfb3174a2ce4",
+        "observed": "First test exceeded its 60s limit without an assertion result. Runner killed a dangling process; subsequent platform-proxy connection was refused. Exact first-test progress was not observed. No timeout or assertions were relaxed."
+      },
+      "validation": "independent CI pending; no speed claim from unequal host conditions"
+    },
+    "format": "passed"
+  },
+  "parallelRegression": [
+    {
+      "command": "bun test --parallel=2 (seven selected Python/process/cancellation files)",
+      "passed": 36,
+      "failed": 2,
+      "unhandledErrors": 2,
+      "seconds": 52.1,
+      "concurrentChecks": [
+        "typecheck",
+        "clippy"
+      ],
+      "observed": "Existing cancellation fixtures hit 15s and 5s limits; runner killed their Workers, followed by connection reset/refusal. All Python cases passed.",
+      "logSha256": "1f950df00fc5b59b54bc4261126ef80cdcbeb76e815fe52853540ce4fa8eb755"
+    },
+    {
+      "command": "same parallel command, without simultaneous compiler checks",
+      "passed": 33,
+      "failed": 5,
+      "unhandledErrors": 1,
+      "seconds": 72.14,
+      "observed": "Existing cancellation/completion/Queue fixtures timed out; later tests used terminated runtimes. All Python cases passed. Other projects had live test processes; this observation is not proof of a root cause.",
+      "logSha256": "9fde41d971d194a6029c6b3e69ab91eba7123733941625d63e8276a5cbcbfee8"
+    }
+  ],
+  "limits": [
+    "Python writes, append, truncate and process-exit flushing remain to implement",
+    "No eager io.FileIO class integration before lazy open setup; no full stdlib/pip claim",
+    "Only regular read descriptors; stdio/directory descriptors and non-null dir_fd are unsupported",
+    "A different writer changing and unlinking an inode before this descriptor refreshes is not observed; full cross-context unlinked-file coherence remains open",
+    "Reads still use bounded JSON/base64 bridge payloads; no peak-memory, R2 billing or production speed claim",
+    "Native binary change requires explicit Python context reset; no replay/reconstruction",
+    "Parallel regression is not green locally; independent CI and production delivery remain separate gates",
+    "The optimized descriptor-boundary fixture has not passed locally; the latest attempt timed out and its subsequent proxy connection failed. Earlier repeated-open fixtures passed the same native capacity guard."
+  ],
+  "delivery": {
+    "sourcePush": "pending",
+    "remoteCi": "pending",
+    "runtimePublication": "not performed",
+    "deployment": "not performed",
+    "minuteiUpdate": "not performed"
+  }
+}

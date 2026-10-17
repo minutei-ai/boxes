@@ -18,6 +18,9 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     }
     for module in [
         "abc.py",
+        "io.py",
+        "_pyio.py",
+        "stat.py",
         "_collections_abc.py",
         "enum.py",
         "functools.py",

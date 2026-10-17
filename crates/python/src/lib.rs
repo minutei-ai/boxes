@@ -1,5 +1,6 @@
 mod filesystem;
 mod locks;
+mod os;
 use rustpython_vm::builtins::{PyBaseException, PyCoroutine, PyDictRef};
 use rustpython_vm::scope::Scope;
 use rustpython_vm::{AsObject, Interpreter, PyObjectRef, VirtualMachine, compiler, py_serde};
@@ -15,30 +16,6 @@ const TOOLS: &rustpython_vm::frozen::FrozenLib = rustpython_vm::py_freeze!(
     source = "class _Request:\n def __init__(self, action):\n  self.action = action\n def __await__(self):\n  response = yield self.action\n  return response\nclass _Tools:\n def call(self, action):\n  return _Request(action)\ntools = _Tools()\n",
     module_name = "__cirro_tools"
 );
-
-#[rustpython_vm::pymodule(name = "os")]
-mod environment {
-    use rustpython_vm::{
-        PyObjectRef, PyResult, VirtualMachine,
-        builtins::{PyDictRef, PyStrRef},
-        function::OptionalArg,
-    };
-
-    #[pyattr]
-    fn environ(vm: &VirtualMachine) -> PyDictRef {
-        vm.ctx.new_dict()
-    }
-
-    #[pyfunction]
-    fn getenv(key: PyStrRef, default: OptionalArg<PyObjectRef>, vm: &VirtualMachine) -> PyResult {
-        let module = vm.import("os", 0)?;
-        let environ = module.get_attr("environ", vm)?;
-        let environ: PyDictRef = environ.try_into_value(vm)?;
-        Ok(environ
-            .get_item_opt(&*key, vm)?
-            .unwrap_or_else(|| default.unwrap_or_else(|| vm.ctx.none())))
-    }
-}
 
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -233,8 +210,10 @@ impl PythonGuest {
     ) -> Result<Self, JsValue> {
         let environment = environment_values(source, max_output, environment)?;
         CREATED_GUESTS.with(|created| created.set(created.get().saturating_add(1)));
-        let builder = Interpreter::builder(Default::default());
-        let environment_module = environment::module_def(&builder.ctx);
+        let mut settings = rustpython_vm::Settings::default();
+        settings.utf8_mode = 1;
+        let builder = Interpreter::builder(settings);
+        let environment_module = os::native::module_def(&builder.ctx);
         let locks_module = locks::single_thread::module_def(&builder.ctx);
         let filesystem_module = filesystem::native::module_def(&builder.ctx);
         let interpreter = builder

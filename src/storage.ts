@@ -149,7 +149,7 @@ export const publish = Effect.fn("filesystem.publish")(function* (
   return written.etag;
 });
 
-const block = Effect.fn("filesystem.block")(function* (
+export const block = Effect.fn("filesystem.block")(function* (
   env: Env,
   id: string,
   reference: typeof ContentBlock.Type,

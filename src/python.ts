@@ -18,9 +18,14 @@ import {
   ToolStep,
 } from "./contracts";
 import { guestAction } from "./capabilities";
+import { PythonFileAction, pythonFile } from "./python-files";
 import type { OutputCapture } from "./output";
 import type { Env } from "./resources";
 import type { open } from "./storage";
+
+const PythonFilesystemRequest = Schema.fromJsonString(
+  Schema.Union([FilesystemAction, PythonFileAction]),
+);
 
 class PythonFailure extends Schema.TaggedError<PythonFailure>()("PythonFailure", {
   cause: Schema.Unknown,
@@ -213,17 +218,24 @@ export const python = Effect.fn("python.execute")(function* (
         try: () => new TextDecoder("utf-8", { fatal: true }).decode(bridge.request),
         catch: (cause) => new PythonFailure({ cause }),
       });
-      const action = yield* Schema.decodeUnknownEffect(Schema.fromJsonString(FilesystemAction), {
+      const action = yield* Schema.decodeUnknownEffect(PythonFilesystemRequest, {
         onExcessProperty: "error",
       })(encoded);
       bridge.request = new Uint8Array(0);
-      const response = yield* guestAction(env, capability, action).pipe(Effect.result);
-      if (response._tag === "Success") {
-        bridge.response = new TextEncoder().encode(
-          Schema.encodeUnknownSync(Schema.fromJsonString(ActionResponses[action.op]))(
-            response.success,
-          ),
+      const response = yield* Effect.gen(function* () {
+        if (
+          action.op === "python.file.openRead" ||
+          action.op === "python.file.read" ||
+          action.op === "python.file.stat"
+        )
+          return yield* pythonFile(env, capability, action);
+        const result = yield* guestAction(env, capability, action);
+        return new TextEncoder().encode(
+          Schema.encodeUnknownSync(Schema.fromJsonString(ActionResponses[action.op]))(result),
         );
+      }).pipe(Effect.result);
+      if (response._tag === "Success") {
+        bridge.response = response.success;
         bridge.rejected = false;
       } else {
         if (response.failure._tag !== "Fault") return yield* response.failure;
