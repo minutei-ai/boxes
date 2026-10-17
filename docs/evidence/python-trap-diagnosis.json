@@ -53,17 +53,94 @@
     },
     "typecheck": "passed",
     "meterClippy": "passed",
-    "nativePackageProofStress": "running; exact existing archived-SDK proof, bounded to eight fresh processes, stop on first failure"
+    "nativePackageProofStress": {
+      "passed": 8,
+      "failed": 0,
+      "sameArchivedSdk": true,
+      "runtimeArchiveSha256": "a8bb2e1a858f0bda84851e6a35ef47110924ce8f502b61841897693ff6d27e85",
+      "budgetsUnchanged": true,
+      "runs": [
+        {
+          "iteration": 1,
+          "exitCode": 0,
+          "logSha256": "8ef151f0e19fbc2f2df18cc67fac1a49eacc7f438cbf3db42c9a0d2323c84de8",
+          "pythonCreate": [41, 41, 42, "café", "ação"],
+          "pythonDenied": ["FORBIDDEN", "FORBIDDEN", "c2VlZA==", "c2VlZA=="]
+        },
+        {
+          "iteration": 2,
+          "exitCode": 0,
+          "logSha256": "b13832dce4ff743bed71936653ff411909f247f369a816f7c07f27ab6780253a",
+          "pythonCreate": [41, 41, 42, "café", "ação"],
+          "pythonDenied": ["FORBIDDEN", "FORBIDDEN", "c2VlZA==", "c2VlZA=="]
+        },
+        {
+          "iteration": 3,
+          "exitCode": 0,
+          "logSha256": "e06438bef5eefddd86fe2ebaaac04463402d8017149a63de5f888e003831445b",
+          "pythonCreate": [41, 41, 42, "café", "ação"],
+          "pythonDenied": ["FORBIDDEN", "FORBIDDEN", "c2VlZA==", "c2VlZA=="]
+        },
+        {
+          "iteration": 4,
+          "exitCode": 0,
+          "logSha256": "76e62fa86ac9bf1dec8838db19810451caca9976c8c239056da2c15022fad3d7",
+          "pythonCreate": [41, 41, 42, "café", "ação"],
+          "pythonDenied": ["FORBIDDEN", "FORBIDDEN", "c2VlZA==", "c2VlZA=="]
+        },
+        {
+          "iteration": 5,
+          "exitCode": 0,
+          "logSha256": "0d7e4ba183228975110e6f8a50c178601e0a1df199cc35ba34424a32f09192f5",
+          "pythonCreate": [41, 41, 42, "café", "ação"],
+          "pythonDenied": ["FORBIDDEN", "FORBIDDEN", "c2VlZA==", "c2VlZA=="]
+        },
+        {
+          "iteration": 6,
+          "exitCode": 0,
+          "logSha256": "c4b16167a26cebefe9f26a4ce44a4a593fbaf16279f8b0689e19fd5f3beca21b",
+          "pythonCreate": [41, 41, 42, "café", "ação"],
+          "pythonDenied": ["FORBIDDEN", "FORBIDDEN", "c2VlZA==", "c2VlZA=="]
+        },
+        {
+          "iteration": 7,
+          "exitCode": 0,
+          "logSha256": "f59896a307de70300d02250234e88e64c76913e512648b35cae375c08a80fb55",
+          "pythonCreate": [41, 41, 42, "café", "ação"],
+          "pythonDenied": ["FORBIDDEN", "FORBIDDEN", "c2VlZA==", "c2VlZA=="]
+        },
+        {
+          "iteration": 8,
+          "exitCode": 0,
+          "logSha256": "95fcf9756a8b3337264debda67e7e4be490bc88dbaf007e4f125c19680c511ed",
+          "pythonCreate": [41, 41, 42, "café", "ação"],
+          "pythonDenied": ["FORBIDDEN", "FORBIDDEN", "c2VlZA==", "c2VlZA=="]
+        }
+      ],
+      "conclusion": "No local reproduction in these eight fresh native workerd runs; no cause or fix is established."
+    },
+    "memoryBaseline": {
+      "baseline": 4980736,
+      "pages": 204,
+      "ceiling": 13369344,
+      "afterStack": 6094848,
+      "afterBootstrap": 7995392,
+      "stackPointer": 4980744
+    }
   },
   "ciArtifacts": {
-    "on": "check failure",
-    "path": "dist/python/",
+    "on": "after every check, including failure",
+    "path": "/tmp/boxes-package-check/",
     "retentionDays": 3,
-    "purpose": "retain the exact generated native binary and revision for frame-level diagnosis"
+    "purpose": "rerun the same packaged SDK and runtime locally, preserving exact native CI binary bytes",
+    "name": "packages-${{ github.run_id }}",
+    "coverageLimit": "Failures before the packaging steps cannot provide these archives."
   },
   "limits": [
     "No failed guest execution is retried by the runtime.",
     "No capability, fuel, memory, request or fixture limit has been relaxed.",
     "Python FileIO and descriptor lifetime work remains open while this failure is investigated."
-  ]
+  ],
+  "diagnosticSourceCommit": "33b0a12f8a7f6e4591bfe234650e7d4d70f6d9bc",
+  "diagnosticCiRun": 39009247716
 }

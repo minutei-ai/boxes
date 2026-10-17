@@ -38,8 +38,8 @@ jobs:
       - run: bun run pack:runtime /tmp/boxes-package-check
       - run: bun run package:proof /tmp/boxes-package-check/minutei-ai-boxes-[0-9]*.tgz /tmp/boxes-package-check/minutei-ai-boxes-runtime-[0-9]*.tgz
       - uses: actions/upload-artifact@v4
-        if: failure()
+        if: always()
         with:
-          name: python-failure-${{ github.run_id }}
-          path: dist/python/
+          name: packages-${{ github.run_id }}
+          path: /tmp/boxes-package-check/
           retention-days: 3
