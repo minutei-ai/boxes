@@ -1,0 +1,57 @@
+{
+  "status": "unpublished source; native Wasm and closed/replacement workerd with R2 verified; not deployed",
+  "measuredAt": "2026-10-17T07:19:25.403622+00:00",
+  "sourceBase": "bf391a21c64a96df06a17437ff55cfb93ed03c38",
+  "boundary": "Native _thread.allocate_lock prerequisite for the pinned RustPython 0.6.0 _pyio buffering implementation. Does not implement open or file descriptors.",
+  "baseline": {
+    "sdkRuntime": "0.25.0",
+    "pythonWasmSha256": "4e1878eedc95dece9518550c836f5930e1478977bff5f467c9ac1993fadad124",
+    "observed": "ImportError: cannot import name allocate_lock from _thread",
+    "exitCode": 1,
+    "logSha256": "60bc80048d63d9d131f229c8bc0a66f8e70d757634601843812527de5efd2d6e"
+  },
+  "implementation": {
+    "owner": "crates/python/src/locks.rs",
+    "storage": "Cell<bool> in native interpreter heap; same existing R2 memory-page transfer; no new external resource",
+    "contract": [
+      "allocate_lock returns distinct LockType, also exported as lock",
+      "nonblocking and timeout-zero contention returns false without changing held state",
+      "blocking acquisition succeeds when unlocked",
+      "blocking contention fails explicitly with RuntimeError, including positive timeouts",
+      "timeout validation precedes state mutation; shared with existing RLock",
+      "context exit releases after body exception; aliases retain the same native state"
+    ]
+  },
+  "candidate": {
+    "pythonWasmBytes": 19460717,
+    "pythonWasmSha256": "08f7a160727867e7b4ed95ef96dc564715e41387f1c8b2b2a118ebf46cc3eb1e",
+    "requiresExplicitContextReset": true
+  },
+  "checks": {
+    "build": "passed",
+    "clippy": "cargo clippy -p cirro-python --target wasm32-unknown-unknown -- -D warnings: passed",
+    "typecheck": "passed after completed build",
+    "nativeTests": {
+      "command": "bun test tests/python.test.ts tests/python-context-heap.test.ts tests/python-filesystem.test.ts",
+      "passed": 10,
+      "failed": 0,
+      "assertions": 107,
+      "seconds": 15.08,
+      "logSha256": "5b5669185dee9eef26a6b0909f8c7f6dab7049dd6d7940a0ca4d2e1c22bc351c"
+    },
+    "closedWorkerProof": "Three separate native workerd instances sharing local R2; acquired state survives first closure, nonblocking reacquisition is denied, release survives next closure, and acquisition succeeds after restore. Original closure, environment, stdlib and filesystem grant checks retained.",
+    "format": "passed"
+  },
+  "limits": [
+    "Single virtual thread; no thread spawning, blocking wait, timer emulation or lock wakeup claim",
+    "Full Python file descriptors, synchronous open, full stdlib and pip remain open parity gates",
+    "No runtime archive publication, deployment, production latency or billing claim",
+    "Benchmark source fixture remains unchanged; lock coverage is added only by the checkpoint test"
+  ],
+  "delivery": {
+    "sourcePush": "pending",
+    "remoteCi": "pending",
+    "release": "not performed",
+    "deployment": "not performed"
+  }
+}

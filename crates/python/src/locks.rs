@@ -24,6 +24,89 @@ pub mod single_thread {
         timeout: TimeoutSeconds,
     }
 
+    impl AcquireArgs {
+        fn validate(&self, vm: &VirtualMachine) -> PyResult<f64> {
+            let timeout = self.timeout.to_secs_f64();
+            if !self.blocking && timeout != -1.0 {
+                return Err(vm.new_value_error("can't specify a timeout for a non-blocking call"));
+            }
+            if timeout.is_nan() || (timeout < 0.0 && timeout != -1.0) {
+                return Err(vm.new_value_error("timeout value must be a non-negative number"));
+            }
+            if timeout > TIMEOUT_MAX {
+                return Err(vm.new_overflow_error("timeout value is too large"));
+            }
+            Ok(timeout)
+        }
+    }
+
+    #[pyfunction]
+    const fn allocate_lock() -> Lock {
+        Lock {
+            held: Cell::new(false),
+        }
+    }
+
+    #[pyattr(name = "LockType")]
+    #[pyattr(name = "lock")]
+    #[pyclass(module = "_thread", name = "lock")]
+    #[derive(Debug, PyPayload)]
+    struct Lock {
+        held: Cell<bool>,
+    }
+
+    #[pyclass(flags(HAS_WEAKREF))]
+    impl Lock {
+        #[pymethod]
+        #[pymethod(name = "acquire_lock")]
+        fn acquire(zelf: &Py<Self>, args: AcquireArgs, vm: &VirtualMachine) -> PyResult<bool> {
+            let timeout = args.validate(vm)?;
+            if !zelf.held.get() {
+                zelf.held.set(true);
+                return Ok(true);
+            }
+            if !args.blocking || timeout == 0.0 {
+                return Ok(false);
+            }
+            Err(vm.new_runtime_error("Blocking on an acquired lock requires another thread"))
+        }
+
+        #[pymethod]
+        fn __enter__(zelf: &Py<Self>, vm: &VirtualMachine) -> PyResult<bool> {
+            Self::acquire(
+                zelf,
+                AcquireArgs {
+                    blocking: true,
+                    timeout: TimeoutSeconds::new(-1.0),
+                },
+                vm,
+            )
+        }
+
+        #[pymethod]
+        #[pymethod(name = "release_lock")]
+        fn release(zelf: &Py<Self>, vm: &VirtualMachine) -> PyResult<()> {
+            if !zelf.held.replace(false) {
+                return Err(vm.new_runtime_error("release unlocked lock"));
+            }
+            Ok(())
+        }
+
+        #[pymethod]
+        fn locked(zelf: &Py<Self>) -> bool {
+            zelf.held.get()
+        }
+
+        #[pymethod]
+        fn __exit__(
+            zelf: &Py<Self>,
+            _args: PosArgs<PyObjectRef, NameExcInfo>,
+            vm: &VirtualMachine,
+        ) -> PyResult<()> {
+            Self::release(zelf, vm)
+        }
+    }
+
     #[pyattr]
     #[pyclass(module = "_thread", name = "RLock")]
     #[derive(Debug, PyPayload)]
@@ -48,16 +131,7 @@ pub mod single_thread {
         #[pymethod]
         #[pymethod(name = "acquire_lock")]
         fn acquire(zelf: &Py<Self>, args: AcquireArgs, vm: &VirtualMachine) -> PyResult<bool> {
-            let timeout = args.timeout.to_secs_f64();
-            if !args.blocking && timeout != -1.0 {
-                return Err(vm.new_value_error("can't specify a timeout for a non-blocking call"));
-            }
-            if timeout.is_nan() || (timeout < 0.0 && timeout != -1.0) {
-                return Err(vm.new_value_error("timeout value must be a non-negative number"));
-            }
-            if timeout > TIMEOUT_MAX {
-                return Err(vm.new_overflow_error("timeout value is too large"));
-            }
+            args.validate(vm)?;
             zelf.depth.set(
                 zelf.depth
                     .get()

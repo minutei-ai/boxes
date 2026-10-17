@@ -21,7 +21,22 @@ test(
             (path) => Effect.promise(() => rm(path, { recursive: true, force: true })),
           );
           yield* Effect.reduce(
-            pythonCheckpointPrograms,
+            pythonCheckpointPrograms.map((program, index) => {
+              if (index === 0)
+                return {
+                  ...program,
+                  source: `from _thread import allocate_lock\nplain_lock=allocate_lock()\nassert plain_lock.acquire(False)\n${program.source}`,
+                };
+              if (index === 1)
+                return {
+                  ...program,
+                  source: `assert plain_lock.locked()\nassert not plain_lock.acquire(False)\nplain_lock.release()\n${program.source}`,
+                };
+              return {
+                ...program,
+                source: `(not plain_lock.locked(), plain_lock.acquire(False), ${program.source})`,
+              };
+            }),
             () => Schema.decodeUnknownSync(Schema.NullOr(PythonCheckpointProof))(null),
             (prior, program, index) =>
               Effect.scoped(
@@ -74,7 +89,7 @@ test(
                       ]);
                       expect(proof.output.stdout).toBe("second\n");
                     } else {
-                      expect(proof.output.result).toEqual([43, false]);
+                      expect(proof.output.result).toEqual([true, true, [43, false]]);
                       expect(proof.output.stdout).toBe("");
                     }
                   }

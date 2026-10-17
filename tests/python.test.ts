@@ -218,3 +218,74 @@ test("Python reentrant locks retain depth, validate acquisition and restore owne
       }),
     ),
   ));
+
+test("Python native plain locks reject recursion, validate timeouts and release after exceptions", () =>
+  Effect.runSync(
+    Effect.scoped(
+      Effect.gen(function* () {
+        const bindings = createBindings();
+        const native = bindings.initSync({ module });
+        native.__cirro_limits(100_000_000n, 512);
+        const guest = yield* Effect.acquireRelease(
+          Effect.sync(
+            () =>
+              new bindings.PythonGuest(
+                `from _thread import allocate_lock, LockType, lock
+plain = allocate_lock()
+assert type(plain) is LockType is lock
+assert not hasattr(plain.acquire, '__code__')
+assert not plain.locked()
+assert plain.acquire(False)
+assert not plain.acquire(False)
+assert not plain.acquire(timeout=0)
+assert plain.locked()
+errors = []
+for operation in [lambda: plain.acquire(), lambda: plain.acquire(timeout=1), lambda: plain.acquire(False, 1), lambda: plain.acquire(timeout=-2), lambda: plain.acquire(timeout=float('nan')), lambda: plain.acquire(timeout=float('inf'))]:
+ try:
+  operation()
+ except (RuntimeError, ValueError, OverflowError) as error:
+  errors.append(type(error).__name__)
+ assert plain.locked()
+plain.release_lock()
+try:
+ plain.release()
+except RuntimeError:
+ errors.append('RuntimeError')
+assert plain.acquire_lock(timeout=1)
+plain.release()
+try:
+ with plain as acquired:
+  assert acquired and plain.locked()
+  raise ValueError('body')
+except ValueError:
+ pass
+[errors, plain.locked(), plain.acquire(False), plain.locked()]`,
+                "/tmp/plain-lock.py",
+                false,
+                1_048_576,
+                "{}",
+              ),
+          ),
+          (guest) => Effect.sync(() => guest.free()),
+        );
+        const result = Schema.decodeUnknownSync(Schema.fromJsonString(Completed))(guest.step());
+        expect(result.output.stderr).toBe("");
+        expect(result.output.exitCode).toBe(0);
+        expect(result.output.result).toEqual([
+          [
+            "RuntimeError",
+            "RuntimeError",
+            "ValueError",
+            "ValueError",
+            "ValueError",
+            "OverflowError",
+            "RuntimeError",
+          ],
+          false,
+          true,
+          true,
+        ]);
+        expect(guest.quiescent()).toBe(true);
+      }),
+    ),
+  ));
