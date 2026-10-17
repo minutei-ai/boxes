@@ -1,5 +1,5 @@
 {
-  "scope": "Local native Wasm and closed/replacement Alchemy workerd with actual R2. This is not a production, CPython parity or cost claim. Source additions are unreleased; production remains 0.22.0.",
+  "scope": "Historical local native Wasm and closed/replacement Alchemy workerd with actual R2, recorded before SDK/runtime 0.23.0 publication and deployment. See sdk-0.23.0-delivery.json for delivery status. This is not a production latency, CPython parity or cost claim.",
   "reproduction": {
     "definitions": "0.22.0 BlockExpr returns final function/class objects and JSON serialization fails. Native parser classifies final declarations for Exec; final expressions retain BlockExpr.",
     "locks": "RustPython eagerly imports its frozen Python _thread during bootstrap. Registering a native module alone does not replace that sys.modules entry; the guest now installs its native definition after bootstrap and before user imports.",
