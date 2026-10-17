@@ -59,6 +59,7 @@ export const filesystem = Effect.fn("filesystem.action")(function* (
     "filesystem.readdirRecursive",
     "filesystem.realpath",
     "filesystem.stat",
+    "filesystem.statFiles",
     "filesystem.readdir",
     "filesystem.exists",
     "filesystem.readlink",
@@ -84,6 +85,19 @@ export const filesystem = Effect.fn("filesystem.action")(function* (
     );
     yield* publish(env, id, session);
     return { ok: true } satisfies typeof Success.Type;
+  }
+  if (action.op === "filesystem.statFiles") {
+    return yield* Effect.forEach(action.paths, (path) =>
+      Effect.gen(function* () {
+        const stat = yield* kernelCall(() => kernel.stat(path, action.follow)).pipe(
+          Effect.flatMap(Schema.decodeUnknownEffect(Schema.fromJsonString(FileStat))),
+          Effect.result,
+        );
+        if (stat._tag === "Success") return { path, stat: stat.success };
+        if (stat.failure._tag !== "Fault") return yield* stat.failure;
+        return { path, stat: null, code: stat.failure.code, error: stat.failure.message };
+      }),
+    );
   }
   return yield* Match.value(action)
     .pipe(

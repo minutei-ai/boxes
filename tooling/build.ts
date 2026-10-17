@@ -1,6 +1,7 @@
 import { Effect, Match, Schema } from "effect";
 import { join } from "node:path";
 import { homedir } from "node:os";
+import { asyncifyPython } from "./python-asyncify";
 
 class BuildFailure extends Schema.TaggedError<BuildFailure>()("BuildFailure", {
   message: Schema.String,
@@ -197,6 +198,7 @@ await Effect.runPromise(
         'import { cirroGuest } from "./cirro_guest";\nexport declare const createBindings: () => typeof cirroGuest;\n',
       ),
     );
+    yield* asyncifyPython(root);
     yield* run([
       "cargo",
       "run",
@@ -233,7 +235,15 @@ await Effect.runPromise(
         message: "Python binding destructor changed",
         cause: pythonGenerated.slice(0, 100),
       });
-    const python = pythonGenerated.replace(destructor, "            void ptr;");
+    const imports = pythonGenerated.match(/require\("boxes_python"\)/g);
+    if (imports?.length !== 2)
+      return yield* new BuildFailure({
+        message: "Python filesystem imports changed",
+        cause: imports,
+      });
+    const python = pythonGenerated
+      .replaceAll('require("boxes_python")', "host")
+      .replace(destructor, "            void ptr;");
     const pythonTypes = yield* Effect.promise(() =>
       Bun.file(join(root, "dist/python/cirro_python.d.ts")).text(),
     );
@@ -244,7 +254,7 @@ await Effect.runPromise(
           pythonTypes
             .replace(
               "declare interface InitOutput {",
-              "declare interface InitOutput {\n    readonly __cirro_limits: (fuel: bigint, pages: number) => void;\n    readonly __cirro_fuel: WebAssembly.Global;",
+              "declare interface InitOutput {\n    readonly __cirro_limits: (fuel: bigint, pages: number) => void;\n    readonly __cirro_fuel: WebAssembly.Global;\n    readonly asyncify_start_unwind: (pointer: number) => void;\n    readonly asyncify_stop_unwind: () => void;\n    readonly asyncify_start_rewind: (pointer: number) => void;\n    readonly asyncify_stop_rewind: () => void;\n    readonly asyncify_get_state: () => number;",
             )
             .replaceAll("declare namespace cirroPython", "export declare namespace cirroPython")
             .replaceAll("declare function cirroPython", "export declare function cirroPython"),
@@ -253,13 +263,13 @@ await Effect.runPromise(
     yield* Effect.promise(() =>
       Bun.write(
         join(root, "dist/python/bindings.js"),
-        `export const createBindings = () => {\n${python}\nreturn cirroPython;\n};\n`,
+        `export const createBindings = (host = { request: () => 0, response: () => -1 }) => {\n${python}\nreturn cirroPython;\n};\n`,
       ),
     );
     yield* Effect.promise(() =>
       Bun.write(
         join(root, "dist/python/bindings.d.ts"),
-        'import { cirroPython } from "./cirro_python";\nexport declare const createBindings: () => typeof cirroPython;\n',
+        'import { cirroPython } from "./cirro_python";\nexport declare const createBindings: (host?: { request: (pointer: number, length: number) => number; response: (pointer: number, length: number) => number }) => typeof cirroPython;\n',
       ),
     );
     const compiler = yield* Effect.promise(() =>

@@ -11,6 +11,7 @@ import {
   CapturedStdio,
   ErrorResponse,
   Fault,
+  FilesystemAction,
   ActionResponses,
   PythonProgram,
   RunResult,
@@ -23,6 +24,8 @@ import type { open } from "./storage";
 
 class PythonFailure extends Schema.TaggedError<PythonFailure>()("PythonFailure", {
   cause: Schema.Unknown,
+  fuelRemaining: Schema.optionalKey(Schema.String),
+  memoryBytes: Schema.optionalKey(Schema.Int),
 }) {}
 export const python = Effect.fn("python.execute")(function* (
   env: Env,
@@ -36,9 +39,37 @@ export const python = Effect.fn("python.execute")(function* (
   const started = yield* Clock.currentTimeMillis;
   if (capability.expiresAt <= started)
     return yield* new Fault({ code: "UNAUTHORIZED", status: 401, message: "Capability expired" });
+  const bridge = {
+    stack: 0,
+    request: new Uint8Array(0),
+    response: new Uint8Array(0),
+    rejected: false,
+  };
   const native = yield* Effect.try({
     try: () => {
-      const bindings = createBindings();
+      const bindings = createBindings({
+        request(pointer, length) {
+          if (state.asyncify_get_state() === 2) {
+            state.asyncify_stop_rewind();
+            if (bridge.rejected) return -bridge.response.byteLength;
+            return bridge.response.byteLength;
+          }
+          if (bridge.stack === 0 || length > 1_048_576) return 0;
+          bridge.request = new Uint8Array(state.memory.buffer, pointer, length).slice();
+          state.asyncify_start_unwind(bridge.stack);
+          return 0;
+        },
+        response(pointer, length) {
+          if (
+            length !== bridge.response.byteLength ||
+            pointer + length > state.memory.buffer.byteLength
+          )
+            return -1;
+          new Uint8Array(state.memory.buffer, pointer, length).set(bridge.response);
+          bridge.response = new Uint8Array(0);
+          return 0;
+        },
+      });
       const state = bindings.initSync({ module: wasm });
       const requested = Math.floor((state.memory.buffer.byteLength + policy.memoryBytes) / 65_536);
       const pages = Math.min(requested, checkpointPageLimit);
@@ -70,6 +101,10 @@ export const python = Effect.fn("python.execute")(function* (
       context.record.heap,
     );
   }
+  bridge.stack = yield* Effect.try({
+    try: () => native.bindings.io_stack(),
+    catch: (cause) => new PythonFailure({ cause }),
+  });
   const retained = yield* Effect.acquireRelease(
     Effect.try({
       try: () => {
@@ -78,14 +113,16 @@ export const python = Effect.fn("python.execute")(function* (
             guest: native.bindings.PythonGuest.resume(context.record.heap.handle),
             released: false,
           };
+        const guest = new native.bindings.PythonGuest(
+          program.source,
+          program.filePath,
+          program.mode === "evaluate",
+          policy.maxOutputBytes,
+          Schema.encodeSync(Schema.fromJsonString(Environment))(program.env),
+        );
+        guest.enable_filesystem();
         return {
-          guest: new native.bindings.PythonGuest(
-            program.source,
-            program.filePath,
-            program.mode === "evaluate",
-            policy.maxOutputBytes,
-            Schema.encodeSync(Schema.fromJsonString(Environment))(program.env),
-          ),
+          guest,
           released: false,
         };
       },
@@ -129,8 +166,101 @@ export const python = Effect.fn("python.execute")(function* (
         });
       context.entered = true;
     }
+    const polling = {
+      status: yield* Effect.try({
+        try: () => resource.poll(),
+        catch: (cause) =>
+          new PythonFailure({
+            cause,
+            fuelRemaining: String(native.state.__cirro_fuel.value),
+            memoryBytes: native.state.memory.buffer.byteLength,
+          }),
+      }),
+    };
+    while (
+      yield* Effect.try({
+        try: () => native.state.asyncify_get_state() === 1,
+        catch: (cause) => new PythonFailure({ cause }),
+      })
+    ) {
+      yield* Effect.try({
+        try: () => native.state.asyncify_stop_unwind(),
+        catch: (cause) => new PythonFailure({ cause }),
+      });
+      const calledAt = yield* Clock.currentTimeMillis;
+      if (capability.expiresAt <= calledAt)
+        return yield* new Fault({
+          code: "UNAUTHORIZED",
+          status: 401,
+          message: "Capability expired",
+        });
+      if (context !== null && calledAt >= context.record.deadlineAt)
+        return yield* new Fault({
+          code: "ETIMEDOUT",
+          status: 408,
+          message: "Python context authority expired",
+        });
+      if (budget.requests >= 256)
+        return yield* new PythonFailure({ cause: "Python host request budget exceeded" });
+      budget.requests += 1;
+      const encoded = yield* Effect.try({
+        try: () => new TextDecoder("utf-8", { fatal: true }).decode(bridge.request),
+        catch: (cause) => new PythonFailure({ cause }),
+      });
+      const action = yield* Schema.decodeUnknownEffect(Schema.fromJsonString(FilesystemAction), {
+        onExcessProperty: "error",
+      })(encoded);
+      bridge.request = new Uint8Array(0);
+      const response = yield* guestAction(env, capability, action).pipe(Effect.result);
+      if (response._tag === "Success") {
+        bridge.response = new TextEncoder().encode(
+          Schema.encodeUnknownSync(Schema.fromJsonString(ActionResponses[action.op]))(
+            response.success,
+          ),
+        );
+        bridge.rejected = false;
+      } else {
+        if (response.failure._tag !== "Fault") return yield* response.failure;
+        bridge.response = new TextEncoder().encode(
+          Schema.encodeSync(Schema.fromJsonString(ErrorResponse))({
+            error: response.failure.code,
+            message: response.failure.message,
+          }),
+        );
+        bridge.rejected = true;
+      }
+      if (bridge.response.byteLength > 25_165_824)
+        return yield* new PythonFailure({ cause: "Python filesystem response exceeds its bound" });
+      const resumedAt = yield* Clock.currentTimeMillis;
+      if (capability.expiresAt <= resumedAt)
+        return yield* new Fault({
+          code: "UNAUTHORIZED",
+          status: 401,
+          message: "Capability expired",
+        });
+      if (context !== null && resumedAt >= context.record.deadlineAt)
+        return yield* new Fault({
+          code: "ETIMEDOUT",
+          status: 408,
+          message: "Python context authority expired",
+        });
+      polling.status = yield* Effect.try({
+        try: () => {
+          native.state.asyncify_start_rewind(bridge.stack);
+          return resource.poll();
+        },
+        catch: (cause) =>
+          new PythonFailure({
+            cause,
+            fuelRemaining: String(native.state.__cirro_fuel.value),
+            memoryBytes: native.state.memory.buffer.byteLength,
+          }),
+      });
+    }
+    if (polling.status !== 1)
+      return yield* new PythonFailure({ cause: "Python poll did not publish a step" });
     const raw = yield* Effect.try({
-      try: () => resource.step(),
+      try: () => resource.take_step(),
       catch: (cause) => new PythonFailure({ cause }),
     });
     const step = yield* Schema.decodeUnknownEffect(Schema.fromJsonString(ToolStep), {

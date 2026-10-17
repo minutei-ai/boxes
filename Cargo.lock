@@ -270,6 +270,7 @@ dependencies = [
 name = "cirro-python"
 version = "0.1.0"
 dependencies = [
+ "base64",
  "rustpython-pylib",
  "rustpython-vm",
  "serde",

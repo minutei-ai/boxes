@@ -5,6 +5,7 @@ edition = "2024"
 [lib]
 crate-type = ["cdylib", "rlib"]
 [dependencies]
+base64 = "=0.23.1"
 rustpython-vm = { version = "=0.6.0", default-features = false, features = [
   "compiler",
   "freeze-stdlib",

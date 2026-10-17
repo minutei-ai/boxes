@@ -156,6 +156,11 @@ export const FilesystemAction = Schema.Union([
   }),
   Schema.Struct({ op: Schema.Literal("filesystem.appendFile"), path: Path, content: Content }),
   Schema.Struct({ op: Schema.Literal("filesystem.stat"), path: Path, follow: Schema.Boolean }),
+  Schema.Struct({
+    op: Schema.Literal("filesystem.statFiles"),
+    paths: Schema.Array(Path).check(Schema.isMaxLength(128)),
+    follow: Schema.Boolean,
+  }),
   Schema.Struct({ op: Schema.Literal("filesystem.exists"), path: Path }),
   Schema.Struct({ op: Schema.Literal("filesystem.mkdir"), path: Path, recursive: Schema.Boolean }),
   Schema.Struct({ op: Schema.Literal("filesystem.readdir"), path: Path }),
@@ -1099,6 +1104,17 @@ export class Fault extends Schema.TaggedError<Fault>()("Fault", {
   status: Schema.Int,
   message: Schema.String,
 }) {}
+export const BatchStatResults = Schema.Array(
+  Schema.Union([
+    Schema.Struct({ path: Path, stat: FileStat }),
+    Schema.Struct({
+      path: Path,
+      stat: Schema.Null,
+      code: Fault.fields.code,
+      error: Fault.fields.message,
+    }),
+  ]),
+);
 
 export const ShellBuiltin = Schema.NullOr(
   Schema.Struct({
@@ -1285,6 +1301,7 @@ export const ActionResponses = {
   "filesystem.writeFile": Success,
   "filesystem.appendFile": Success,
   "filesystem.stat": FileStat,
+  "filesystem.statFiles": BatchStatResults,
   "filesystem.exists": Exists,
   "filesystem.mkdir": Success,
   "filesystem.readdir": DirectoryEntries,

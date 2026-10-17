@@ -1,3 +1,4 @@
+mod filesystem;
 mod locks;
 use rustpython_vm::builtins::{PyBaseException, PyCoroutine, PyDictRef};
 use rustpython_vm::scope::Scope;
@@ -67,11 +68,39 @@ struct State {
     stderr: PyObjectRef,
     max_output: usize,
     done: Option<String>,
+    last_step: Option<Result<String, JsValue>>,
+    filesystem: bool,
 }
 thread_local! {
     static PARKED_CONTEXTS: RefCell<BTreeMap<u32, PythonGuest>> = const { RefCell::new(BTreeMap::new()) };
     static NEXT_CONTEXT: Cell<u32> = const { Cell::new(1) };
     static CREATED_GUESTS: Cell<u32> = const { Cell::new(0) };
+    static IO_STACK: RefCell<Option<Box<[u32]>>> = const { RefCell::new(None) };
+}
+
+#[wasm_bindgen]
+pub fn io_stack() -> Result<u32, JsValue> {
+    #[cfg(not(target_arch = "wasm32"))]
+    return Err(JsValue::from_str("Python I/O requires Wasm"));
+    #[cfg(target_arch = "wasm32")]
+    IO_STACK.with(|slot| {
+        let mut slot = slot.borrow_mut();
+        if slot.is_none() {
+            let mut words = Vec::new();
+            words
+                .try_reserve_exact(262_144)
+                .map_err(|error| JsValue::from_str(&error.to_string()))?;
+            words.resize(262_144, 0u32);
+            let mut words = words.into_boxed_slice();
+            let pointer = words.as_ptr() as u32;
+            words[0] = pointer + 8;
+            words[1] = pointer + 1_048_576;
+            *slot = Some(words);
+        }
+        slot.as_ref()
+            .map(|words| words.as_ptr() as u32)
+            .ok_or_else(|| JsValue::from_str("Python I/O stack is missing"))
+    })
 }
 
 fn environment_values(
@@ -141,6 +170,7 @@ impl PythonGuest {
 
     pub fn quiescent(&self) -> bool {
         self.state.done.is_some()
+            && self.state.last_step.is_none()
             && self.state.source.is_none()
             && self.state.coroutine.is_none()
             && self.state.response.is_none()
@@ -206,9 +236,12 @@ impl PythonGuest {
         let builder = Interpreter::builder(Default::default());
         let environment_module = environment::module_def(&builder.ctx);
         let locks_module = locks::single_thread::module_def(&builder.ctx);
+        let filesystem_module = filesystem::native::module_def(&builder.ctx);
         let interpreter = builder
             .add_native_module(environment_module)
             .add_native_module(locks_module)
+            .add_native_module(filesystem_module)
+            .add_frozen_modules(filesystem::IMPORTS)
             .add_frozen_modules(BOOTSTRAP)
             .add_frozen_modules(TOOLS)
             .build();
@@ -283,8 +316,39 @@ impl PythonGuest {
                 stderr,
                 max_output,
                 done: None,
+                last_step: None,
+                filesystem: false,
             }),
         })
+    }
+    pub fn enable_filesystem(&mut self) -> Result<(), JsValue> {
+        if self.state.filesystem || self.state.source.is_none() || self.state.done.is_some() {
+            return Err(JsValue::from_str(
+                "Python filesystem requires a fresh guest",
+            ));
+        }
+        self.state.interpreter.enter(|vm| {
+            vm.import("_boxes_imports", 0)
+                .and_then(|module| vm.call_method(&module, "install", (self.state.path.as_str(),)))
+                .map(|_| ())
+                .map_err(|_| JsValue::from_str("Python filesystem importer initialization failed"))
+        })?;
+        self.state.filesystem = true;
+        Ok(())
+    }
+    pub fn poll(&mut self) -> u32 {
+        if self.state.last_step.is_some() {
+            return 0;
+        }
+        let result = self.step();
+        self.state.last_step = Some(result);
+        1
+    }
+    pub fn take_step(&mut self) -> Result<String, JsValue> {
+        self.state
+            .last_step
+            .take()
+            .ok_or_else(|| JsValue::from_str("Python step is not ready"))?
     }
     pub fn step(&mut self) -> Result<String, JsValue> {
         let state = &mut *self.state;

@@ -1,0 +1,470 @@
+{
+  "status": "current-source-local-implementation; unreleased",
+  "recordedAt": "2026-10-17T05:26:24.273851+00:00",
+  "sourceParent": "efe7dcd740c1092d167830a8e0fb634f16db2881",
+  "scope": "Static RustPython Wasm, native Effect filesystem operations, ordinary Worker service bindings and actual local R2. This record proves current-source imports, not full Python/AgentOS parity or production delivery.",
+  "implementation": {
+    "interpreter": "rustpython-vm 0.6.0; pinned frozen library modules",
+    "suspension": "Native C request/byte-copy imports, Binaryen Asyncify scalar polling and the same retained Rust stack. No source replay or interpreter-global reconstruction.",
+    "authorization": "Current credential and context deadlines are checked before host adoption and rewind. Filesystem actions use the existing owning Schema, permission checks, kernel and R2 publication.",
+    "lookup": "Initial entry directory and sys.path; existing builtin/frozen precedence; source packages/modules/namespaces; source encoding declarations; native module cache/circular imports/failed-import cleanup.",
+    "batchStat": "filesystem.statFiles accepts at most 128 paths and a required follow flag. One acquired snapshot returns ordered success or per-path Fault rows; unused candidate errors do not invalidate an earlier package match.",
+    "bounds": {
+      "requestBytes": 1048576,
+      "replyBytes": 25165824,
+      "sourceBytes": 1048576,
+      "savedStackBytes": 1048576,
+      "hostOperations": 256
+    },
+    "pureAbi": "The request owner explicitly enables the finder only on a fresh guest. Existing pure interpreter and heap fixtures remain filesystem-free."
+  },
+  "checks": {
+    "complete": {
+      "command": "TMPDIR=<owned native temporary directory> bun run check",
+      "result": "passed; build, SDK generation, typecheck, workspace Clippy, workspace Cargo tests and native Bun tests",
+      "bunTests": 442,
+      "files": 100,
+      "assertions": 6474,
+      "bunElapsedSeconds": 283.33,
+      "logSha256": "c0d546e2380d3e1118ec8abdfc91d5e90b708efc33acc4803fcae3a9eff9e59b"
+    },
+    "focused": {
+      "result": "2 passed, 0 failed, 32 assertions; 20.04 seconds in native workerd/R2 through service bindings",
+      "source": "tests/python-filesystem.test.ts"
+    },
+    "coverage": [
+      "UTF-8 and Latin-1 source files, module filename/cache identity",
+      "Regular packages and relative imports; cycles; namespace search across two roots",
+      "ValueError import cleanup, source correction via a coroutine tool request, retry and missing-module cleanup",
+      "Same module path in independent sandboxes",
+      "Frozen JSON/regex interoperability in a separate stdlib-budget sandbox",
+      "Three closed/replacement Workers retain the module counter 41 -> 42 -> 43 -> 44 without rereading changed source",
+      "Captured native filesystem function and new module code both lose prior write authority; both markers remain absent",
+      "Missing read capability is rejected before retained-context entry; the cached counter is not incremented",
+      "Reset discards the native module cache and loads changed source: 901",
+      "Ordered stat batches retain ELOOP/ENOENT rows, consume follow=false for symlinks and require read permission",
+      "Native ABI saved-stack exhaustion traps before response adoption; trapped wrappers release without invoking the borrowed Rust destructor"
+    ],
+    "package": {
+      "result": "passed exact locally packed SDK/runtime archives through native workerd service bindings, Agent RPC, R2 and Queue",
+      "version": "0.24.0",
+      "transport": "native Alchemy workerd service binding and Agent RPC; local R2 and Queue",
+      "proof": "SDK archive exports and consumer declarations; runtime archive; filesystem snapshot restore; hard-link metadata; RPC callbacks and cooperative disposal; ephemeral context disposal with 1024 files and concurrent closes; persistent driver contexts and cancellation; retained native heaps and current callback authority; scoped authority",
+      "reportSha256": "44937c3f7b85361ad6eef2dd51eaad56dbb035b31e260df9260a917d2912e7fe",
+      "archives": [
+        {
+          "name": "minutei-ai-boxes-0.24.0.tgz",
+          "bytes": 87816,
+          "sha256": "14aa06c642d4af1d93a8de6ce7fbd59d6a559c416c6bbfc8bf881a09f790f764"
+        },
+        {
+          "name": "minutei-ai-boxes-runtime-0.24.0.tgz",
+          "bytes": 7152964,
+          "sha256": "c9bfbc27432634ec2299e6e6c7bf68f2d96f19341c836a45cd50b4a767b8a8cd"
+        }
+      ],
+      "publication": "These 0.24.0-named files are local source candidates only. They were not uploaded or substituted for the immutable public 0.24.0 assets.",
+      "newOperationInArchiveDeclarations": true
+    }
+  },
+  "statReadCounts": {
+    "scope": "Local actual R2 get/put/delete calls forwarded through a request-scoped observer around the unchanged native bucket owner. The client uses the real service binding. Four ABBA phases use identical paths and compare every returned stat. This is not production billing or latency evidence.",
+    "getsByPhase": {
+      "0": 3,
+      "1": 1,
+      "2": 1,
+      "3": 3
+    },
+    "raw": {
+      "scope": "Same native Worker and R2, actual service binding; ABBA ordered path metadata. Native R2 methods are forwarded unchanged and counted per request. Counts are not production billing or latency.",
+      "measurements": [
+        {
+          "phase": 0,
+          "operation": "filesystem.stat",
+          "get": 1,
+          "put": 0,
+          "delete": 0
+        },
+        {
+          "phase": 0,
+          "operation": "filesystem.stat",
+          "get": 1,
+          "put": 0,
+          "delete": 0
+        },
+        {
+          "phase": 0,
+          "operation": "filesystem.stat",
+          "get": 1,
+          "put": 0,
+          "delete": 0
+        },
+        {
+          "phase": 1,
+          "operation": "filesystem.statFiles",
+          "get": 1,
+          "put": 0,
+          "delete": 0
+        },
+        {
+          "phase": 2,
+          "operation": "filesystem.statFiles",
+          "get": 1,
+          "put": 0,
+          "delete": 0
+        },
+        {
+          "phase": 3,
+          "operation": "filesystem.stat",
+          "get": 1,
+          "put": 0,
+          "delete": 0
+        },
+        {
+          "phase": 3,
+          "operation": "filesystem.stat",
+          "get": 1,
+          "put": 0,
+          "delete": 0
+        },
+        {
+          "phase": 3,
+          "operation": "filesystem.stat",
+          "get": 1,
+          "put": 0,
+          "delete": 0
+        }
+      ],
+      "results": [
+        [
+          {
+            "path": "/tmp/pkg/__init__.py",
+            "kind": "file",
+            "size": 10,
+            "mode": 420,
+            "inode": 6,
+            "nlink": 1,
+            "uid": 0,
+            "gid": 0,
+            "atimeNs": "1792214223978000000",
+            "mtimeNs": "1792214223978000000",
+            "ctimeNs": "1792214223978000000"
+          },
+          {
+            "path": "/tmp/pkg.py",
+            "kind": "file",
+            "size": 10,
+            "mode": 420,
+            "inode": 7,
+            "nlink": 1,
+            "uid": 0,
+            "gid": 0,
+            "atimeNs": "1792214224009000000",
+            "mtimeNs": "1792214224009000000",
+            "ctimeNs": "1792214224009000000"
+          },
+          {
+            "path": "/tmp/pkg",
+            "kind": "directory",
+            "size": 0,
+            "mode": 493,
+            "inode": 5,
+            "nlink": 2,
+            "uid": 0,
+            "gid": 0,
+            "atimeNs": "1792214223955000000",
+            "mtimeNs": "1792214223978000000",
+            "ctimeNs": "1792214223978000000"
+          }
+        ],
+        [
+          {
+            "path": "/tmp/pkg/__init__.py",
+            "kind": "file",
+            "size": 10,
+            "mode": 420,
+            "inode": 6,
+            "nlink": 1,
+            "uid": 0,
+            "gid": 0,
+            "atimeNs": "1792214223978000000",
+            "mtimeNs": "1792214223978000000",
+            "ctimeNs": "1792214223978000000"
+          },
+          {
+            "path": "/tmp/pkg.py",
+            "kind": "file",
+            "size": 10,
+            "mode": 420,
+            "inode": 7,
+            "nlink": 1,
+            "uid": 0,
+            "gid": 0,
+            "atimeNs": "1792214224009000000",
+            "mtimeNs": "1792214224009000000",
+            "ctimeNs": "1792214224009000000"
+          },
+          {
+            "path": "/tmp/pkg",
+            "kind": "directory",
+            "size": 0,
+            "mode": 493,
+            "inode": 5,
+            "nlink": 2,
+            "uid": 0,
+            "gid": 0,
+            "atimeNs": "1792214223955000000",
+            "mtimeNs": "1792214223978000000",
+            "ctimeNs": "1792214223978000000"
+          }
+        ],
+        [
+          {
+            "path": "/tmp/pkg/__init__.py",
+            "kind": "file",
+            "size": 10,
+            "mode": 420,
+            "inode": 6,
+            "nlink": 1,
+            "uid": 0,
+            "gid": 0,
+            "atimeNs": "1792214223978000000",
+            "mtimeNs": "1792214223978000000",
+            "ctimeNs": "1792214223978000000"
+          },
+          {
+            "path": "/tmp/pkg.py",
+            "kind": "file",
+            "size": 10,
+            "mode": 420,
+            "inode": 7,
+            "nlink": 1,
+            "uid": 0,
+            "gid": 0,
+            "atimeNs": "1792214224009000000",
+            "mtimeNs": "1792214224009000000",
+            "ctimeNs": "1792214224009000000"
+          },
+          {
+            "path": "/tmp/pkg",
+            "kind": "directory",
+            "size": 0,
+            "mode": 493,
+            "inode": 5,
+            "nlink": 2,
+            "uid": 0,
+            "gid": 0,
+            "atimeNs": "1792214223955000000",
+            "mtimeNs": "1792214223978000000",
+            "ctimeNs": "1792214223978000000"
+          }
+        ],
+        [
+          {
+            "path": "/tmp/pkg/__init__.py",
+            "kind": "file",
+            "size": 10,
+            "mode": 420,
+            "inode": 6,
+            "nlink": 1,
+            "uid": 0,
+            "gid": 0,
+            "atimeNs": "1792214223978000000",
+            "mtimeNs": "1792214223978000000",
+            "ctimeNs": "1792214223978000000"
+          },
+          {
+            "path": "/tmp/pkg.py",
+            "kind": "file",
+            "size": 10,
+            "mode": 420,
+            "inode": 7,
+            "nlink": 1,
+            "uid": 0,
+            "gid": 0,
+            "atimeNs": "1792214224009000000",
+            "mtimeNs": "1792214224009000000",
+            "ctimeNs": "1792214224009000000"
+          },
+          {
+            "path": "/tmp/pkg",
+            "kind": "directory",
+            "size": 0,
+            "mode": 493,
+            "inode": 5,
+            "nlink": 2,
+            "uid": 0,
+            "gid": 0,
+            "atimeNs": "1792214223955000000",
+            "mtimeNs": "1792214223978000000",
+            "ctimeNs": "1792214223978000000"
+          }
+        ]
+      ]
+    },
+    "temporaryProofDirectory": "/home/yorizel/.cache/boxes-exec-cwd/python-import-diagnostics/stat-proof",
+    "sourceFiles": [
+      {
+        "path": "wrapper.ts",
+        "sha256": "7025e3cf4d40b8bb872e486d346c5c57d61f35dae3c9d6aee163d2f0b1d4d98a"
+      },
+      {
+        "path": "build.ts",
+        "sha256": "ac993f5a9df8b4e53f223c19659da9cd5ea72155988d54fe5d87543cd8f02c5b"
+      },
+      {
+        "path": "run.ts",
+        "sha256": "d72bbeea1fe031ff07f1bb730750fd70a52dc133ded23174c1e21c8d66ca089a"
+      },
+      {
+        "path": "tooling/worker-test.ts",
+        "sha256": "7c5f8ec2a4292fc1c7e09399a4131044a2c9ff4165370a0bdf0b652b4cc95922"
+      }
+    ]
+  },
+  "buildCache": {
+    "fullEngineCacheHit": {
+      "cacheReceiptsUnchanged": true,
+      "pythonRevisionUnchanged": true,
+      "before": {
+        "d2c7f20e01876ef8c3f97e0448e22e32436c9e473607768e8d52cba21aeabc19.json": {
+          "mtimeNs": "1792212181788774844",
+          "sha256": "282f72dc1e5dc5cb0a29059c84fc1d13f1f7820e1b5a520193d33c4c145c4011"
+        },
+        "b3025845dfcc2a413227f315556fca98901a0c51b3275341243e55ab0b9b07d5.json": {
+          "mtimeNs": "1792212431355736241",
+          "sha256": "c66c47b62e93e88e1f02c4f179ea8b8fabf62972e782797641f3804c6ed6f21c"
+        },
+        "27003c696d562fae2e7455dcd7c8c623c289b5a38dff2fb5259001fe90bacbdc.json": {
+          "mtimeNs": "1792213382414100951",
+          "sha256": "9d5b347de4c6c2dc2b01f5f9d221def52b7b54927b7f36a1179a127fce894269"
+        }
+      },
+      "after": {
+        "d2c7f20e01876ef8c3f97e0448e22e32436c9e473607768e8d52cba21aeabc19.json": {
+          "mtimeNs": "1792212181788774844",
+          "sha256": "282f72dc1e5dc5cb0a29059c84fc1d13f1f7820e1b5a520193d33c4c145c4011"
+        },
+        "b3025845dfcc2a413227f315556fca98901a0c51b3275341243e55ab0b9b07d5.json": {
+          "mtimeNs": "1792212431355736241",
+          "sha256": "c66c47b62e93e88e1f02c4f179ea8b8fabf62972e782797641f3804c6ed6f21c"
+        },
+        "27003c696d562fae2e7455dcd7c8c623c289b5a38dff2fb5259001fe90bacbdc.json": {
+          "mtimeNs": "1792213382414100951",
+          "sha256": "9d5b347de4c6c2dc2b01f5f9d221def52b7b54927b7f36a1179a127fce894269"
+        }
+      }
+    },
+    "coldCompilerAndWarmReuse": {
+      "scope": "Digest-checked cold compiler download/extraction, real Rust-to-Wasm input and native Asyncify transformation. Warm hit after removing the compiler executable verifies immutable output reuse; timings are operator samples, not guest performance.",
+      "coldMs": 6057.176708999999,
+      "warmMs": 65.67957700000079,
+      "rawBytes": 1472682,
+      "outputBytes": 1248246,
+      "sha256": "061d3e774f8ca08755b97e5b3093df0436ee0b0482b70af1a9e0a068508b8dbc",
+      "receiptUnchanged": true,
+      "compilerAbsentOnWarmHit": true,
+      "exports": [
+        {
+          "name": "memory",
+          "kind": "memory"
+        },
+        {
+          "name": "poll",
+          "kind": "function"
+        },
+        {
+          "name": "__data_end",
+          "kind": "global"
+        },
+        {
+          "name": "__heap_base",
+          "kind": "global"
+        },
+        {
+          "name": "asyncify_start_unwind",
+          "kind": "function"
+        },
+        {
+          "name": "asyncify_stop_unwind",
+          "kind": "function"
+        },
+        {
+          "name": "asyncify_start_rewind",
+          "kind": "function"
+        },
+        {
+          "name": "asyncify_stop_rewind",
+          "kind": "function"
+        },
+        {
+          "name": "asyncify_get_state",
+          "kind": "function"
+        }
+      ]
+    },
+    "temporaryProofDirectory": "/home/yorizel/.cache/boxes-exec-cwd/python-import-diagnostics/compiler-proof"
+  },
+  "resourceBudget": {
+    "ordinaryModuleFixture": {
+      "interruptBudget": 1000,
+      "nativeInstructions": 1000000,
+      "guestMemoryBytes": 8388608
+    },
+    "stdlibFixture": {
+      "interruptBudget": 100000,
+      "nativeInstructions": 100000000,
+      "guestMemoryBytes": 8388608
+    },
+    "correction": "A new combined stdlib/module case initially used the ordinary one-million-instruction fixture and trapped with fuelRemaining=0. The historical python-stdlib-local.json already records roughly seven million instructions for cold json/re imports. The combined case now owns a separate sandbox with the existing stdlib proof budget; ordinary module, recovery, permission and stack-limit cases retain their smaller limits. No production default was raised.",
+    "failureDiagnostics": {
+      "fuelRemaining": "0",
+      "memoryBytes": 9109504,
+      "scope": "Observed native trap in the incorrectly budgeted combined test, not a production failure."
+    },
+    "pureFixtureCorrection": "Installing a filesystem finder without its host binding turned json.scanner optional accelerator lookup into a host-unavailable RuntimeError. Reproducing the same program with and without finder initialization confirmed the cause. Pure fixtures now retain their prior initialization; the real runtime enables the finder with its binding."
+  },
+  "artifacts": {
+    "pythonWasm": {
+      "bytes": 19439002,
+      "gzipBytes": 5087013,
+      "sha256": "4e1878eedc95dece9518550c836f5930e1478977bff5f467c9ac1993fadad124"
+    },
+    "sourceFiles": {
+      ".github/workflows/check.yml": "7902c75b4aaa401d84c7c1abadc8dcf8ee8ed088afb0bdf1c253af2904d22419",
+      "Cargo.lock": "d85290ac0e85e2f131f822be9a32d36bea48040f25b10b6b77c328e826c495c0",
+      "crates/python/Cargo.toml": "5d4247a2272291cece4cb0f67b0d3fcc1025b7e19cb41b3d64a9af2bf0071a89",
+      "crates/python/src/lib.rs": "ea49865d0878228b5774d3342e1a345745a815b16d7c5d9d00f86e32449d4ff2",
+      "crates/python/src/filesystem.rs": "11e1b6ddfc7fb55af5e6a0888f1dcd5c1a7bad2371a2efd02f89310e25de1b9c",
+      "src/contracts.ts": "833c833c0ca7d719cb31bb3e2fa5e5584391406efc6a0dd74f86583104c31b2e",
+      "src/filesystem.ts": "bda0b226cb5a508f26da7132b70e6a26df80219ed84ee8fba7fa24b1f4f2abc6",
+      "src/python.ts": "479d267ed6a52f82d0e89816633b7c34a27bc6260195793002a55d68cd84143b",
+      "tooling/build.ts": "7639f97daa574e6b1af9afcb7988422d089bfbbab0e1b4fbdb9a36272999fc47",
+      "tooling/python-asyncify.ts": "abfeb2401b930dc41328cf0b5020fe7b28054ec32aee9850b77856480a0e0dfa",
+      "tests/python.test.ts": "86a8de7fe7e727d5cfaace6dc14cd4300653ce7ef713c576c9a9fd388aa8f7fe",
+      "tests/python-filesystem.test.ts": "6fc83553708cda349ad12cf869285346dfe40c477393c666609bfa3a6975ef47"
+    }
+  },
+  "toolchain": {
+    "bun": "1.4.3",
+    "workerd": "2026-10-02",
+    "effect": "4.0.4",
+    "alchemyRuntime": "2.0.0-beta.83",
+    "rustc": "1.97.0-nightly (37d85e592 2026-04-28)",
+    "binaryen": "133; Linux x64; archive and executable SHA checked"
+  },
+  "delivery": {
+    "publication": false,
+    "deployment": false,
+    "minuteiChanged": false,
+    "currentPublicRelease": "sdk-v0.24.0"
+  },
+  "limitations": [
+    "Synchronous open/file descriptors, full stdlib, pip, native extensions and bytecode caches remain open.",
+    "The Python binary changed; existing Python contexts require explicit reset before adopting this runtime. JavaScript/WASI binaries are unchanged.",
+    "Package and focused/full tests are local. Source CI, public SDK/runtime publication, unconditional Alchemy deployment, remote binding and Minutei delivery remain separate gates.",
+    "No cancellation-during-native-R2-I/O or arbitrary backend-crash recovery proof was added here. Quiescent same-build R2 module recovery is covered.",
+    "Temporary operator provisioning and R2-count scripts remain outside the tracked tree; the maintained regression tests are in tests/python-filesystem.test.ts and tests/python.test.ts.",
+    "No production latency, peak memory, R2 billing or AgentOS cost advantage is established."
+  ]
+}

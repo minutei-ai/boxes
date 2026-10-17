@@ -58,6 +58,37 @@ test("compiled Python memory ceiling rejects growth before allocation independen
   guest.free();
 });
 
+test("native Python suspension traps an exhausted saved stack before adopting a host request", () => {
+  const observed = { requests: 0, responses: 0 };
+  const bindings = createBindings({
+    request() {
+      observed.requests += 1;
+      native.asyncify_start_unwind(stack);
+      return 0;
+    },
+    response() {
+      observed.responses += 1;
+      return -1;
+    },
+  });
+  const native = bindings.initSync({ module });
+  native.__cirro_limits(100_000_000n, 512);
+  const stack = bindings.io_stack();
+  const guest = new bindings.PythonGuest(
+    "import _boxes_io\n_boxes_io.call({'op':'filesystem.stat','path':'/','follow':True})",
+    "/tmp/bounds.py",
+    false,
+    4096,
+    "{}",
+  );
+  new DataView(native.memory.buffer).setUint32(stack + 4, stack + 8, true);
+  expect(guest.poll()).toBe(0);
+  expect(native.asyncify_get_state()).toBe(1);
+  expect(() => native.asyncify_stop_unwind()).toThrow();
+  expect(observed).toEqual({ requests: 1, responses: 0 });
+  expect(() => guest.free()).not.toThrow();
+});
+
 test("Python definitions complete without exporting function objects and remain callable in their native scope", () =>
   Effect.runSync(
     Effect.scoped(

@@ -1,0 +1,200 @@
+use rustpython_vm::{AsObject, PyObjectRef, PyResult, VirtualMachine, py_serde};
+use serde_json::Value;
+
+#[cfg(target_arch = "wasm32")]
+#[link(wasm_import_module = "boxes_python")]
+unsafe extern "C" {
+    fn request(pointer: *const u8, length: usize) -> i32;
+    fn response(pointer: *mut u8, length: usize) -> i32;
+}
+
+fn exchange(vm: &VirtualMachine, action: &Value) -> PyResult<Value> {
+    let input =
+        serde_json::to_vec(action).map_err(|error| vm.new_runtime_error(error.to_string()))?;
+    if input.len() > 1_048_576 {
+        return Err(vm.new_value_error("Python filesystem request exceeds its bound"));
+    }
+    #[cfg(not(target_arch = "wasm32"))]
+    let signed_length = 0i32;
+    #[cfg(target_arch = "wasm32")]
+    let signed_length = unsafe { request(input.as_ptr(), input.len()) };
+    let length = signed_length.unsigned_abs() as usize;
+    if length == 0 || length > 25_165_824 {
+        return Err(
+            vm.new_runtime_error("Python filesystem host response is unavailable or oversized")
+        );
+    }
+    let mut bytes = Vec::new();
+    bytes
+        .try_reserve_exact(length)
+        .map_err(|error| vm.new_runtime_error(error.to_string()))?;
+    bytes.resize(length, 0);
+    #[cfg(not(target_arch = "wasm32"))]
+    let copied = -1;
+    #[cfg(target_arch = "wasm32")]
+    let copied = unsafe { response(bytes.as_mut_ptr(), length) };
+    if copied != 0 {
+        return Err(vm.new_runtime_error("Python filesystem response copy failed"));
+    }
+    let value: Value =
+        serde_json::from_slice(&bytes).map_err(|error| vm.new_runtime_error(error.to_string()))?;
+    if signed_length >= 0 {
+        return Ok(value);
+    }
+    let code = value
+        .get("error")
+        .and_then(Value::as_str)
+        .ok_or_else(|| vm.new_runtime_error("Python filesystem fault has no code"))?;
+    let message = value
+        .get("message")
+        .and_then(Value::as_str)
+        .ok_or_else(|| vm.new_runtime_error("Python filesystem fault has no message"))?;
+    Err(fault(vm, code, message)?)
+}
+
+fn fault(
+    vm: &VirtualMachine,
+    code: &str,
+    message: &str,
+) -> PyResult<rustpython_vm::PyRef<rustpython_vm::builtins::PyBaseException>> {
+    let exceptions = &vm.ctx.exceptions;
+    let (kind, errno) = match code {
+        "ENOENT" => (exceptions.file_not_found_error, Some(2)),
+        "ENOTDIR" => (exceptions.not_a_directory_error, Some(20)),
+        "EISDIR" => (exceptions.is_a_directory_error, Some(21)),
+        "EEXIST" => (exceptions.file_exists_error, Some(17)),
+        "EACCES" | "FORBIDDEN" | "UNAUTHORIZED" => (exceptions.permission_error, Some(13)),
+        "EPERM" => (exceptions.permission_error, Some(1)),
+        "ETIMEDOUT" => (exceptions.timeout_error, Some(110)),
+        _ => (exceptions.os_error, None),
+    };
+    let error = vm
+        .new_os_subtype_error(kind.to_owned(), errno, message)
+        .upcast::<rustpython_vm::builtins::PyBaseException>();
+    error
+        .as_object()
+        .set_attr("error", vm.ctx.new_str(code), vm)?;
+    Ok(error)
+}
+
+#[rustpython_vm::pymodule(name = "_boxes_io")]
+pub mod native {
+    use super::*;
+    use base64::Engine;
+    use rustpython_vm::builtins::PyStrRef;
+
+    #[pyfunction]
+    fn call(action: PyObjectRef, vm: &VirtualMachine) -> PyResult {
+        let action = py_serde::serialize(vm, &action, serde_json::value::Serializer)
+            .map_err(|error| vm.new_value_error(error.to_string()))?;
+        let value = exchange(vm, &action)?;
+        py_serde::deserialize(vm, &value).map_err(|error| vm.new_runtime_error(error.to_string()))
+    }
+
+    #[pyfunction]
+    fn raise_fault(code: PyStrRef, message: PyStrRef, vm: &VirtualMachine) -> PyResult {
+        let code = code
+            .as_utf8()
+            .ok_or_else(|| vm.new_value_error("Filesystem fault code must be UTF-8"))?;
+        let message = message
+            .as_utf8()
+            .ok_or_else(|| vm.new_value_error("Filesystem fault message must be UTF-8"))?;
+        Err(fault(vm, code.as_str(), message.as_str())?)
+    }
+
+    #[pyfunction]
+    fn read_source(path: PyStrRef, vm: &VirtualMachine) -> PyResult {
+        let path = path
+            .as_utf8()
+            .ok_or_else(|| vm.new_value_error("Python module path must be UTF-8"))?;
+        let value = exchange(
+            vm,
+            &serde_json::json!({
+                "op": "filesystem.readFile", "path": path.as_str(),
+                "offset": 0, "length": 1_048_577,
+            }),
+        )?;
+        let encoded = value
+            .get("content")
+            .and_then(Value::as_str)
+            .ok_or_else(|| vm.new_runtime_error("Python source response has no content"))?;
+        let bytes = base64::engine::general_purpose::STANDARD
+            .decode(encoded)
+            .map_err(|error| vm.new_runtime_error(error.to_string()))?;
+        if bytes.len() > 1_048_576 {
+            return Err(vm.new_value_error("Python module source exceeds one MiB"));
+        }
+        Ok(vm.ctx.new_bytes(bytes).into())
+    }
+}
+
+pub const IMPORTS: &rustpython_vm::frozen::FrozenLib = rustpython_vm::py_freeze!(
+    source = r#"
+import sys as _sys
+import _frozen_importlib as _bootstrap
+import _boxes_io as _io
+
+class _Spec(_bootstrap.ModuleSpec):
+ @property
+ def cached(self):
+  return None
+
+class _Loader:
+ def __init__(self, filename):
+  self.filename = filename
+ def create_module(self, spec):
+  return None
+ def exec_module(self, module):
+  if self.filename is None:
+   return
+  source = _io.read_source(self.filename)
+  code = compile(source, self.filename, 'exec', dont_inherit=True)
+  exec(code, module.__dict__)
+
+def _stat(result):
+ if result['stat'] is not None:
+  return result['stat']
+ if result['code'] in ('ENOENT','ENOTDIR'):
+  return None
+ _io.raise_fault(result['code'], result['error'])
+
+class _Finder:
+ def find_spec(self, fullname, path=None, target=None):
+  search = _sys.path if path is None else path
+  leaf = fullname.rpartition('.')[2]
+  namespaces = []
+  for entry in search:
+   if not isinstance(entry, str):
+    continue
+   if not entry.startswith('/'):
+    entry = '/' + entry
+   base = entry.rstrip('/') + '/' + leaf
+   package, module, directory = _io.call({'op':'filesystem.statFiles','paths':[base+'/__init__.py',base+'.py',base],'follow':True})
+   filename = base + '/__init__.py'
+   info = _stat(package)
+   if info is not None and info['kind'] == 'file':
+    spec = _Spec(fullname, _Loader(filename), origin=filename, is_package=True)
+    spec.has_location = True
+    spec.submodule_search_locations = [base]
+    return spec
+   filename = base + '.py'
+   info = _stat(module)
+   if info is not None and info['kind'] == 'file':
+    spec = _Spec(fullname, _Loader(filename), origin=filename, is_package=False)
+    spec.has_location = True
+    return spec
+   info = _stat(directory)
+   if info is not None and info['kind'] == 'directory':
+    namespaces.append(base)
+  if namespaces:
+   spec = _Spec(fullname, _Loader(None), is_package=True)
+   spec.submodule_search_locations = namespaces
+   return spec
+  return None
+
+def install(filename):
+ _sys.meta_path.append(_Finder())
+ _sys.path.insert(0, filename.rpartition('/')[0] or '/')
+"#,
+    module_name = "_boxes_imports"
+);
