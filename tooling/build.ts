@@ -209,6 +209,7 @@ await Effect.runPromise(
       "--",
       "dist/python/cirro_python_bg.wasm",
       "dist/python/metered.wasm",
+      "--trap-reason",
     ]);
     yield* Effect.promise(() =>
       Bun.write(
@@ -254,7 +255,7 @@ await Effect.runPromise(
           pythonTypes
             .replace(
               "declare interface InitOutput {",
-              "declare interface InitOutput {\n    readonly __cirro_limits: (fuel: bigint, pages: number) => void;\n    readonly __cirro_fuel: WebAssembly.Global;\n    readonly asyncify_start_unwind: (pointer: number) => void;\n    readonly asyncify_stop_unwind: () => void;\n    readonly asyncify_start_rewind: (pointer: number) => void;\n    readonly asyncify_stop_rewind: () => void;\n    readonly asyncify_get_state: () => number;",
+              "declare interface InitOutput {\n    readonly __cirro_limits: (fuel: bigint, pages: number) => void;\n    readonly __cirro_fuel: WebAssembly.Global;\n    readonly __cirro_trap_reason: WebAssembly.Global;\n    readonly asyncify_start_unwind: (pointer: number) => void;\n    readonly asyncify_stop_unwind: () => void;\n    readonly asyncify_start_rewind: (pointer: number) => void;\n    readonly asyncify_stop_rewind: () => void;\n    readonly asyncify_get_state: () => number;",
             )
             .replaceAll("declare namespace cirroPython", "export declare namespace cirroPython")
             .replaceAll("declare function cirroPython", "export declare function cirroPython"),

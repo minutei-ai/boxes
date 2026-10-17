@@ -25,8 +25,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         .generate_name_section(false)
         .generate_producers_section(false)
         .parse_file(input)?;
-    if let Some(mode) = args.get(3) {
-        if mode != "--start" || args.len() != 5 {
+    if args.get(3).is_some_and(|mode| mode == "--start") {
+        if args.len() != 5 {
             return Err("Expected --start and an exported function name".into());
         }
         let export = module
@@ -41,6 +41,11 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         module.emit_wasm_file(output)?;
         return Ok(());
     }
+    let diagnostics = match args.get(3) {
+        None if args.len() == 3 => false,
+        Some(mode) if mode == "--trap-reason" && args.len() == 4 => true,
+        _ => return Err("Expected --trap-reason or --start and an exported function name".into()),
+    };
     let memories: Vec<_> = module.memories.iter().map(|memory| memory.id()).collect();
     if memories.len() != 1 {
         return Err("Meter requires exactly one memory".into());
@@ -59,6 +64,16 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         ConstExpr::Value(walrus::ir::Value::I32(1024)),
     );
     module.exports.add("__cirro_fuel", fuel);
+    let trap_reason = diagnostics.then(|| {
+        let reason = module.globals.add_local(
+            ValType::I32,
+            true,
+            false,
+            ConstExpr::Value(walrus::ir::Value::I32(0)),
+        );
+        module.exports.add("__cirro_trap_reason", reason);
+        reason
+    });
     let mut charge = FunctionBuilder::new(&mut module.types, &[], &[]);
     charge
         .func_body()
@@ -68,6 +83,9 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         .if_else(
             None,
             |body| {
+                if let Some(reason) = trap_reason {
+                    body.i32_const(1).global_set(reason);
+                }
                 body.unreachable();
             },
             |_| {},
@@ -89,6 +107,9 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         .if_else(
             None,
             |body| {
+                if let Some(reason) = trap_reason {
+                    body.i32_const(2).global_set(reason);
+                }
                 body.unreachable();
             },
             |_| {},
@@ -107,6 +128,9 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         .if_else(
             None,
             |body| {
+                if let Some(reason) = trap_reason {
+                    body.i32_const(3).global_set(reason);
+                }
                 body.unreachable();
             },
             |_| {},
@@ -115,6 +139,9 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         .global_set(fuel)
         .local_get(input_pages)
         .global_set(pages);
+    if let Some(reason) = trap_reason {
+        setter.func_body().i32_const(0).global_set(reason);
+    }
     let setter = setter.finish(vec![input_fuel, input_pages], &mut module.funcs);
     module.exports.add("__cirro_limits", setter);
     for (_, function) in module

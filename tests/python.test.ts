@@ -28,6 +28,7 @@ test("compiled Python ABI meters user instructions after bounded bootstrap and r
   expect(step.output.result).toEqual([0, 1, 4, 9]);
   expect(native.__cirro_fuel.value).toBeLessThan(1_000_000n);
   expect(native.__cirro_fuel.value).toBeGreaterThan(0n);
+  expect(native.__cirro_trap_reason.value).toBe(0);
   guest.free();
   const isolated = createBindings();
   const state = isolated.initSync({ module });
@@ -42,7 +43,10 @@ test("compiled Python ABI meters user instructions after bounded bootstrap and r
   state.__cirro_limits(1000n, 512);
   expect(() => exhausted.step()).toThrow();
   expect(state.__cirro_fuel.value).toBe(0n);
+  expect(state.__cirro_trap_reason.value).toBe(1);
   expect(() => exhausted.free()).not.toThrow();
+  state.__cirro_limits(1000n, 512);
+  expect(state.__cirro_trap_reason.value).toBe(0);
 });
 
 test("compiled Python memory ceiling rejects growth before allocation independently of its instruction budget", () => {
@@ -55,7 +59,12 @@ test("compiled Python memory ceiling rejects growth before allocation independen
   expect(() => guest.step()).toThrow();
   expect(native.memory.buffer.byteLength).toBe(size);
   expect(native.__cirro_fuel.value).toBeGreaterThan(0n);
+  expect(native.__cirro_trap_reason.value).toBe(2);
   guest.free();
+  expect(() => native.__cirro_limits(100_000_000n, size / 65_536 - 1)).toThrow();
+  expect(native.__cirro_trap_reason.value).toBe(3);
+  native.__cirro_limits(100_000_000n, size / 65_536);
+  expect(native.__cirro_trap_reason.value).toBe(0);
 });
 
 test("native Python suspension traps an exhausted saved stack before adopting a host request", () => {

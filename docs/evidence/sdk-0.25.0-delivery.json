@@ -1,5 +1,5 @@
 {
-  "status": "published and deployed; production proofs passed; Minutei updated locally; initial binding assertion failure remains unexplained",
+  "status": "published and deployed; production reruns and local Minutei passed; intermittent retained Python failure reproduced in CI",
   "version": "0.25.0",
   "implementationCommit": "1257917145ebe37b9445537d55c1eb7cb8b204a3",
   "localEvidence": "python-filesystem-local.json",
@@ -3212,9 +3212,27 @@
     "typecheck": "passed",
     "format": "passed",
     "ciRunId": 39008317836,
-    "ciConclusion": "in progress",
+    "ciConclusion": "failure",
     "fixtureSha256": "302e7c7931392820195e29a5eba36d49037528cf0702413d2f5b6d23cbf1a5a9",
     "packageProofLogSha256": "ffd622af23b187f3c56a270251a7d72de0ab3c472e71e6ee714c516e3650ddd8",
-    "retainedDiagnosisOperatorSha256": "c1e3166dc5f170acc58cfd35c11749eec4e51d8fa0501e0d43d6b04debb42d02"
+    "retainedDiagnosisOperatorSha256": "c1e3166dc5f170acc58cfd35c11749eec4e51d8fa0501e0d43d6b04debb42d02",
+    "failedStage": "native package proof",
+    "observedFailure": {
+      "process": "python-denied",
+      "phase": "retained resume",
+      "status": "failed",
+      "output": null,
+      "cause": "RuntimeError: unreachable",
+      "fuelRemaining": "99998051",
+      "memoryBytes": 13369344,
+      "resourceTrap": "not exported by this build",
+      "logSha256": "020d4fd6a3d7c77f6167bc09d87d894423d462cd60f41c4b967a71379aa15e7e"
+    },
+    "subsequentDocumentationCi": {
+      "runId": 39008508248,
+      "conclusion": "success",
+      "commit": "74b41eb1be3e66a12d888ac46ddff8769954682a",
+      "note": "Same runtime and binding fixture, documentation-only changes; this passing run does not identify the intermittent failure."
+    }
   }
 }

@@ -26,6 +26,7 @@ class PythonFailure extends Schema.TaggedError<PythonFailure>()("PythonFailure",
   cause: Schema.Unknown,
   fuelRemaining: Schema.optionalKey(Schema.String),
   memoryBytes: Schema.optionalKey(Schema.Int),
+  resourceTrap: Schema.optionalKey(Schema.Int),
 }) {}
 export const python = Effect.fn("python.execute")(function* (
   env: Env,
@@ -174,6 +175,7 @@ export const python = Effect.fn("python.execute")(function* (
             cause,
             fuelRemaining: String(native.state.__cirro_fuel.value),
             memoryBytes: native.state.memory.buffer.byteLength,
+            resourceTrap: Number(native.state.__cirro_trap_reason.value),
           }),
       }),
     };
@@ -254,6 +256,7 @@ export const python = Effect.fn("python.execute")(function* (
             cause,
             fuelRemaining: String(native.state.__cirro_fuel.value),
             memoryBytes: native.state.memory.buffer.byteLength,
+            resourceTrap: Number(native.state.__cirro_trap_reason.value),
           }),
       });
     }

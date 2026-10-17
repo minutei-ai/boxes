@@ -37,3 +37,9 @@ jobs:
       - run: bun pm pack --ignore-scripts --destination /tmp/boxes-package-check
       - run: bun run pack:runtime /tmp/boxes-package-check
       - run: bun run package:proof /tmp/boxes-package-check/minutei-ai-boxes-[0-9]*.tgz /tmp/boxes-package-check/minutei-ai-boxes-runtime-[0-9]*.tgz
+      - uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: python-failure-${{ github.run_id }}
+          path: dist/python/
+          retention-days: 3

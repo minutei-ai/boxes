@@ -1,0 +1,69 @@
+{
+  "status": "diagnosis in progress; no runtime fix or new release claimed",
+  "baseline": {
+    "release": "sdk-v0.25.0",
+    "wasmSha256": "4e1878eedc95dece9518550c836f5930e1478977bff5f467c9ac1993fadad124",
+    "ciFailure": {
+      "process": "python-denied",
+      "phase": "retained resume",
+      "status": "failed",
+      "output": null,
+      "cause": "RuntimeError: unreachable",
+      "fuelRemaining": "99998051",
+      "memoryBytes": 13369344,
+      "resourceTrap": "not exported by this build",
+      "logSha256": "020d4fd6a3d7c77f6167bc09d87d894423d462cd60f41c4b967a71379aa15e7e"
+    },
+    "failingRun": 39008317836,
+    "passingSameSourceRuntimeRun": 39008508248
+  },
+  "hypotheses": [
+    "A refused memory growth may explain the observed native trap, but remaining fuel and physical memory alone do not prove that cause.",
+    "Asyncify, interpreter state or another native failure remains possible until the trap indicator or an exact failing artifact identifies it."
+  ],
+  "instrumentation": {
+    "implementation": "Rust Wasm meter, opt-in --trap-reason used by Python build only",
+    "export": "__cirro_trap_reason",
+    "codes": {
+      "0": "unclassified native trap or normal execution",
+      "1": "instruction fuel exhausted",
+      "2": "memory growth exceeded configured page ceiling",
+      "3": "limit setter received a ceiling below existing memory"
+    },
+    "validLimitSetterClearsReason": true,
+    "pythonFailurePreserves": ["cause", "fuelRemaining", "memoryBytes", "resourceTrap"],
+    "fixtureBudgetsChanged": false,
+    "nonPythonRuntimeBytesChanged": false,
+    "diagnosticPythonSha256": "2b9d9bacd7ddbc0d4bc02783b862e984b33e1448f9a8d1e9adc85b80e49cb93b",
+    "publication": "unreleased source; diagnostic runtime archive stays outside Git and does not replace public 0.25 assets"
+  },
+  "local": {
+    "focusedTests": {
+      "passed": 9,
+      "failed": 0,
+      "assertions": 100,
+      "files": 3,
+      "seconds": 14.38
+    },
+    "extendedAbiTests": {
+      "passed": 6,
+      "failed": 0,
+      "assertions": 46,
+      "seconds": 1.302
+    },
+    "typecheck": "passed",
+    "meterClippy": "passed",
+    "nativePackageProofStress": "running; exact existing archived-SDK proof, bounded to eight fresh processes, stop on first failure"
+  },
+  "ciArtifacts": {
+    "on": "check failure",
+    "path": "dist/python/",
+    "retentionDays": 3,
+    "purpose": "retain the exact generated native binary and revision for frame-level diagnosis"
+  },
+  "limits": [
+    "No failed guest execution is retried by the runtime.",
+    "No capability, fuel, memory, request or fixture limit has been relaxed.",
+    "Python FileIO and descriptor lifetime work remains open while this failure is investigated."
+  ]
+}
