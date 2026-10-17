@@ -1,5 +1,5 @@
 {
-  "status": "Source implementation validated locally. Published 0.21.0 and production remain unchanged; new archives and remote delivery are pending.",
+  "status": "Local Queue/cron context verification passed. Published SDK/runtime 0.22.0 and production validation are recorded separately in sdk-0.22.0-delivery.json.",
   "baseCommit": "fccd3ce6ae6a53b68456382ab7cb8131863d4e4c",
   "change": "Capture retained language context ID and generation in detached processes and schedules; acquire the original generation on Queue delivery without capturing request-scoped callbacks.",
   "persistence": {
@@ -64,7 +64,7 @@
     "A real pending cron occurrence with an already reserved process was incorrectly marked failed after reset because new admission rejected its generation before EEXIST. Reproduced natively with 1 failing assertion; recovery now reads the deterministic existing receipt on admission faults, verifies its captured context reference and records acceptance without replay."
   ],
   "limits": [
-    "No new archives, SDK publication, Alchemy deployment or production Queue/cron proof yet. Published 0.21.0 rejects detached context selectors.",
+    "This record establishes local source behavior; sdk-0.22.0-delivery.json owns exact archives, publication and production delivery.",
     "Language execution completes in one Worker invocation; native WASI checkpoint handover does not imply JavaScript/Python in-flight recovery.",
     "Context heap publication and process settlement are separate R2 writes; uncertain execution is never replayed.",
     "Pre-cutover ETag fencing is verified; interactions with an old Worker still executing during production rollout remain unproven.",

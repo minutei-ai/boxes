@@ -11,7 +11,7 @@ Licensed under [Apache 2.0](LICENSE). Maintained by [Minutei AI](https://github.
 - Rust filesystem kernel with directories, files, modes, relative symlinks, rename, append and truncate.
 - Rust QuickJS for JavaScript, Oxc for TypeScript and Wasmi for Wasm/WASI, inside one ordinary Worker.
 - JavaScript/TypeScript script execution, expression evaluation and execution of files with sandbox imports, reexports, cycles and symlinks.
-- Retained JavaScript/TypeScript/Python contexts through `contextId`, native Rust heaps, R2 pages and the `Agent` service binding; source 0.22.0 also supports queued and scheduled execution with captured generations.
+- Retained JavaScript/TypeScript/Python contexts through `contextId`, native Rust heaps, R2 pages and the `Agent` service binding; queued and scheduled execution with captured generations is included in 0.22.0.
 - A bounded shell with pipes, redirection, conditionals and initial commands.
 - Alchemy-provisioned default software in shared immutable R2 blocks, with copy-on-write and a separate private-byte quota. The [image evidence](docs/evidence/default-software-full-local.json) records the tested commands and remaining gaps.
 - Capability tokens scoped to one sandbox, permission set and expiration.
