@@ -1,5 +1,5 @@
 {
-  "status": "diagnosis in progress; no runtime fix or new release claimed",
+  "status": "CI failure identified as a configured memory-growth rejection; complex proof capacity corrected locally; remote proof in progress",
   "baseline": {
     "release": "sdk-v0.25.0",
     "wasmSha256": "4e1878eedc95dece9518550c836f5930e1478977bff5f467c9ac1993fadad124",
@@ -18,8 +18,7 @@
     "passingSameSourceRuntimeRun": 39008508248
   },
   "hypotheses": [
-    "A refused memory growth may explain the observed native trap, but remaining fuel and physical memory alone do not prove that cause.",
-    "Asyncify, interpreter state or another native failure remains possible until the trap indicator or an exact failing artifact identifies it."
+    "The CI trap is identified by exact memory-growth guard decoding and matched reconstructed V8 frames. The source of allocation variation between passing and failing runs has not been measured; passing reruns alone did not establish the cause."
   ],
   "instrumentation": {
     "implementation": "Rust Wasm meter, opt-in --trap-reason used by Python build only",
@@ -32,10 +31,10 @@
     },
     "validLimitSetterClearsReason": true,
     "pythonFailurePreserves": ["cause", "fuelRemaining", "memoryBytes", "resourceTrap"],
-    "fixtureBudgetsChanged": false,
     "nonPythonRuntimeBytesChanged": false,
     "diagnosticPythonSha256": "2b9d9bacd7ddbc0d4bc02783b862e984b33e1448f9a8d1e9adc85b80e49cb93b",
-    "publication": "unreleased source; diagnostic runtime archive stays outside Git and does not replace public 0.25 assets"
+    "publication": "unreleased source; diagnostic runtime archive stays outside Git and does not replace public 0.25 assets",
+    "changedLimits": false
   },
   "local": {
     "focusedTests": {
@@ -126,6 +125,22 @@
       "afterStack": 6094848,
       "afterBootstrap": 7995392,
       "stackPointer": 4980744
+    },
+    "exactCiPackageStress": {
+      "passed": 8,
+      "failed": 0,
+      "budgetsUnchanged": true,
+      "logSha256": [
+        "12223ea7061620bfb2679456759d3216b1320c019917ebb3deeb8b13ecdcc702",
+        "c67d3f07a678e8c1ba2ad65550b1983d99f4637cef7a3f6bf8f50978438c0e7f",
+        "fe4cef02a34263520e24dd22fccbb2260dded4555b0a32c718c3dfb52318eacf",
+        "6c6aa2db4d66b8be37a2703e1a2ac158ed082f963aa3405de7270d3ca55e378f",
+        "26afa2a2c9e6b8e01a7271f01e994392c412220f3f21dd7ee139168d55da977f",
+        "3fa123b4be6cf8e6a64d0b733519700ebb507b47fb86858d53f74cf852331aab",
+        "02f0d1c605e75b2e15403fa646ceee77eafefd36d5ecb3f1558836b2c7773e29",
+        "be17631902d4f5cdc0bdeb3a275184ea98747d050e2bcd5e9f75c6a96b230a4d"
+      ],
+      "scope": "Actual downloaded CI SDK/runtime bytes through the existing native workerd package proof; passing stress alone did not identify the failure."
     }
   },
   "ciArtifacts": {
@@ -138,9 +153,138 @@
   },
   "limits": [
     "No failed guest execution is retried by the runtime.",
-    "No capability, fuel, memory, request or fixture limit has been relaxed.",
-    "Python FileIO and descriptor lifetime work remains open while this failure is investigated."
+    "Product, fuel, request and capability limits are unchanged. Only the complex proof sandbox memory reservation changes.",
+    "Python FileIO and descriptor lifetime remain open parity work.",
+    "The first generic production assertion cannot be attributed because its original observed result was discarded."
   ],
   "diagnosticSourceCommit": "33b0a12f8a7f6e4591bfe234650e7d4d70f6d9bc",
-  "diagnosticCiRun": 39009247716
+  "diagnosticCiRun": 39009247716,
+  "cause": {
+    "kind": "configured memory ceiling",
+    "failedInstruction": "memory-growth guard unreachable at wasm function 20086, offset 0xefe679",
+    "policyMemoryBytes": 8388608,
+    "engineBaselineBytes": 4980736,
+    "physicalCeilingBytes": 13369344,
+    "nativeLimitEnforcementWasCorrect": true,
+    "authorizationAssertionsWereNotRelaxed": true,
+    "scope": "This identifies the CI python-denied trap. The first production generic assertion discarded its result, so its cause cannot be independently attributed."
+  },
+  "forensics": {
+    "roundtripIdenticalToDownloadedCiBinary": true,
+    "diagnosticCiWasmSha256": "dddb1a2cb7c5b1f846e9444180e67c4a4d8e9091b99efc50ad1121f8e9d0295d",
+    "removedDiagnosticAssignments": 4,
+    "reconstructedUninstrumentedReasonWasmSha256": "770c79de816ceb63e491a2a573e77bc62add21859d98f097343ce21bbd48c858",
+    "v8ModuleId": "04a092ae",
+    "allTenFramesMatchCiFailure": true,
+    "frames": [
+      {
+        "function": 20086,
+        "offset": "0xefe679"
+      },
+      {
+        "function": 19381,
+        "offset": "0xeeff3d"
+      },
+      {
+        "function": 308,
+        "offset": "0x2c5f72"
+      },
+      {
+        "function": 9425,
+        "offset": "0xbe1042"
+      },
+      {
+        "function": 20020,
+        "offset": "0xefdf82"
+      },
+      {
+        "function": 20181,
+        "offset": "0xefed91"
+      },
+      {
+        "function": 5989,
+        "offset": "0xa13c54"
+      },
+      {
+        "function": 12040,
+        "offset": "0xce935b"
+      },
+      {
+        "function": 407,
+        "offset": "0x3241df"
+      },
+      {
+        "function": 5409,
+        "offset": "0x9ad14f"
+      }
+    ],
+    "experiment": "Native RustPython ABI, same reconstructed V8 module; allocate a list after setting the page ceiling to current physical memory. No filesystem or authorization substitute.",
+    "originalCiFailure": {
+      "fuelRemaining": "99998051",
+      "memoryBytes": 13369344
+    },
+    "controlledGrowthRejection": {
+      "fuelRemaining": "99999863",
+      "memoryBytes": 6946816
+    },
+    "scope": "The old CI SHA was not retained. Reconstruction is validated by an exact-byte diagnostic roundtrip, the identical V8 module id, all ten frames, and the decoded memory-growth guard instruction.",
+    "operatorSha256": "8cb4b8a604fc9d4487f5d3e998c504695379e6ece994aa4816afd95863f75064",
+    "probeSha256": "cc9a97f3f21843493e3e9bf817bc02bac79c2cd8756b4ed2068df9f01cab3d0d",
+    "originalLogSha256": "020d4fd6a3d7c77f6167bc09d87d894423d462cd60f41c4b967a71379aa15e7e",
+    "probeLogSha256": "8997a8082989e89e915e0837776c540dea812b772b4c87c9f314cf4100efbe1a",
+    "memoryGrowthGuard": {
+      "function": 20086,
+      "functionImports": 16,
+      "bodyOffset": "0xefe66e",
+      "bodyBytes": 19,
+      "bodyHex": "0023063f006b200049044000050b200040000b",
+      "trappingOpcodeOffset": "0xefe679",
+      "decodedGuard": "global.get 6 (pageLimit); memory.size; i32.sub; local.get 0 (requestedPages); i32.lt_u; if; unreachable; else; end; local.get 0; memory.grow"
+    }
+  },
+  "diagnosticCi": [
+    {
+      "runId": 39009247716,
+      "commit": "33b0a12f8a7f6e4591bfe234650e7d4d70f6d9bc",
+      "conclusion": "success"
+    },
+    {
+      "runId": 39009467965,
+      "commit": "2dd002da5fcb0ea5ed1dc087c341cbecfab1ccd8",
+      "conclusion": "success"
+    }
+  ],
+  "downloadedCiArtifact": {
+    "runId": 39009467965,
+    "artifactId": 12092540974,
+    "name": "packages-39009467965",
+    "zipDigest": "sha256:d8b7a325bdd7e2ef92e5c860de14517988fb656738902cf5f8567f8108a86f2f",
+    "zipBytes": 7143813,
+    "archives": {
+      "boxes": {
+        "bytes": 87869,
+        "sha256": "2bfbb3898c01cf78851204db6da2ad240bfbe692d6d526970fdb1059621aa496"
+      },
+      "boxes-runtime": {
+        "bytes": 7154978,
+        "sha256": "bcfb4c08ea73fb03b3227a397965ffcf1b28f521986b7b51f0a977dbd8f28bab",
+        "pythonWasmSha256": "dddb1a2cb7c5b1f846e9444180e67c4a4d8e9091b99efc50ad1121f8e9d0295d",
+        "pythonWasmBytes": 19408086,
+        "samePythonAsLocalDiagnostic": false
+      }
+    }
+  },
+  "fixtureCorrection": {
+    "packageProof": "package-terminal sandbox, containing the retained stdlib/module workload, receives 16 MiB instead of 8 MiB",
+    "remoteProof": "shared full-proof sandbox receives 16 MiB instead of 8 MiB",
+    "changedProductDefaults": false,
+    "changedGuestPermissions": false,
+    "changedExpectedResults": false,
+    "changedInstructionLimits": false,
+    "changedNegativeMemoryProbes": false,
+    "negativeEvidence": "Existing native ABI memory-growth rejection tests retain their ceiling. Package persistent-driver tests still explicitly clamp policy to 8 MiB and reject a 20,000,000-byte allocation; remote persistent-driver test still rejects that allocation under its 16 MiB policy.",
+    "localPackageProof": "passed with exact downloaded CI archives",
+    "localPackageProofLogSha256": "49ae31df5311e039d5d5f3063e1c3553ceba607ecde002fa47be899c3f9fea45",
+    "remote": "running against existing 0.25 production runtime; no deployment or customer context reset"
+  }
 }

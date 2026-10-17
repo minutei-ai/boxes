@@ -1,5 +1,5 @@
 {
-  "status": "published and deployed; production reruns and local Minutei passed; intermittent retained Python failure reproduced in CI",
+  "status": "published and deployed; production reruns and local Minutei passed; CI retained Python trap identified as proof memory exhaustion",
   "version": "0.25.0",
   "implementationCommit": "1257917145ebe37b9445537d55c1eb7cb8b204a3",
   "localEvidence": "python-filesystem-local.json",
@@ -3233,6 +3233,11 @@
       "conclusion": "success",
       "commit": "74b41eb1be3e66a12d888ac46ddff8769954682a",
       "note": "Same runtime and binding fixture, documentation-only changes; this passing run does not identify the intermittent failure."
+    },
+    "ciFailureDiagnosis": {
+      "cause": "native memory-growth guard correctly rejected additional pages at the complex proof sandbox ceiling",
+      "evidence": "python-trap-diagnosis.json",
+      "proofCapacityCorrection": "current source reserves 16 MiB for the retained-stdlib proof; product limits and expected authorization results are unchanged"
     }
   }
 }

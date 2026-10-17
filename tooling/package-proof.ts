@@ -353,7 +353,7 @@ await Effect.runPromise(
         policy: {
           networkHosts: [],
           interruptBudget: 100000,
-          memoryBytes: 8388608,
+          memoryBytes: 16_777_216,
           maxOutputBytes: 1048576,
         },
       });
