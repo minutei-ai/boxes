@@ -40,7 +40,15 @@ export const VerifiedRetainedBindingProof = RetainedBindingProof.check(
         proof.driver.value === 41 &&
         proof.python.records.length === 2 &&
         proof.python.records[0]?.output?.result === null &&
-        proof.python.records[1]?.output?.result === 41 &&
+        Schema.is(
+          Schema.Tuple([
+            Schema.Literal(41),
+            Schema.Literal(41),
+            Schema.Literal(42),
+            Schema.Literal("café"),
+            Schema.Literal("ação"),
+          ]),
+        )(proof.python.records[1]?.output?.result) &&
         !proof.python.deleted &&
         proof.python.context.generation === 0 &&
         !proof.deleted &&
@@ -66,9 +74,21 @@ export const VerifiedRetainedBindingProof = RetainedBindingProof.check(
             Schema.Literal(2),
           ]),
           Schema.Literal(false),
+          Schema.Literal(42),
+          Schema.Literal(42),
+          Schema.Literal("café"),
+          Schema.Literal("ação"),
+          Schema.Literal(true),
         ]),
       )(proof.python.records[0]?.output?.result) &&
-      proof.python.records[1]?.output?.result === "FORBIDDEN" &&
+      Schema.is(
+        Schema.Tuple([
+          Schema.Literal("FORBIDDEN"),
+          Schema.Literal("FORBIDDEN"),
+          Schema.Literal("c2VlZA=="),
+          Schema.Literal("c2VlZA=="),
+        ]),
+      )(proof.python.records[1]?.output?.result) &&
       proof.python.records[2]?.output?.result === false &&
       proof.python.deleted &&
       proof.python.context.generation === 1 &&
@@ -96,6 +116,31 @@ export const retainedBindingProof = Effect.fn("fixture.retainedBindingProof")(fu
   const python = yield* Effect.gen(function* () {
     if (input.phase === "create") {
       yield* client.action(input.sandboxId, {
+        op: "filesystem.mkdir",
+        path: "/tmp/python_pkg",
+        recursive: true,
+      });
+      for (const [path, content] of [
+        ["/tmp/python_pkg/__init__.py", "from .leaf import answer\n"],
+        ["/tmp/python_pkg/leaf.py", "answer=42\n"],
+        [
+          "/tmp/python_counter.py",
+          "import _boxes_io\nsaved_call=_boxes_io.call\nsaved_call({'op':'filesystem.writeFile','path':'/tmp/python-module-grant','content':'seed','encoding':'utf8'})\nvalue=40\nlabel='ação'\ndef next():\n global value\n value+=1\n return value\ndef write():\n return saved_call({'op':'filesystem.writeFile','path':'/tmp/python-module-grant','content':'bad','encoding':'utf8'})\n",
+        ],
+      ] as const)
+        yield* client.action(input.sandboxId, {
+          op: "filesystem.writeFile",
+          path,
+          content,
+          encoding: "utf8",
+        });
+      yield* client.action(input.sandboxId, {
+        op: "filesystem.writeFile",
+        path: "/tmp/python_latin.py",
+        encoding: "base64",
+        content: "IyBjb2Rpbmc6IGxhdGluLTEKbGFiZWw9J2NhZuknCg==",
+      });
+      yield* client.action(input.sandboxId, {
         op: "contexts.create",
         id: "retained-python",
         language: "python",
@@ -106,13 +151,14 @@ export const retainedBindingProof = Effect.fn("fixture.retainedBindingProof")(fu
         contextId: "retained-python",
         env: { MODE: "seed" },
         source:
-          "import os, json, re, functools\nfrom collections import Counter\nfrom _thread import RLock\nsaved_lock=RLock()\nassert not hasattr(saved_lock.acquire,'__code__')\nsaved_lock.acquire()\nsaved_lock.acquire()\ncounts=Counter('boxes')\n@functools.lru_cache(maxsize=8)\ndef cached(value):\n return value*2\nencoded=json.dumps({'value':cached(21),'text':'ação'},ensure_ascii=False)\ndef factory():\n n=40\n def next():\n  nonlocal n\n  n+=1\n  return n\n return next\nnext_value=factory()\nasync def saved_write(value):\n return await tools.call({'op':'filesystem.writeFile','path':'/tmp/python-grant','content':value,'encoding':'utf8'})\nawait saved_write('seed')\ndef from_library():\n return [json.loads(encoded),re.findall(r'[a-z]+','box 42 native'),counts['b'],cached(21),saved_lock._recursion_count()]",
+          "import os, json, re, functools\nfrom collections import Counter\nfrom _thread import RLock\nimport python_counter,python_pkg,python_latin\nsaved_lock=RLock()\nassert not hasattr(saved_lock.acquire,'__code__')\nsaved_lock.acquire()\nsaved_lock.acquire()\ncounts=Counter('boxes')\n@functools.lru_cache(maxsize=8)\ndef cached(value):\n return value*2\nencoded=json.dumps({'value':cached(21),'text':'ação'},ensure_ascii=False)\ndef factory():\n n=40\n def next():\n  nonlocal n\n  n+=1\n  return n\n return next\nnext_value=factory()\nasync def saved_write(value):\n return await tools.call({'op':'filesystem.writeFile','path':'/tmp/python-grant','content':value,'encoding':'utf8'})\nawait saved_write('seed')\ndef from_library():\n return [json.loads(encoded),re.findall(r'[a-z]+','box 42 native'),counts['b'],cached(21),saved_lock._recursion_count()]",
       });
       const record = yield* client.action(input.sandboxId, {
         op: "python.evaluate",
         id: "python-initial-value",
         contextId: "retained-python",
-        expression: "next_value()",
+        expression:
+          "[next_value(),python_counter.next(),python_pkg.answer,python_latin.label,python_counter.label]",
       });
       return {
         context: yield* client.action(input.sandboxId, {
@@ -129,14 +175,14 @@ export const retainedBindingProof = Effect.fn("fixture.retainedBindingProof")(fu
       contextId: "retained-python",
       env: { MODE: "current" },
       source:
-        "prior=from_library()\nsaved_lock.release()\nsaved_lock.release()\ncontent=await tools.call({'op':'filesystem.readFile','path':'/tmp/python-grant'})\n[next_value(),os.getenv('MODE'),content['content'],prior,saved_lock.locked()]",
+        "prior=from_library()\nsaved_lock.release()\nsaved_lock.release()\ncontent=await tools.call({'op':'filesystem.readFile','path':'/tmp/python-grant'})\nimport python_counter\n[next_value(),os.getenv('MODE'),content['content'],prior,saved_lock.locked(),python_counter.next(),python_pkg.answer,python_latin.label,python_counter.label,__import__('python_counter') is python_counter]",
     });
     const denied = yield* client.action(input.sandboxId, {
       op: "python.execute",
       id: "python-denied",
       contextId: "retained-python",
       source:
-        "try:\n await saved_write('bad')\nexcept RuntimeError as error:\n denied=error.error\ndenied",
+        "try:\n await saved_write('bad')\nexcept RuntimeError as error:\n denied=error.error\ntry:\n python_counter.write()\nexcept PermissionError as error:\n module_denied=error.error\ncurrent=await tools.call({'op':'filesystem.readFile','path':'/tmp/python-grant'})\nmodule_current=await tools.call({'op':'filesystem.readFile','path':'/tmp/python-module-grant'})\n[denied,module_denied,current['content'],module_current['content']]",
     });
     yield* client.action(input.sandboxId, { op: "contexts.reset", id: "retained-python" });
     const cleared = yield* client.action(input.sandboxId, {

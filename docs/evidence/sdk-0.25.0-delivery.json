@@ -1,0 +1,328 @@
+{
+  "status": "candidate validation complete; publication and deployment pending",
+  "version": "0.25.0",
+  "implementationCommit": "1257917145ebe37b9445537d55c1eb7cb8b204a3",
+  "localEvidence": "python-filesystem-local.json",
+  "pythonWasmSha256": "4e1878eedc95dece9518550c836f5930e1478977bff5f467c9ac1993fadad124",
+  "upgrade": "Existing Python heaps require explicit reset before entry. JavaScript, WASI, kernel and compiler binaries are unchanged from 0.24.0.",
+  "publication": {
+    "status": "pending"
+  },
+  "production": {
+    "status": "pending",
+    "profile": "minutei"
+  },
+  "minutei": {
+    "status": "pending; no application push or deployment authorized"
+  },
+  "limitations": [
+    "Synchronous open/descriptors, full Python stdlib, pip and complete AgentOS parity remain open.",
+    "Production cost and latency comparison remain unverified."
+  ],
+  "ci": {
+    "implementation": {
+      "runId": 39006372606,
+      "conclusion": "success",
+      "commit": "1257917145ebe37b9445537d55c1eb7cb8b204a3"
+    }
+  },
+  "candidate": {
+    "archives": [
+      {
+        "name": "minutei-ai-boxes-0.25.0.tgz",
+        "bytes": 87869,
+        "sha256": "2bfbb3898c01cf78851204db6da2ad240bfbe692d6d526970fdb1059621aa496"
+      },
+      {
+        "name": "minutei-ai-boxes-runtime-0.25.0.tgz",
+        "bytes": 7152963,
+        "sha256": "33c3228250a8ae3222d2df33d4ea3b8d5eda16df6f2d9818301cad8e0562167f"
+      }
+    ],
+    "packageProof": {
+      "status": "passed",
+      "transport": "native Alchemy workerd service binding and Agent RPC; local R2 and Queue",
+      "retainedContexts": [
+        {
+          "phase": "create",
+          "context": {
+            "id": "retained",
+            "language": "javascript",
+            "generation": 0,
+            "state": "idle",
+            "createdAt": 1792215288630,
+            "updatedAt": 1792215288819,
+            "executionId": "retained-first",
+            "deadlineAt": null
+          },
+          "records": [
+            {
+              "id": "retained-seed",
+              "context": {
+                "id": "retained",
+                "generation": 0
+              },
+              "status": "exited",
+              "sourceHash": "488ea9e6613986c876e109697e04010a3e6d16a8b89107feef55c722cbf3cdc0",
+              "language": "javascript",
+              "startedAt": 1792215288653,
+              "finishedAt": 1792215288716,
+              "output": {
+                "stdout": "",
+                "stderr": "",
+                "result": null,
+                "exitCode": 0
+              }
+            },
+            {
+              "id": "retained-first",
+              "context": {
+                "id": "retained",
+                "generation": 0
+              },
+              "status": "exited",
+              "sourceHash": "c737d8cb92926ce3263c827bacf2533abd4d84128402215f8854442f180ee25e",
+              "language": "typescript",
+              "startedAt": 1792215288741,
+              "finishedAt": 1792215288836,
+              "output": {
+                "stdout": "",
+                "stderr": "",
+                "result": {
+                  "counter": 41,
+                  "tool": 11
+                },
+                "exitCode": 0
+              }
+            }
+          ],
+          "callbacks": 1,
+          "deleted": false,
+          "driver": {
+            "value": 41,
+            "closedDenied": true
+          },
+          "python": {
+            "context": {
+              "id": "retained-python",
+              "language": "python",
+              "generation": 0,
+              "state": "idle",
+              "createdAt": 1792215286752,
+              "updatedAt": 1792215288447,
+              "executionId": "python-initial-value",
+              "deadlineAt": null
+            },
+            "records": [
+              {
+                "id": "python-seed",
+                "context": {
+                  "id": "retained-python",
+                  "generation": 0
+                },
+                "status": "exited",
+                "sourceHash": "1947dbd2848102b040db9845e79682c921d5c9fb6c636e295fea7c365d1706cc",
+                "language": "python",
+                "startedAt": 1792215286784,
+                "finishedAt": 1792215287975,
+                "output": {
+                  "stdout": "",
+                  "stderr": "",
+                  "result": null,
+                  "exitCode": 0
+                }
+              },
+              {
+                "id": "python-initial-value",
+                "context": {
+                  "id": "retained-python",
+                  "generation": 0
+                },
+                "status": "exited",
+                "sourceHash": "ac3767b4380964b6a64650d387ccfde873b42d5d39677bcb0c06feb35ad24b7e",
+                "language": "python",
+                "startedAt": 1792215288004,
+                "finishedAt": 1792215288457,
+                "output": {
+                  "stdout": "",
+                  "stderr": "",
+                  "result": [41, 41, 42, "caf\u00e9", "a\u00e7\u00e3o"],
+                  "exitCode": 0
+                }
+              }
+            ],
+            "deleted": false
+          }
+        },
+        {
+          "phase": "resume",
+          "context": {
+            "id": "retained",
+            "language": "javascript",
+            "generation": 1,
+            "state": "idle",
+            "createdAt": 1792215288630,
+            "updatedAt": 1792215290704,
+            "executionId": "retained-cleared",
+            "deadlineAt": null
+          },
+          "records": [
+            {
+              "id": "retained-next",
+              "context": {
+                "id": "retained",
+                "generation": 0
+              },
+              "status": "exited",
+              "sourceHash": "3c22822d46020f61fe10c63a93980c727ad77aed61725d9db04ecb258923c2e9",
+              "language": "typescript",
+              "startedAt": 1792215290371,
+              "finishedAt": 1792215290476,
+              "output": {
+                "stdout": "resumed\n",
+                "stderr": "",
+                "result": {
+                  "counter": 42,
+                  "tool": 42
+                },
+                "exitCode": 0
+              }
+            },
+            {
+              "id": "retained-denied",
+              "context": {
+                "id": "retained",
+                "generation": 0
+              },
+              "status": "exited",
+              "sourceHash": "f50b5c5b802ebe9743e9168ae29de3e0d7f4f086af80941aeda60afff8280ca6",
+              "language": "typescript",
+              "startedAt": 1792215290502,
+              "finishedAt": 1792215290602,
+              "output": {
+                "stdout": "",
+                "stderr": "",
+                "result": "FORBIDDEN",
+                "exitCode": 0
+              }
+            },
+            {
+              "id": "retained-cleared",
+              "context": {
+                "id": "retained",
+                "generation": 1
+              },
+              "status": "exited",
+              "sourceHash": "f8bd8ff550ea459186702ffdcb169dc0e5b5076958ff032c59e77c248c01a345",
+              "language": "javascript",
+              "startedAt": 1792215290642,
+              "finishedAt": 1792215290714,
+              "output": {
+                "stdout": "",
+                "stderr": "",
+                "result": "undefined",
+                "exitCode": 0
+              }
+            }
+          ],
+          "callbacks": 1,
+          "deleted": true,
+          "driver": {
+            "value": 42,
+            "closedDenied": true
+          },
+          "python": {
+            "context": {
+              "id": "retained-python",
+              "language": "python",
+              "generation": 1,
+              "state": "idle",
+              "createdAt": 1792215286752,
+              "updatedAt": 1792215290186,
+              "executionId": "python-cleared",
+              "deadlineAt": null
+            },
+            "records": [
+              {
+                "id": "python-resume",
+                "context": {
+                  "id": "retained-python",
+                  "generation": 0
+                },
+                "status": "exited",
+                "sourceHash": "7221fcf3c9bae3fd479b1923e9a1f57243e1a26a3990f05eb91f6486b61d1520",
+                "language": "python",
+                "startedAt": 1792215288890,
+                "finishedAt": 1792215289346,
+                "output": {
+                  "stdout": "",
+                  "stderr": "",
+                  "result": [
+                    42,
+                    "current",
+                    "c2VlZA==",
+                    [
+                      {
+                        "text": "a\u00e7\u00e3o",
+                        "value": 42
+                      },
+                      ["box", "native"],
+                      1,
+                      42,
+                      2
+                    ],
+                    false,
+                    42,
+                    42,
+                    "caf\u00e9",
+                    "a\u00e7\u00e3o",
+                    true
+                  ],
+                  "exitCode": 0
+                }
+              },
+              {
+                "id": "python-denied",
+                "context": {
+                  "id": "retained-python",
+                  "generation": 0
+                },
+                "status": "exited",
+                "sourceHash": "7f0cebbf318bcd74f4264654659acfb1b94338bfa420459f04f9240207991c05",
+                "language": "python",
+                "startedAt": 1792215289378,
+                "finishedAt": 1792215289806,
+                "output": {
+                  "stdout": "",
+                  "stderr": "",
+                  "result": ["FORBIDDEN", "FORBIDDEN", "c2VlZA==", "c2VlZA=="],
+                  "exitCode": 0
+                }
+              },
+              {
+                "id": "python-cleared",
+                "context": {
+                  "id": "retained-python",
+                  "generation": 1
+                },
+                "status": "exited",
+                "sourceHash": "703d590e2831eb0a587bb76aa83bf423dbd948db3193606373ad9255c295fe15",
+                "language": "python",
+                "startedAt": 1792215289846,
+                "finishedAt": 1792215290196,
+                "output": {
+                  "stdout": "",
+                  "stderr": "",
+                  "result": false,
+                  "exitCode": 0
+                }
+              }
+            ],
+            "deleted": true
+          }
+        }
+      ]
+    },
+    "checksumsSha256": "24f8f368bdf0d5d7c67a6c7f11a5f5d46bae430c61a1eb0fe81e834acd1ac48b"
+  }
+}
