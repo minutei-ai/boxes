@@ -38,8 +38,9 @@ export const VerifiedRetainedBindingProof = RetainedBindingProof.check(
     if (proof.phase === "create")
       return (
         proof.driver.value === 41 &&
-        proof.python.records.length === 1 &&
-        proof.python.records[0]?.output?.result === 41 &&
+        proof.python.records.length === 2 &&
+        proof.python.records[0]?.output?.result === null &&
+        proof.python.records[1]?.output?.result === 41 &&
         !proof.python.deleted &&
         proof.python.context.generation === 0 &&
         !proof.deleted &&
@@ -53,7 +54,19 @@ export const VerifiedRetainedBindingProof = RetainedBindingProof.check(
       proof.driver.value === 42 &&
       proof.python.records.length === 3 &&
       Schema.is(
-        Schema.Tuple([Schema.Literal(42), Schema.Literal("current"), Schema.Literal("c2VlZA==")]),
+        Schema.Tuple([
+          Schema.Literal(42),
+          Schema.Literal("current"),
+          Schema.Literal("c2VlZA=="),
+          Schema.Tuple([
+            Schema.Struct({ value: Schema.Literal(42), text: Schema.Literal("ação") }),
+            Schema.Tuple([Schema.Literal("box"), Schema.Literal("native")]),
+            Schema.Literal(1),
+            Schema.Literal(42),
+            Schema.Literal(2),
+          ]),
+          Schema.Literal(false),
+        ]),
       )(proof.python.records[0]?.output?.result) &&
       proof.python.records[1]?.output?.result === "FORBIDDEN" &&
       proof.python.records[2]?.output?.result === false &&
@@ -87,20 +100,26 @@ export const retainedBindingProof = Effect.fn("fixture.retainedBindingProof")(fu
         id: "retained-python",
         language: "python",
       });
-      const record = yield* client.action(input.sandboxId, {
+      const defined = yield* client.action(input.sandboxId, {
         op: "python.execute",
         id: "python-seed",
         contextId: "retained-python",
         env: { MODE: "seed" },
         source:
-          "import os\ndef factory():\n n=40\n def next():\n  nonlocal n\n  n+=1\n  return n\n return next\nnext_value=factory()\nasync def saved_write(value):\n return await tools.call({'op':'filesystem.writeFile','path':'/tmp/python-grant','content':value,'encoding':'utf8'})\nawait saved_write('seed')\nnext_value()",
+          "import os, json, re, functools\nfrom collections import Counter\nfrom _thread import RLock\nsaved_lock=RLock()\nassert not hasattr(saved_lock.acquire,'__code__')\nsaved_lock.acquire()\nsaved_lock.acquire()\ncounts=Counter('boxes')\n@functools.lru_cache(maxsize=8)\ndef cached(value):\n return value*2\nencoded=json.dumps({'value':cached(21),'text':'ação'},ensure_ascii=False)\ndef factory():\n n=40\n def next():\n  nonlocal n\n  n+=1\n  return n\n return next\nnext_value=factory()\nasync def saved_write(value):\n return await tools.call({'op':'filesystem.writeFile','path':'/tmp/python-grant','content':value,'encoding':'utf8'})\nawait saved_write('seed')\ndef from_library():\n return [json.loads(encoded),re.findall(r'[a-z]+','box 42 native'),counts['b'],cached(21),saved_lock._recursion_count()]",
+      });
+      const record = yield* client.action(input.sandboxId, {
+        op: "python.evaluate",
+        id: "python-initial-value",
+        contextId: "retained-python",
+        expression: "next_value()",
       });
       return {
         context: yield* client.action(input.sandboxId, {
           op: "contexts.get",
           id: "retained-python",
         }),
-        records: [record],
+        records: [defined, record],
         deleted: false,
       };
     }
@@ -110,7 +129,7 @@ export const retainedBindingProof = Effect.fn("fixture.retainedBindingProof")(fu
       contextId: "retained-python",
       env: { MODE: "current" },
       source:
-        "content=await tools.call({'op':'filesystem.readFile','path':'/tmp/python-grant'})\n[next_value(),os.getenv('MODE'),content['content']]",
+        "prior=from_library()\nsaved_lock.release()\nsaved_lock.release()\ncontent=await tools.call({'op':'filesystem.readFile','path':'/tmp/python-grant'})\n[next_value(),os.getenv('MODE'),content['content'],prior,saved_lock.locked()]",
     });
     const denied = yield* client.action(input.sandboxId, {
       op: "python.execute",

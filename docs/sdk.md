@@ -18,10 +18,12 @@ Version 0.21.0 adds retained Python contexts and explicit context-language migra
 
 Version 0.22.0 adds captured context generations to Queue and cron execution. Its [delivery record](https://github.com/minutei-ai/boxes/blob/main/docs/evidence/sdk-0.22.0-delivery.json) distinguishes candidate validation, publication and production deployment.
 
-Install the matching SDK archive from the [experimental 0.22.0 release](https://github.com/minutei-ai/boxes/releases/tag/sdk-v0.22.0):
+Version 0.23.0 adds pinned frozen Python JSON, regex, collections, functools, enum and weak-reference modules, final-definition completion and native single-thread reentrant locks. Imports consume the sandbox instruction budget. Existing Python heaps need an explicit context reset when changing the runtime binary; JavaScript contexts keep their unchanged native binary. Candidate, publication and production stages are recorded separately in the [0.23.0 delivery record](https://github.com/minutei-ai/boxes/blob/main/docs/evidence/sdk-0.23.0-delivery.json). Full Python stdlib, pip and synchronous sandbox filesystem imports remain open.
+
+Install the matching SDK archive from the [experimental 0.23.0 release](https://github.com/minutei-ai/boxes/releases/tag/sdk-v0.23.0):
 
 ```sh
-bun add https://github.com/minutei-ai/boxes/releases/download/sdk-v0.22.0/minutei-ai-boxes-0.22.0.tgz
+bun add https://github.com/minutei-ai/boxes/releases/download/sdk-v0.23.0/minutei-ai-boxes-0.23.0.tgz
 ```
 
 Use the service binding from the Minutei Worker environment:
