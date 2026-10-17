@@ -654,7 +654,7 @@
       "status": 500,
       "body": "SchemaError: Expected <filter> at fixture.retainedBindingProof",
       "cleanup": "Scoped finalizer completed; subsequent native audit found only the deleted head and complete reclamation record for this sandbox, with no process, input, schedule or other sandbox objects.",
-      "diagnosis": "The original filter discarded the observed result. Added schema-encoded fixture results to filter failures and reran the exact retained fixture independently and in the full proof with matching published archives and policy. Both reruns passed without changing runtime, workload or budgets. The first mismatch remains unidentified; successful reruns do not establish its cause.",
+      "diagnosis": "The original filter discarded the observed result. Exact retained and full reruns passed under the original capacity. A later CI failure was identified as a memory-growth rejection and the complex proof now reserves 16 MiB. Historical Cloudflare telemetry located this original request and mapped its wrapper frame to a Python poll catch, but its native cause and counters were lost by Error serialization. It cannot be independently attributed to the CI memory guard. Current source preserves the diagnostic message explicitly; see python-trap-diagnosis.json.",
       "logSha256": "362d40d204a5cfb6e85cdebb64a3845183ee6cc353d1372d2856f20e315d1da2"
     },
     "bindingProof": {
@@ -3237,7 +3237,13 @@
     "ciFailureDiagnosis": {
       "cause": "native memory-growth guard correctly rejected additional pages at the complex proof sandbox ceiling",
       "evidence": "python-trap-diagnosis.json",
-      "proofCapacityCorrection": "current source reserves 16 MiB for the retained-stdlib proof; product limits and expected authorization results are unchanged"
+      "proofCapacityCorrection": "current source reserves 16 MiB for the retained-stdlib proof; product limits and expected authorization results are unchanged",
+      "capacityCorrectionCi": {
+        "runId": 39010533712,
+        "commit": "5052e54c8f97d597b205f32e3a67b2814898b28f",
+        "conclusion": "success"
+      },
+      "remoteCapacityProof": "passed with unchanged expected results; see python-trap-diagnosis.json"
     }
   }
 }

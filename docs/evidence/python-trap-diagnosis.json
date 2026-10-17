@@ -1,5 +1,5 @@
 {
-  "status": "CI failure identified as a configured memory-growth rejection; complex proof capacity corrected locally; remote proof in progress",
+  "status": "Memory-growth rejection identified and proof capacity validated; provider message loss reproduced and corrected in source with native workerd validation",
   "baseline": {
     "release": "sdk-v0.25.0",
     "wasmSha256": "4e1878eedc95dece9518550c836f5930e1478977bff5f467c9ac1993fadad124",
@@ -158,7 +158,6 @@
     "The first generic production assertion cannot be attributed because its original observed result was discarded."
   ],
   "diagnosticSourceCommit": "33b0a12f8a7f6e4591bfe234650e7d4d70f6d9bc",
-  "diagnosticCiRun": 39009247716,
   "cause": {
     "kind": "configured memory ceiling",
     "failedInstruction": "memory-growth guard unreachable at wasm function 20086, offset 0xefe679",
@@ -240,7 +239,8 @@
       "bodyHex": "0023063f006b200049044000050b200040000b",
       "trappingOpcodeOffset": "0xefe679",
       "decodedGuard": "global.get 6 (pageLimit); memory.size; i32.sub; local.get 0 (requestedPages); i32.lt_u; if; unreachable; else; end; local.get 0; memory.grow"
-    }
+    },
+    "runtime": "Node v26.11.1 V8; actual compiled RustPython ABI. Separate native workerd package and remote binding proofs cover transport and persistence."
   },
   "diagnosticCi": [
     {
@@ -285,6 +285,235 @@
     "negativeEvidence": "Existing native ABI memory-growth rejection tests retain their ceiling. Package persistent-driver tests still explicitly clamp policy to 8 MiB and reject a 20,000,000-byte allocation; remote persistent-driver test still rejects that allocation under its 16 MiB policy.",
     "localPackageProof": "passed with exact downloaded CI archives",
     "localPackageProofLogSha256": "49ae31df5311e039d5d5f3063e1c3553ceba607ecde002fa47be899c3f9fea45",
-    "remote": "running against existing 0.25 production runtime; no deployment or customer context reset"
+    "remote": "passed against the deployed ordinary Worker; no deployment or customer context reset performed"
+  },
+  "capacityCorrectionCi": {
+    "runId": 39010533712,
+    "commit": "5052e54c8f97d597b205f32e3a67b2814898b28f",
+    "conclusion": "success"
+  },
+  "remoteCapacityProof": {
+    "measuredAt": 1792219209733,
+    "profile": "minutei",
+    "targetWorker": "cirro-sandbox-prod-rs7wexxow56rmsoz",
+    "sandboxId": "remote-binding-fec2572d-bf62-4cd1-be73-82a430241e68",
+    "sdkVersion": "0.25.0",
+    "consumerBundleSha256": "8447be216685db7ee92046eaad0225584fd72d3040d745850aef1ecfe165a3c1",
+    "sdkModulesSha256": {
+      "../../src/sdk": "1a697b2fca2350d71c3901b03c55be41de1e04b978386c8c7a0651c8fcdb14ce",
+      "../../src/sdk-rpc": "1584f0102fe1276e12f15933aba8906f733d3de93bbce499a86275c3db01182e",
+      "../../src/sdk-tanstack": "73c62abaa449bd18b3648e9b9ae98e8c05e0c639dab182d0dfa04f4a8cc95f25",
+      "../../src/contracts": "bcacd714897e460d59b84cf10506ca43e16c0852ee06cbe37ac8bf9759738326"
+    },
+    "catalogPackages": 10,
+    "softwareCases": 14,
+    "descriptorCases": 5,
+    "pythonCreate": [41, 41, 42, "café", "ação"],
+    "pythonResume": [
+      42,
+      "current",
+      "c2VlZA==",
+      [
+        {
+          "text": "ação",
+          "value": 42
+        },
+        ["box", "native"],
+        1,
+        42,
+        2
+      ],
+      false,
+      42,
+      42,
+      "café",
+      "ação",
+      true
+    ],
+    "pythonDenied": ["FORBIDDEN", "FORBIDDEN", "c2VlZA==", "c2VlZA=="],
+    "persistent": {
+      "created": {
+        "phase": "create",
+        "value": {
+          "content": "cGVyc2lzdGVudCBuYXRpdmUgYmluZGluZw==",
+          "encoding": "base64",
+          "freshGlobals": true,
+          "label": "create"
+        },
+        "callbacks": ["create"],
+        "closedContextDenied": true,
+        "writeDenied": null,
+        "lowMemoryDenied": true,
+        "policyMemoryDenied": true,
+        "allowedAllocation": 6000000
+      },
+      "resumed": {
+        "phase": "resume",
+        "value": {
+          "content": "cGVyc2lzdGVudCBuYXRpdmUgYmluZGluZw==",
+          "encoding": "base64",
+          "freshGlobals": true,
+          "label": "resume"
+        },
+        "callbacks": ["resume"],
+        "closedContextDenied": true,
+        "writeDenied": true,
+        "lowMemoryDenied": true,
+        "policyMemoryDenied": true,
+        "allowedAllocation": 6000000
+      },
+      "previousReceiptRetained": true
+    },
+    "nativeProofLogSha256": "3b4c1a0b3dcd098d0f47fd4dd96cd2f2b6312df9b519b191ce0adf52c67d6a1e",
+    "cleanup": {
+      "measuredAt": 1792219352761,
+      "profile": "minutei",
+      "worker": "cirro-sandbox-prod-rs7wexxow56rmsoz",
+      "bucket": "cirro-objects-prod-vbk2p6ruhs2m645y",
+      "placement": {
+        "mode": "smart"
+      },
+      "roots": [
+        {
+          "id": "remote-binding-fec2572d-bf62-4cd1-be73-82a430241e68",
+          "head": {
+            "policy": {
+              "networkHosts": [],
+              "interruptBudget": 100000,
+              "memoryBytes": 16777216,
+              "maxOutputBytes": 1048576
+            },
+            "deleted": true
+          },
+          "reclamation": {
+            "phase": "complete",
+            "revision": "6b8a0884-6160-4aa6-9e31-98804856edff"
+          },
+          "prefixes": [
+            {
+              "prefix": "sandboxes/remote-binding-fec2572d-bf62-4cd1-be73-82a430241e68/",
+              "keys": ["sandboxes/remote-binding-fec2572d-bf62-4cd1-be73-82a430241e68/head.json"]
+            },
+            {
+              "prefix": "processes/remote-binding-fec2572d-bf62-4cd1-be73-82a430241e68/",
+              "keys": []
+            },
+            {
+              "prefix": "process-input/remote-binding-fec2572d-bf62-4cd1-be73-82a430241e68/",
+              "keys": []
+            },
+            {
+              "prefix": "schedules/remote-binding-fec2572d-bf62-4cd1-be73-82a430241e68/",
+              "keys": []
+            }
+          ]
+        }
+      ],
+      "complete": true
+    },
+    "finalAudit": {
+      "measuredAt": 1792219358686,
+      "profile": "minutei",
+      "worker": "cirro-sandbox-prod-rs7wexxow56rmsoz",
+      "bucket": "cirro-objects-prod-vbk2p6ruhs2m645y",
+      "placement": {
+        "mode": "smart"
+      },
+      "counts": {
+        "pages": 7,
+        "objects": 6096,
+        "processes": 1499,
+        "schedules": 2,
+        "contexts": 0,
+        "metadataAbsent": 2747
+      },
+      "formats": {
+        "run-v7": 1499,
+        "program-json-v2": 1397,
+        "program-json": 435,
+        "historical-source-text-v1": 16,
+        "cron-v2": 2
+      },
+      "statuses": {
+        "cancelled": 28,
+        "exited": 1362,
+        "failed": 109
+      },
+      "complete": true
+    },
+    "objectDelta": 2,
+    "unchangedProcessStatusTotals": true,
+    "remainingOwnedObjects": "deleted head and compact complete reclamation record only",
+    "scope": "Same full proof and expected results with 16 MiB reserved for the stdlib workload. Native consumer replacement does not intentionally terminate the backend Worker."
+  },
+  "historicalProductionEvent": {
+    "query": "native Cloudflare Workers Observability telemetry; dry query after native key/value discovery",
+    "timeframeUtc": ["2026-10-17T05:48:00Z", "2026-10-17T05:54:00Z"],
+    "filters": {
+      "$workers.scriptName": "cirro-sandbox-prod-rs7wexxow56rmsoz",
+      "$metadata.message": "includes Cirro guest failed"
+    },
+    "count": 1,
+    "timestamp": 1792216304626,
+    "requestId": "b56281b227bda72f9fa9bb6f5ae2dad8",
+    "entrypoint": "Agent",
+    "scriptVersionId": "d03d25fa-08e9-4d72-ab10-15d3db6fe73a",
+    "requestPath": "/v1/sandboxes/remote-binding-e44d0b10-f32f-4149-a50b-139144986c54/action",
+    "capturedMessage": "Cirro guest failed     at catch (index.js:27:43268)\n    at n.~effect/Effect/args (index.js:23:5392)\n    at ~effect/Effect/evaluate (index.js:23:4907)\n    at af.runLoop (index.js:23:2555)\n    at af.evaluate (index.js:23:1680)\n    at af.evaluate (index.js:23:1554)\n    at index.js:23:5990\n    at x (index.js:23:18364)\n    at Array.<anonymous> (index.js:23:18096)\n    at af.evaluate (index.js:23:2094)",
+    "workerArchiveSha256": "85f5afb8903c29e13827ef923cc8278b5967e5ecc10ceb331782038f7945091e",
+    "workerSourceLocation": {
+      "file": "package/index.js",
+      "line": 27,
+      "column": 43268,
+      "operation": "Python native poll catch; creates PythonFailure with fuelRemaining and memoryBytes"
+    },
+    "conclusion": "The original event is a native Python poll failure. Cloudflare retained only its Effect wrapper stack, losing the native cause and resource counters. Its exact native trap reason cannot be recovered from this event.",
+    "rawNativeResponseSha256": "83d401003c44dc5913cca598e98b392f4a55fdcfb371022c8d9324309f9a3c88",
+    "rawResponseFileMode": "0600; full response remains outside Git",
+    "nativeCaptureNote": "The generated response Schema encoder required run.query.adhoc, absent in the successfully returned ad-hoc native result. The evidence collector retained the native operation result directly; no installed SDK, application contract or query was altered."
+  },
+  "failureMessageCorrection": {
+    "status": "current source; local native workerd proof passed; production deployment not performed",
+    "pythonError": "Computed message includes trap indicator, fuel, physical memory and native Effect Cause formatting while retaining the original cause.",
+    "processLog": "Supplies that message as a separate scalar argument plus sandbox, execution and language identity; retains the original typed failure.",
+    "nativeProof": {
+      "measuredAt": 1792220566630,
+      "scope": "native workerd, service binding and local R2; real memory-growth rejection",
+      "record": {
+        "id": "controlled-growth",
+        "context": null,
+        "status": "failed",
+        "sourceHash": "236cab97bffa311eac184f026e9303c95720dc2ebf93616c275465ecb21f5906",
+        "language": "python",
+        "startedAt": 1792220566183,
+        "finishedAt": 1792220566609,
+        "output": null
+      }
+    },
+    "observedMessageFields": {
+      "resourceTrap": 2,
+      "fuelRemaining": "996093",
+      "memoryBytes": 9109504,
+      "nativeWasmFramesPresent": true
+    },
+    "nativeProofLogSha256": "17ad518a9fcfd6661824cf23128013b75d4b8dc32d9e65079978a2f9c36ad7bc",
+    "operatorSha256": "26260959749361e55ddbe2a4a96a87b242e42df492f338fa7e987c3a58d9a85d",
+    "typecheck": "passed",
+    "scope": "Actual compiled producer Worker, service binding and local R2. Cloudflare telemetry verification of the new message remains pending deployment.",
+    "regression": {
+      "passed": 32,
+      "failed": 0,
+      "assertions": 406,
+      "files": [
+        "tests/python.test.ts",
+        "tests/process.test.ts",
+        "tests/cancel.test.ts",
+        "tests/cancel-completion.test.ts"
+      ],
+      "seconds": 36.54,
+      "logSha256": "91826d0a44eaff2992a06f7c8d7ad4564a7029ae2ba908a66672b3f6d83acf49"
+    },
+    "sourcePaths": ["src/python.ts", "src/process.ts"],
+    "pending": "CI for the message change and Cloudflare telemetry verification after its production deployment"
   }
 }

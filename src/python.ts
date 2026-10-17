@@ -1,4 +1,4 @@
-import { Clock, Effect, Schema } from "effect";
+import { Cause, Clock, Effect, Schema } from "effect";
 import wasm from "cirro:python";
 import revision from "../dist/python/revision.json";
 import { acquireContext, finishContext } from "./contexts";
@@ -27,7 +27,11 @@ class PythonFailure extends Schema.TaggedError<PythonFailure>()("PythonFailure",
   fuelRemaining: Schema.optionalKey(Schema.String),
   memoryBytes: Schema.optionalKey(Schema.Int),
   resourceTrap: Schema.optionalKey(Schema.Int),
-}) {}
+}) {
+  get message() {
+    return `Python native failure (resourceTrap=${this.resourceTrap}, fuelRemaining=${this.fuelRemaining}, memoryBytes=${this.memoryBytes})\n${Cause.pretty(Cause.fail(this.cause))}`;
+  }
+}
 export const python = Effect.fn("python.execute")(function* (
   env: Env,
   capability: typeof Capability.Type,

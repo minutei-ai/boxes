@@ -471,8 +471,19 @@ const complete = Effect.fn("process.complete")(function* (
           finishedAt,
           output: output.success.outcome.success,
         };
-      console.error("Cirro guest failed", output.success.outcome.failure);
-    } else console.error("Cirro guest failed", output.failure);
+      console.error(
+        "Cirro guest failed",
+        { sandboxId: capability.sandboxId, executionId: record.id, language: record.language },
+        output.success.outcome.failure.message,
+        output.success.outcome.failure,
+      );
+    } else
+      console.error(
+        "Cirro guest failed",
+        { sandboxId: capability.sandboxId, executionId: record.id, language: record.language },
+        output.failure.message,
+        output.failure,
+      );
 
     return { ...snapshot, status: "failed" as const, finishedAt, output: snapshots[0] ?? null };
   });
