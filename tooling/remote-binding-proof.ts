@@ -1,4 +1,9 @@
 import {
+  QueuedBindingInput,
+  QueuedBindingCreated,
+  QueuedBindingVerified,
+} from "../tests/fixtures/queued-binding-proof";
+import {
   DefaultSoftwareProof,
   DefaultSoftwareProofInput,
 } from "../tests/fixtures/default-software-proof";
@@ -54,6 +59,10 @@ const Report = Schema.Struct({
   proof: VerifiedRemoteBindingProof,
   descriptors: DescriptorProof,
   terminal: TerminalProof,
+  detachedContexts: Schema.Struct({
+    created: QueuedBindingCreated,
+    verified: QueuedBindingVerified,
+  }),
   retainedContexts: Schema.Struct({
     created: VerifiedRetainedBindingProof,
     resumed: VerifiedRetainedBindingProof,
@@ -138,6 +147,28 @@ const report = await Effect.runPromise(
           { name: "BOXES_AGENT", type: "service", service: targetWorker, entrypoint: "Agent" },
         ],
       });
+      const detachedCreatedResponse = yield* Effect.promise(() =>
+        fetch(new URL("/queued-contexts", session.url), {
+          method: "POST",
+          keepalive: false,
+          headers: { ...session.headers, "content-type": "application/json" },
+          body: Schema.encodeSync(Schema.fromJsonString(QueuedBindingInput))({
+            phase: "create",
+            sandboxId: id,
+            token: management.token,
+          }),
+          signal: AbortSignal.timeout(120000),
+        }),
+      );
+      const detachedCreatedBody = yield* Effect.promise(() => detachedCreatedResponse.text());
+      if (detachedCreatedResponse.status !== 200)
+        return yield* Effect.die({
+          status: detachedCreatedResponse.status,
+          body: detachedCreatedBody,
+        });
+      const detachedCreated = yield* Schema.decodeUnknownEffect(
+        Schema.fromJsonString(QueuedBindingCreated),
+      )(detachedCreatedBody);
       const defaultsResponse = yield* Effect.tryPromise(() =>
         fetch(new URL("/software-defaults", session.url), {
           method: "POST",
@@ -384,6 +415,28 @@ const report = await Effect.runPromise(
       const terminal = yield* Schema.decodeUnknownEffect(TerminalProof)(
         yield* Effect.tryPromise(() => terminalResponse.json()),
       );
+      const detachedVerifiedResponse = yield* Effect.promise(() =>
+        fetch(new URL("/queued-contexts", replacement.url), {
+          method: "POST",
+          keepalive: false,
+          headers: { ...replacement.headers, "content-type": "application/json" },
+          body: Schema.encodeSync(Schema.fromJsonString(QueuedBindingInput))({
+            phase: "verify",
+            sandboxId: id,
+            token: management.token,
+          }),
+          signal: AbortSignal.timeout(180000),
+        }),
+      );
+      const detachedVerifiedBody = yield* Effect.promise(() => detachedVerifiedResponse.text());
+      if (detachedVerifiedResponse.status !== 200)
+        return yield* Effect.die({
+          status: detachedVerifiedResponse.status,
+          body: detachedVerifiedBody,
+        });
+      const detachedVerified = yield* Schema.decodeUnknownEffect(
+        Schema.fromJsonString(QueuedBindingVerified),
+      )(detachedVerifiedBody);
       return {
         measuredAt: yield* Clock.currentTimeMillis,
         profile,
@@ -400,6 +453,7 @@ const report = await Effect.runPromise(
         proof,
         descriptors,
         terminal,
+        detachedContexts: { created: detachedCreated, verified: detachedVerified },
         retainedContexts: { created: retainedCreated, resumed: retainedResumed },
         persistent: { created, resumed, previousReceiptRetained: true as const },
       };

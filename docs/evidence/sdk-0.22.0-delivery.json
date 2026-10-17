@@ -1,0 +1,726 @@
+{
+  "status": "Experimental 0.22.0 candidate validated locally; release-source CI, immutable publication, production migration and remote binding proof remain pending. Full AgentOS parity remains open.",
+  "version": "0.22.0",
+  "sourceBase": "6ecbe83a805acde1b50e80023ebce34fc012b58d",
+  "previousDelivery": "sdk-0.21.0-delivery.json",
+  "localEvidence": "queued-contexts-local.json",
+  "change": "Retained JS/TS/Python contexts in Queue and cron with captured context generations, explicit process/schedule migrations and accepted-occurrence recovery without replay.",
+  "artifacts": [
+    {
+      "file": "minutei-ai-boxes-0.22.0.tgz",
+      "bytes": 85366,
+      "sha256": "e17b7283f444622ea437ac8bff6a2ff9d79437d8e0b89e5d9fadb80d97e071e0"
+    },
+    {
+      "file": "minutei-ai-boxes-runtime-0.22.0.tgz",
+      "bytes": 5571330,
+      "sha256": "e6a89659fb64f994ce574d776ea277369e07176e9c720c4f5fa519016e34ea33"
+    }
+  ],
+  "ci": {
+    "implementation": {
+      "run": 38985806889,
+      "commit": "6ecbe83a805acde1b50e80023ebce34fc012b58d",
+      "status": "success",
+      "nativeTests": {
+        "passed": 432,
+        "failed": 0,
+        "assertions": 6332,
+        "files": 97,
+        "elapsedSeconds": 138.48
+      }
+    }
+  },
+  "local": {
+    "typecheck": "passed",
+    "build": "passed",
+    "exactArchiveProof": {
+      "exitCode": 0,
+      "version": "0.22.0",
+      "transport": "native Alchemy workerd service binding and Agent RPC; local R2 and Queue",
+      "proof": "SDK archive exports and consumer declarations; runtime archive; filesystem snapshot restore; hard-link metadata; RPC callbacks and cooperative disposal; ephemeral context disposal with 1024 files and concurrent closes; persistent driver contexts and cancellation; retained native heaps and current callback authority; scoped authority",
+      "terminal": {
+        "inventory": {
+          "running": {
+            "id": "terminal-live",
+            "context": null,
+            "status": "running",
+            "sourceHash": "a8a6480394435899e061e452f41d433ae5dcff92bcf00e197b8faea415137b28",
+            "language": "wasm",
+            "startedAt": 1792196633328,
+            "finishedAt": null,
+            "stdinMode": "pty"
+          },
+          "settled": {
+            "id": "terminal-live",
+            "context": null,
+            "status": "exited",
+            "sourceHash": "a8a6480394435899e061e452f41d433ae5dcff92bcf00e197b8faea415137b28",
+            "language": "wasm",
+            "startedAt": 1792196633328,
+            "finishedAt": 1792196633845,
+            "stdinMode": "pty"
+          },
+          "pages": 4
+        },
+        "initial": {
+          "cols": 80,
+          "rows": 24,
+          "revision": 0
+        },
+        "resized": {
+          "cols": 100,
+          "rows": 30,
+          "revision": 2
+        },
+        "terminal": {
+          "id": "terminal-live",
+          "context": null,
+          "status": "exited",
+          "sourceHash": "a8a6480394435899e061e452f41d433ae5dcff92bcf00e197b8faea415137b28",
+          "language": "wasm",
+          "startedAt": 1792196633328,
+          "finishedAt": 1792196633845,
+          "output": {
+            "stdout": "ready\neof-ready\nwinch\nafter-one\nwinch\ndone\n",
+            "stderr": "",
+            "result": null,
+            "exitCode": 0
+          }
+        },
+        "agent": {
+          "id": "terminal-agent",
+          "context": null,
+          "status": "exited",
+          "sourceHash": "0bc9adff0ae13ee1bef54d4ae1ab07254e340a996cec8b6a418fe919151d4056",
+          "language": "typescript",
+          "startedAt": 1792196633805,
+          "finishedAt": 1792196633826,
+          "output": {
+            "stdout": "",
+            "stderr": "",
+            "result": {
+              "cols": 100,
+              "rows": 30,
+              "revision": 2
+            },
+            "exitCode": 0
+          }
+        },
+        "input": {
+          "offset": 0,
+          "total": 0,
+          "closed": true
+        },
+        "staleRevision": 409,
+        "foreignSandbox": 401,
+        "foreground": {
+          "id": "terminal-foreground",
+          "context": null,
+          "status": "exited",
+          "sourceHash": "ba142b7baf1b3995c8c0c79e34cbbaa5a5918c22842d94de6aaed64be41b3dc3",
+          "language": "wasm",
+          "startedAt": 1792196633879,
+          "finishedAt": 1792196633897,
+          "output": {
+            "stdout": "interrupt\npair-done\n",
+            "stderr": "",
+            "result": null,
+            "exitCode": 0
+          }
+        },
+        "rawOwners": {
+          "id": "terminal-raw-owners",
+          "context": null,
+          "status": "exited",
+          "sourceHash": "47334effdf47f9cd168641c5b517244045a26912fab8c5f7dd63d11088783fc2",
+          "language": "wasm",
+          "startedAt": 1792196633982,
+          "finishedAt": 1792196634116,
+          "output": {
+            "stdout": "raw-owners-restored\n",
+            "stderr": "",
+            "result": null,
+            "exitCode": 0
+          }
+        },
+        "termios": {
+          "id": "terminal-termios",
+          "context": null,
+          "status": "exited",
+          "sourceHash": "10c8332bd7f638de1770e1493da38074a0b06d618c198f589d69c36c835c641f",
+          "language": "wasm",
+          "startedAt": 1792196634126,
+          "finishedAt": 1792196634145,
+          "output": {
+            "stdout": "termios-verified\n",
+            "stderr": "",
+            "result": null,
+            "exitCode": 0
+          }
+        },
+        "attributes": {
+          "initial": {
+            "desired": {
+              "attributes": null,
+              "revision": 0
+            },
+            "observed": {
+              "attributes": {
+                "icrnl": true,
+                "opost": true,
+                "onlcr": true,
+                "icanon": true,
+                "echo": true,
+                "isig": true,
+                "cc": [3, 28, 26, 4, 127, 21, 23]
+              },
+              "revision": 0
+            },
+            "settled": false
+          },
+          "guest": {
+            "desired": {
+              "attributes": {
+                "icrnl": false,
+                "opost": false,
+                "onlcr": false,
+                "icanon": false,
+                "echo": false,
+                "isig": false,
+                "cc": [1, 2, 3, 4, 5, 6, 7]
+              },
+              "revision": 1
+            },
+            "observed": {
+              "attributes": {
+                "icrnl": false,
+                "opost": false,
+                "onlcr": false,
+                "icanon": false,
+                "echo": true,
+                "isig": false,
+                "cc": [1, 2, 3, 4, 5, 6, 7]
+              },
+              "revision": 1
+            },
+            "settled": false
+          },
+          "final": {
+            "desired": {
+              "attributes": {
+                "icrnl": true,
+                "opost": true,
+                "onlcr": true,
+                "icanon": true,
+                "echo": false,
+                "isig": true,
+                "cc": [1, 2, 3, 4, 5, 6, 7]
+              },
+              "revision": 3
+            },
+            "observed": {
+              "attributes": {
+                "icrnl": true,
+                "opost": true,
+                "onlcr": true,
+                "icanon": true,
+                "echo": false,
+                "isig": true,
+                "cc": [1, 2, 3, 4, 5, 6, 7]
+              },
+              "revision": 3
+            },
+            "settled": true
+          },
+          "process": {
+            "id": "terminal-attributes",
+            "context": null,
+            "status": "exited",
+            "sourceHash": "631b044078fbac8a03ddea47e5b1ef2185f919c6289a76ec7112a84ab6c8b3b0",
+            "language": "wasm",
+            "startedAt": 1792196634162,
+            "finishedAt": 1792196634743,
+            "output": {
+              "stdout": "attributes-ready\r\nraw-ok\nguest-changed\nconfigured-again\neof-ready\nterminal-done\r\n",
+              "stderr": "",
+              "result": null,
+              "exitCode": 0
+            }
+          },
+          "staleRevision": 409,
+          "foreignSandbox": 401
+        }
+      },
+      "retainedContexts": [
+        {
+          "phase": "create",
+          "context": {
+            "id": "retained",
+            "language": "javascript",
+            "generation": 0,
+            "state": "idle",
+            "createdAt": 1792196627721,
+            "updatedAt": 1792196627851,
+            "executionId": "retained-first",
+            "deadlineAt": null
+          },
+          "records": [
+            {
+              "id": "retained-seed",
+              "context": {
+                "id": "retained",
+                "generation": 0
+              },
+              "status": "exited",
+              "sourceHash": "488ea9e6613986c876e109697e04010a3e6d16a8b89107feef55c722cbf3cdc0",
+              "language": "javascript",
+              "startedAt": 1792196627734,
+              "finishedAt": 1792196627784,
+              "output": {
+                "stdout": "",
+                "stderr": "",
+                "result": null,
+                "exitCode": 0
+              }
+            },
+            {
+              "id": "retained-first",
+              "context": {
+                "id": "retained",
+                "generation": 0
+              },
+              "status": "exited",
+              "sourceHash": "c737d8cb92926ce3263c827bacf2533abd4d84128402215f8854442f180ee25e",
+              "language": "typescript",
+              "startedAt": 1792196627796,
+              "finishedAt": 1792196627857,
+              "output": {
+                "stdout": "",
+                "stderr": "",
+                "result": {
+                  "counter": 41,
+                  "tool": 11
+                },
+                "exitCode": 0
+              }
+            }
+          ],
+          "callbacks": 1,
+          "deleted": false,
+          "driver": {
+            "value": 41,
+            "closedDenied": true
+          },
+          "python": {
+            "context": {
+              "id": "retained-python",
+              "language": "python",
+              "generation": 0,
+              "state": "idle",
+              "createdAt": 1792196627021,
+              "updatedAt": 1792196627561,
+              "executionId": "python-seed",
+              "deadlineAt": null
+            },
+            "records": [
+              {
+                "id": "python-seed",
+                "context": {
+                  "id": "retained-python",
+                  "generation": 0
+                },
+                "status": "exited",
+                "sourceHash": "b36a19bc809458761e72970d5f55678978f882c1fe1fdf2b9180fdbd7ddfb8f3",
+                "language": "python",
+                "startedAt": 1792196627048,
+                "finishedAt": 1792196627567,
+                "output": {
+                  "stdout": "",
+                  "stderr": "",
+                  "result": 41,
+                  "exitCode": 0
+                }
+              }
+            ],
+            "deleted": false
+          }
+        },
+        {
+          "phase": "resume",
+          "context": {
+            "id": "retained",
+            "language": "javascript",
+            "generation": 1,
+            "state": "idle",
+            "createdAt": 1792196627721,
+            "updatedAt": 1792196629095,
+            "executionId": "retained-cleared",
+            "deadlineAt": null
+          },
+          "records": [
+            {
+              "id": "retained-next",
+              "context": {
+                "id": "retained",
+                "generation": 0
+              },
+              "status": "exited",
+              "sourceHash": "3c22822d46020f61fe10c63a93980c727ad77aed61725d9db04ecb258923c2e9",
+              "language": "typescript",
+              "startedAt": 1792196628897,
+              "finishedAt": 1792196628958,
+              "output": {
+                "stdout": "resumed\n",
+                "stderr": "",
+                "result": {
+                  "counter": 42,
+                  "tool": 42
+                },
+                "exitCode": 0
+              }
+            },
+            {
+              "id": "retained-denied",
+              "context": {
+                "id": "retained",
+                "generation": 0
+              },
+              "status": "exited",
+              "sourceHash": "f50b5c5b802ebe9743e9168ae29de3e0d7f4f086af80941aeda60afff8280ca6",
+              "language": "typescript",
+              "startedAt": 1792196628971,
+              "finishedAt": 1792196629030,
+              "output": {
+                "stdout": "",
+                "stderr": "",
+                "result": "FORBIDDEN",
+                "exitCode": 0
+              }
+            },
+            {
+              "id": "retained-cleared",
+              "context": {
+                "id": "retained",
+                "generation": 1
+              },
+              "status": "exited",
+              "sourceHash": "f8bd8ff550ea459186702ffdcb169dc0e5b5076958ff032c59e77c248c01a345",
+              "language": "javascript",
+              "startedAt": 1792196629053,
+              "finishedAt": 1792196629099,
+              "output": {
+                "stdout": "",
+                "stderr": "",
+                "result": "undefined",
+                "exitCode": 0
+              }
+            }
+          ],
+          "callbacks": 1,
+          "deleted": true,
+          "driver": {
+            "value": 42,
+            "closedDenied": true
+          },
+          "python": {
+            "context": {
+              "id": "retained-python",
+              "language": "python",
+              "generation": 1,
+              "state": "idle",
+              "createdAt": 1792196627021,
+              "updatedAt": 1792196628782,
+              "executionId": "python-cleared",
+              "deadlineAt": null
+            },
+            "records": [
+              {
+                "id": "python-resume",
+                "context": {
+                  "id": "retained-python",
+                  "generation": 0
+                },
+                "status": "exited",
+                "sourceHash": "d53d0edc996c5cc129de4a56fff2599f3a5166f2f440c1619089cb9f78871967",
+                "language": "python",
+                "startedAt": 1792196627901,
+                "finishedAt": 1792196628144,
+                "output": {
+                  "stdout": "",
+                  "stderr": "",
+                  "result": [42, "current", "c2VlZA=="],
+                  "exitCode": 0
+                }
+              },
+              {
+                "id": "python-denied",
+                "context": {
+                  "id": "retained-python",
+                  "generation": 0
+                },
+                "status": "exited",
+                "sourceHash": "63a2b8d98ae2c0e392ad6454615067f431ba23fa09b8fec01604a03de4b0cb06",
+                "language": "python",
+                "startedAt": 1792196628161,
+                "finishedAt": 1792196628400,
+                "output": {
+                  "stdout": "",
+                  "stderr": "",
+                  "result": "FORBIDDEN",
+                  "exitCode": 0
+                }
+              },
+              {
+                "id": "python-cleared",
+                "context": {
+                  "id": "retained-python",
+                  "generation": 1
+                },
+                "status": "exited",
+                "sourceHash": "703d590e2831eb0a587bb76aa83bf423dbd948db3193606373ad9255c295fe15",
+                "language": "python",
+                "startedAt": 1792196628422,
+                "finishedAt": 1792196628786,
+                "output": {
+                  "stdout": "",
+                  "stderr": "",
+                  "result": false,
+                  "exitCode": 0
+                }
+              }
+            ],
+            "deleted": true
+          }
+        }
+      ],
+      "detachedContexts": [
+        {
+          "phase": "create",
+          "callbacks": 1,
+          "queued": [
+            {
+              "id": "detached-queued-js",
+              "context": {
+                "id": "detached-js",
+                "generation": 0
+              },
+              "status": "queued",
+              "sourceHash": "37706cbb9f0f63c57d6eba15c2542cd0998e68d4289f7dc40a99b0939366b3be",
+              "language": "typescript",
+              "startedAt": 1792196630488,
+              "finishedAt": null,
+              "output": null
+            },
+            {
+              "id": "detached-queued-python",
+              "context": {
+                "id": "detached-python",
+                "generation": 0
+              },
+              "status": "queued",
+              "sourceHash": "34a6a5152d55b824ea1d1442f093ca78f465171937d6d3ac0c360043d658aced",
+              "language": "python",
+              "startedAt": 1792196630567,
+              "finishedAt": null,
+              "output": null
+            }
+          ],
+          "schedule": {
+            "op": "cron.schedule",
+            "id": "detached-once",
+            "schedule": "2026-10-17T00:23:52.773Z",
+            "execution": {
+              "op": "javascript.evaluate",
+              "id": "detached-tick",
+              "contextId": "detached-cron",
+              "expression": "globalThis.next()"
+            },
+            "overlap": "queue",
+            "context": {
+              "id": "detached-cron",
+              "generation": 0
+            },
+            "state": "active",
+            "createdAt": 1792196630782,
+            "nextRun": 1792196632773,
+            "lastRun": null,
+            "runCount": 0,
+            "lastProcessId": null,
+            "error": null
+          }
+        },
+        {
+          "phase": "verify",
+          "queued": [
+            {
+              "id": "detached-queued-js",
+              "context": {
+                "id": "detached-js",
+                "generation": 0
+              },
+              "status": "exited",
+              "sourceHash": "2cbd6c79cde051e3455293463e8bab3b6b61598599f5551277f192cc692c97ca",
+              "language": "typescript",
+              "startedAt": 1792196630496,
+              "finishedAt": 1792196630559,
+              "output": {
+                "stdout": "",
+                "stderr": "",
+                "result": {
+                  "value": 41,
+                  "denied": "FORBIDDEN"
+                },
+                "exitCode": 0
+              }
+            },
+            {
+              "id": "detached-queued-python",
+              "context": {
+                "id": "detached-python",
+                "generation": 0
+              },
+              "status": "exited",
+              "sourceHash": "34a6a5152d55b824ea1d1442f093ca78f465171937d6d3ac0c360043d658aced",
+              "language": "python",
+              "startedAt": 1792196630573,
+              "finishedAt": 1792196630769,
+              "output": {
+                "stdout": "",
+                "stderr": "",
+                "result": 41,
+                "exitCode": 0
+              }
+            }
+          ],
+          "continued": [
+            {
+              "id": "detached-next-js",
+              "context": {
+                "id": "detached-js",
+                "generation": 0
+              },
+              "status": "exited",
+              "sourceHash": "78b5570582a5cd9b4dc8fb8de493fb9b71c046aee9a7867a7934204cdd2926e3",
+              "language": "javascript",
+              "startedAt": 1792196633048,
+              "finishedAt": 1792196633094,
+              "output": {
+                "stdout": "",
+                "stderr": "",
+                "result": 42,
+                "exitCode": 0
+              }
+            },
+            {
+              "id": "detached-next-python",
+              "context": {
+                "id": "detached-python",
+                "generation": 0
+              },
+              "status": "exited",
+              "sourceHash": "34a6a5152d55b824ea1d1442f093ca78f465171937d6d3ac0c360043d658aced",
+              "language": "python",
+              "startedAt": 1792196633107,
+              "finishedAt": 1792196633272,
+              "output": {
+                "stdout": "",
+                "stderr": "",
+                "result": 42,
+                "exitCode": 0
+              }
+            }
+          ],
+          "schedule": {
+            "op": "cron.schedule",
+            "id": "detached-once",
+            "schedule": "2026-10-17T00:23:52.773Z",
+            "execution": {
+              "op": "javascript.evaluate",
+              "id": "detached-tick",
+              "contextId": "detached-cron",
+              "expression": "globalThis.next()"
+            },
+            "overlap": "queue",
+            "context": {
+              "id": "detached-cron",
+              "generation": 0
+            },
+            "state": "completed",
+            "createdAt": 1792196630782,
+            "nextRun": null,
+            "lastRun": 1792196632773,
+            "runCount": 1,
+            "lastProcessId": "cron-015af68f00d7f0399fcd643fff248d25107e132ba4b1e11483108bebae",
+            "error": null
+          },
+          "scheduledProcess": {
+            "id": "cron-015af68f00d7f0399fcd643fff248d25107e132ba4b1e11483108bebae",
+            "context": {
+              "id": "detached-cron",
+              "generation": 0
+            },
+            "status": "exited",
+            "sourceHash": "459851de8b6eee45f01c06c485e09bf72217d7e67b8f588a75fc0ed3d192958b",
+            "language": "javascript",
+            "startedAt": 1792196632943,
+            "finishedAt": 1792196633001,
+            "output": {
+              "stdout": "",
+              "stderr": "",
+              "result": 41,
+              "exitCode": 0
+            }
+          },
+          "staleSchedule": {
+            "op": "cron.schedule",
+            "id": "detached-stale-once",
+            "schedule": "2026-10-17T00:23:52.773Z",
+            "execution": {
+              "op": "process.run",
+              "id": "detached-stale-tick",
+              "language": "javascript",
+              "source": "export default async({tools})=>tools.call({op:'filesystem.writeFile',path:'/detached-stale-entered',content:'bad',encoding:'utf8'})",
+              "contextId": "detached-stale"
+            },
+            "overlap": "allow",
+            "context": {
+              "id": "detached-stale",
+              "generation": 0
+            },
+            "state": "failed",
+            "createdAt": 1792196630796,
+            "nextRun": null,
+            "lastRun": null,
+            "runCount": 0,
+            "lastProcessId": null,
+            "error": "Execution belongs to another context generation"
+          },
+          "staleContext": {
+            "id": "detached-stale",
+            "language": "javascript",
+            "generation": 1,
+            "state": "idle",
+            "createdAt": 1792196629890,
+            "updatedAt": 1792196630804,
+            "executionId": null,
+            "deadlineAt": null
+          },
+          "staleFileExists": false
+        }
+      ]
+    },
+    "engines": {
+      "cirro_guest_bg.wasm": "dcf1a9d66b4c3a11106076c3e9d5fa1f596b8846a811dfeec9ecf3a8744af01f",
+      "cirro_python_bg.wasm": "438ea33a3579525ec1d60be1cd25bea686c7faff7e75eef01b5e27f674a79bdb"
+    },
+    "engineChange": "QuickJS and RustPython binaries are identical to delivered 0.21.0; this cutover changes orchestration and required process/schedule references."
+  },
+  "limits": [
+    "No SDK/runtime 0.22.0 publication or production deployment yet.",
+    "Local cron is invoked through Alchemy native scheduled-handler dispatch; actual production timer delivery remains a separate gate.",
+    "Native consumer replacement is covered; the backend closed/replacement test remains in queued-contexts-local.json.",
+    "No arbitrary-crash replay, full AgentOS parity, rendered terminal, production cost/latency comparison or Minutei production/model claim.",
+    "Minutei is neither pushed nor deployed by this delivery."
+  ]
+}

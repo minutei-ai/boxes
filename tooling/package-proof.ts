@@ -1,3 +1,4 @@
+import { QueuedBindingInput, QueuedBindingReply } from "../tests/fixtures/queued-binding-proof";
 import { execFileSync } from "node:child_process";
 import { mkdtemp, mkdir, readFile, readdir, rm, symlink, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
@@ -408,7 +409,7 @@ await Effect.runPromise(
         permissions: ["read", "write", "execute", "manage"],
         expiresInSeconds: 60,
       });
-      const terminal = yield* Effect.scoped(
+      const verifiedTerminal = yield* Effect.scoped(
         Effect.gen(function* () {
           yield* Effect.acquireRelease(
             make({ url: proxy.env.ORIGINS.runtime, token: Redacted.make(ownership.token) }),
@@ -422,6 +423,48 @@ await Effect.runPromise(
                   );
                 if (reclaimed.status !== "complete") return yield* Effect.die(reclaimed);
               }).pipe(Effect.orDie),
+          );
+          const detachedContexts = yield* Effect.forEach(["create", "verify"] as const, (phase) =>
+            Effect.gen(function* () {
+              if (phase === "verify") {
+                yield* Effect.sleep("2100 millis");
+                const triggered = yield* Effect.promise(() =>
+                  fetch(new URL("/cdn-cgi/handler/scheduled", proxy.env.ORIGINS.runtime), {
+                    method: "POST",
+                    keepalive: false,
+                  }),
+                );
+                if (triggered.status !== 200)
+                  return yield* Effect.die({
+                    status: triggered.status,
+                    body: yield* Effect.promise(() => triggered.text()),
+                  });
+              }
+              const origin = yield* Effect.sync(() => {
+                if (phase === "create") return proxy.env.ORIGINS.terminal;
+                return proxy.env.ORIGINS.replacement;
+              });
+              const response = yield* Effect.promise(() =>
+                fetch(new URL("/queued-contexts", origin), {
+                  method: "POST",
+                  keepalive: false,
+                  body: Schema.encodeSync(Schema.fromJsonString(QueuedBindingInput))({
+                    phase,
+                    sandboxId: "package-terminal",
+                    token: ownership.token,
+                  }),
+                }),
+              );
+              const body = yield* Effect.promise(() => response.text());
+              if (response.status !== 200)
+                return yield* Effect.die({ status: response.status, body });
+              const proof = yield* Schema.decodeUnknownEffect(
+                Schema.fromJsonString(QueuedBindingReply),
+              )(body);
+              if (proof.phase !== phase)
+                return yield* Effect.die("Detached binding phase mismatch");
+              return proof;
+            }),
           );
           const grant = yield* admin.mintCapability("package-terminal", {
             permissions: ["read", "write", "execute"],
@@ -443,11 +486,13 @@ await Effect.runPromise(
               status: response.status,
               body: yield* Effect.promise(() => response.text()),
             });
-          return yield* Schema.decodeUnknownEffect(TerminalProof)(
+          const terminal = yield* Schema.decodeUnknownEffect(TerminalProof)(
             yield* Effect.tryPromise(() => response.json()),
           );
+          return { terminal, detachedContexts };
         }),
       );
+      const { terminal, detachedContexts } = verifiedTerminal;
       if (terminal.inventory.pages < 4)
         return yield* Effect.die("Packaged terminal proof did not cross both inventory pages");
       console.log(
@@ -459,12 +504,14 @@ await Effect.runPromise(
               proof: Schema.String,
               terminal: TerminalProof,
               retainedContexts: Schema.Array(VerifiedRetainedBindingProof),
+              detachedContexts: Schema.Array(QueuedBindingReply),
             }),
           ),
         )({
           version: sdk.version,
           terminal,
           retainedContexts,
+          detachedContexts,
           transport: "native Alchemy workerd service binding and Agent RPC; local R2 and Queue",
           proof: `SDK archive exports and consumer declarations; runtime archive; filesystem snapshot restore; hard-link metadata; RPC callbacks and cooperative disposal; ephemeral context disposal with ${collected} files and concurrent closes; persistent driver contexts and cancellation; retained native heaps and current callback authority; scoped authority`,
         }),

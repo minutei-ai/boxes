@@ -1,3 +1,4 @@
+import { queuedBindingProof, QueuedBindingReply } from "./queued-binding-proof";
 import {
   DefaultSoftwareProof,
   DefaultSoftwareProofInput,
@@ -55,6 +56,12 @@ export default {
             Schema.encodeSync(Schema.fromJsonString(PublishedTerminalProof))(proof),
             { headers: { "content-type": "application/json", "cache-control": "no-store" } },
           );
+        }
+        if (new URL(request.url).pathname === "/queued-contexts") {
+          const proof = yield* queuedBindingProof(request, env.BOXES_AGENT);
+          return new Response(Schema.encodeSync(Schema.fromJsonString(QueuedBindingReply))(proof), {
+            headers: { "content-type": "application/json", "cache-control": "no-store" },
+          });
         }
         if (new URL(request.url).pathname === "/retained") {
           const proof = yield* retainedBindingProof(request, env.BOXES_AGENT);
