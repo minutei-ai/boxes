@@ -227,13 +227,13 @@ export const migrateMemory = Effect.fn("migration.memory")(function* (
     })(text);
     if (entry.key !== `processes/${sandboxId}/${record.id}.json`)
       return yield* new StorageFailure({ cause: "Memory migration process identity mismatch" });
-    if (record.checkpoint === null) continue;
     if (
       (record.status === "running" || record.status === "cancelling") &&
       record.deadlineAt !== null &&
       record.deadlineAt > (yield* Clock.currentTimeMillis)
     )
       return { migrated: 0, cursor, retryAfterMs: 1000 };
+    if (record.checkpoint === null) continue;
     const checkpointObject = yield* Effect.tryPromise({
       try: () =>
         env.OBJECTS.get(`sandboxes/${sandboxId}/execution-checkpoints/${record.checkpoint}.json`),

@@ -173,6 +173,41 @@ for (const mode of ["synced", "unsynced", "legacy-packed"] as const) {
         },
       ]);
       expect((await (await second.objects).head(key))?.etag).toBe(before.etag);
+      const storage = await second.objects;
+      const queuedObject = await storage.get(key);
+      if (queuedObject === null) return expect(queuedObject).not.toBeNull();
+      const queuedBody = await queuedObject.text();
+      const queuedRecord = Schema.decodeUnknownSync(Schema.fromJsonString(StoredRun))(queuedBody);
+      const held = await storage.put(
+        key,
+        Schema.encodeSync(Schema.fromJsonString(StoredRun))({
+          ...queuedRecord,
+          status: "running",
+          checkpoint: null,
+        }),
+        { onlyIf: { etagMatches: queuedObject.etag }, customMetadata: queuedObject.customMetadata },
+      );
+      if (held === null) return expect(held).not.toBeNull();
+      const waiting = await post(
+        second,
+        "/v1/migrations/memory-packs-v1",
+        "cirro-local-test-credential",
+        Schema.encodeSync(MemoryMigrationInput)({
+          cursor: { phase: "processes", continuation: null },
+        }),
+      );
+      expect(waiting.status).toBe(200);
+      const waitingReceipt = Schema.decodeUnknownSync(
+        Schema.fromJsonString(MemoryMigrationReceipt),
+      )(await waiting.text());
+      expect(waitingReceipt.retryAfterMs).toBe(1000);
+      expect(waitingReceipt.cursor).toEqual({ phase: "processes", continuation: null });
+      expect((await storage.head(key))?.etag).toBe(held.etag);
+      const released = await storage.put(key, queuedBody, {
+        onlyIf: { etagMatches: held.etag },
+        customMetadata: queuedObject.customMetadata,
+      });
+      if (released === null) return expect(released).not.toBeNull();
       const cursors: (typeof MemoryMigrationReceipt.Type.cursor)[] = [null];
       const progress = { calls: 0, migrated: 0 };
       while (cursors.length > 0) {
