@@ -1,0 +1,853 @@
+{
+  "status": "isolated-native-feasibility-proof-only",
+  "measuredAt": "2026-10-17T04:27:18.089583+00:00",
+  "sourceCommit": "f451da53b04313566898e132eaf839e8b14d90c7",
+  "scope": "Initial scalar suspension campaign plus a variable-length UTF-8 source followup. Both copied RustPython engines run as static Wasm inside native Alchemy workerd with actual local R2. Neither is a deployed sandbox filesystem implementation.",
+  "baseline": {
+    "id": "python-io-baseline-cadf3891-527b-4788-89d7-5571c68c6555",
+    "file": {
+      "content": "YW5zd2VyID0gNDIK",
+      "encoding": "base64",
+      "size": 12
+    },
+    "imports": {
+      "id": "import",
+      "context": null,
+      "status": "exited",
+      "sourceHash": "2fa02fdbefde91d56c9d60e68c8c822153b82f510a178eb9c102c0d2f7aa853d",
+      "language": "python",
+      "startedAt": 1792210387332,
+      "finishedAt": 1792210387580,
+      "output": {
+        "stdout": "",
+        "stderr": "Traceback (most recent call last):\n  File \"/tmp/__cirro_inline__.py\", line 3, in <module>\nModuleNotFoundError: No module named 'helper'\n",
+        "result": null,
+        "exitCode": 1
+      }
+    },
+    "open": {
+      "id": "open",
+      "context": null,
+      "status": "exited",
+      "sourceHash": "4874fc310c96937d1c97fb9501850c081f9f5dd44a422c90c3b136efd6f0e10f",
+      "language": "python",
+      "startedAt": 1792210387604,
+      "finishedAt": 1792210387676,
+      "output": {
+        "stdout": "",
+        "stderr": "Traceback (most recent call last):\n  File \"/tmp/__cirro_inline__.py\", line 1, in <module>\nUnsupportedOperation: Couldn't get FileIO, io.open likely isn't supported on your platform\n",
+        "result": null,
+        "exitCode": 1
+      }
+    }
+  },
+  "toolchain": {
+    "rustpython": "0.6.0",
+    "wasmBindgen": "0.2.129",
+    "binaryen": "version_133",
+    "binaryenArchiveSha256": "2dc9c7813f5375db93d96ead4b78222fcc3e2677bbb832297af4797782a37489",
+    "bun": "1.4.3",
+    "alchemyRuntime": "2.0.0-beta.83",
+    "rustc": "1.97.0-nightly (37d85e592 2026-04-28)",
+    "workerd": "2026-10-02"
+  },
+  "commands": [
+    "CARGO_TARGET_DIR=/home/yorizel/Documents/cirro/target cargo build --manifest-path crate/Cargo.toml --target wasm32-unknown-unknown --release",
+    "wasm-bindgen /home/yorizel/Documents/cirro/target/wasm32-unknown-unknown/release/boxes_python_probe.wasm --target no-modules --no-modules-global cirroProbe --remove-name-section --remove-producers-section --out-dir generated",
+    "BINARYEN_CORES=4 binaryen-version_133/bin/wasm-opt generated/boxes_python_probe_bg.wasm -O1 --asyncify --pass-arg=asyncify-imports@boxes_probe.read --enable-mutable-globals --enable-sign-ext --enable-nontrapping-float-to-int --enable-bulk-memory --enable-bulk-memory-opt --enable-reference-types --enable-multivalue -o unmetered.wasm",
+    "/home/yorizel/Documents/cirro/target/release/cirro-wasm-meter unmetered.wasm metered.wasm",
+    "cp metered.wasm probe.wasm",
+    "bun build.ts",
+    "TMPDIR=/home/yorizel/.cache/boxes-exec-cwd/tmp bun run.ts"
+  ],
+  "prototypeSources": {
+    "directory": "/home/yorizel/.cache/boxes-exec-cwd/asyncify-probe/v1-scalar",
+    "files": [
+      {
+        "path": "crate/src/lib.rs",
+        "bytes": 22986,
+        "sha256": "9b681e42fa4cf2bf1051a93d46f67ac11e094fd2ffb0c7a42e2c8fed61122de5"
+      },
+      {
+        "path": "crate/src/locks.rs",
+        "bytes": 4850,
+        "sha256": "401d0af62a583f3ea8ab295775a81fc0241dd24fdd6d30c2e3af1d1d542c2c09"
+      },
+      {
+        "path": "crate/build.rs",
+        "bytes": 1685,
+        "sha256": "e8fb376fb034354528a45ff67fdfc9dcc7eb8d4bfed561cb53021ca037ee10a6"
+      },
+      {
+        "path": "crate/Cargo.toml",
+        "bytes": 512,
+        "sha256": "5b3a6d95f15e07bb4b09d0ee9a733ec7e0a1a363121439f263a4ab8762612954"
+      },
+      {
+        "path": "crate/Cargo.lock",
+        "bytes": 59104,
+        "sha256": "0c4a340481772ffbe22b62dfaa4546250e58544b88fec4e554f7013197e0c468"
+      },
+      {
+        "path": "worker.ts",
+        "bytes": 6329,
+        "sha256": "0dd05eb7642958cd40ed7732bbc67b0e86a08cc880a42fba2314d871033296a7"
+      },
+      {
+        "path": "run.ts",
+        "bytes": 1710,
+        "sha256": "f6260edb8b07a471c569239ce0022b09b6feb8161fe8137aa27e27bbc642d70e"
+      },
+      {
+        "path": "build.ts",
+        "bytes": 1566,
+        "sha256": "8180b5cf16632f08e2680f56f3b9b2126c4bf62d0e67738761c06c66bcb23658"
+      },
+      {
+        "path": "baseline.ts",
+        "bytes": 1945,
+        "sha256": "d6b98513e33a60059164f4177c69d68f316926a1dacbafdd09e5bf030692d4aa"
+      },
+      {
+        "path": "inspect.ts",
+        "bytes": 836,
+        "sha256": "c45e314152ab70194930e81f599799a08c39dcb7b450fdcdf6338f84a2f7450f"
+      }
+    ],
+    "distribution": "Temporary research sources remain outside the tracked tree. Hashes identify the local experiment; this record is not a maintained product test harness."
+  },
+  "artifacts": [
+    {
+      "path": "generated/boxes_python_probe_bg.wasm",
+      "bytes": 10902218,
+      "gzipBytes": 3792442,
+      "sha256": "cbb676feb3db68dce0ac73c7ea291a20816847881316abd1d116d738ec1bc81c",
+      "compileMs": 54.485141999999996,
+      "imports": [
+        {
+          "module": "./boxes_python_probe_bg.js",
+          "name": "__wbindgen_object_drop_ref",
+          "kind": "function"
+        },
+        {
+          "module": "boxes_probe",
+          "name": "read",
+          "kind": "function"
+        },
+        {
+          "module": "./boxes_python_probe_bg.js",
+          "name": "__wbg_now_c10d7a09f342efcc",
+          "kind": "function"
+        },
+        {
+          "module": "./boxes_python_probe_bg.js",
+          "name": "__wbg_error_60fece866bc95631",
+          "kind": "function"
+        },
+        {
+          "module": "./boxes_python_probe_bg.js",
+          "name": "__wbg_new_617a8cdb8bb1130e",
+          "kind": "function"
+        },
+        {
+          "module": "./boxes_python_probe_bg.js",
+          "name": "__wbg_new_ee2291f50781bf1d",
+          "kind": "function"
+        },
+        {
+          "module": "./boxes_python_probe_bg.js",
+          "name": "__wbg_new_e32e15714757492a",
+          "kind": "function"
+        },
+        {
+          "module": "./boxes_python_probe_bg.js",
+          "name": "__wbg_resolvedOptions_d055a38915c452e3",
+          "kind": "function"
+        },
+        {
+          "module": "./boxes_python_probe_bg.js",
+          "name": "__wbg_getTime_f5a55efff2585d5d",
+          "kind": "function"
+        },
+        {
+          "module": "./boxes_python_probe_bg.js",
+          "name": "__wbg_new_0_72d020f0c63443d4",
+          "kind": "function"
+        },
+        {
+          "module": "./boxes_python_probe_bg.js",
+          "name": "__wbg_get_31af05bd4842a84f",
+          "kind": "function"
+        },
+        {
+          "module": "./boxes_python_probe_bg.js",
+          "name": "__wbg_getRandomValues_436a51d0629d84e1",
+          "kind": "function"
+        },
+        {
+          "module": "./boxes_python_probe_bg.js",
+          "name": "__wbg___wbindgen_throw_41e9ee4f547fc59a",
+          "kind": "function"
+        },
+        {
+          "module": "./boxes_python_probe_bg.js",
+          "name": "__wbg___wbindgen_string_get_0380ccaa2f57f0d9",
+          "kind": "function"
+        },
+        {
+          "module": "./boxes_python_probe_bg.js",
+          "name": "__wbindgen_generic_0000000000000001",
+          "kind": "function"
+        }
+      ],
+      "asyncifyExports": []
+    },
+    {
+      "path": "probe.wasm",
+      "bytes": 19376513,
+      "gzipBytes": 5072969,
+      "sha256": "a30f8cfa6b0c4e01e1e23a74c0830a16978d7eb6ebb10d129caa8e314fced594",
+      "compileMs": 76.85295700000006,
+      "imports": [
+        {
+          "module": "./boxes_python_probe_bg.js",
+          "name": "__wbindgen_object_drop_ref",
+          "kind": "function"
+        },
+        {
+          "module": "boxes_probe",
+          "name": "read",
+          "kind": "function"
+        },
+        {
+          "module": "./boxes_python_probe_bg.js",
+          "name": "__wbg_now_c10d7a09f342efcc",
+          "kind": "function"
+        },
+        {
+          "module": "./boxes_python_probe_bg.js",
+          "name": "__wbg_error_60fece866bc95631",
+          "kind": "function"
+        },
+        {
+          "module": "./boxes_python_probe_bg.js",
+          "name": "__wbg_new_617a8cdb8bb1130e",
+          "kind": "function"
+        },
+        {
+          "module": "./boxes_python_probe_bg.js",
+          "name": "__wbg_new_ee2291f50781bf1d",
+          "kind": "function"
+        },
+        {
+          "module": "./boxes_python_probe_bg.js",
+          "name": "__wbg_new_e32e15714757492a",
+          "kind": "function"
+        },
+        {
+          "module": "./boxes_python_probe_bg.js",
+          "name": "__wbg_resolvedOptions_d055a38915c452e3",
+          "kind": "function"
+        },
+        {
+          "module": "./boxes_python_probe_bg.js",
+          "name": "__wbg_getTime_f5a55efff2585d5d",
+          "kind": "function"
+        },
+        {
+          "module": "./boxes_python_probe_bg.js",
+          "name": "__wbg_new_0_72d020f0c63443d4",
+          "kind": "function"
+        },
+        {
+          "module": "./boxes_python_probe_bg.js",
+          "name": "__wbg_get_31af05bd4842a84f",
+          "kind": "function"
+        },
+        {
+          "module": "./boxes_python_probe_bg.js",
+          "name": "__wbg_getRandomValues_436a51d0629d84e1",
+          "kind": "function"
+        },
+        {
+          "module": "./boxes_python_probe_bg.js",
+          "name": "__wbg___wbindgen_throw_41e9ee4f547fc59a",
+          "kind": "function"
+        },
+        {
+          "module": "./boxes_python_probe_bg.js",
+          "name": "__wbg___wbindgen_string_get_0380ccaa2f57f0d9",
+          "kind": "function"
+        },
+        {
+          "module": "./boxes_python_probe_bg.js",
+          "name": "__wbindgen_generic_0000000000000001",
+          "kind": "function"
+        }
+      ],
+      "asyncifyExports": [
+        {
+          "name": "asyncify_start_unwind",
+          "kind": "function"
+        },
+        {
+          "name": "asyncify_stop_unwind",
+          "kind": "function"
+        },
+        {
+          "name": "asyncify_start_rewind",
+          "kind": "function"
+        },
+        {
+          "name": "asyncify_stop_rewind",
+          "kind": "function"
+        },
+        {
+          "name": "asyncify_get_state",
+          "kind": "function"
+        }
+      ]
+    }
+  ],
+  "nativeProofs": [
+    {
+      "path": "/root",
+      "status": 200,
+      "proof": {
+        "result": {
+          "kind": "done",
+          "output": {
+            "stdout": "",
+            "stderr": "",
+            "result": [84, [4, 3, 2, 1, 0, "finally"]],
+            "exitCode": 0
+          }
+        },
+        "reads": 2,
+        "suspensions": 2,
+        "state": 0,
+        "memoryBytes": 9109504,
+        "remainingFuel": "96362040"
+      }
+    },
+    {
+      "path": "/class",
+      "status": 200,
+      "proof": {
+        "result": {
+          "kind": "done",
+          "output": {
+            "stdout": "",
+            "stderr": "",
+            "result": [84, [4, 3, 2, 1, 0, "finally"]],
+            "exitCode": 0
+          }
+        },
+        "reads": 2,
+        "suspensions": 2,
+        "state": 0,
+        "memoryBytes": 9109504,
+        "remainingFuel": "942706"
+      }
+    },
+    {
+      "path": "/import",
+      "status": 200,
+      "proof": {
+        "result": {
+          "kind": "done",
+          "output": {
+            "stdout": "",
+            "stderr": "",
+            "result": [84, ["load"], true],
+            "exitCode": 0
+          }
+        },
+        "reads": 2,
+        "suspensions": 2,
+        "state": 0,
+        "memoryBytes": 9109504,
+        "remainingFuel": "880483"
+      }
+    },
+    {
+      "path": "/fuel",
+      "status": 200,
+      "proof": {
+        "mode": "/fuel",
+        "reads": 1,
+        "suspensions": 1,
+        "memoryBytes": 9109504,
+        "remainingFuel": "0",
+        "cause": "RuntimeError: unreachable"
+      }
+    },
+    {
+      "path": "/memory",
+      "status": 200,
+      "proof": {
+        "mode": "/memory",
+        "reads": 1,
+        "suspensions": 1,
+        "memoryBytes": 9109504,
+        "remainingFuel": "99999696",
+        "cause": "RuntimeError: unreachable"
+      }
+    },
+    {
+      "path": "/memory-control",
+      "status": 200,
+      "proof": {
+        "result": {
+          "kind": "done",
+          "output": {
+            "stdout": "",
+            "stderr": "",
+            "result": 1000000,
+            "exitCode": 0
+          }
+        },
+        "reads": 1,
+        "suspensions": 1,
+        "state": 0,
+        "memoryBytes": 13172736,
+        "remainingFuel": "93998520"
+      }
+    }
+  ],
+  "limits": {
+    "bootstrapFuel": 100000000,
+    "ordinaryClassExecutionFuel": 1000000,
+    "ordinaryMemoryCeilingPages": 512,
+    "fuelTrapBudgetAtResume": 1000,
+    "memoryPairFuelAtResume": 100000000,
+    "memoryPairDeniedPages": 139,
+    "memoryPairAllowedPages": 512,
+    "stackBytes": 1048576
+  },
+  "attempts": [
+    {
+      "status": "intentionally stopped before completion",
+      "pid": 2253906,
+      "command": "./binaryen-version_133/bin/wasm-opt generated/boxes_python_probe_bg.wasm --asyncify --pass-arg=asyncify-imports@boxes_probe.read --all-features -o probe.wasm ",
+      "cpuSeconds": 947.38,
+      "reason": "The initial invocation omitted optimization. Pinned Asyncify.cpp enables pre-flow local coalescing and pre/post local-save optimization only when optimizeLevel > 0. Switch to -O1 before evaluating runtime cost. No candidate was published or run.",
+      "stoppedAtUnix": 1792210818.3874266
+    },
+    {
+      "status": "rejected-before-execution",
+      "flags": "-O1 --asyncify --all-features",
+      "cause": "WasmModuleObject::Compile(): Invalid import kind 127, enable with --wasm-compact-imports @+1492",
+      "resolution": "Use the explicit baseline-compatible feature set. Do not enable compact imports or other unverified proposals."
+    },
+    {
+      "status": "control-corrected",
+      "cause": "The initial memory control retained only one million instructions while the denied memory case reset to one hundred million. The control trapped; that was not a valid memory-only comparison.",
+      "resolution": "Both final memory cases reset to one hundred million instructions; only the page ceiling differs. The denied case traps and the control completes with result 1000000."
+    }
+  ],
+  "findings": [
+    "Scalar polling can suspend and rewind an ordinary RustPython call through the real wasm-bindgen class borrow boundary.",
+    "Two actual R2 reads return 42 each. The recursive Python trace is [4,3,2,1,0,\"finally\"] exactly once and the result is 84.",
+    "A custom Python meta-path loader suspends during exec_module; a repeated import uses one cached module. This is not a filesystem-backed source loader.",
+    "Metering after Asyncify preserves the instruction and memory traps exercised here.",
+    "The existing explicit Python free glue unregisters the JavaScript wrapper without invoking Rust destruction, allowing the isolated trapped instance to be abandoned."
+  ],
+  "limitations": [
+    "No production implementation, release, deploy or Minutei dependency change.",
+    "No filesystem authorization, cancellation, missing-object handling, a complete structured request/error protocol, arbitrary stack-depth campaign or retained-context recovery proof for this candidate.",
+    "The baseline artifact is untransformed and unmetered; the candidate artifact is transformed and metered. Their sizes are descriptive, not a controlled optimization comparison.",
+    "Compile timings are single Bun WebAssembly.Module samples, excluding workerd startup and R2, not a latency distribution or Cloudflare cold-start measurement.",
+    "Reported guest linear memory is observed at the checked boundary, not process peak RSS, maximum guest allocation or production billing."
+  ],
+  "variableLengthFollowup": {
+    "measuredAt": "2026-10-17T04:31:59.010313+00:00",
+    "scope": "The same static native prototype adds a UTF-8 source-key request, an asynchronous R2 body response and a bounded Rust-owned byte copy. A custom Python meta-path loader executes the actual source body from R2, then a repeated import observes the cached module. It does not implement sandbox filesystem path lookup or authorization.",
+    "sourceBody": "answer = 42\nlabel = 'a\u00e7\u00e3o'\n",
+    "sourceBodySha256": "ecd5e581ba3c904005c879aef45a9abbaaef84f6443f72b6eae4ba3102721a16",
+    "maximumSourceResponseBytes": 1048576,
+    "abi": {
+      "module": "boxes_probe",
+      "suspendingImports": ["read", "source"],
+      "nonsuspendingImports": ["copy"],
+      "source": "UTF-8 key pointer/length -> byte count after rewind",
+      "copy": "Rust allocated pointer/length -> exact native response copy; reply bytes are consumed after one copy"
+    },
+    "prototypeSources": {
+      "directory": "/home/yorizel/.cache/boxes-exec-cwd/asyncify-probe",
+      "files": [
+        {
+          "path": "crate/src/lib.rs",
+          "bytes": 24038,
+          "sha256": "b35049de252af1ed053380713800ce91d810aae62ce29eed97716f8cc6987ea0"
+        },
+        {
+          "path": "crate/src/locks.rs",
+          "bytes": 4850,
+          "sha256": "401d0af62a583f3ea8ab295775a81fc0241dd24fdd6d30c2e3af1d1d542c2c09"
+        },
+        {
+          "path": "crate/build.rs",
+          "bytes": 1685,
+          "sha256": "e8fb376fb034354528a45ff67fdfc9dcc7eb8d4bfed561cb53021ca037ee10a6"
+        },
+        {
+          "path": "crate/Cargo.toml",
+          "bytes": 512,
+          "sha256": "5b3a6d95f15e07bb4b09d0ee9a733ec7e0a1a363121439f263a4ab8762612954"
+        },
+        {
+          "path": "crate/Cargo.lock",
+          "bytes": 59104,
+          "sha256": "0c4a340481772ffbe22b62dfaa4546250e58544b88fec4e554f7013197e0c468"
+        },
+        {
+          "path": "worker.ts",
+          "bytes": 7847,
+          "sha256": "8a4a6329815428fa11ad582140ec14f089d4b74713e2e1f88bbb55d255f3ff1f"
+        },
+        {
+          "path": "run.ts",
+          "bytes": 1710,
+          "sha256": "f6260edb8b07a471c569239ce0022b09b6feb8161fe8137aa27e27bbc642d70e"
+        },
+        {
+          "path": "build.ts",
+          "bytes": 1645,
+          "sha256": "2c515814571ebb55bb6840f5deacc60c16ff54778644d435f51b3bba79ec6cbc"
+        },
+        {
+          "path": "baseline.ts",
+          "bytes": 1945,
+          "sha256": "d6b98513e33a60059164f4177c69d68f316926a1dacbafdd09e5bf030692d4aa"
+        },
+        {
+          "path": "inspect.ts",
+          "bytes": 836,
+          "sha256": "c45e314152ab70194930e81f599799a08c39dcb7b450fdcdf6338f84a2f7450f"
+        }
+      ]
+    },
+    "transformCommand": "BINARYEN_CORES=4 binaryen-version_133/bin/wasm-opt generated/boxes_python_probe_bg.wasm -O1 --asyncify --pass-arg=asyncify-imports@boxes_probe.read,boxes_probe.source --enable-mutable-globals --enable-sign-ext --enable-nontrapping-float-to-int --enable-bulk-memory --enable-bulk-memory-opt --enable-reference-types --enable-multivalue -o unmetered.wasm",
+    "artifacts": [
+      {
+        "path": "generated/boxes_python_probe_bg.wasm",
+        "bytes": 10903897,
+        "gzipBytes": 3796588,
+        "sha256": "bd90bb88f60ae30054c45c6864ec251911982dbf0bd331236c6da996f05d27e6",
+        "compileMs": 54.405427,
+        "imports": [
+          {
+            "module": "./boxes_python_probe_bg.js",
+            "name": "__wbindgen_object_drop_ref",
+            "kind": "function"
+          },
+          {
+            "module": "boxes_probe",
+            "name": "read",
+            "kind": "function"
+          },
+          {
+            "module": "boxes_probe",
+            "name": "source",
+            "kind": "function"
+          },
+          {
+            "module": "boxes_probe",
+            "name": "copy",
+            "kind": "function"
+          },
+          {
+            "module": "./boxes_python_probe_bg.js",
+            "name": "__wbg_now_c10d7a09f342efcc",
+            "kind": "function"
+          },
+          {
+            "module": "./boxes_python_probe_bg.js",
+            "name": "__wbg_error_60fece866bc95631",
+            "kind": "function"
+          },
+          {
+            "module": "./boxes_python_probe_bg.js",
+            "name": "__wbg_new_617a8cdb8bb1130e",
+            "kind": "function"
+          },
+          {
+            "module": "./boxes_python_probe_bg.js",
+            "name": "__wbg_new_ee2291f50781bf1d",
+            "kind": "function"
+          },
+          {
+            "module": "./boxes_python_probe_bg.js",
+            "name": "__wbg_new_e32e15714757492a",
+            "kind": "function"
+          },
+          {
+            "module": "./boxes_python_probe_bg.js",
+            "name": "__wbg_resolvedOptions_d055a38915c452e3",
+            "kind": "function"
+          },
+          {
+            "module": "./boxes_python_probe_bg.js",
+            "name": "__wbg_getTime_f5a55efff2585d5d",
+            "kind": "function"
+          },
+          {
+            "module": "./boxes_python_probe_bg.js",
+            "name": "__wbg_new_0_72d020f0c63443d4",
+            "kind": "function"
+          },
+          {
+            "module": "./boxes_python_probe_bg.js",
+            "name": "__wbg_get_31af05bd4842a84f",
+            "kind": "function"
+          },
+          {
+            "module": "./boxes_python_probe_bg.js",
+            "name": "__wbg_getRandomValues_436a51d0629d84e1",
+            "kind": "function"
+          },
+          {
+            "module": "./boxes_python_probe_bg.js",
+            "name": "__wbg___wbindgen_throw_41e9ee4f547fc59a",
+            "kind": "function"
+          },
+          {
+            "module": "./boxes_python_probe_bg.js",
+            "name": "__wbg___wbindgen_string_get_0380ccaa2f57f0d9",
+            "kind": "function"
+          },
+          {
+            "module": "./boxes_python_probe_bg.js",
+            "name": "__wbindgen_generic_0000000000000001",
+            "kind": "function"
+          }
+        ],
+        "asyncifyExports": []
+      },
+      {
+        "path": "probe.wasm",
+        "bytes": 19380333,
+        "gzipBytes": 5077781,
+        "sha256": "3e3b3169c7650fae9f62cfec5246a4c895cb5c31df6b5e7e71e708c5b14dfa78",
+        "compileMs": 71.17878799999994,
+        "imports": [
+          {
+            "module": "./boxes_python_probe_bg.js",
+            "name": "__wbindgen_object_drop_ref",
+            "kind": "function"
+          },
+          {
+            "module": "boxes_probe",
+            "name": "read",
+            "kind": "function"
+          },
+          {
+            "module": "boxes_probe",
+            "name": "source",
+            "kind": "function"
+          },
+          {
+            "module": "boxes_probe",
+            "name": "copy",
+            "kind": "function"
+          },
+          {
+            "module": "./boxes_python_probe_bg.js",
+            "name": "__wbg_now_c10d7a09f342efcc",
+            "kind": "function"
+          },
+          {
+            "module": "./boxes_python_probe_bg.js",
+            "name": "__wbg_error_60fece866bc95631",
+            "kind": "function"
+          },
+          {
+            "module": "./boxes_python_probe_bg.js",
+            "name": "__wbg_new_617a8cdb8bb1130e",
+            "kind": "function"
+          },
+          {
+            "module": "./boxes_python_probe_bg.js",
+            "name": "__wbg_new_ee2291f50781bf1d",
+            "kind": "function"
+          },
+          {
+            "module": "./boxes_python_probe_bg.js",
+            "name": "__wbg_new_e32e15714757492a",
+            "kind": "function"
+          },
+          {
+            "module": "./boxes_python_probe_bg.js",
+            "name": "__wbg_resolvedOptions_d055a38915c452e3",
+            "kind": "function"
+          },
+          {
+            "module": "./boxes_python_probe_bg.js",
+            "name": "__wbg_getTime_f5a55efff2585d5d",
+            "kind": "function"
+          },
+          {
+            "module": "./boxes_python_probe_bg.js",
+            "name": "__wbg_new_0_72d020f0c63443d4",
+            "kind": "function"
+          },
+          {
+            "module": "./boxes_python_probe_bg.js",
+            "name": "__wbg_get_31af05bd4842a84f",
+            "kind": "function"
+          },
+          {
+            "module": "./boxes_python_probe_bg.js",
+            "name": "__wbg_getRandomValues_436a51d0629d84e1",
+            "kind": "function"
+          },
+          {
+            "module": "./boxes_python_probe_bg.js",
+            "name": "__wbg___wbindgen_throw_41e9ee4f547fc59a",
+            "kind": "function"
+          },
+          {
+            "module": "./boxes_python_probe_bg.js",
+            "name": "__wbg___wbindgen_string_get_0380ccaa2f57f0d9",
+            "kind": "function"
+          },
+          {
+            "module": "./boxes_python_probe_bg.js",
+            "name": "__wbindgen_generic_0000000000000001",
+            "kind": "function"
+          }
+        ],
+        "asyncifyExports": [
+          {
+            "name": "asyncify_start_unwind",
+            "kind": "function"
+          },
+          {
+            "name": "asyncify_stop_unwind",
+            "kind": "function"
+          },
+          {
+            "name": "asyncify_start_rewind",
+            "kind": "function"
+          },
+          {
+            "name": "asyncify_stop_rewind",
+            "kind": "function"
+          },
+          {
+            "name": "asyncify_get_state",
+            "kind": "function"
+          }
+        ]
+      }
+    ],
+    "nativeProofs": [
+      {
+        "path": "/root",
+        "status": 200,
+        "proof": {
+          "result": {
+            "kind": "done",
+            "output": {
+              "stdout": "",
+              "stderr": "",
+              "result": [84, [4, 3, 2, 1, 0, "finally"]],
+              "exitCode": 0
+            }
+          },
+          "reads": 2,
+          "suspensions": 2,
+          "state": 0,
+          "memoryBytes": 9109504,
+          "remainingFuel": "96360961"
+        }
+      },
+      {
+        "path": "/class",
+        "status": 200,
+        "proof": {
+          "result": {
+            "kind": "done",
+            "output": {
+              "stdout": "",
+              "stderr": "",
+              "result": [84, [4, 3, 2, 1, 0, "finally"]],
+              "exitCode": 0
+            }
+          },
+          "reads": 2,
+          "suspensions": 2,
+          "state": 0,
+          "memoryBytes": 9109504,
+          "remainingFuel": "942485"
+        }
+      },
+      {
+        "path": "/import",
+        "status": 200,
+        "proof": {
+          "result": {
+            "kind": "done",
+            "output": {
+              "stdout": "",
+              "stderr": "",
+              "result": [84, "a\u00e7\u00e3o", ["load"], true],
+              "exitCode": 0
+            }
+          },
+          "reads": 2,
+          "suspensions": 2,
+          "state": 0,
+          "memoryBytes": 10223616,
+          "remainingFuel": "870435"
+        }
+      },
+      {
+        "path": "/fuel",
+        "status": 200,
+        "proof": {
+          "mode": "/fuel",
+          "reads": 1,
+          "suspensions": 1,
+          "memoryBytes": 9109504,
+          "remainingFuel": "0",
+          "cause": "RuntimeError: unreachable"
+        }
+      },
+      {
+        "path": "/memory",
+        "status": 200,
+        "proof": {
+          "mode": "/memory",
+          "reads": 1,
+          "suspensions": 1,
+          "memoryBytes": 9109504,
+          "remainingFuel": "99999709",
+          "cause": "RuntimeError: unreachable"
+        }
+      },
+      {
+        "path": "/memory-control",
+        "status": 200,
+        "proof": {
+          "result": {
+            "kind": "done",
+            "output": {
+              "stdout": "",
+              "stderr": "",
+              "result": 1000000,
+              "exitCode": 0
+            }
+          },
+          "reads": 1,
+          "suspensions": 1,
+          "state": 0,
+          "memoryBytes": 13172736,
+          "remainingFuel": "93998520"
+        }
+      }
+    ],
+    "generationFinding": "wasm-bindgen emits one require(\"boxes_probe\") binding per raw imported function. The build owner must inject the same native host object into every occurrence; replacing only import1 leaves import2/import3 unresolved. No package install or alternate runtime resolves this native module."
+  }
+}
