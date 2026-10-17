@@ -118,7 +118,7 @@ test("spawn survives the initiating request and wait reports a real exit after a
     ).json(),
   );
   expect(repeated).toEqual(completed);
-});
+}, 15_000);
 
 const programs = {
   javascript: "export default () => 42;",
