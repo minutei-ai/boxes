@@ -1,8 +1,8 @@
 {
-  "status": "Candidate exact archive proof passed; unpublished and not deployed",
+  "status": "Published and deployed; source/tag CI, exact archives, local Minutei binding and production proofs passed; scoped workloads cleaned up",
   "version": "0.27.0",
   "implementationCommit": "a9ae451736a2fe80bdff57e3958535a3e8b3f239",
-  "measuredAt": "2026-10-18T19:40:53.844211+00:00",
+  "measuredAt": "2026-10-18T20:05:13.254747+00:00",
   "localEvidence": ["python-shared-inodes-local.json"],
   "candidate": {
     "assets": [
@@ -22,15 +22,2434 @@
       "version": "0.27.0",
       "transport": "native Alchemy workerd service binding and Agent RPC; local R2 and Queue",
       "logSha256": "f7fe65a19f229f6082b0d87dbc67022f7811704b81e6b973ebec88401733fb3e"
-    }
+    },
+    "minuteiProof": {
+      "clientVersion": "0.26.0",
+      "runtimeVersion": "0.27.0",
+      "runtimeArchiveSha256": "625af48d711b592bccecdfac7f6276cb49f7e00642188d972381ffccea12d97d",
+      "consumerCommit": "d8bf6237cd2e7e2022546f3609e3e3b8e2559e65",
+      "consumerBundleSha256": "9c5cb5bb051fd1ebbaf984b2cbec59c7af2254d74288804fcbb425b88d13070a",
+      "transport": "native workerd Agent service binding; actual Minutei Code Mode and tenant SQLite; local R2, KV and Queue",
+      "retention": true,
+      "isolatedRegistry": true,
+      "capabilities": true,
+      "consumerFixturesSha256": {
+        "boxes-retention.ts": "2f90aacc149345cf51ffefc0f00e468c51e00d75cbe7f3e3dd68c532714edf70",
+        "boxes-code.worker.ts": "c3d6f06ea5f5afe322076052267468c4702fe79aff596fa847d68bdc3045e5f4"
+      },
+      "passed": true,
+      "logSha256": "778a8b0b6460f766a72f0604781c29b0fbc7b2cc665c05189ef59a381565cfa7",
+      "scope": "Local actual Minutei Code Mode, isolated registry and tenant SQLite through Agent service binding; Minutei has not been pushed or deployed; history Queue processing excluded."
+    },
+    "modules": [
+      {
+        "file": "cirro_compiler_bg.wasm",
+        "bytes": 1943596,
+        "sha256": "27d9b0022a634ed4eef47b6561ad38cafde3522c17e834afed1264440678bf2f"
+      },
+      {
+        "file": "cirro_guest_bg.wasm",
+        "bytes": 1150616,
+        "sha256": "dcf1a9d66b4c3a11106076c3e9d5fa1f596b8846a811dfeec9ecf3a8744af01f"
+      },
+      {
+        "file": "cirro_kernel_bg.wasm",
+        "bytes": 1237113,
+        "sha256": "2bfe109a42ec2ccd0d2e6c50d0b06a1575ce41c845dee0ee7ffc4e60658729fb"
+      },
+      {
+        "file": "cirro_python_bg.wasm",
+        "bytes": 19720381,
+        "sha256": "f11ff22fc5e14ce878bf9f18895c4e90c8ac3b983226dc4669e19485fdda7151"
+      },
+      {
+        "file": "cirro_wasi_bg.wasm",
+        "bytes": 1707779,
+        "sha256": "0d1fd49eb2d515f724ad1067dec002f07d009d056bb6091402807b8ac5110090"
+      }
+    ]
   },
   "upgrade": "Unconditional filesystem-v6 migration. Existing Python contexts require explicit reset; old heaps must fail before process reservation. JavaScript continuity is checked independently.",
   "delivery": {
-    "release": "not published",
-    "deployment": "not performed"
+    "release": {
+      "assets": [
+        {
+          "apiUrl": "https://api.github.com/repos/minutei-ai/boxes/releases/assets/654328723",
+          "contentType": "application/x-gtar",
+          "createdAt": "2026-10-18T19:48:02Z",
+          "digest": "sha256:b47019a65eb6dfe81c69245173106dcf3c06220dc38bb2446c2042ddc11f85d4",
+          "downloadCount": 0,
+          "id": "RA_kwDOVHG00M4nAEOT",
+          "label": "",
+          "name": "minutei-ai-boxes-0.27.0.tgz",
+          "size": 89060,
+          "state": "uploaded",
+          "updatedAt": "2026-10-18T19:48:02Z",
+          "url": "https://github.com/minutei-ai/boxes/releases/download/sdk-v0.27.0/minutei-ai-boxes-0.27.0.tgz"
+        },
+        {
+          "apiUrl": "https://api.github.com/repos/minutei-ai/boxes/releases/assets/654328731",
+          "contentType": "application/x-gtar",
+          "createdAt": "2026-10-18T19:48:02Z",
+          "digest": "sha256:625af48d711b592bccecdfac7f6276cb49f7e00642188d972381ffccea12d97d",
+          "downloadCount": 0,
+          "id": "RA_kwDOVHG00M4nAEOb",
+          "label": "",
+          "name": "minutei-ai-boxes-runtime-0.27.0.tgz",
+          "size": 7299137,
+          "state": "uploaded",
+          "updatedAt": "2026-10-18T19:48:03Z",
+          "url": "https://github.com/minutei-ai/boxes/releases/download/sdk-v0.27.0/minutei-ai-boxes-runtime-0.27.0.tgz"
+        },
+        {
+          "apiUrl": "https://api.github.com/repos/minutei-ai/boxes/releases/assets/654328724",
+          "contentType": "application/octet-stream",
+          "createdAt": "2026-10-18T19:48:02Z",
+          "digest": "sha256:718d5c44de530600dba19f13d89721d66d53eab2599f6c76045eb0d9e15309d4",
+          "downloadCount": 0,
+          "id": "RA_kwDOVHG00M4nAEOU",
+          "label": "",
+          "name": "SHA256SUMS",
+          "size": 196,
+          "state": "uploaded",
+          "updatedAt": "2026-10-18T19:48:02Z",
+          "url": "https://github.com/minutei-ai/boxes/releases/download/sdk-v0.27.0/SHA256SUMS"
+        }
+      ],
+      "isDraft": false,
+      "isPrerelease": true,
+      "publishedAt": "2026-10-18T19:48:04Z",
+      "tagName": "sdk-v0.27.0",
+      "url": "https://github.com/minutei-ai/boxes/releases/tag/sdk-v0.27.0"
+    },
+    "deployment": {
+      "passed": true,
+      "profile": "minutei",
+      "worker": "cirro-sandbox-prod-rs7wexxow56rmsoz",
+      "bucket": "cirro-objects-prod-vbk2p6ruhs2m645y",
+      "elapsedSeconds": 946.5,
+      "succeeded": 6,
+      "migrationsSeconds": 442.7,
+      "filesystem": {
+        "version": 6,
+        "pages": 71,
+        "migrated": 231,
+        "lastPageHasMore": false
+      },
+      "softwareBase": {
+        "digest": "cf8f5c4bf5774fc0e13843dd82632ca28858506d09cc1f9a97974e3fd8d03301",
+        "blocks": 354,
+        "uploadedBlocks": 0,
+        "uploadedBytes": 0,
+        "elapsedSeconds": 480.5
+      },
+      "logSha256": "7abeffd26ebca7c4d47b579ba47296a215aa5ca134e05aaa8629dba60489fd4b"
+    },
+    "sourceCommit": "e78e6345df95340725fb7f54feba911e0b9f3b52",
+    "sourceCi": {
+      "runId": 39159881157,
+      "status": "completed",
+      "url": "https://github.com/minutei-ai/boxes/actions/runs/39159881157",
+      "conclusion": "success",
+      "logSha256": "c1972f171926db83999fc16af0302f98fc5c3cc2dae97b1e5f36e0b85b029af2"
+    },
+    "anonymousDownloads": [
+      {
+        "file": "minutei-ai-boxes-0.27.0.tgz",
+        "bytes": 89060,
+        "sha256": "b47019a65eb6dfe81c69245173106dcf3c06220dc38bb2446c2042ddc11f85d4",
+        "anonymousDownloadMatchesCandidate": true
+      },
+      {
+        "file": "minutei-ai-boxes-runtime-0.27.0.tgz",
+        "bytes": 7299137,
+        "sha256": "625af48d711b592bccecdfac7f6276cb49f7e00642188d972381ffccea12d97d",
+        "anonymousDownloadMatchesCandidate": true
+      },
+      {
+        "file": "SHA256SUMS",
+        "bytes": 196,
+        "sha256": "718d5c44de530600dba19f13d89721d66d53eab2599f6c76045eb0d9e15309d4",
+        "anonymousDownloadMatchesCandidate": true
+      }
+    ],
+    "tag": {
+      "name": "sdk-v0.27.0",
+      "annotatedSha": "a155d4f7e5a8762194ed787f46186311474873e7",
+      "sourceSha": "e78e6345df95340725fb7f54feba911e0b9f3b52",
+      "verified": true
+    },
+    "tagCi": {
+      "runId": 39160405159,
+      "status": "completed",
+      "url": "https://github.com/minutei-ai/boxes/actions/runs/39160405159",
+      "conclusion": "success",
+      "headSha": "e78e6345df95340725fb7f54feba911e0b9f3b52",
+      "logSha256": "3b8ffb315dcec421e64543cc5b694f5f1bc505c3f6c02f0acc348cc46946f131"
+    }
   },
   "limits": [
     "Full upstream parity, actual Minutei production/model behavior and comparative performance/cost remain open.",
     "WASI process-local detached files are outside Python shared-inode coherence."
-  ]
+  ],
+  "production": {
+    "cutover": {
+      "passed": true,
+      "report": {
+        "measuredAt": 1792353477321,
+        "id": "python-io-cutover-a00e9df2-6ee2-43ed-aae9-b079b87cdb17",
+        "seedSdkVersion": "0.26.0",
+        "verifySdkVersion": "0.27.0",
+        "rejection": {
+          "alreadyReset": false,
+          "error": "CHECKPOINT_RUNTIME_MISMATCH",
+          "status": 409,
+          "processReceiptAbsent": true,
+          "prior": {
+            "id": "python",
+            "language": "python",
+            "generation": 0,
+            "state": "idle",
+            "createdAt": 1792352417475,
+            "updatedAt": 1792352419463,
+            "executionId": "before-python",
+            "deadlineAt": null
+          },
+          "reset": {
+            "id": "python",
+            "language": "python",
+            "generation": 1,
+            "state": "idle",
+            "createdAt": 1792352417475,
+            "updatedAt": 1792353464695,
+            "executionId": null,
+            "deadlineAt": null
+          }
+        },
+        "imported": {
+          "id": "after-python",
+          "context": {
+            "id": "python",
+            "generation": 1
+          },
+          "status": "exited",
+          "sourceHash": "a6e9ba82a8a86fe699b45efec14e13b78b20ab6f565c9beecd9b25f735777eac",
+          "language": "python",
+          "startedAt": 1792353466089,
+          "finishedAt": 1792353469211,
+          "output": {
+            "stdout": "",
+            "stderr": "",
+            "result": [42, "a\u00e7\u00e3o", false],
+            "exitCode": 0
+          }
+        },
+        "ephemeral": {
+          "id": "after-automatic-flush",
+          "context": null,
+          "status": "exited",
+          "sourceHash": "dbe2f47ebd46605f2b53a05a18e51f4b01752c1b3fde34d101c439dffd943041",
+          "language": "python",
+          "startedAt": 1792353470356,
+          "finishedAt": 1792353472042,
+          "output": {
+            "stdout": "",
+            "stderr": "",
+            "result": 42,
+            "exitCode": 0
+          }
+        },
+        "automatic": {
+          "content": "YcOnw6NvIG5vIGZpbQ==",
+          "encoding": "base64",
+          "size": 13
+        },
+        "contextFile": {
+          "content": "YcOnw6Nv",
+          "encoding": "base64",
+          "size": 6
+        },
+        "javascript": {
+          "id": "after-js",
+          "context": {
+            "id": "javascript",
+            "generation": 0
+          },
+          "status": "exited",
+          "sourceHash": "211089a84f021f03ac3afe9a47c03e77dc2c56c7c9c07be64bc92e10e5cb198d",
+          "language": "javascript",
+          "startedAt": 1792353475146,
+          "finishedAt": 1792353476088,
+          "output": {
+            "stdout": "",
+            "stderr": "",
+            "result": 42,
+            "exitCode": 0
+          }
+        },
+        "jsContext": {
+          "id": "javascript",
+          "language": "javascript",
+          "generation": 0,
+          "state": "idle",
+          "createdAt": 1792352421001,
+          "updatedAt": 1792353475646,
+          "executionId": "after-js",
+          "deadlineAt": null
+        },
+        "stats": [
+          {
+            "path": "/tmp/cutover.py",
+            "stat": {
+              "path": "/tmp/cutover.py",
+              "kind": "file",
+              "size": 25,
+              "mode": 420,
+              "inode": 336,
+              "nlink": 1,
+              "uid": 0,
+              "gid": 0,
+              "atimeNs": "1792352416000000000",
+              "mtimeNs": "1792352416000000000",
+              "ctimeNs": "1792352416000000000"
+            }
+          },
+          {
+            "path": "/tmp/missing.py",
+            "stat": null,
+            "code": "ENOENT",
+            "error": "ENOENT: file does not exist"
+          }
+        ],
+        "tokenExcluded": true
+      },
+      "logSha256": "4afa05af9fdf4150f79411e9292e0f173eeff2d2398d5b39d621ddf3111548f8"
+    },
+    "cutoverCleanup": {
+      "passed": true,
+      "report": {
+        "measuredAt": 1792353535553,
+        "id": "python-io-cutover-a00e9df2-6ee2-43ed-aae9-b079b87cdb17",
+        "progress": {
+          "phase": "complete",
+          "status": "complete",
+          "removed": 0,
+          "blocking": []
+        }
+      },
+      "logSha256": "b6ef1e8e874256499076854dfab1557dcbe497bbdcab6f62bfcd8db860e2e41d"
+    },
+    "storage": {
+      "passed": true,
+      "report": {
+        "measuredAt": 1792353474519,
+        "profile": "minutei",
+        "worker": "cirro-sandbox-prod-rs7wexxow56rmsoz",
+        "bucket": "cirro-objects-prod-vbk2p6ruhs2m645y",
+        "sandboxId": "software-storage-e1396e99-d275-4a40-b6fd-ccaa0652bb64",
+        "baseDigest": "cf8f5c4bf5774fc0e13843dd82632ca28858506d09cc1f9a97974e3fd8d03301",
+        "placementMode": "smart",
+        "status": {
+          "id": "software-storage-e1396e99-d275-4a40-b6fd-ccaa0652bb64",
+          "generation": 0,
+          "filesystemBytes": 77754575,
+          "policy": {
+            "networkHosts": [],
+            "interruptBudget": 100000,
+            "memoryBytes": 8388608,
+            "maxOutputBytes": 1048576
+          }
+        },
+        "catalogPackages": 10,
+        "objectsAfterCreate": 1,
+        "privateSoftwareBlobsAfterCreate": 0,
+        "sharedObjectsBefore": 354,
+        "sharedObjectsAfterCollection": 354,
+        "reclaimed": true
+      },
+      "logSha256": "3f5c4deebb2d6bc459871c1a6a1fd41e415026739b19d4742ad818fb1b03dc1a"
+    },
+    "sharedInodes": {
+      "passed": true,
+      "report": {
+        "measuredAt": 1792353771895,
+        "profile": "minutei",
+        "targetWorker": "cirro-sandbox-prod-rs7wexxow56rmsoz",
+        "sandboxId": "shared-inodes-27d391f8-703a-4337-b716-464baa04aee9",
+        "sdkVersion": "0.27.0",
+        "baselineFilesystemBytes": 77754575,
+        "transport": "Cloudflare named Agent service binding via compiled SDK action transport; two preview consumers; actual production R2",
+        "consumerBundleSha256": "c6c93cc23a083be6d97399640692bb14a6f9fded461a607da90b121e3c8c05b4",
+        "origins": [
+          "https://boxes-inodes-initial-27d391f8-703a-4337-b716-464baa04aee9.manoel-carvalhoneto.workers.dev",
+          "https://boxes-inodes-replacement-27d391f8-703a-4337-b716-464baa04aee9.manoel-carvalhoneto.workers.dev"
+        ],
+        "proofs": [
+          {
+            "phase": "seed",
+            "values": [],
+            "assertions": true
+          },
+          {
+            "phase": "read",
+            "values": [["linked", 0]],
+            "assertions": true
+          },
+          {
+            "phase": "write",
+            "values": [],
+            "assertions": true
+          },
+          {
+            "phase": "verify",
+            "values": [["orphan", 0], 9, 9, 3, "bmV3"],
+            "assertions": true
+          }
+        ],
+        "cleanup": "contexts deleted; sandbox disposed and reclaimed by completed scope",
+        "scope": "Consumer replacement and separate production requests; not an induced restart of the Boxes Worker"
+      },
+      "logSha256": "a41947b9a2265b39711a79faabb6a52622085b54e9d935f0ad40ad749d74210a",
+      "sourceSha256": {
+        "shared-worker.ts": "ce65a16b1b94887ae75d985c5d0f25da744796258ed53461df07d12601c4294e",
+        "shared-proof.ts": "76c15471ce76b7e57c722107c15eb8cd0b1dd967c056c96fa6da3bef57c99a67"
+      },
+      "initialFailures": {
+        "logs": [
+          {
+            "file": "sdk-0.27-shared-proof.log",
+            "sha256": "09a45349a71a1947e5015ddb2796a1d37758f889ab58108c0d46bd8d4095a986"
+          },
+          {
+            "file": "sdk-0.27-shared-proof-diagnostic.log",
+            "sha256": "46896fdc17bac1c579ef436b06eaa9dbae4abc5b7f7f2222910593449e2db488"
+          }
+        ],
+        "cause": "The scratch proof used bare-filesystem absolute byte counts against the production default software image. Diagnostic status was 77754584 bytes, exactly 9 above its 77754575-byte shared-image baseline. Corrected proof compares the same 9/9/3-byte deltas against its actual creation status; product code, resource limits and assertions remain unchanged."
+      }
+    },
+    "remoteBinding": {
+      "passed": true,
+      "report": {
+        "measuredAt": 1792353845079,
+        "profile": "minutei",
+        "targetWorker": "cirro-sandbox-prod-rs7wexxow56rmsoz",
+        "sandboxId": "remote-binding-475c8da2-cdea-490a-a706-9a2f1702f9f3",
+        "previewOrigin": "https://boxes-binding-475c8da2-cdea-490a-a706-9a2f1702f9f3.manoel-carvalhoneto.workers.dev",
+        "replacementPreviewOrigin": "https://boxes-replacement-475c8da2-cdea-490a-a706-9a2f1702f9f3.manoel-carvalhoneto.workers.dev",
+        "consumerBundleSha256": "0a2f8d855d562dc528fd90b646288c686fcb8205cf6409344b5edbb53896c0e2",
+        "sdkVersion": "0.27.0",
+        "shellPackage": {
+          "packageId": "1922d7987e34c080abe1c8edf85e0d01c4f5dccaefafe1dada5735c6e64eb2ec",
+          "digest": "sha256:1922d7987e34c080abe1c8edf85e0d01c4f5dccaefafe1dada5735c6e64eb2ec",
+          "sizeBytes": 4349290,
+          "manifest": {
+            "name": "sh",
+            "version": "0.17.0",
+            "provides": null,
+            "commands": [
+              {
+                "command": "sh",
+                "entry": "bin/sh"
+              }
+            ],
+            "man_pages": []
+          }
+        },
+        "defaultSoftware": {
+          "catalog": [
+            {
+              "packageId": "1922d7987e34c080abe1c8edf85e0d01c4f5dccaefafe1dada5735c6e64eb2ec",
+              "digest": "sha256:1922d7987e34c080abe1c8edf85e0d01c4f5dccaefafe1dada5735c6e64eb2ec",
+              "sizeBytes": 4349290,
+              "manifest": {
+                "name": "sh",
+                "version": "0.17.0",
+                "provides": null,
+                "commands": [
+                  {
+                    "command": "sh",
+                    "entry": "bin/sh"
+                  }
+                ],
+                "man_pages": []
+              }
+            },
+            {
+              "packageId": "edb1cf0bbcf663d177916592d2f1b4361a02966dbf2eb44e3e61ea2a399bb43a",
+              "digest": "sha256:edb1cf0bbcf663d177916592d2f1b4361a02966dbf2eb44e3e61ea2a399bb43a",
+              "sizeBytes": 716972,
+              "manifest": {
+                "name": "jq",
+                "version": "0.3.3",
+                "provides": null,
+                "commands": [
+                  {
+                    "command": "jq",
+                    "entry": "bin/jq"
+                  }
+                ],
+                "man_pages": []
+              }
+            },
+            {
+              "packageId": "4bee17be5e65fab4195ab794e0a175021738c8fbe4363312b6987b57ec4b395d",
+              "digest": "sha256:4bee17be5e65fab4195ab794e0a175021738c8fbe4363312b6987b57ec4b395d",
+              "sizeBytes": 67400857,
+              "manifest": {
+                "name": "coreutils",
+                "version": "0.3.4",
+                "provides": null,
+                "commands": [
+                  {
+                    "command": "[",
+                    "entry": "bin/["
+                  },
+                  {
+                    "command": "arch",
+                    "entry": "bin/arch"
+                  },
+                  {
+                    "command": "b2sum",
+                    "entry": "bin/b2sum"
+                  },
+                  {
+                    "command": "base32",
+                    "entry": "bin/base32"
+                  },
+                  {
+                    "command": "base64",
+                    "entry": "bin/base64"
+                  },
+                  {
+                    "command": "basename",
+                    "entry": "bin/basename"
+                  },
+                  {
+                    "command": "basenc",
+                    "entry": "bin/basenc"
+                  },
+                  {
+                    "command": "bash",
+                    "entry": "bin/bash"
+                  },
+                  {
+                    "command": "bc",
+                    "entry": "bin/bc"
+                  },
+                  {
+                    "command": "cat",
+                    "entry": "bin/cat"
+                  },
+                  {
+                    "command": "chcon",
+                    "entry": "bin/chcon"
+                  },
+                  {
+                    "command": "chgrp",
+                    "entry": "bin/chgrp"
+                  },
+                  {
+                    "command": "chmod",
+                    "entry": "bin/chmod"
+                  },
+                  {
+                    "command": "chown",
+                    "entry": "bin/chown"
+                  },
+                  {
+                    "command": "chroot",
+                    "entry": "bin/chroot"
+                  },
+                  {
+                    "command": "cksum",
+                    "entry": "bin/cksum"
+                  },
+                  {
+                    "command": "cmp",
+                    "entry": "bin/cmp"
+                  },
+                  {
+                    "command": "column",
+                    "entry": "bin/column"
+                  },
+                  {
+                    "command": "comm",
+                    "entry": "bin/comm"
+                  },
+                  {
+                    "command": "cp",
+                    "entry": "bin/cp"
+                  },
+                  {
+                    "command": "cut",
+                    "entry": "bin/cut"
+                  },
+                  {
+                    "command": "date",
+                    "entry": "bin/date"
+                  },
+                  {
+                    "command": "dd",
+                    "entry": "bin/dd"
+                  },
+                  {
+                    "command": "df",
+                    "entry": "bin/df"
+                  },
+                  {
+                    "command": "dir",
+                    "entry": "bin/dir"
+                  },
+                  {
+                    "command": "dircolors",
+                    "entry": "bin/dircolors"
+                  },
+                  {
+                    "command": "dirname",
+                    "entry": "bin/dirname"
+                  },
+                  {
+                    "command": "du",
+                    "entry": "bin/du"
+                  },
+                  {
+                    "command": "echo",
+                    "entry": "bin/echo"
+                  },
+                  {
+                    "command": "env",
+                    "entry": "bin/env"
+                  },
+                  {
+                    "command": "expand",
+                    "entry": "bin/expand"
+                  },
+                  {
+                    "command": "expr",
+                    "entry": "bin/expr"
+                  },
+                  {
+                    "command": "factor",
+                    "entry": "bin/factor"
+                  },
+                  {
+                    "command": "false",
+                    "entry": "bin/false"
+                  },
+                  {
+                    "command": "findmnt",
+                    "entry": "bin/findmnt"
+                  },
+                  {
+                    "command": "fmt",
+                    "entry": "bin/fmt"
+                  },
+                  {
+                    "command": "fold",
+                    "entry": "bin/fold"
+                  },
+                  {
+                    "command": "getent",
+                    "entry": "bin/getent"
+                  },
+                  {
+                    "command": "groups",
+                    "entry": "bin/groups"
+                  },
+                  {
+                    "command": "head",
+                    "entry": "bin/head"
+                  },
+                  {
+                    "command": "hostid",
+                    "entry": "bin/hostid"
+                  },
+                  {
+                    "command": "hostname",
+                    "entry": "bin/hostname"
+                  },
+                  {
+                    "command": "id",
+                    "entry": "bin/id"
+                  },
+                  {
+                    "command": "install",
+                    "entry": "bin/install"
+                  },
+                  {
+                    "command": "join",
+                    "entry": "bin/join"
+                  },
+                  {
+                    "command": "kill",
+                    "entry": "bin/kill"
+                  },
+                  {
+                    "command": "link",
+                    "entry": "bin/link"
+                  },
+                  {
+                    "command": "ln",
+                    "entry": "bin/ln"
+                  },
+                  {
+                    "command": "logname",
+                    "entry": "bin/logname"
+                  },
+                  {
+                    "command": "ls",
+                    "entry": "bin/ls"
+                  },
+                  {
+                    "command": "md5sum",
+                    "entry": "bin/md5sum"
+                  },
+                  {
+                    "command": "mkdir",
+                    "entry": "bin/mkdir"
+                  },
+                  {
+                    "command": "mkfifo",
+                    "entry": "bin/mkfifo"
+                  },
+                  {
+                    "command": "mknod",
+                    "entry": "bin/mknod"
+                  },
+                  {
+                    "command": "mktemp",
+                    "entry": "bin/mktemp"
+                  },
+                  {
+                    "command": "more",
+                    "entry": "bin/more"
+                  },
+                  {
+                    "command": "mount",
+                    "entry": "bin/mount"
+                  },
+                  {
+                    "command": "mv",
+                    "entry": "bin/mv"
+                  },
+                  {
+                    "command": "nice",
+                    "entry": "bin/nice"
+                  },
+                  {
+                    "command": "nl",
+                    "entry": "bin/nl"
+                  },
+                  {
+                    "command": "nohup",
+                    "entry": "bin/nohup"
+                  },
+                  {
+                    "command": "nproc",
+                    "entry": "bin/nproc"
+                  },
+                  {
+                    "command": "numfmt",
+                    "entry": "bin/numfmt"
+                  },
+                  {
+                    "command": "od",
+                    "entry": "bin/od"
+                  },
+                  {
+                    "command": "paste",
+                    "entry": "bin/paste"
+                  },
+                  {
+                    "command": "pathchk",
+                    "entry": "bin/pathchk"
+                  },
+                  {
+                    "command": "pinky",
+                    "entry": "bin/pinky"
+                  },
+                  {
+                    "command": "printenv",
+                    "entry": "bin/printenv"
+                  },
+                  {
+                    "command": "printf",
+                    "entry": "bin/printf"
+                  },
+                  {
+                    "command": "ptx",
+                    "entry": "bin/ptx"
+                  },
+                  {
+                    "command": "pwd",
+                    "entry": "bin/pwd"
+                  },
+                  {
+                    "command": "readlink",
+                    "entry": "bin/readlink"
+                  },
+                  {
+                    "command": "realpath",
+                    "entry": "bin/realpath"
+                  },
+                  {
+                    "command": "rev",
+                    "entry": "bin/rev"
+                  },
+                  {
+                    "command": "rm",
+                    "entry": "bin/rm"
+                  },
+                  {
+                    "command": "rmdir",
+                    "entry": "bin/rmdir"
+                  },
+                  {
+                    "command": "runas",
+                    "entry": "bin/runas"
+                  },
+                  {
+                    "command": "runcon",
+                    "entry": "bin/runcon"
+                  },
+                  {
+                    "command": "seq",
+                    "entry": "bin/seq"
+                  },
+                  {
+                    "command": "sh",
+                    "entry": "bin/sh"
+                  },
+                  {
+                    "command": "sha1sum",
+                    "entry": "bin/sha1sum"
+                  },
+                  {
+                    "command": "sha224sum",
+                    "entry": "bin/sha224sum"
+                  },
+                  {
+                    "command": "sha256sum",
+                    "entry": "bin/sha256sum"
+                  },
+                  {
+                    "command": "sha384sum",
+                    "entry": "bin/sha384sum"
+                  },
+                  {
+                    "command": "sha512sum",
+                    "entry": "bin/sha512sum"
+                  },
+                  {
+                    "command": "shred",
+                    "entry": "bin/shred"
+                  },
+                  {
+                    "command": "shuf",
+                    "entry": "bin/shuf"
+                  },
+                  {
+                    "command": "sleep",
+                    "entry": "bin/sleep"
+                  },
+                  {
+                    "command": "sort",
+                    "entry": "bin/sort"
+                  },
+                  {
+                    "command": "split",
+                    "entry": "bin/split"
+                  },
+                  {
+                    "command": "stat",
+                    "entry": "bin/stat"
+                  },
+                  {
+                    "command": "stdbuf",
+                    "entry": "bin/stdbuf"
+                  },
+                  {
+                    "command": "strings",
+                    "entry": "bin/strings"
+                  },
+                  {
+                    "command": "stty",
+                    "entry": "bin/stty"
+                  },
+                  {
+                    "command": "su",
+                    "entry": "bin/su"
+                  },
+                  {
+                    "command": "sum",
+                    "entry": "bin/sum"
+                  },
+                  {
+                    "command": "sync",
+                    "entry": "bin/sync"
+                  },
+                  {
+                    "command": "tac",
+                    "entry": "bin/tac"
+                  },
+                  {
+                    "command": "tail",
+                    "entry": "bin/tail"
+                  },
+                  {
+                    "command": "tee",
+                    "entry": "bin/tee"
+                  },
+                  {
+                    "command": "test",
+                    "entry": "bin/test"
+                  },
+                  {
+                    "command": "timeout",
+                    "entry": "bin/timeout"
+                  },
+                  {
+                    "command": "touch",
+                    "entry": "bin/touch"
+                  },
+                  {
+                    "command": "tr",
+                    "entry": "bin/tr"
+                  },
+                  {
+                    "command": "true",
+                    "entry": "bin/true"
+                  },
+                  {
+                    "command": "truncate",
+                    "entry": "bin/truncate"
+                  },
+                  {
+                    "command": "tsort",
+                    "entry": "bin/tsort"
+                  },
+                  {
+                    "command": "tty",
+                    "entry": "bin/tty"
+                  },
+                  {
+                    "command": "uname",
+                    "entry": "bin/uname"
+                  },
+                  {
+                    "command": "unexpand",
+                    "entry": "bin/unexpand"
+                  },
+                  {
+                    "command": "uniq",
+                    "entry": "bin/uniq"
+                  },
+                  {
+                    "command": "unlink",
+                    "entry": "bin/unlink"
+                  },
+                  {
+                    "command": "uptime",
+                    "entry": "bin/uptime"
+                  },
+                  {
+                    "command": "users",
+                    "entry": "bin/users"
+                  },
+                  {
+                    "command": "vdir",
+                    "entry": "bin/vdir"
+                  },
+                  {
+                    "command": "wc",
+                    "entry": "bin/wc"
+                  },
+                  {
+                    "command": "which",
+                    "entry": "bin/which"
+                  },
+                  {
+                    "command": "who",
+                    "entry": "bin/who"
+                  },
+                  {
+                    "command": "whoami",
+                    "entry": "bin/whoami"
+                  },
+                  {
+                    "command": "yes",
+                    "entry": "bin/yes"
+                  }
+                ],
+                "man_pages": []
+              }
+            },
+            {
+              "packageId": "627c66cd792dbf7d8be470957f8fabb601480f10bb8e4688f01125e174c3b94a",
+              "digest": "sha256:627c66cd792dbf7d8be470957f8fabb601480f10bb8e4688f01125e174c3b94a",
+              "sizeBytes": 1268400,
+              "manifest": {
+                "name": "sed",
+                "version": "0.3.4",
+                "provides": null,
+                "commands": [
+                  {
+                    "command": "sed",
+                    "entry": "bin/sed"
+                  }
+                ],
+                "man_pages": []
+              }
+            },
+            {
+              "packageId": "7cfda6adf263ab53a82d6615889be50b7378ec763105a44b7791d1ad07df3d86",
+              "digest": "sha256:7cfda6adf263ab53a82d6615889be50b7378ec763105a44b7791d1ad07df3d86",
+              "sizeBytes": 425270,
+              "manifest": {
+                "name": "grep",
+                "version": "0.3.4",
+                "provides": null,
+                "commands": [
+                  {
+                    "command": "egrep",
+                    "entry": "bin/egrep"
+                  },
+                  {
+                    "command": "fgrep",
+                    "entry": "bin/fgrep"
+                  },
+                  {
+                    "command": "grep",
+                    "entry": "bin/grep"
+                  }
+                ],
+                "man_pages": []
+              }
+            },
+            {
+              "packageId": "a448662d870f46b78a091b1bff689697d47c5e535ece11042e9394ed64305716",
+              "digest": "sha256:a448662d870f46b78a091b1bff689697d47c5e535ece11042e9394ed64305716",
+              "sizeBytes": 1186481,
+              "manifest": {
+                "name": "gawk",
+                "version": "0.3.4",
+                "provides": null,
+                "commands": [
+                  {
+                    "command": "awk",
+                    "entry": "bin/awk"
+                  }
+                ],
+                "man_pages": []
+              }
+            },
+            {
+              "packageId": "a76c3acfd9124669f8476f6d5acb8799b8606b126518f05c4d508e144898036a",
+              "digest": "sha256:a76c3acfd9124669f8476f6d5acb8799b8606b126518f05c4d508e144898036a",
+              "sizeBytes": 1783546,
+              "manifest": {
+                "name": "findutils",
+                "version": "0.3.4",
+                "provides": null,
+                "commands": [
+                  {
+                    "command": "find",
+                    "entry": "bin/find"
+                  },
+                  {
+                    "command": "xargs",
+                    "entry": "bin/xargs"
+                  }
+                ],
+                "man_pages": []
+              }
+            },
+            {
+              "packageId": "c63f665fb9e8eb7cae4162d9d58f496d931d0e55c6d9e3aa6c1a841412a781e1",
+              "digest": "sha256:c63f665fb9e8eb7cae4162d9d58f496d931d0e55c6d9e3aa6c1a841412a781e1",
+              "sizeBytes": 140985,
+              "manifest": {
+                "name": "diffutils",
+                "version": "0.3.4",
+                "provides": null,
+                "commands": [
+                  {
+                    "command": "diff",
+                    "entry": "bin/diff"
+                  }
+                ],
+                "man_pages": []
+              }
+            },
+            {
+              "packageId": "a1db07c4e8113f1acb65651f470d362a87f4a18ba346c553c418c151f1e4e9f9",
+              "digest": "sha256:a1db07c4e8113f1acb65651f470d362a87f4a18ba346c553c418c151f1e4e9f9",
+              "sizeBytes": 220336,
+              "manifest": {
+                "name": "tar",
+                "version": "0.3.5",
+                "provides": null,
+                "commands": [
+                  {
+                    "command": "tar",
+                    "entry": "bin/tar"
+                  }
+                ],
+                "man_pages": []
+              }
+            },
+            {
+              "packageId": "76edafcb28727c6efe36ef73b74b3c14fbc16fa5962c706b163266c39c347597",
+              "digest": "sha256:76edafcb28727c6efe36ef73b74b3c14fbc16fa5962c706b163266c39c347597",
+              "sizeBytes": 413494,
+              "manifest": {
+                "name": "gzip",
+                "version": "0.3.4",
+                "provides": null,
+                "commands": [
+                  {
+                    "command": "gunzip",
+                    "entry": "bin/gunzip"
+                  },
+                  {
+                    "command": "gzip",
+                    "entry": "bin/gzip"
+                  },
+                  {
+                    "command": "zcat",
+                    "entry": "bin/zcat"
+                  }
+                ],
+                "man_pages": []
+              }
+            }
+          ],
+          "runs": [
+            {
+              "id": "coreutils",
+              "context": null,
+              "status": "exited",
+              "sourceHash": "eca41609765d6e7f921001f9e1f6a460bd0a09a1de0b4b4af11a01f13fd6c0db",
+              "language": "wasm",
+              "startedAt": 1792353567231,
+              "finishedAt": 1792353567888,
+              "output": {
+                "stdout": "native:image\n",
+                "stderr": "",
+                "result": null,
+                "exitCode": 0
+              }
+            },
+            {
+              "id": "bracket",
+              "context": null,
+              "status": "exited",
+              "sourceHash": "817cd62523a1d2c4abab0e1a79bf02a1a5ed6ecd224e04ce3d373fbd6a328c9e",
+              "language": "wasm",
+              "startedAt": 1792353568590,
+              "finishedAt": 1792353569285,
+              "output": {
+                "stdout": "",
+                "stderr": "",
+                "result": null,
+                "exitCode": 0
+              }
+            },
+            {
+              "id": "bracket-false",
+              "context": null,
+              "status": "exited",
+              "sourceHash": "6c436617930b722c02e8d6397da61dbe94b59510206ffb15b913ce4fc3dd5881",
+              "language": "wasm",
+              "startedAt": 1792353570005,
+              "finishedAt": 1792353570351,
+              "output": {
+                "stdout": "",
+                "stderr": "",
+                "result": null,
+                "exitCode": 1
+              }
+            },
+            {
+              "id": "sed",
+              "context": null,
+              "status": "exited",
+              "sourceHash": "dc4c1ecd5431df58e4098bc625c5a9f2c772fbdda5a07b04fd7cc0822feaaecd",
+              "language": "wasm",
+              "startedAt": 1792353571067,
+              "finishedAt": 1792353572269,
+              "output": {
+                "stdout": "new new\n",
+                "stderr": "",
+                "result": null,
+                "exitCode": 0
+              }
+            },
+            {
+              "id": "grep",
+              "context": null,
+              "status": "exited",
+              "sourceHash": "aea60905f716e759bfc37b30dbe445ab3d8f52a830f13908ede2c29a5feb4ed9",
+              "language": "wasm",
+              "startedAt": 1792353573109,
+              "finishedAt": 1792353574221,
+              "output": {
+                "stdout": "needle\n",
+                "stderr": "",
+                "result": null,
+                "exitCode": 0
+              }
+            },
+            {
+              "id": "gawk",
+              "context": null,
+              "status": "exited",
+              "sourceHash": "467ccfb890b4a3de7fb75de0e91cc6b3b769cd7296ca71bdd6f35500542d16df",
+              "language": "wasm",
+              "startedAt": 1792353574905,
+              "finishedAt": 1792353575805,
+              "output": {
+                "stdout": "12\n",
+                "stderr": "",
+                "result": null,
+                "exitCode": 0
+              }
+            },
+            {
+              "id": "findutils",
+              "context": null,
+              "status": "exited",
+              "sourceHash": "747926362cf82d9013e55c02126b926ac199a8853785b3a03580f0dc8e2d36fa",
+              "language": "wasm",
+              "startedAt": 1792353576578,
+              "finishedAt": 1792353577236,
+              "output": {
+                "stdout": "/tmp/seed.txt\n",
+                "stderr": "",
+                "result": null,
+                "exitCode": 0
+              }
+            },
+            {
+              "id": "diffutils",
+              "context": null,
+              "status": "exited",
+              "sourceHash": "9adf5b9e58087d27ab24e52f164eceb7eb4c2b0fddbac00b13e89e695f77660b",
+              "language": "wasm",
+              "startedAt": 1792353577892,
+              "finishedAt": 1792353578725,
+              "output": {
+                "stdout": "1c1\n< alpha\n---\n> beta\n",
+                "stderr": "",
+                "result": null,
+                "exitCode": 1
+              }
+            },
+            {
+              "id": "tar-write",
+              "context": null,
+              "status": "exited",
+              "sourceHash": "7b8b72513a047c2504b21fcf09688b70a68af22b6246ece7ff4176d892723b31",
+              "language": "wasm",
+              "startedAt": 1792353579396,
+              "finishedAt": 1792353580273,
+              "output": {
+                "stdout": "",
+                "stderr": "",
+                "result": null,
+                "exitCode": 0
+              }
+            },
+            {
+              "id": "tar-read",
+              "context": null,
+              "status": "exited",
+              "sourceHash": "9bca072eafa20c905bfa2028c48b155edb9825177c442c520cfbf5b970aacdba",
+              "language": "wasm",
+              "startedAt": 1792353580907,
+              "finishedAt": 1792353581617,
+              "output": {
+                "stdout": "seed.txt\n",
+                "stderr": "",
+                "result": null,
+                "exitCode": 0
+              }
+            },
+            {
+              "id": "gzip-write",
+              "context": null,
+              "status": "exited",
+              "sourceHash": "a97369a615447222e8b8030fbf139a4d5c57082eb1f115027d747df6a228e172",
+              "language": "wasm",
+              "startedAt": 1792353582159,
+              "finishedAt": 1792353583295,
+              "output": {
+                "stdout": "",
+                "stderr": "",
+                "result": null,
+                "exitCode": 0
+              }
+            },
+            {
+              "id": "gzip-read",
+              "context": null,
+              "status": "exited",
+              "sourceHash": "a3ac3c4f5c33ba5e52d7fb11e1104e2388016fce995b496a2cb8f55e231e6c3f",
+              "language": "wasm",
+              "startedAt": 1792353583882,
+              "finishedAt": 1792353584591,
+              "output": {
+                "stdout": "compressed content\n",
+                "stderr": "",
+                "result": null,
+                "exitCode": 0
+              }
+            },
+            {
+              "id": "jq",
+              "context": null,
+              "status": "exited",
+              "sourceHash": "d77590d33552b0262181e70ea17bf9b855ee3544facfb6e230deec399b6e0847",
+              "language": "wasm",
+              "startedAt": 1792353585058,
+              "finishedAt": 1792353585763,
+              "output": {
+                "stdout": "42\n",
+                "stderr": "",
+                "result": null,
+                "exitCode": 0
+              }
+            },
+            {
+              "id": "sh",
+              "context": null,
+              "status": "exited",
+              "sourceHash": "d528475055f04f8272b10b31ed1d5e4643021fabe96e8881fbe385a3e54f18b4",
+              "language": "wasm",
+              "startedAt": 1792353586578,
+              "finishedAt": 1792353588294,
+              "output": {
+                "stdout": "shell-ready\n",
+                "stderr": "",
+                "result": null,
+                "exitCode": 0
+              }
+            }
+          ]
+        },
+        "sdkModulesSha256": {
+          "../../src/sdk": "1a697b2fca2350d71c3901b03c55be41de1e04b978386c8c7a0651c8fcdb14ce",
+          "../../src/sdk-rpc": "1584f0102fe1276e12f15933aba8906f733d3de93bbce499a86275c3db01182e",
+          "../../src/sdk-tanstack": "73c62abaa449bd18b3648e9b9ae98e8c05e0c639dab182d0dfa04f4a8cc95f25",
+          "../../src/contracts": "bcacd714897e460d59b84cf10506ca43e16c0852ee06cbe37ac8bf9759738326"
+        },
+        "inlineDeadline": {
+          "requestedMs": 15000,
+          "startedAt": 1792353590234,
+          "recovery": {
+            "state": "running",
+            "checkpoints": 0,
+            "resumable": false,
+            "deadlineAt": 1792353605234
+          }
+        },
+        "proof": {
+          "measuredAt": 1792353621560,
+          "callback": {
+            "id": "rpc-callback",
+            "context": null,
+            "status": "exited",
+            "sourceHash": "75090090f42e508d6542184bce91b43c775c128d2ccfc04977bc226f5980cf7d",
+            "language": "typescript",
+            "startedAt": 1792353590234,
+            "finishedAt": 1792353593837,
+            "output": {
+              "stdout": "",
+              "stderr": "",
+              "result": {
+                "answer": 42,
+                "transport": "native RPC"
+              },
+              "exitCode": 0
+            }
+          },
+          "voidCallback": {
+            "id": "rpc-void",
+            "context": null,
+            "status": "exited",
+            "sourceHash": "0216a3fc5e53bcf477f59bda2cb4dc00f2f8f938fc8658ed498f019dcfbca5fa",
+            "language": "typescript",
+            "startedAt": 1792353594687,
+            "finishedAt": 1792353596258,
+            "output": {
+              "stdout": "",
+              "stderr": "",
+              "result": {
+                "wasUndefined": true,
+                "freshGlobals": true
+              },
+              "exitCode": 0
+            }
+          },
+          "interpreters": [
+            {
+              "id": "shebang-direct",
+              "context": null,
+              "status": "exited",
+              "sourceHash": "c79c9e8e573cb1313c5cadf0ce32e86376c9b0e2c2845ff9d215230fdca80a8c",
+              "language": "wasm",
+              "startedAt": 1792353598805,
+              "finishedAt": 1792353600631,
+              "output": {
+                "stdout": "/tmp/installed-script|a b|shebang-direct|input line\n",
+                "stderr": "",
+                "result": null,
+                "exitCode": 0
+              }
+            },
+            {
+              "id": "shebang-spawn",
+              "context": null,
+              "status": "exited",
+              "sourceHash": "00febb3abb8a7c3e2a09ec67df0d3ee957624168a9aa3c4b4b03a8f155564a7e",
+              "language": "wasm",
+              "startedAt": 1792353601481,
+              "finishedAt": 1792353604300,
+              "output": {
+                "stdout": "/tmp/installed-script|a b|shebang-spawn|input line\nafter",
+                "stderr": "",
+                "result": null,
+                "exitCode": 0
+              }
+            },
+            {
+              "id": "shebang-exec",
+              "context": null,
+              "status": "exited",
+              "sourceHash": "9195481d8a248dc8bc7a6eb041f0e13513d1ae651c91bf6ff69db89511219498",
+              "language": "wasm",
+              "startedAt": 1792353605208,
+              "finishedAt": 1792353607556,
+              "output": {
+                "stdout": "/tmp/installed-script|a b|shebang-exec|input line\n",
+                "stderr": "",
+                "result": null,
+                "exitCode": 0
+              }
+            }
+          ],
+          "interpreterFile": {
+            "content": "c2hlYmFuZy1leGVj",
+            "encoding": "base64",
+            "size": 12
+          },
+          "shellCwd": [
+            {
+              "id": "direct",
+              "result": {
+                "id": "direct",
+                "context": null,
+                "status": "exited",
+                "sourceHash": "ac15e1303cc719258d4329d60564bae2569a2a74b79c1b8445f7974de281fde0",
+                "language": "wasm",
+                "startedAt": 1792353611101,
+                "finishedAt": 1792353612630,
+                "output": {
+                  "stdout": "/tmp/context|/tmp/context/script|hello\n",
+                  "stderr": "",
+                  "result": null,
+                  "exitCode": 0
+                }
+              }
+            },
+            {
+              "id": "absolute",
+              "result": {
+                "id": "absolute",
+                "context": null,
+                "status": "exited",
+                "sourceHash": "973ba4b884c8e968eaaf6952e640529821f5c622467cfd58ac8b1148ae996160",
+                "language": "wasm",
+                "startedAt": 1792353613292,
+                "finishedAt": 1792353614334,
+                "output": {
+                  "stdout": "/tmp/context\n",
+                  "stderr": "",
+                  "result": null,
+                  "exitCode": 0
+                }
+              }
+            },
+            {
+              "id": "symlink",
+              "result": {
+                "id": "symlink",
+                "context": null,
+                "status": "exited",
+                "sourceHash": "ea73aa82411235bf14dcaf1c00a595e425d7e89050d4cd62d95a025503e2f22a",
+                "language": "wasm",
+                "startedAt": 1792353615016,
+                "finishedAt": 1792353616791,
+                "output": {
+                  "stdout": "/tmp/context|/tmp/link/script|hello\n",
+                  "stderr": "",
+                  "result": null,
+                  "exitCode": 0
+                }
+              }
+            },
+            {
+              "id": "spoofed-pwd",
+              "result": {
+                "id": "spoofed-pwd",
+                "context": null,
+                "status": "exited",
+                "sourceHash": "efbf0ef2c46ccd101fe40d3d2bab22dcf51e57d9347dccb2c7b6c9c1b1297d3d",
+                "language": "wasm",
+                "startedAt": 1792353617755,
+                "finishedAt": 1792353619071,
+                "output": {
+                  "stdout": "/tmp/context|/tmp/context/script|hello\n",
+                  "stderr": "",
+                  "result": null,
+                  "exitCode": 0
+                }
+              }
+            },
+            {
+              "id": "empty-environment",
+              "result": {
+                "id": "empty-environment",
+                "context": null,
+                "status": "exited",
+                "sourceHash": "b9afeb45b12f09e2e49b289187465a8f258c3e0abd479dd26a0d3cb4d2523c38",
+                "language": "wasm",
+                "startedAt": 1792353620137,
+                "finishedAt": 1792353621006,
+                "output": {
+                  "stdout": "/tmp/context|/tmp/context/script|hello\n",
+                  "stderr": "",
+                  "result": null,
+                  "exitCode": 0
+                }
+              }
+            }
+          ],
+          "file": {
+            "content": "bmF0aXZlIENsb3VkZmxhcmUgYmluZGluZw==",
+            "encoding": "base64",
+            "size": 25
+          },
+          "calls": [
+            {
+              "op": "host.call",
+              "name": "answer",
+              "input": {
+                "value": 21
+              }
+            },
+            {
+              "op": "host.call",
+              "name": "void"
+            }
+          ],
+          "managementDenied": 403,
+          "wrongSandboxDenied": 401
+        },
+        "descriptors": [
+          {
+            "run": {
+              "id": "descriptor-fexec",
+              "context": null,
+              "status": "exited",
+              "sourceHash": "0c8e786835f8ab9b3cbb4f71bb0f9dd9917b582ad1eb4f38c6d6ea2ce03c1779",
+              "language": "wasm",
+              "startedAt": 1792353624873,
+              "finishedAt": 1792353627125,
+              "output": {
+                "stdout": "/dev/fd/12|fexec|blue\n",
+                "stderr": "",
+                "result": null,
+                "exitCode": 0
+              }
+            },
+            "file": {
+              "content": "ZmV4ZWM=",
+              "encoding": "base64",
+              "size": 5
+            }
+          },
+          {
+            "run": {
+              "id": "descriptor-fexec-unlink",
+              "context": null,
+              "status": "exited",
+              "sourceHash": "d7884d7a020822394129d672fa05fe1b1f6595ea7f285e67efac13c8c54a135b",
+              "language": "wasm",
+              "startedAt": 1792353629500,
+              "finishedAt": 1792353631216,
+              "output": {
+                "stdout": "/dev/fd/12|fexec|blue\n",
+                "stderr": "",
+                "result": null,
+                "exitCode": 0
+              }
+            },
+            "file": {
+              "content": "ZmV4ZWMtdW5saW5r",
+              "encoding": "base64",
+              "size": 12
+            }
+          },
+          {
+            "run": {
+              "id": "descriptor-fexec-rename",
+              "context": null,
+              "status": "exited",
+              "sourceHash": "5252bf965c8a33706f36dfeb3936a9cf90179665b93b3d48f045d6d0f87c5c28",
+              "language": "wasm",
+              "startedAt": 1792353633133,
+              "finishedAt": 1792353634935,
+              "output": {
+                "stdout": "/dev/fd/12|fexec|blue\n",
+                "stderr": "",
+                "result": null,
+                "exitCode": 0
+              }
+            },
+            "file": {
+              "content": "ZmV4ZWMtcmVuYW1l",
+              "encoding": "base64",
+              "size": 12
+            }
+          },
+          {
+            "run": {
+              "id": "descriptor-fexec-cloexec",
+              "context": null,
+              "status": "exited",
+              "sourceHash": "eb6b5667f0c2002fb8bbacc86d9d2983b4532a613db8f38843879e671c868e02",
+              "language": "wasm",
+              "startedAt": 1792353637067,
+              "finishedAt": 1792353637592,
+              "output": {
+                "stdout": "",
+                "stderr": "",
+                "result": 44,
+                "exitCode": 0
+              }
+            },
+            "file": {
+              "content": "ZmV4ZWMtcmVuYW1l",
+              "encoding": "base64",
+              "size": 12
+            }
+          },
+          {
+            "run": {
+              "id": "descriptor-fexec-closed",
+              "context": null,
+              "status": "exited",
+              "sourceHash": "6ee56814462c45c8da4aae9696c84790e89f45dd9f76c2c5514aa4b6cf26f28e",
+              "language": "wasm",
+              "startedAt": 1792353639477,
+              "finishedAt": 1792353639927,
+              "output": {
+                "stdout": "",
+                "stderr": "",
+                "result": 44,
+                "exitCode": 0
+              }
+            },
+            "file": {
+              "content": "ZmV4ZWMtcmVuYW1l",
+              "encoding": "base64",
+              "size": 12
+            }
+          }
+        ],
+        "terminal": {
+          "inventory": {
+            "running": {
+              "id": "terminal-live",
+              "context": null,
+              "status": "running",
+              "sourceHash": "a8a6480394435899e061e452f41d433ae5dcff92bcf00e197b8faea415137b28",
+              "language": "wasm",
+              "startedAt": 1792353790062,
+              "finishedAt": null,
+              "stdinMode": "pty"
+            },
+            "settled": {
+              "id": "terminal-live",
+              "context": null,
+              "status": "exited",
+              "sourceHash": "a8a6480394435899e061e452f41d433ae5dcff92bcf00e197b8faea415137b28",
+              "language": "wasm",
+              "startedAt": 1792353790062,
+              "finishedAt": 1792353798542,
+              "stdinMode": "pty"
+            },
+            "pages": 4
+          },
+          "initial": {
+            "cols": 80,
+            "rows": 24,
+            "revision": 0
+          },
+          "resized": {
+            "cols": 100,
+            "rows": 30,
+            "revision": 2
+          },
+          "terminal": {
+            "id": "terminal-live",
+            "context": null,
+            "status": "exited",
+            "sourceHash": "a8a6480394435899e061e452f41d433ae5dcff92bcf00e197b8faea415137b28",
+            "language": "wasm",
+            "startedAt": 1792353790062,
+            "finishedAt": 1792353798542,
+            "output": {
+              "stdout": "ready\neof-ready\nwinch\nafter-one\nwinch\ndone\n",
+              "stderr": "",
+              "result": null,
+              "exitCode": 0
+            }
+          },
+          "agent": {
+            "id": "terminal-agent",
+            "context": null,
+            "status": "exited",
+            "sourceHash": "0bc9adff0ae13ee1bef54d4ae1ab07254e340a996cec8b6a418fe919151d4056",
+            "language": "typescript",
+            "startedAt": 1792353796601,
+            "finishedAt": 1792353797127,
+            "output": {
+              "stdout": "",
+              "stderr": "",
+              "result": {
+                "cols": 100,
+                "rows": 30,
+                "revision": 2
+              },
+              "exitCode": 0
+            }
+          },
+          "input": {
+            "offset": 0,
+            "total": 0,
+            "closed": true
+          },
+          "staleRevision": 409,
+          "foreignSandbox": 401,
+          "foreground": {
+            "id": "terminal-foreground",
+            "context": null,
+            "status": "exited",
+            "sourceHash": "ba142b7baf1b3995c8c0c79e34cbbaa5a5918c22842d94de6aaed64be41b3dc3",
+            "language": "wasm",
+            "startedAt": 1792353800382,
+            "finishedAt": 1792353803204,
+            "output": {
+              "stdout": "interrupt\npair-done\n",
+              "stderr": "",
+              "result": null,
+              "exitCode": 0
+            }
+          },
+          "rawOwners": {
+            "id": "terminal-raw-owners",
+            "context": null,
+            "status": "exited",
+            "sourceHash": "47334effdf47f9cd168641c5b517244045a26912fab8c5f7dd63d11088783fc2",
+            "language": "wasm",
+            "startedAt": 1792353807782,
+            "finishedAt": 1792353809174,
+            "output": {
+              "stdout": "raw-owners-restored\n",
+              "stderr": "",
+              "result": null,
+              "exitCode": 0
+            }
+          },
+          "termios": {
+            "id": "terminal-termios",
+            "context": null,
+            "status": "exited",
+            "sourceHash": "10c8332bd7f638de1770e1493da38074a0b06d618c198f589d69c36c835c641f",
+            "language": "wasm",
+            "startedAt": 1792353809659,
+            "finishedAt": 1792353810419,
+            "output": {
+              "stdout": "termios-verified\n",
+              "stderr": "",
+              "result": null,
+              "exitCode": 0
+            }
+          },
+          "attributes": {
+            "initial": {
+              "desired": {
+                "attributes": null,
+                "revision": 0
+              },
+              "observed": {
+                "attributes": {
+                  "icrnl": true,
+                  "opost": true,
+                  "onlcr": true,
+                  "icanon": true,
+                  "echo": true,
+                  "isig": true,
+                  "cc": [3, 28, 26, 4, 127, 21, 23]
+                },
+                "revision": 0
+              },
+              "settled": false
+            },
+            "guest": {
+              "desired": {
+                "attributes": {
+                  "icrnl": false,
+                  "opost": false,
+                  "onlcr": false,
+                  "icanon": false,
+                  "echo": false,
+                  "isig": false,
+                  "cc": [1, 2, 3, 4, 5, 6, 7]
+                },
+                "revision": 1
+              },
+              "observed": {
+                "attributes": {
+                  "icrnl": false,
+                  "opost": false,
+                  "onlcr": false,
+                  "icanon": false,
+                  "echo": true,
+                  "isig": false,
+                  "cc": [1, 2, 3, 4, 5, 6, 7]
+                },
+                "revision": 1
+              },
+              "settled": false
+            },
+            "final": {
+              "desired": {
+                "attributes": {
+                  "icrnl": true,
+                  "opost": true,
+                  "onlcr": true,
+                  "icanon": true,
+                  "echo": false,
+                  "isig": true,
+                  "cc": [1, 2, 3, 4, 5, 6, 7]
+                },
+                "revision": 3
+              },
+              "observed": {
+                "attributes": {
+                  "icrnl": true,
+                  "opost": true,
+                  "onlcr": true,
+                  "icanon": true,
+                  "echo": false,
+                  "isig": true,
+                  "cc": [1, 2, 3, 4, 5, 6, 7]
+                },
+                "revision": 3
+              },
+              "settled": true
+            },
+            "process": {
+              "id": "terminal-attributes",
+              "context": null,
+              "status": "exited",
+              "sourceHash": "631b044078fbac8a03ddea47e5b1ef2185f919c6289a76ec7112a84ab6c8b3b0",
+              "language": "wasm",
+              "startedAt": 1792353815653,
+              "finishedAt": 1792353830372,
+              "output": {
+                "stdout": "attributes-ready\r\nraw-ok\nguest-changed\nconfigured-again\neof-ready\nterminal-done\r\n",
+                "stderr": "",
+                "result": null,
+                "exitCode": 0
+              }
+            },
+            "staleRevision": 409,
+            "foreignSandbox": 401
+          }
+        },
+        "detachedContexts": {
+          "created": {
+            "phase": "create",
+            "callbacks": 1,
+            "queued": [
+              {
+                "id": "detached-queued-js",
+                "context": {
+                  "id": "detached-js",
+                  "generation": 0
+                },
+                "status": "queued",
+                "sourceHash": "37706cbb9f0f63c57d6eba15c2542cd0998e68d4289f7dc40a99b0939366b3be",
+                "language": "typescript",
+                "startedAt": 1792353557690,
+                "finishedAt": null,
+                "output": null
+              },
+              {
+                "id": "detached-queued-python",
+                "context": {
+                  "id": "detached-python",
+                  "generation": 0
+                },
+                "status": "queued",
+                "sourceHash": "34a6a5152d55b824ea1d1442f093ca78f465171937d6d3ac0c360043d658aced",
+                "language": "python",
+                "startedAt": 1792353559699,
+                "finishedAt": null,
+                "output": null
+              }
+            ],
+            "schedule": {
+              "op": "cron.schedule",
+              "id": "detached-once",
+              "schedule": "2026-10-18T19:59:22.841Z",
+              "execution": {
+                "op": "javascript.evaluate",
+                "id": "detached-tick",
+                "contextId": "detached-cron",
+                "expression": "globalThis.next()"
+              },
+              "overlap": "queue",
+              "context": {
+                "id": "detached-cron",
+                "generation": 0
+              },
+              "state": "active",
+              "createdAt": 1792353561477,
+              "nextRun": 1792353562841,
+              "lastRun": null,
+              "runCount": 0,
+              "lastProcessId": null,
+              "error": null
+            }
+          },
+          "verified": {
+            "phase": "verify",
+            "queued": [
+              {
+                "id": "detached-queued-js",
+                "context": {
+                  "id": "detached-js",
+                  "generation": 0
+                },
+                "status": "exited",
+                "sourceHash": "2cbd6c79cde051e3455293463e8bab3b6b61598599f5551277f192cc692c97ca",
+                "language": "typescript",
+                "startedAt": 1792353560572,
+                "finishedAt": 1792353564061,
+                "output": {
+                  "stdout": "",
+                  "stderr": "",
+                  "result": {
+                    "value": 41,
+                    "denied": "FORBIDDEN"
+                  },
+                  "exitCode": 0
+                }
+              },
+              {
+                "id": "detached-queued-python",
+                "context": {
+                  "id": "detached-python",
+                  "generation": 0
+                },
+                "status": "exited",
+                "sourceHash": "34a6a5152d55b824ea1d1442f093ca78f465171937d6d3ac0c360043d658aced",
+                "language": "python",
+                "startedAt": 1792353565115,
+                "finishedAt": 1792353569133,
+                "output": {
+                  "stdout": "",
+                  "stderr": "",
+                  "result": 41,
+                  "exitCode": 0
+                }
+              }
+            ],
+            "continued": [
+              {
+                "id": "detached-next-js",
+                "context": {
+                  "id": "detached-js",
+                  "generation": 0
+                },
+                "status": "exited",
+                "sourceHash": "78b5570582a5cd9b4dc8fb8de493fb9b71c046aee9a7867a7934204cdd2926e3",
+                "language": "javascript",
+                "startedAt": 1792353834762,
+                "finishedAt": 1792353837778,
+                "output": {
+                  "stdout": "",
+                  "stderr": "",
+                  "result": 42,
+                  "exitCode": 0
+                }
+              },
+              {
+                "id": "detached-next-python",
+                "context": {
+                  "id": "detached-python",
+                  "generation": 0
+                },
+                "status": "exited",
+                "sourceHash": "34a6a5152d55b824ea1d1442f093ca78f465171937d6d3ac0c360043d658aced",
+                "language": "python",
+                "startedAt": 1792353839585,
+                "finishedAt": 1792353843303,
+                "output": {
+                  "stdout": "",
+                  "stderr": "",
+                  "result": 42,
+                  "exitCode": 0
+                }
+              }
+            ],
+            "schedule": {
+              "op": "cron.schedule",
+              "id": "detached-once",
+              "schedule": "2026-10-18T19:59:22.841Z",
+              "execution": {
+                "op": "javascript.evaluate",
+                "id": "detached-tick",
+                "contextId": "detached-cron",
+                "expression": "globalThis.next()"
+              },
+              "overlap": "queue",
+              "context": {
+                "id": "detached-cron",
+                "generation": 0
+              },
+              "state": "completed",
+              "createdAt": 1792353561477,
+              "nextRun": null,
+              "lastRun": 1792353562841,
+              "runCount": 1,
+              "lastProcessId": "cron-768da3effbdd0fef62106dc72f37a05faf6a3260190e52799b1d62962a",
+              "error": null
+            },
+            "scheduledProcess": {
+              "id": "cron-768da3effbdd0fef62106dc72f37a05faf6a3260190e52799b1d62962a",
+              "context": {
+                "id": "detached-cron",
+                "generation": 0
+              },
+              "status": "exited",
+              "sourceHash": "459851de8b6eee45f01c06c485e09bf72217d7e67b8f588a75fc0ed3d192958b",
+              "language": "javascript",
+              "startedAt": 1792353586338,
+              "finishedAt": 1792353589543,
+              "output": {
+                "stdout": "",
+                "stderr": "",
+                "result": 41,
+                "exitCode": 0
+              }
+            },
+            "staleSchedule": {
+              "op": "cron.schedule",
+              "id": "detached-stale-once",
+              "schedule": "2026-10-18T19:59:22.841Z",
+              "execution": {
+                "op": "process.run",
+                "id": "detached-stale-tick",
+                "language": "javascript",
+                "source": "export default async({tools})=>tools.call({op:'filesystem.writeFile',path:'/detached-stale-entered',content:'bad',encoding:'utf8'})",
+                "contextId": "detached-stale"
+              },
+              "overlap": "allow",
+              "context": {
+                "id": "detached-stale",
+                "generation": 0
+              },
+              "state": "failed",
+              "createdAt": 1792353562571,
+              "nextRun": null,
+              "lastRun": null,
+              "runCount": 0,
+              "lastProcessId": null,
+              "error": "Execution belongs to another context generation"
+            },
+            "staleContext": {
+              "id": "detached-stale",
+              "language": "javascript",
+              "generation": 1,
+              "state": "idle",
+              "createdAt": 1792353540916,
+              "updatedAt": 1792353563331,
+              "executionId": null,
+              "deadlineAt": null
+            },
+            "staleFileExists": false
+          }
+        },
+        "retainedContexts": {
+          "created": {
+            "phase": "create",
+            "context": {
+              "id": "retained",
+              "language": "javascript",
+              "generation": 0,
+              "state": "idle",
+              "createdAt": 1792353703785,
+              "updatedAt": 1792353712750,
+              "executionId": "retained-first",
+              "deadlineAt": null
+            },
+            "records": [
+              {
+                "id": "retained-seed",
+                "context": {
+                  "id": "retained",
+                  "generation": 0
+                },
+                "status": "exited",
+                "sourceHash": "488ea9e6613986c876e109697e04010a3e6d16a8b89107feef55c722cbf3cdc0",
+                "language": "javascript",
+                "startedAt": 1792353705465,
+                "finishedAt": 1792353708348,
+                "output": {
+                  "stdout": "",
+                  "stderr": "",
+                  "result": null,
+                  "exitCode": 0
+                }
+              },
+              {
+                "id": "retained-first",
+                "context": {
+                  "id": "retained",
+                  "generation": 0
+                },
+                "status": "exited",
+                "sourceHash": "c737d8cb92926ce3263c827bacf2533abd4d84128402215f8854442f180ee25e",
+                "language": "typescript",
+                "startedAt": 1792353710206,
+                "finishedAt": 1792353714402,
+                "output": {
+                  "stdout": "",
+                  "stderr": "",
+                  "result": {
+                    "counter": 41,
+                    "tool": 11
+                  },
+                  "exitCode": 0
+                }
+              }
+            ],
+            "callbacks": 1,
+            "deleted": false,
+            "driver": {
+              "value": 41,
+              "closedDenied": true
+            },
+            "python": {
+              "context": {
+                "id": "retained-python",
+                "language": "python",
+                "generation": 0,
+                "state": "idle",
+                "createdAt": 1792353664695,
+                "updatedAt": 1792353695188,
+                "executionId": "python-initial-value",
+                "deadlineAt": null
+              },
+              "records": [
+                {
+                  "id": "python-seed",
+                  "context": {
+                    "id": "retained-python",
+                    "generation": 0
+                  },
+                  "status": "exited",
+                  "sourceHash": "3c28f734a1da41433fd1fd8b72d2aa54848c5d1a7a86202bf6f2789f3f29a67b",
+                  "language": "python",
+                  "startedAt": 1792353666320,
+                  "finishedAt": 1792353687614,
+                  "output": {
+                    "stdout": "",
+                    "stderr": "",
+                    "result": null,
+                    "exitCode": 0
+                  }
+                },
+                {
+                  "id": "python-initial-value",
+                  "context": {
+                    "id": "retained-python",
+                    "generation": 0
+                  },
+                  "status": "exited",
+                  "sourceHash": "ac3767b4380964b6a64650d387ccfde873b42d5d39677bcb0c06feb35ad24b7e",
+                  "language": "python",
+                  "startedAt": 1792353689856,
+                  "finishedAt": 1792353696085,
+                  "output": {
+                    "stdout": "",
+                    "stderr": "",
+                    "result": [41, 41, 42, "caf\u00e9", "a\u00e7\u00e3o"],
+                    "exitCode": 0
+                  }
+                }
+              ],
+              "deleted": false
+            }
+          },
+          "resumed": {
+            "phase": "resume",
+            "context": {
+              "id": "retained",
+              "language": "javascript",
+              "generation": 1,
+              "state": "idle",
+              "createdAt": 1792353703785,
+              "updatedAt": 1792353783863,
+              "executionId": "retained-cleared",
+              "deadlineAt": null
+            },
+            "records": [
+              {
+                "id": "retained-next",
+                "context": {
+                  "id": "retained",
+                  "generation": 0
+                },
+                "status": "exited",
+                "sourceHash": "3c22822d46020f61fe10c63a93980c727ad77aed61725d9db04ecb258923c2e9",
+                "language": "typescript",
+                "startedAt": 1792353768409,
+                "finishedAt": 1792353773647,
+                "output": {
+                  "stdout": "resumed\n",
+                  "stderr": "",
+                  "result": {
+                    "counter": 42,
+                    "tool": 42
+                  },
+                  "exitCode": 0
+                }
+              },
+              {
+                "id": "retained-denied",
+                "context": {
+                  "id": "retained",
+                  "generation": 0
+                },
+                "status": "exited",
+                "sourceHash": "f50b5c5b802ebe9743e9168ae29de3e0d7f4f086af80941aeda60afff8280ca6",
+                "language": "typescript",
+                "startedAt": 1792353775780,
+                "finishedAt": 1792353779519,
+                "output": {
+                  "stdout": "",
+                  "stderr": "",
+                  "result": "FORBIDDEN",
+                  "exitCode": 0
+                }
+              },
+              {
+                "id": "retained-cleared",
+                "context": {
+                  "id": "retained",
+                  "generation": 1
+                },
+                "status": "exited",
+                "sourceHash": "f8bd8ff550ea459186702ffdcb169dc0e5b5076958ff032c59e77c248c01a345",
+                "language": "javascript",
+                "startedAt": 1792353782220,
+                "finishedAt": 1792353784721,
+                "output": {
+                  "stdout": "",
+                  "stderr": "",
+                  "result": "undefined",
+                  "exitCode": 0
+                }
+              }
+            ],
+            "callbacks": 1,
+            "deleted": true,
+            "driver": {
+              "value": 42,
+              "closedDenied": true
+            },
+            "python": {
+              "context": {
+                "id": "retained-python",
+                "language": "python",
+                "generation": 1,
+                "state": "idle",
+                "createdAt": 1792353664695,
+                "updatedAt": 1792353759142,
+                "executionId": "python-cleared",
+                "deadlineAt": null
+              },
+              "records": [
+                {
+                  "id": "python-resume",
+                  "context": {
+                    "id": "retained-python",
+                    "generation": 0
+                  },
+                  "status": "exited",
+                  "sourceHash": "3201493d72ff5d74d8b39eb5656636423ca86d771101dc5c7d1ea8383f4d5b30",
+                  "language": "python",
+                  "startedAt": 1792353737970,
+                  "finishedAt": 1792353745750,
+                  "output": {
+                    "stdout": "",
+                    "stderr": "",
+                    "result": [
+                      42,
+                      "current",
+                      "c2VlZA==",
+                      [
+                        {
+                          "text": "a\u00e7\u00e3o",
+                          "value": 42
+                        },
+                        ["box", "native"],
+                        1,
+                        42,
+                        2
+                      ],
+                      false,
+                      42,
+                      42,
+                      "caf\u00e9",
+                      "a\u00e7\u00e3o",
+                      true
+                    ],
+                    "exitCode": 0
+                  }
+                },
+                {
+                  "id": "python-denied",
+                  "context": {
+                    "id": "retained-python",
+                    "generation": 0
+                  },
+                  "status": "exited",
+                  "sourceHash": "7f0cebbf318bcd74f4264654659acfb1b94338bfa420459f04f9240207991c05",
+                  "language": "python",
+                  "startedAt": 1792353747568,
+                  "finishedAt": 1792353753629,
+                  "output": {
+                    "stdout": "",
+                    "stderr": "",
+                    "result": ["FORBIDDEN", "FORBIDDEN", "c2VlZA==", "c2VlZA=="],
+                    "exitCode": 0
+                  }
+                },
+                {
+                  "id": "python-cleared",
+                  "context": {
+                    "id": "retained-python",
+                    "generation": 1
+                  },
+                  "status": "exited",
+                  "sourceHash": "703d590e2831eb0a587bb76aa83bf423dbd948db3193606373ad9255c295fe15",
+                  "language": "python",
+                  "startedAt": 1792353756496,
+                  "finishedAt": 1792353759964,
+                  "output": {
+                    "stdout": "",
+                    "stderr": "",
+                    "result": false,
+                    "exitCode": 0
+                  }
+                }
+              ],
+              "deleted": true
+            }
+          }
+        },
+        "persistent": {
+          "created": {
+            "phase": "create",
+            "value": {
+              "content": "cGVyc2lzdGVudCBuYXRpdmUgYmluZGluZw==",
+              "encoding": "base64",
+              "freshGlobals": true,
+              "label": "create"
+            },
+            "callbacks": ["create"],
+            "closedContextDenied": true,
+            "writeDenied": null,
+            "lowMemoryDenied": true,
+            "policyMemoryDenied": true,
+            "allowedAllocation": 6000000
+          },
+          "resumed": {
+            "phase": "resume",
+            "value": {
+              "content": "cGVyc2lzdGVudCBuYXRpdmUgYmluZGluZw==",
+              "encoding": "base64",
+              "freshGlobals": true,
+              "label": "resume"
+            },
+            "callbacks": ["resume"],
+            "closedContextDenied": true,
+            "writeDenied": true,
+            "lowMemoryDenied": true,
+            "policyMemoryDenied": true,
+            "allowedAllocation": 6000000
+          },
+          "previousReceiptRetained": true
+        }
+      },
+      "logSha256": "77e2e6af79fbbeb2aeb40d15c3f571464aec994a3eb4aa9825611eaf758b58aa"
+    },
+    "finalAudit": {
+      "passed": true,
+      "report": {
+        "measuredAt": 1792353898581,
+        "profile": "minutei",
+        "worker": "cirro-sandbox-prod-rs7wexxow56rmsoz",
+        "bucket": "cirro-objects-prod-vbk2p6ruhs2m645y",
+        "placement": {
+          "mode": "smart"
+        },
+        "counts": {
+          "pages": 7,
+          "objects": 6117,
+          "processes": 1499,
+          "schedules": 2,
+          "contexts": 0,
+          "metadataAbsent": 2768
+        },
+        "formats": {
+          "run-v7": 1499,
+          "program-json-v2": 1397,
+          "program-json": 435,
+          "historical-source-text-v1": 16,
+          "cron-v2": 2
+        },
+        "statuses": {
+          "cancelled": 28,
+          "exited": 1362,
+          "failed": 109
+        },
+        "complete": true
+      },
+      "logSha256": "b187360633d33bf8c0a68cc8d12e67a0fb42f23fadb2f6433f3afac4295b2ba4"
+    }
+  },
+  "archiveDocumentation": {
+    "scope": "Immutable SDK archive README/docs snapshot predates the final delivery update and still labels shared-inode source unreleased and points installation at 0.26.0. Runtime and SDK archive version are 0.27.0; current repository docs and release notes provide the updated scope.",
+    "archiveReplaced": false
+  }
 }

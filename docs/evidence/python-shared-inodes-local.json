@@ -202,7 +202,7 @@
     "scope": "Standalone artifact byte sizes and hashes only; no request latency, CPU, heap-page, billing or AgentOS cost comparison"
   },
   "limits": [
-    "Local source evidence only; current production and published archives remain 0.26.0",
+    "Local source measurement; 0.27.0 publication and production proof are recorded separately in sdk-0.27.0-delivery.json",
     "Changed Python binary requires explicit context reset; filesystem-v6 is an unconditional deploy-time migration",
     "Expired-process recovery uses a seeded receipt in real R2, not proof of an arbitrary platform crash",
     "WASI process-local detached buffers and full cross-runtime POSIX descriptor coherence are outside this change",
@@ -225,7 +225,7 @@
       "files": 101,
       "testSeconds": 220.67
     },
-    "release": "not published",
-    "deployment": "not performed"
+    "release": "Published as sdk-v0.27.0; see sdk-0.27.0-delivery.json",
+    "deployment": "Completed with unconditional filesystem-v6 migration; see sdk-0.27.0-delivery.json"
   }
 }
