@@ -771,7 +771,7 @@ fn confined(base: &str, path: &str) -> Result<String, Failure> {
     if parts.len() > 64 {
         return Err(Failure::Errno(37));
     }
-    let path = format!("/{}", parts.join("/"));
+    let path = format!("{}/{path}", base.trim_end_matches('/'));
     if path.len() > 4096 {
         return Err(Failure::Errno(37));
     }
@@ -6344,6 +6344,6 @@ mod tests {
     fn paths_cannot_escape_the_directory_descriptor() {
         assert!(confined("/tmp", "../escape").is_err());
         assert!(confined("/", "../../escape").is_err());
-        assert!(matches!(confined("/tmp","a/../b"),Ok(path) if path == "/tmp/b"));
+        assert!(matches!(confined("/tmp","a/../b"),Ok(path) if path == "/tmp/a/../b"));
     }
 }

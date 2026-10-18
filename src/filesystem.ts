@@ -243,7 +243,7 @@ export const filesystem = Effect.fn("filesystem.action")(function* (
             Effect.gen(function* () {
               const result = yield* Effect.gen(function* () {
                 const data = yield* content(entry.content, entry.encoding);
-                const target = yield* kernelCall(() => kernel.canonical(entry.path, "/"));
+                const target = yield* kernelCall(() => kernel.absolute(entry.path, "/"));
                 const parent = target.slice(0, target.lastIndexOf("/"));
                 if (parent.length > 0) yield* kernelCall(() => kernel.mkdir(parent, true));
                 const blocks = yield* stageWrite(kernel, target, data);

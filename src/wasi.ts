@@ -80,17 +80,7 @@ const resolvePath = Effect.fn("wasi.resolvePath")(function* (
   base: string,
   follow = false,
 ) {
-  const parent = path.slice(0, path.lastIndexOf("/"));
-  const directory = yield* kernelCall(() => kernel.realpath(parent || "/"));
-  const leaf = path.slice(path.lastIndexOf("/"));
-  const resolved = Match.value(directory).pipe(
-    Match.when("/", () => leaf),
-    Match.orElse(() => directory + leaf),
-  );
-  const canonical = yield* Effect.gen(function* () {
-    if (follow) return yield* kernelCall(() => kernel.realpath(resolved));
-    return resolved;
-  });
+  const canonical = yield* kernelCall(() => kernel.lookup(path, "/", follow));
   if (base !== "/" && canonical !== base && !canonical.startsWith(base + "/"))
     return yield* new Fault({
       code: "ENOTCAPABLE",

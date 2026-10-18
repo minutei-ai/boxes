@@ -6,7 +6,7 @@ pub use memory::{pack_memory, unpack_memory};
 
 use serde::ser::{SerializeSeq, Serializer};
 use serde::{Deserialize, Serialize};
-use std::collections::{BTreeMap, BTreeSet};
+use std::collections::{BTreeMap, BTreeSet, VecDeque};
 use wasm_bindgen::prelude::*;
 
 const MAX_NODES: usize = 16_384;
@@ -469,6 +469,41 @@ pub fn migrate_filesystem(json: &str) -> Result<String, JsValue> {
     kernel.manifest()
 }
 
+pub fn absolute(path: &str, cwd: &str) -> Result<String, String> {
+    if path.is_empty() || path.contains('\0') || path.len() > MAX_PATH {
+        return Err("EINVAL: invalid path".into());
+    }
+    let joined = if path.starts_with('/') {
+        path.to_owned()
+    } else {
+        format!("{cwd}/{path}")
+    };
+    if !joined.starts_with('/') || joined.contains('\0') {
+        return Err("EINVAL: invalid working directory".into());
+    }
+    if joined.len() > MAX_PATH + 1 {
+        return Err("ENAMETOOLONG: joined path length exceeded".into());
+    }
+    if joined.len() <= MAX_PATH && !joined.contains("//") {
+        return Ok(joined);
+    }
+    let mut result = String::with_capacity(joined.len());
+    result.push('/');
+    for part in joined.split('/').filter(|part| !part.is_empty()) {
+        if result.len() > 1 {
+            result.push('/');
+        }
+        result.push_str(part);
+    }
+    if joined.ends_with('/') && result != "/" {
+        result.push('/');
+    }
+    if result.len() > MAX_PATH {
+        return Err("ENAMETOOLONG: path length exceeded".into());
+    }
+    Ok(result)
+}
+
 pub fn normalize(path: &str, cwd: &str) -> Result<String, String> {
     if path.is_empty() || path.contains('\0') || path.len() > MAX_PATH {
         return Err("EINVAL: invalid path".into());
@@ -781,8 +816,9 @@ impl Kernel {
         {
             return Err("EINVAL: invalid excluded names".into());
         }
-        let logical = normalize(path, "/")?;
+        let logical = absolute(path, "/")?;
         let root = self.resolve(&logical, true)?;
+        let logical = logical.trim_end_matches('/');
         match self.state.node(&root) {
             Some(Node::Directory { mode }) if mode & 0o500 == 0o500 => {}
             Some(Node::Directory { .. }) => return Err("EACCES: directory is not readable".into()),
@@ -814,11 +850,14 @@ impl Kernel {
             {
                 return Err("EACCES: child directory is not readable".into());
             }
-            let path = if logical == "/" {
+            let path = if logical.is_empty() {
                 format!("/{relative}")
             } else {
                 format!("{logical}/{relative}")
             };
+            if path.len() > MAX_PATH {
+                return Err("ENAMETOOLONG: projected directory path exceeds its bound".into());
+            }
             result.push(TreeEntry {
                 path,
                 kind: node.kind(),
@@ -875,43 +914,93 @@ impl Kernel {
     }
 
     fn resolve(&self, path: &str, follow_last: bool) -> Result<String, String> {
-        let mut pending = normalize(path, "/")?;
-        if pending != "/"
-            && matches!(self.state.node("/"), Some(Node::Directory { mode }) if mode & 0o100 == 0)
-        {
-            return Err("EACCES: root is not searchable".into());
+        let mut links = 0;
+        self.resolve_with_budget(path, follow_last, &mut links)
+    }
+
+    fn resolve_with_budget(
+        &self,
+        path: &str,
+        follow_last: bool,
+        links: &mut usize,
+    ) -> Result<String, String> {
+        let path = absolute(path, "/")?;
+        let mut pending: VecDeque<&str> =
+            path.split('/').filter(|piece| !piece.is_empty()).collect();
+        let directory_required = path.ends_with('/') && path != "/";
+        if directory_required && follow_last {
+            pending.push_back(".");
         }
-        for _ in 0..40 {
-            let pieces: Vec<_> = pending.split('/').filter(|p| !p.is_empty()).collect();
-            let mut prefix = String::new();
-            let mut replacement = None;
-            for (index, piece) in pieces.iter().enumerate() {
-                prefix.push('/');
-                prefix.push_str(piece);
-                let last = index + 1 == pieces.len();
-                match self.state.node(&prefix) {
-                    Some(Node::Symlink { target }) if follow_last || !last => {
-                        let suffix = pieces.get(index + 1..).unwrap_or_default().join("/");
-                        replacement =
-                            Some(normalize(&format!("{target}/{suffix}"), parent(&prefix))?);
-                        break;
-                    }
-                    Some(Node::Directory { mode }) if !last && mode & 0o100 == 0 => {
-                        return Err("EACCES: directory is not searchable".into());
-                    }
-                    Some(Node::File { .. }) if !last => {
-                        return Err("ENOTDIR: path component is a file".into());
-                    }
-                    None if !last => return Err("ENOENT: parent does not exist".into()),
-                    _ => {}
+        let mut current = "/".to_owned();
+        let mut depth = 0;
+        while let Some(piece) = pending.pop_front() {
+            match self.state.node(&current) {
+                Some(Node::Directory { mode }) if mode & 0o100 != 0 => {}
+                Some(Node::Directory { .. }) => {
+                    return Err("EACCES: directory is not searchable".into());
                 }
+                Some(_) => return Err("ENOTDIR: path component is not a directory".into()),
+                None => return Err("ENOENT: parent does not exist".into()),
             }
-            match replacement {
-                Some(next) => pending = next,
-                None => return Ok(pending),
+            if piece == "." {
+                continue;
+            }
+            if piece == ".." {
+                if current != "/" {
+                    current.truncate(parent(&current).len());
+                    depth -= 1;
+                }
+                continue;
+            }
+            let parent_length = current.len();
+            if current != "/" {
+                current.push('/');
+            }
+            current.push_str(piece);
+            if depth >= MAX_DEPTH || current.len() > MAX_PATH {
+                return Err("ENAMETOOLONG: resolved path exceeds its bound".into());
+            }
+            if let Some(Node::Symlink { target }) = self.state.node(&current)
+                && (follow_last || !pending.is_empty())
+            {
+                if *links >= 40 {
+                    return Err("ELOOP: too many symlinks".into());
+                }
+                *links += 1;
+                if target.is_empty() || target.contains('\0') || target.len() > MAX_PATH {
+                    return Err("EINVAL: invalid symlink target".into());
+                }
+                current.truncate(parent_length);
+                if target.ends_with('/') {
+                    pending.push_front(".");
+                }
+                for component in target.split('/').filter(|part| !part.is_empty()).rev() {
+                    pending.push_front(component);
+                }
+                if target.starts_with('/') {
+                    current.clear();
+                    current.push('/');
+                    depth = 0;
+                }
+                let prefix = if current == "/" { 0 } else { current.len() };
+                if prefix + pending.iter().map(|part| part.len() + 1).sum::<usize>() > MAX_PATH {
+                    return Err("ENAMETOOLONG: expanded symlink path exceeds its bound".into());
+                }
+                continue;
+            }
+            depth += 1;
+        }
+        if directory_required {
+            match self.state.node(&current) {
+                Some(Node::Directory { mode }) if mode & 0o100 != 0 => {}
+                Some(Node::Directory { .. }) => {
+                    return Err("EACCES: directory is not searchable".into());
+                }
+                Some(_) => return Err("ENOTDIR: trailing slash requires a directory".into()),
+                None => return Err("ENOENT: directory does not exist".into()),
             }
         }
-        Err("ELOOP: too many symlinks".into())
+        Ok(current)
     }
 
     fn writable_parent(&self, path: &str) -> Result<(), String> {
@@ -1443,8 +1532,19 @@ impl Kernel {
         normalize(path, cwd).map_err(|e| fail(&e))
     }
 
+    pub fn absolute(&self, path: &str, cwd: &str) -> Result<String, JsValue> {
+        absolute(path, cwd).map_err(|error| fail(&error))
+    }
+
+    pub fn lookup(&self, path: &str, cwd: &str, follow: bool) -> Result<String, JsValue> {
+        let path = absolute(path, cwd).map_err(|error| fail(&error))?;
+        self.resolve(&path, follow).map_err(|error| fail(&error))
+    }
+
     pub fn stat(&self, path: &str, follow: bool) -> Result<String, JsValue> {
-        let path = self.resolve(path, follow).map_err(|e| fail(&e))?;
+        let path = self
+            .resolve(path, follow || path.ends_with('/'))
+            .map_err(|e| fail(&e))?;
         self.stat_resolved(&path)
     }
 
@@ -1760,16 +1860,21 @@ impl Kernel {
     }
 
     pub fn mkdir(&mut self, path: &str, recursive: bool) -> Result<(), JsValue> {
-        let path = normalize(path, "/").map_err(|e| fail(&e))?;
-        if recursive && path == "/" {
-            return Ok(());
+        let path = absolute(path, "/").map_err(|e| fail(&e))?;
+        if path == "/" {
+            if recursive {
+                return Ok(());
+            }
+            return Err(fail("EEXIST: root directory exists"));
         }
         let parts: Vec<_> = path.split('/').filter(|p| !p.is_empty()).collect();
-        let mut current = String::new();
+        let mut current = String::from("/");
+        let mut links = 0;
         for (index, part) in parts.iter().enumerate() {
-            current.push('/');
-            current.push_str(part);
-            let resolved = self.resolve(&current, true).map_err(|e| fail(&e))?;
+            let next = absolute(part, &current).map_err(|error| fail(&error))?;
+            let resolved = self
+                .resolve_with_budget(&next, true, &mut links)
+                .map_err(|e| fail(&e))?;
             if let Some(node) = self.state.node(&resolved) {
                 if !matches!(node, Node::Directory { .. }) {
                     return Err(fail("ENOTDIR: path is not a directory"));
@@ -1777,6 +1882,7 @@ impl Kernel {
                 if index + 1 == parts.len() && !recursive {
                     return Err(fail("EEXIST: directory exists"));
                 }
+                current = resolved;
                 continue;
             }
             if !recursive && index + 1 != parts.len() {
@@ -1785,8 +1891,9 @@ impl Kernel {
             self.writable_parent(&resolved).map_err(|e| fail(&e))?;
             self.package_writable(&resolved, false)
                 .map_err(|error| fail(&error))?;
-            self.insert(resolved, Node::Directory { mode: 0o755 })
+            self.insert(resolved.clone(), Node::Directory { mode: 0o755 })
                 .map_err(|e| fail(&e))?;
+            current = resolved;
         }
         Ok(())
     }
@@ -2017,7 +2124,9 @@ impl Kernel {
     }
 
     pub fn readlink(&self, path: &str) -> Result<String, JsValue> {
-        let path = self.resolve(path, false).map_err(|e| fail(&e))?;
+        let path = self
+            .resolve(path, path.ends_with('/'))
+            .map_err(|e| fail(&e))?;
         match self.state.node(&path) {
             Some(Node::Symlink { target }) => Ok(target.clone()),
             Some(_) => Err(fail("EINVAL: not a symlink")),
@@ -2834,6 +2943,108 @@ mod tests {
         assert_eq!(normalize("./a//b", "/tmp")?, "/tmp/a/b");
         assert!(normalize("x\0y", "/").is_err());
         assert!(normalize(&"a/".repeat(65), "/").is_err());
+        Ok(())
+    }
+
+    #[test]
+    fn semantic_paths_follow_symlinks_before_parent_components() -> Result<(), String> {
+        let mut kernel = Kernel::fresh();
+        kernel.insert("/tmp/real".into(), Node::Directory { mode: 0o755 })?;
+        kernel.insert("/tmp/real/deep".into(), Node::Directory { mode: 0o755 })?;
+        kernel.insert(
+            "/home/cirro/alias".into(),
+            Node::Symlink {
+                target: "/tmp/real/deep".into(),
+            },
+        )?;
+        assert_eq!(kernel.resolve("/home/cirro/alias/..", true)?, "/tmp/real");
+        assert_eq!(kernel.resolve("/home/cirro/alias/..", false)?, "/tmp/real");
+        assert_eq!(
+            kernel.resolve("/home/cirro/alias/../new", true)?,
+            "/tmp/real/new"
+        );
+        assert!(
+            kernel
+                .resolve("/tmp/missing/..", true)
+                .unwrap_err()
+                .starts_with("ENOENT:")
+        );
+        kernel.insert(
+            "/tmp/file".into(),
+            Node::File {
+                mode: 0o644,
+                size: 0,
+                chunks: Vec::new(),
+            },
+        )?;
+        assert!(
+            kernel
+                .resolve("/tmp/file/..", true)
+                .unwrap_err()
+                .starts_with("ENOTDIR:")
+        );
+        assert!(
+            kernel
+                .resolve("/tmp/file/", true)
+                .unwrap_err()
+                .starts_with("ENOTDIR:")
+        );
+        kernel.insert("/tmp/blocked".into(), Node::Directory { mode: 0 })?;
+        assert!(
+            kernel
+                .resolve("/tmp/blocked/..", true)
+                .unwrap_err()
+                .starts_with("EACCES:")
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn semantic_paths_accept_exactly_forty_link_traversals() -> Result<(), String> {
+        let mut kernel = Kernel::fresh();
+        for index in (0..40).rev() {
+            let target = if index == 39 {
+                "/tmp".to_owned()
+            } else {
+                format!("l{}", index + 1)
+            };
+            kernel.insert(format!("/tmp/l{index}"), Node::Symlink { target })?;
+        }
+        assert_eq!(kernel.resolve("/tmp/l0", true)?, "/tmp");
+        kernel.insert(
+            "/tmp/extra".into(),
+            Node::Symlink {
+                target: "l0".into(),
+            },
+        )?;
+        assert!(
+            kernel
+                .resolve("/tmp/extra", true)
+                .unwrap_err()
+                .starts_with("ELOOP:")
+        );
+        kernel.insert(
+            "/tmp/missing-target".into(),
+            Node::Symlink {
+                target: "absent/../l0".into(),
+            },
+        )?;
+        assert!(
+            kernel
+                .resolve("/tmp/missing-target", true)
+                .unwrap_err()
+                .starts_with("ENOENT:")
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn lexical_manifest_validation_keeps_existing_symlink_targets() -> Result<(), String> {
+        let mut kernel = Kernel::fresh();
+        let target = "x/../".repeat(818);
+        assert_eq!(normalize(&target, "/home/cirro")?, "/home/cirro");
+        kernel.insert("/home/cirro/long-target".into(), Node::Symlink { target })?;
+        kernel.validate()?;
         Ok(())
     }
 

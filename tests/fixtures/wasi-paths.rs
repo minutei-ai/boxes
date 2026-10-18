@@ -2,6 +2,18 @@ use std::io::{Read, Seek, SeekFrom, Write};
 
 #[link(wasm_import_module = "wasi_snapshot_preview1")]
 unsafe extern "C" {
+    fn path_open(
+        fd: u32,
+        lookup: u32,
+        path: *const u8,
+        length: usize,
+        flags: u32,
+        rights: u64,
+        inheriting: u64,
+        fd_flags: u32,
+        opened: *mut u32,
+    ) -> i32;
+    fn fd_close(fd: u32) -> i32;
     fn path_symlink(
         target: *const u8,
         target_len: usize,
@@ -12,6 +24,54 @@ unsafe extern "C" {
 }
 
 fn main() -> std::io::Result<()> {
+    if std::env::args().nth(1).as_deref() == Some("semantic-paths") {
+        assert_eq!(
+            std::fs::read_to_string("/home/cirro/alias/../marker")?,
+            "right"
+        );
+        std::fs::write("/home/cirro/alias/../from-wasi", b"wasi")?;
+        assert_eq!(std::fs::read_to_string("/tmp/real/from-wasi")?, "wasi");
+        assert!(std::fs::metadata("/home/cirro/marker/..").is_err());
+        let path = b"tmp/scoped";
+        let mut directory = 0;
+        assert_eq!(
+            unsafe {
+                path_open(
+                    3,
+                    1,
+                    path.as_ptr(),
+                    path.len(),
+                    2,
+                    (1 << 13) | (1 << 18),
+                    1 << 1,
+                    0,
+                    &mut directory,
+                )
+            },
+            0
+        );
+        let outside = b"outside/../marker";
+        let mut denied = 0;
+        assert_eq!(
+            unsafe {
+                path_open(
+                    directory,
+                    1,
+                    outside.as_ptr(),
+                    outside.len(),
+                    0,
+                    1 << 1,
+                    0,
+                    0,
+                    &mut denied,
+                )
+            },
+            76
+        );
+        assert_eq!(unsafe { fd_close(directory) }, 0);
+        println!("semantic paths verified");
+        return Ok(());
+    }
     std::fs::create_dir("/tmp/paths")?;
     std::fs::write("/tmp/paths/source", b"source bytes")?;
     std::fs::write("/tmp/paths/target", b"target bytes")?;

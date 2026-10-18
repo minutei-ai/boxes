@@ -1,0 +1,199 @@
+{
+  "status": "Unreleased source; complete final local verification passed",
+  "measuredAt": "2026-10-18T21:19:55.528282+00:00",
+  "sourceBase": "552fa935c3d2c259d02855fe78271aebf24536e8",
+  "sourceSha256": {
+    "crates/kernel/src/lib.rs": "2317bf637b2af978e572f0195bb332be427f93b6c54a71a5f28ae11529f61c89",
+    "crates/kernel/src/software.rs": "0b8ebcb02baddd636a5d0de1c1667c46fecaa33a72fe385d6fbf7f797e019199",
+    "crates/wasi/src/lib.rs": "1b5b0310a0265bd4fa542a32ea028128ab08f820cbe5878863fab433a1a86e49",
+    "src/filesystem.ts": "7ec7c651b1cd96b75ea3b93d8e3904dfa3a0252f01a40d26913fcd302d4ba4eb",
+    "src/shell.ts": "4b0f66d92be0d5d1b2846c7b27a71fcaf1c338e04b6376d414b75fca4ff11664",
+    "src/wasi.ts": "940bfdd8168e2e21df34133315ba8cf57b2be3a5e5c30fe66812d35b04a7555f",
+    "tests/fixtures/wasi-paths.rs": "6f8899b8d2a622974b4888e35fdcf43ed7d81dac22894ba958da7eb72ba080ca",
+    "tests/semantic-paths.test.ts": "e3a39ce5f99012df1f05393b21653134bdb41dc2cdc3ee5ede85838cba5d0245"
+  },
+  "reproduction": {
+    "kernel": {
+      "logSha256": "616aefb51983d809b88055340b7f2d74a0738e09d196281c15820391a15fb80a",
+      "result": "Rust resolve returned /home/cirro instead of /tmp/real for /home/cirro/alias/.. where alias targets /tmp/real/deep."
+    },
+    "native": {
+      "logSha256": "9129ff1173fc3ed837d685c107e55fecee34403a065bfaa4d06321399cff0790",
+      "result": "Actual workerd/R2 read returned wrong rather than right from the physical target parent; expected failure occurs before later fixture phases."
+    }
+  },
+  "change": [
+    "A bounded component walker follows symlinks before consuming remaining dots/parents, checks each traversed directory and search mode, and accepts forty symlink traversals before ELOOP. Recursive mkdir shares that link budget.",
+    "Absolute filesystem joins preserve traversal components. Batch parent creation, built-in shell paths, executable lookup and WASI no longer lexically erase them before kernel lookup.",
+    "WASI retains its existing lexical descriptor floor check and checks the kernel-resolved path against the descriptor base. Root and scoped descriptor accesses are exercised by the native Cargo-built guest.",
+    "Recursive listing retains a usable logical root, including parent components. Namespace mutations reject trailing symlinks as directories; directory metadata consumes the requested trailing slash.",
+    "Lexical normalization remains the owner for persisted manifest validation, virtual filenames and relative ESM URL names. No persisted format or migration changes.",
+    "Pending pieces borrow request/manifest strings; one prefix buffer is extended/truncated during traversal. No per-piece String copy or candidate-prefix allocation is needed."
+  ],
+  "coverage": [
+    "Read/stat identity through symlink followed by parent, recursive batch writes and subsequent reads at the physical path",
+    "Recursive directory results can be read/stat-ed through their returned logical paths",
+    "Built-in shell reads and actual WASI std::fs reads/writes follow physical parents",
+    "Direct JavaScript file execution uses filesystem traversal; ESM imports preserve lexical URL normalization in the same setup",
+    "Python open and pinned os.path.realpath agree on the physical file",
+    "A native WASI directory descriptor denies an existing external file after symlink/parent traversal with ENOTCAPABLE",
+    "Missing parents, file-as-parent, search-mode denial, trailing non-directory paths and exact forty/forty-one link boundaries",
+    "Trailing-symlink removal fails and preserves the target directory",
+    "Rename, closure of the original Worker, restored read/remove and unchanged unrelated lexical-parent bytes",
+    "Existing long lexical symlink targets remain valid persisted v6 manifests"
+  ],
+  "hostOracle": {
+    "python": "3.14.8 (main, Oct  2 2026, 10:23:31) [GCC 16.2.1 20260810]",
+    "relativeResolvedPath": "/tmp/real/marker",
+    "content": "right",
+    "sameInode": true,
+    "invalidTraversalErrnos": [2, 20, 20],
+    "trailingSymlinkRemovalErrno": 20,
+    "trailingSymlinkTargetPreserved": true,
+    "fortySymlinksAccepted": true,
+    "fortyFirstSymlinkErrno": 40
+  },
+  "esmOracle": {
+    "node": "v26.11.1",
+    "esmRelativeImportValue": 13,
+    "physicalFileText": "export const value=42;",
+    "scope": "ESM URL normalization is distinct from direct filesystem traversal; preserve existing module resolver behavior."
+  },
+  "references": [
+    {
+      "title": "Node ESM resolution algorithm",
+      "url": "https://nodejs.org/download/release/latest-v24.x/docs/api/esm.html#resolution-algorithm-specification",
+      "scope": "Relative ESM specifiers use URL normalization before real-path lookup; preserve the existing module resolver."
+    }
+  ],
+  "checks": {
+    "initialNativeProof": {
+      "command": "bun test tests/semantic-paths.test.ts",
+      "passed": true,
+      "tests": 1,
+      "expects": 30,
+      "seconds": 3.75,
+      "logSha256": "bf876989f8924bebc69b8239e4fdcbeab8fe005e61b6eb98cbe6a8681761a5b3",
+      "scope": "Before the final borrowed-buffer optimization and ESM-preservation adjustment; final complete check is recorded separately."
+    },
+    "borrowedKernel": {
+      "command": "cargo test -p cirro-kernel",
+      "passed": true,
+      "tests": 57,
+      "logSha256": "1897a4c97dddef06303b28e8c844903e95a358db53adc3e464894404a3af8896"
+    },
+    "intermediateFull": {
+      "command": "bun run check",
+      "passed": false,
+      "tests": 455,
+      "files": 104,
+      "passedTests": 454,
+      "failedTests": 1,
+      "expects": 6644,
+      "testSeconds": 308.82,
+      "failure": "shell-control conditional-lists case exceeded its unchanged 5-second budget. Other checks passed. This is before the final allocation and ESM-preservation adjustments.",
+      "logSha256": "aab91a1f5dc61bdc31fd5303828d02145bd04604e84378063af041fb0a5f9ea7"
+    },
+    "isolationBeforeAllocationChange": {
+      "command": "bun test tests/shell-control.test.ts tests/metadata.test.ts",
+      "passed": true,
+      "tests": 3,
+      "files": 2,
+      "expects": 54,
+      "seconds": 9.86,
+      "logSha256": "bafd53297bb7ead5d984709ca064bab42912d1d7387254e9a07033b917a78022",
+      "scope": "Same pre-optimization compiled kernel; shell timeout did not reproduce in isolation. Cause of the full-run timeout is not established."
+    },
+    "full": {
+      "command": "bun run check",
+      "passed": true,
+      "exitCode": 0,
+      "tests": 455,
+      "files": 104,
+      "expects": 6652,
+      "testSeconds": 302.95,
+      "logSha256": "339798d739ad1d4468774eb9dcc2d07d14b607351d2f0d91d8602177e1fca9a5",
+      "scope": "Final build, SDK build, TypeScript, workspace Clippy, all Rust tests and native workerd/R2 suites after borrowed-component optimization and ESM preservation.",
+      "shellControlMs": 2796.99,
+      "semanticProofMs": 3381.27
+    }
+  },
+  "development": [
+    "Corrected the fixture to use DirectoryTree.type and the published JavaScript execute contract (stdout, not invocation of an exported default).",
+    "Corrected the WASI action input to args, whose entry path is added by the existing owner.",
+    "A Node oracle established the ESM distinction before delivery; the provisional module-resolver change was removed and the final test checks both lexical ESM imports and physical executeFile paths."
+  ],
+  "limits": [
+    "Source only; public/deployed 0.27.0 and Minutei remain unchanged.",
+    "Input, resolved depth and expanded-path limits remain bounded by the existing kernel ceilings; complete POSIX path/error and directory-descriptor behavior is not claimed.",
+    "Native WASI lexical floor checks remain conservative; full cross-runtime POSIX descriptor/cwd coherence remains open.",
+    "Structural allocation removal is not a latency, CPU, heap or billing comparison. No performance improvement or AgentOS cost advantage is claimed.",
+    "Native kernel/WASI binaries change; existing exact-binary checkpoint compatibility rules apply. Full upstream parity and real Minutei production/model validation remain open."
+  ],
+  "delivery": {
+    "sourcePush": "not part of this local measurement",
+    "remoteCi": "not part of this local measurement",
+    "release": "not published",
+    "deployment": "not performed",
+    "previousSourceCi": {
+      "runId": 39164715758,
+      "headSha": "552fa935c3d2c259d02855fe78271aebf24536e8",
+      "conclusion": "success"
+    }
+  },
+  "artifactComparison": {
+    "reference": "Immutable public 0.27.0 runtime. Current source also contains the previously added unreleased Python path/stdlib work.",
+    "modules": [
+      {
+        "file": "cirro_kernel_bg.wasm",
+        "referenceBytes": 1237113,
+        "candidateBytes": 1243800,
+        "deltaBytes": 6687,
+        "referenceSha256": "2bfe109a42ec2ccd0d2e6c50d0b06a1575ce41c845dee0ee7ffc4e60658729fb",
+        "candidateSha256": "f31caad6e7db817ad9e9eff12466ba196f6003207f876b1cb545efd62b833a90"
+      },
+      {
+        "file": "cirro_wasi_bg.wasm",
+        "referenceBytes": 1707779,
+        "candidateBytes": 1706658,
+        "deltaBytes": -1121,
+        "referenceSha256": "0d1fd49eb2d515f724ad1067dec002f07d009d056bb6091402807b8ac5110090",
+        "candidateSha256": "3f3a97b0262036b6843581f9ef019ccf394a4d65fc45e02a2f2ddcd78e01df66"
+      },
+      {
+        "file": "cirro_python_bg.wasm",
+        "referenceBytes": 19720381,
+        "candidateBytes": 19783572,
+        "deltaBytes": 63191,
+        "referenceSha256": "f11ff22fc5e14ce878bf9f18895c4e90c8ac3b983226dc4669e19485fdda7151",
+        "candidateSha256": "39d0a027d8be9d57ccdf992e89a2b5fb928150ee85ca9cd8f33c208913b92ef4"
+      },
+      {
+        "file": "cirro_guest_bg.wasm",
+        "referenceBytes": 1150616,
+        "candidateBytes": 1150616,
+        "deltaBytes": 0,
+        "referenceSha256": "dcf1a9d66b4c3a11106076c3e9d5fa1f596b8846a811dfeec9ecf3a8744af01f",
+        "candidateSha256": "dcf1a9d66b4c3a11106076c3e9d5fa1f596b8846a811dfeec9ecf3a8744af01f"
+      },
+      {
+        "file": "cirro_compiler_bg.wasm",
+        "referenceBytes": 1943596,
+        "candidateBytes": 1943596,
+        "deltaBytes": 0,
+        "referenceSha256": "27d9b0022a634ed4eef47b6561ad38cafde3522c17e834afed1264440678bf2f",
+        "candidateSha256": "27d9b0022a634ed4eef47b6561ad38cafde3522c17e834afed1264440678bf2f"
+      },
+      {
+        "file": "index.js",
+        "referenceBytes": 429824,
+        "candidateBytes": 430900,
+        "deltaBytes": 1076,
+        "referenceSha256": "25e17ef8965e7bae8f9b8ece766c28b4b19790b3a89aed811a6a47e7eaec1a08",
+        "candidateSha256": "13d2dc12c14ef3fb4fb7f703507f1de264edd1434d0fce0a7b09ae7d7cedc1d7"
+      }
+    ],
+    "pythonUnchangedFromPreviousSource": true,
+    "scope": "Artifact bytes and SHA-256 only; not a latency, CPU, heap or cost comparison."
+  }
+}

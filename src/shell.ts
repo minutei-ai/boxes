@@ -91,7 +91,7 @@ export const shell = Effect.fn("shell.execute")(function* (
         };
         const commandOutcome = Effect.gen(function* () {
           yield* Effect.fromResult(expansion);
-          const path = (input: string) => kernelCall(() => kernel.canonical(input, cwd));
+          const path = (input: string) => kernelCall(() => kernel.absolute(input, cwd));
           const file = Effect.fn("shell.read")(function* (input: string) {
             yield* requirePermission(capability, "read");
             const resolved = yield* path(input);

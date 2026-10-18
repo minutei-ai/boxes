@@ -793,7 +793,7 @@ impl Kernel {
             return Err(super::fail("EINVAL: invalid command or PATH"));
         }
         let candidates: Vec<String> = if command.contains('/') {
-            vec![super::normalize(command, cwd).map_err(|error| super::fail(&error))?]
+            vec![super::absolute(command, cwd).map_err(|error| super::fail(&error))?]
         } else {
             search
                 .split(':')
@@ -801,9 +801,9 @@ impl Kernel {
                     let directory = if directory.is_empty() {
                         cwd.to_string()
                     } else {
-                        super::normalize(directory, cwd)?
+                        super::absolute(directory, cwd)?
                     };
-                    super::normalize(command, &directory)
+                    super::absolute(command, &directory)
                 })
                 .collect::<Result<_, String>>()
                 .map_err(|error| super::fail(&error))?
