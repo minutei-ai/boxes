@@ -1,5 +1,5 @@
 {
-  "status": "local native Alchemy/workerd/R2 proof passed; optimization not deployed",
+  "status": "Native local Alchemy/workerd/R2 proof, production deployment, storage proof and remote service-binding proof passed",
   "measuredAt": "2026-10-18T17:50:12.098172+00:00",
   "sourceBase": "f29d62d2fa9ed8dbcb5ed4f9b1de59fdd12a685f",
   "sourceSha256": {
@@ -69,7 +69,7 @@
     "logSha256": "80a87f6f03d5fdd96b6fce7833ffab6467b7a24fa62907a4fb322d457a47e9e4"
   },
   "limits": [
-    "Local deployment evidence only; no production latency, CPU, billing or AgentOS cost comparison",
+    "Deployment publication evidence only; no production request latency, CPU, billing or AgentOS cost comparison",
     "A cold bucket now requires an existence read before each first upload",
     "Warm verification still downloads existing bytes to preserve SHA-256 verification",
     "Action memoization still applies; unchanged inputs do not rerun it automatically",
@@ -88,8 +88,112 @@
     }
   },
   "delivery": {
-    "sourcePush": "pending",
-    "remoteCi": "pending",
-    "productionDeployment": "not performed; public runtime remains 0.26.0"
+    "sourcePush": "cee698bbe0f9a6bb6693de69df7c00b5c8049b1c verified at origin/main",
+    "remoteCi": {
+      "runId": 39151710633,
+      "status": "success",
+      "tests": 449,
+      "files": 101,
+      "testSeconds": 183.51
+    },
+    "productionDeployment": {
+      "profile": "minutei",
+      "worker": "cirro-sandbox-prod-rs7wexxow56rmsoz",
+      "bucket": "cirro-objects-prod-vbk2p6ruhs2m645y",
+      "command": "bunx alchemy deploy alchemy.run.ts --stage prod --profile minutei --force --yes",
+      "status": "success",
+      "completedNodes": 6,
+      "seconds": 633.5,
+      "defaultSoftwareSeconds": 319.8,
+      "migrationsSeconds": 291.4,
+      "blocks": 354,
+      "uploadedBlocks": 0,
+      "uploadedBytes": 0,
+      "baseDigest": "e81f7f0e7a269a467614cbab3ccc0b18ff692f478219caff4b44bf3ea425aab3",
+      "runtime": "All six deployed dist/worker files matched the immutable public 0.26.0 archive before deployment; experimental kernel changes excluded",
+      "placement": {
+        "mode": "smart"
+      },
+      "forcePreview": "4 updates, 3 binding changes, 2 tasks; no deletes or replacements",
+      "logSha256": "e462604ab959e758142c789c492513d522f87724f295630c0624439d870720e0"
+    },
+    "storageProof": {
+      "measuredAt": 1792347577855,
+      "profile": "minutei",
+      "worker": "cirro-sandbox-prod-rs7wexxow56rmsoz",
+      "bucket": "cirro-objects-prod-vbk2p6ruhs2m645y",
+      "sandboxId": "software-storage-27970c4b-c396-40af-a8a8-2b0c1634371f",
+      "baseDigest": "e81f7f0e7a269a467614cbab3ccc0b18ff692f478219caff4b44bf3ea425aab3",
+      "placementMode": "smart",
+      "status": {
+        "id": "software-storage-27970c4b-c396-40af-a8a8-2b0c1634371f",
+        "generation": 0,
+        "filesystemBytes": 77754575,
+        "policy": {
+          "networkHosts": [],
+          "interruptBudget": 100000,
+          "memoryBytes": 8388608,
+          "maxOutputBytes": 1048576
+        }
+      },
+      "catalogPackages": 10,
+      "objectsAfterCreate": 1,
+      "privateSoftwareBlobsAfterCreate": 0,
+      "sharedObjectsBefore": 354,
+      "sharedObjectsAfterCollection": 354,
+      "reclaimed": true
+    },
+    "bindingProof": {
+      "status": "success",
+      "exitCode": 0,
+      "measuredAt": 1792347877154,
+      "profile": "minutei",
+      "worker": "cirro-sandbox-prod-rs7wexxow56rmsoz",
+      "sdkVersion": "0.26.0",
+      "consumerBundleSha256": "0a2f8d855d562dc528fd90b646288c686fcb8205cf6409344b5edbb53896c0e2",
+      "defaultSoftwareRuns": 14,
+      "descriptorCases": 5,
+      "coverage": [
+        "callback and void callback",
+        "deadline recovery",
+        "terminal geometry, foreground, raw input and termios",
+        "detached Queue/cron contexts",
+        "Python streams and orphan bytes across replacement under current grants",
+        "persistent JavaScript context continuity",
+        "scope denial and test sandbox disposal/reclamation"
+      ],
+      "logSha256": "41c6d57435f0231becee0b21fc3a70d9418c863397cefa3f0cf00cad77a75f0d"
+    },
+    "finalAudit": {
+      "measuredAt": 1792347930550,
+      "profile": "minutei",
+      "worker": "cirro-sandbox-prod-rs7wexxow56rmsoz",
+      "bucket": "cirro-objects-prod-vbk2p6ruhs2m645y",
+      "placement": {
+        "mode": "smart"
+      },
+      "counts": {
+        "pages": 7,
+        "objects": 6104,
+        "processes": 1499,
+        "schedules": 2,
+        "contexts": 0,
+        "metadataAbsent": 2755
+      },
+      "formats": {
+        "run-v7": 1499,
+        "program-json-v2": 1397,
+        "program-json": 435,
+        "historical-source-text-v1": 16,
+        "cron-v2": 2
+      },
+      "statuses": {
+        "cancelled": 28,
+        "exited": 1362,
+        "failed": 109
+      },
+      "complete": true
+    },
+    "finalAuditLogSha256": "754ebe638dab0e3a6a090ebab7fc5455d0ca790cf613b5796096486ed4f6f217"
   }
 }
