@@ -1,0 +1,51 @@
+{
+  "status": "local native workerd/R2 checks passed; unreleased and undeployed",
+  "measuredAt": "2026-10-18T16:48:42.442187+00:00",
+  "sourceBase": "cbf0c552a62f8e97e794208bcad9ed474a84fdf6",
+  "sourceSha256": {
+    "crates/python/src/filesystem.rs": "008301a5e7776b0dc0c8da0ead4db920e64a339933f83d8e079c14c17442fbff",
+    "tests/python-descriptors.test.ts": "920e7a14a4cbf9e567a42dec9662c9f9ffc98581fc7a6ff1010b6a30d5cc67b3"
+  },
+  "baseline": {
+    "command": "bun test tests/python-descriptors.test.ts -t 'standard-library open'",
+    "passed": 0,
+    "failed": 1,
+    "seconds": 2.26,
+    "observed": "Direct io.FileIO lookup is None and _io.FileIO raises AttributeError before any open",
+    "logSha256": "d3faf918e1ae959106cce02ee577a9daa1901953a06eb4a1d4d821ab8c1cd93c"
+  },
+  "ownership": "Native Python module attribute lookup invokes the existing pinned _pyio installation on first FileIO access. Both module attributes receive the real class. The same initializer owns open installation; no fake class or second stream implementation.",
+  "coverage": [
+    "Minimal execution keeps _pyio absent before first use",
+    "from io import FileIO before any open returns the actual class with native RawIOBase relationship",
+    "from _io import FileIO before any open constructs a readable raw stream and closes it",
+    "io and _io expose the identical class",
+    "Retained imported class identity and buffered stream survive closing the original Worker and R2 restoration",
+    "Existing descriptor rights, unlinked images, buffered flush and memory/interrupt tests pass"
+  ],
+  "checks": {
+    "build": "passed",
+    "typecheck": "passed",
+    "clippy": "cargo clippy -p cirro-python --target wasm32-unknown-unknown -- -D warnings: passed",
+    "nativeSuite": {
+      "command": "bun test tests/python-descriptors.test.ts tests/python.test.ts tests/python-context-heap.test.ts tests/python-filesystem.test.ts",
+      "passed": 16,
+      "failed": 0,
+      "assertions": 166,
+      "seconds": 33.3,
+      "logSha256": "ca60cedb4e40ab2101525005ee34ca1a34a105c429a77a033d3b99631f828d32"
+    }
+  },
+  "limits": [
+    "Full stdlib/pip and cross-context unlinked-file coherence remain open",
+    "Changed Python binary requires explicit retained-context reset",
+    "No production performance or cost claim"
+  ],
+  "delivery": {
+    "sourcePush": "pending",
+    "remoteCi": "pending",
+    "runtimePublication": "not performed",
+    "deployment": "not performed",
+    "minuteiUpdate": "not performed"
+  }
+}

@@ -210,7 +210,7 @@ class _Finder:
    return spec
   return None
 
-def open(*args, **kwargs):
+def _install_io():
  import _pyio
  import io
  import _io as native
@@ -218,18 +218,30 @@ def open(*args, **kwargs):
  for name in ('BufferedReader','BufferedWriter','BufferedRandom','BufferedRWPair','TextIOWrapper'):
   setattr(_pyio, name, getattr(native, name))
  io.FileIO = _pyio.FileIO
+ native.FileIO = _pyio.FileIO
  io.open = _pyio.open
  native.open = _pyio.open
  builtins.open = _pyio.open
- return _pyio.open(*args, **kwargs)
+ return _pyio
+
+def _io_attribute(name):
+ if name == 'FileIO':
+  return _install_io().FileIO
+ raise AttributeError(name)
+
+def open(*args, **kwargs):
+ return _install_io().open(*args, **kwargs)
 
 def install(filename):
  import builtins
  import _io as native
+ import io
  builtins.open = open
  native.open = open
- if 'io' in _sys.modules:
-  _sys.modules['io'].open = open
+ native.__getattr__ = _io_attribute
+ io.open = open
+ del io.FileIO
+ io.__getattr__ = _io_attribute
  _sys.meta_path.append(_Finder())
  _sys.path.insert(0, filename.rpartition('/')[0] or '/')
 "#,

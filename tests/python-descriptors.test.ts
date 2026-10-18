@@ -269,11 +269,30 @@ test(
                 encoding: "utf8",
                 content: "ação\r\nsegunda\rfinal\n",
               });
+              const direct = yield* client.action("reading", {
+                op: "python.execute",
+                id: "native-fileio",
+                source: `from _io import FileIO
+import io
+assert FileIO is io.FileIO
+with FileIO('/tmp/text','r') as raw:
+ assert raw.read(2)==b'a\\xc3'
+assert raw.closed
+True`,
+              });
+              expect(direct.output?.stderr).toBe("");
+              expect(direct.output?.result).toBe(true);
               const opened = yield* client.action("reading", {
                 op: "python.execute",
                 id: "open",
                 contextId: "stream",
-                source: `import io,os
+                source: `import io,os,_io
+assert '_pyio' not in __import__('sys').modules
+from io import FileIO
+assert FileIO is io.FileIO and FileIO is _io.FileIO
+assert isinstance(FileIO,type) and issubclass(FileIO,io.RawIOBase)
+with FileIO('/tmp/text','r') as raw:
+ assert raw.read(2)==b'a\\xc3'
 with open('/tmp/text') as default:
  assert default.readline()=='ação\\n'
 stream=io.open('/tmp/text','r',encoding='utf-8')
@@ -310,7 +329,8 @@ os.close(fd)
             op: "python.execute",
             id: "resume",
             contextId: "stream",
-            source: `assert stream.readline()=='segunda\\n'
+            source: `assert FileIO is io.FileIO and FileIO is _io.FileIO
+assert stream.readline()=='segunda\\n'
 assert stream.read()=='final\\n'
 stream.close()
 errors=[]
