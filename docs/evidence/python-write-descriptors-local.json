@@ -89,8 +89,8 @@
       "nativeSeconds": 204.37,
       "logSha256": "de2bcec742ab780e2a62ed86dae6a2f5c0deb4125bf7ed7122ba8a8b582d21cb"
     },
-    "runtimePublication": "not performed",
-    "deployment": "not performed",
-    "minuteiUpdate": "not performed"
+    "runtimePublication": "sdk-v0.26.0",
+    "deployment": "See sdk-0.26.0-delivery.json for completed production checks",
+    "minuteiUpdate": "Local commit d8bf623; not pushed or deployed"
   }
 }

@@ -1,5 +1,5 @@
 {
-  "status": "0.26.0 candidate archives validated locally; publication and deployment pending",
+  "status": "published and deployed; native source/tag CI, production binding and cutover checks passed; Minutei consumer validated locally",
   "version": "0.26.0",
   "implementationCommit": "00dab40851bcf397b60f9d048323f0090fde8b0b",
   "measuredAt": "2026-10-18T16:58:06.123998+00:00",
@@ -82,7 +82,7 @@
     }
   },
   "production": {
-    "status": "not deployed",
+    "status": "deployed; unconditional migrations, upgrade and production service-binding checks passed; scoped test cleanup completed",
     "before": {
       "measuredAt": 1792342583121,
       "profile": "minutei",
@@ -169,17 +169,352 @@
         }
       },
       "tokenExcluded": true
+    },
+    "profile": "minutei",
+    "deployment": {
+      "command": "bunx alchemy deploy alchemy.run.ts --stage prod --profile minutei --yes",
+      "exitCode": 0,
+      "seconds": 700.0,
+      "logSha256": "280933e19780df050708efc6ffb09a7e9149b87e090d768ba4b734372d8033fd",
+      "defaultSoftwarePreparation": {
+        "digest": "e81f7f0e7a269a467614cbab3ccc0b18ff692f478219caff4b44bf3ea425aab3",
+        "blocks": 354,
+        "bytes": 69590215,
+        "manifestBytes": 139179,
+        "seconds": 394.5
+      },
+      "unconditionalMigrationsSeconds": 290.8
+    },
+    "upgradeVerified": {
+      "measuredAt": 1792343943094,
+      "id": "python-io-cutover-546910d0-1c6e-4242-a012-337f611ae215",
+      "seedSdkVersion": "0.25.0",
+      "verifySdkVersion": "0.26.0",
+      "rejection": {
+        "alreadyReset": false,
+        "error": "CHECKPOINT_RUNTIME_MISMATCH",
+        "status": 409,
+        "processReceiptAbsent": true,
+        "prior": {
+          "id": "python",
+          "language": "python",
+          "generation": 0,
+          "state": "idle",
+          "createdAt": 1792342644647,
+          "updatedAt": 1792342646155,
+          "executionId": "before-python",
+          "deadlineAt": null
+        },
+        "reset": {
+          "id": "python",
+          "language": "python",
+          "generation": 1,
+          "state": "idle",
+          "createdAt": 1792342644647,
+          "updatedAt": 1792343932403,
+          "executionId": null,
+          "deadlineAt": null
+        }
+      },
+      "imported": {
+        "id": "after-python",
+        "context": {
+          "id": "python",
+          "generation": 1
+        },
+        "status": "exited",
+        "sourceHash": "a6e9ba82a8a86fe699b45efec14e13b78b20ab6f565c9beecd9b25f735777eac",
+        "language": "python",
+        "startedAt": 1792343933488,
+        "finishedAt": 1792343936308,
+        "output": {
+          "stdout": "",
+          "stderr": "",
+          "result": [42, "a\u00e7\u00e3o", false],
+          "exitCode": 0
+        }
+      },
+      "ephemeral": {
+        "id": "after-automatic-flush",
+        "context": null,
+        "status": "exited",
+        "sourceHash": "dbe2f47ebd46605f2b53a05a18e51f4b01752c1b3fde34d101c439dffd943041",
+        "language": "python",
+        "startedAt": 1792343937606,
+        "finishedAt": 1792343939489,
+        "output": {
+          "stdout": "",
+          "stderr": "",
+          "result": 42,
+          "exitCode": 0
+        }
+      },
+      "automatic": {
+        "content": "YcOnw6NvIG5vIGZpbQ==",
+        "encoding": "base64",
+        "size": 13
+      },
+      "contextFile": {
+        "content": "YcOnw6Nv",
+        "encoding": "base64",
+        "size": 6
+      },
+      "javascript": {
+        "id": "after-js",
+        "context": {
+          "id": "javascript",
+          "generation": 0
+        },
+        "status": "exited",
+        "sourceHash": "211089a84f021f03ac3afe9a47c03e77dc2c56c7c9c07be64bc92e10e5cb198d",
+        "language": "javascript",
+        "startedAt": 1792343941472,
+        "finishedAt": 1792343942086,
+        "output": {
+          "stdout": "",
+          "stderr": "",
+          "result": 42,
+          "exitCode": 0
+        }
+      },
+      "jsContext": {
+        "id": "javascript",
+        "language": "javascript",
+        "generation": 0,
+        "state": "idle",
+        "createdAt": 1792342647487,
+        "updatedAt": 1792343941771,
+        "executionId": "after-js",
+        "deadlineAt": null
+      },
+      "stats": [
+        {
+          "path": "/tmp/cutover.py",
+          "stat": {
+            "path": "/tmp/cutover.py",
+            "kind": "file",
+            "size": 25,
+            "mode": 420,
+            "inode": 336,
+            "nlink": 1,
+            "uid": 0,
+            "gid": 0,
+            "atimeNs": "1792342643677000000",
+            "mtimeNs": "1792342643677000000",
+            "ctimeNs": "1792342643677000000"
+          }
+        },
+        {
+          "path": "/tmp/missing.py",
+          "stat": null,
+          "code": "ENOENT",
+          "error": "ENOENT: file does not exist"
+        }
+      ],
+      "tokenExcluded": true
+    },
+    "upgradeCleanup": {
+      "measuredAt": 1792344170353,
+      "id": "python-io-cutover-546910d0-1c6e-4242-a012-337f611ae215",
+      "progress": {
+        "phase": "complete",
+        "status": "complete",
+        "removed": 0,
+        "blocking": []
+      }
+    },
+    "placement": {
+      "measuredAt": 1792344166261,
+      "profile": "minutei",
+      "worker": "cirro-sandbox-prod-rs7wexxow56rmsoz",
+      "placement": {
+        "mode": "smart"
+      }
+    },
+    "finalAudit": {
+      "measuredAt": 1792344303559,
+      "profile": "minutei",
+      "worker": "cirro-sandbox-prod-rs7wexxow56rmsoz",
+      "bucket": "cirro-objects-prod-vbk2p6ruhs2m645y",
+      "placement": {
+        "mode": "smart"
+      },
+      "counts": {
+        "pages": 7,
+        "objects": 6100,
+        "processes": 1499,
+        "schedules": 2,
+        "contexts": 0,
+        "metadataAbsent": 2751
+      },
+      "formats": {
+        "run-v7": 1499,
+        "program-json-v2": 1397,
+        "program-json": 435,
+        "historical-source-text-v1": 16,
+        "cron-v2": 2
+      },
+      "statuses": {
+        "cancelled": 28,
+        "exited": 1362,
+        "failed": 109
+      },
+      "complete": true
+    },
+    "binding": {
+      "sdkVersion": "0.26.0",
+      "targetWorker": "cirro-sandbox-prod-rs7wexxow56rmsoz",
+      "profile": "minutei",
+      "sandboxId": "remote-binding-2dbc232b-d58f-4f08-ba4c-3546b92f7196",
+      "previewOrigin": "https://boxes-binding-2dbc232b-d58f-4f08-ba4c-3546b92f7196.manoel-carvalhoneto.workers.dev",
+      "replacementPreviewOrigin": "https://boxes-replacement-2dbc232b-d58f-4f08-ba4c-3546b92f7196.manoel-carvalhoneto.workers.dev",
+      "consumerBundleSha256": "0a2f8d855d562dc528fd90b646288c686fcb8205cf6409344b5edbb53896c0e2",
+      "sdkModulesSha256": {
+        "../../src/sdk": "1a697b2fca2350d71c3901b03c55be41de1e04b978386c8c7a0651c8fcdb14ce",
+        "../../src/sdk-rpc": "1584f0102fe1276e12f15933aba8906f733d3de93bbce499a86275c3db01182e",
+        "../../src/sdk-tanstack": "73c62abaa449bd18b3648e9b9ae98e8c05e0c639dab182d0dfa04f4a8cc95f25",
+        "../../src/contracts": "bcacd714897e460d59b84cf10506ca43e16c0852ee06cbe37ac8bf9759738326"
+      },
+      "logSha256": "47b841f4c52d7f1b514703e18f5c0ca2a458d3ef5538224014cc56f68df1f249",
+      "defaultSoftwareRuns": 14,
+      "descriptorCases": 5,
+      "managementDenied": 403,
+      "wrongSandboxDenied": 401,
+      "inlineDeadline": {
+        "requestedMs": 15000,
+        "startedAt": 1792344009971,
+        "recovery": {
+          "state": "running",
+          "checkpoints": 0,
+          "resumable": false,
+          "deadlineAt": 1792344024971
+        }
+      },
+      "retainedPython": [
+        {
+          "phase": "create",
+          "generation": 0,
+          "exitCodes": [0, 0],
+          "deleted": false
+        },
+        {
+          "phase": "resume",
+          "generation": 1,
+          "exitCodes": [0, 0, 0],
+          "deleted": true
+        }
+      ],
+      "persistent": {
+        "created": {
+          "phase": "create",
+          "value": {
+            "content": "cGVyc2lzdGVudCBuYXRpdmUgYmluZGluZw==",
+            "encoding": "base64",
+            "freshGlobals": true,
+            "label": "create"
+          },
+          "callbacks": ["create"],
+          "closedContextDenied": true,
+          "writeDenied": null,
+          "lowMemoryDenied": true,
+          "policyMemoryDenied": true,
+          "allowedAllocation": 6000000
+        },
+        "resumed": {
+          "phase": "resume",
+          "value": {
+            "content": "cGVyc2lzdGVudCBuYXRpdmUgYmluZGluZw==",
+            "encoding": "base64",
+            "freshGlobals": true,
+            "label": "resume"
+          },
+          "callbacks": ["resume"],
+          "closedContextDenied": true,
+          "writeDenied": true,
+          "lowMemoryDenied": true,
+          "policyMemoryDenied": true,
+          "allowedAllocation": 6000000
+        },
+        "previousReceiptRetained": true
+      },
+      "coverage": [
+        "RPC callbacks including void results and deadline ownership",
+        "Default software, native descriptors, terminal resize, foreground, raw owners and termios",
+        "Queue/cron context ownership and replacement consumer",
+        "Retained Python buffered orphan bytes, current-grant write denial, FileIO imports and stdlib objects across replacement Workers",
+        "Context reset, deletion and post-disposal denial; scoped native reclamation completed"
+      ]
     }
   },
   "publication": {
-    "status": "pending"
+    "url": "https://github.com/minutei-ai/boxes/releases/tag/sdk-v0.26.0",
+    "publishedAt": "2026-10-18T17:09:48Z",
+    "tag": "sdk-v0.26.0",
+    "tagObject": "051d11bac9a258b5f236c89533f9ad03d410b30a",
+    "sourceCommit": "c4ff1dacd2181bda58166274bcf1d4e64d6f4310",
+    "prerelease": true,
+    "latest": false,
+    "anonymousDownloadsMatchValidatedCandidates": true,
+    "checksumFileSha256": "f8e6cbd5ac411383864e4ae21793ab96bf98f784d2d6de5aa1a6cf07537df41c",
+    "archiveDocumentation": "Archive README predates the final Python I/O wording; enclosed docs/sdk.md and release notes describe the 0.26.0 API. Current repository README is corrected without replacing immutable assets."
   },
   "remoteCi": {
-    "status": "pending"
+    "candidate": {
+      "run": 39147411342,
+      "conclusion": "success",
+      "tests": 449,
+      "files": 101,
+      "seconds": 211.05,
+      "packageProof": "passed",
+      "logSha256": "364046b2418eaea227c5cfb4008e5b645d391a2b796a559a73ae44ff56ec31a1"
+    },
+    "main": {
+      "run": 39147646726,
+      "conclusion": "success",
+      "tests": 449,
+      "files": 101,
+      "seconds": 210.95,
+      "packageProof": "passed",
+      "logSha256": "a559bb83d2d92dd1bcc08c44eb76360e2bce6f6ece507b2848af29c9895a864d"
+    },
+    "tag": {
+      "run": 39147690668,
+      "conclusion": "success",
+      "tests": 449,
+      "files": 101,
+      "seconds": 215.8,
+      "packageProof": "passed",
+      "logSha256": "468587bffe6071a7a298a6fa05508b5eadf0a94d1298e7cb8ddc5d3c6e501320"
+    }
   },
   "limits": [
     "Complete POSIX/Linux, cross-context unlinked-file coherence, remaining stdlib/pip and native extensions remain open",
     "Source/local proof and production delivery are distinct; no production performance or AgentOS cost advantage established",
     "Minutei consumer is not pushed or deployed by this delivery"
-  ]
+  ],
+  "minutei": {
+    "status": "local commit only; not pushed or deployed",
+    "commit": "d8bf6237cd2e7e2022546f3609e3e3b8e2559e65",
+    "sdkVersion": "0.26.0",
+    "runtimeVersion": "0.26.0",
+    "nativeTests": {
+      "passed": 2,
+      "failed": 0,
+      "seconds": 13.33,
+      "logSha256": "905cd3940075d5e68a052f44adefa9e5000c2274651907e8a27b398e7eeb0b84"
+    },
+    "typecheck": {
+      "command": "NX_DAEMON=false bunx nx run web:typecheck",
+      "passed": true,
+      "tasks": 30,
+      "logSha256": "fa47af2b61796ac590be53274bbc11bc658edb48109c7e32401b2bf6179835cb"
+    },
+    "fixtureCorrection": "Missing required SOFTWARE_BASE reproduced on public 0.25.0. Fixture now selects the explicit bare image and checks retained global value within one agent plus independent heap/file isolation between agents.",
+    "baselineLogSha256": "d49fba3446e7e6bb74ac07157f0e9f861eb49639ecf088f07c3b919360ff3ea7",
+    "sourceSha256": {
+      "apps/web/package.json": "567d140a6cf4e62f0a92dafa7f55d15f0d8f654c681d6bb869bd5981cbc6d881",
+      "bun.lock": "156d9bd22f8761f6c7fbda09a43332891ffbbd0573054d9bc6ccc9874e5c5a25",
+      "apps/web/__tests__/agent-code.test.ts": "4b2e09992eef6bd0a6dbd29c2fb5f046b64d750085ff0063efefd7ee7d78b31e"
+    }
+  }
 }
