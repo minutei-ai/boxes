@@ -6,7 +6,7 @@ pub mod native {
         FromArgs, PyObjectRef, PyPayload, PyRef, PyResult, VirtualMachine,
         builtins::{PyDictRef, PyStrRef},
         convert::ToPyObject,
-        function::{ArgBytesLike, ArgMemoryBuffer, FsPath, OptionalArg},
+        function::{ArgBytesLike, ArgMemoryBuffer, Either, FsPath, OptionalArg},
         pyclass, pystruct_sequence, pystruct_sequence_data,
         types::PyStructSequence,
     };
@@ -60,6 +60,7 @@ pub mod native {
         entries: RefCell<BTreeMap<i32, Descriptor>>,
         mask: Cell<u32>,
         inodes: RefCell<BTreeMap<u64, Weak<u64>>>,
+        cwd: Cell<Option<u64>>,
     }
     #[pyclass]
     impl DescriptorTable {}
@@ -81,6 +82,7 @@ pub mod native {
                 entries: RefCell::new(BTreeMap::new()),
                 mask: Cell::new(0o022),
                 inodes: RefCell::new(BTreeMap::new()),
+                cwd: Cell::new(None),
             }
             .into_ref(&vm.ctx);
             tables.borrow_mut().insert(key, table.clone());
@@ -116,6 +118,170 @@ pub mod native {
             .and_then(Value::as_str)
             .and_then(|value| value.parse().ok())
             .ok_or_else(|| vm.new_runtime_error(format!("File metadata has invalid {key}")))
+    }
+    fn text<'a>(value: &'a Value, key: &str, vm: &VirtualMachine) -> PyResult<&'a str> {
+        value
+            .get(key)
+            .and_then(Value::as_str)
+            .ok_or_else(|| vm.new_runtime_error(format!("Filesystem response has no {key}")))
+    }
+    fn cwd(vm: &VirtualMachine) -> PyResult<String> {
+        match table(vm).cwd.get() {
+            None => Ok("/".into()),
+            Some(inode) => {
+                let stat = exchange(vm, &json!({"op":"python.file.cwd","inode":inode}))?;
+                Ok(text(&stat, "path", vm)?.into())
+            }
+        }
+    }
+    fn path(path: &FsPath, vm: &VirtualMachine) -> PyResult<String> {
+        let value = std::str::from_utf8(path.as_bytes())
+            .map_err(|_| vm.new_value_error("Sandbox paths must be UTF-8"))?;
+        if value.is_empty() {
+            return Err(fault(vm, "ENOENT", "Empty filesystem path")?);
+        }
+        if value.starts_with('/') {
+            return Ok(value.into());
+        }
+        Ok(format!("{}/{value}", cwd(vm)?))
+    }
+
+    #[pyfunction]
+    fn getcwd(vm: &VirtualMachine) -> PyResult<String> {
+        cwd(vm)
+    }
+    #[pyfunction]
+    fn getcwdb(vm: &VirtualMachine) -> PyResult {
+        Ok(vm.ctx.new_bytes(cwd(vm)?.into_bytes()).into())
+    }
+    #[derive(FromArgs)]
+    struct ChdirArgs {
+        #[pyarg(any)]
+        path: FsPath,
+    }
+    #[pyfunction]
+    fn chdir(args: ChdirArgs, vm: &VirtualMachine) -> PyResult<()> {
+        let value = exchange(
+            vm,
+            &json!({"op":"filesystem.stat","path":path(&args.path,vm)?,"follow":true}),
+        )?;
+        if text(&value, "kind", vm)? != "directory" {
+            return Err(fault(
+                vm,
+                "ENOTDIR",
+                "Current directory must be a directory",
+            )?);
+        }
+        if integer(&value, "mode", vm)? & 0o100 == 0 {
+            return Err(fault(vm, "EACCES", "Directory is not searchable")?);
+        }
+        table(vm).cwd.set(Some(integer(&value, "inode", vm)?));
+        Ok(())
+    }
+    #[derive(FromArgs)]
+    struct StatArgs {
+        #[pyarg(any)]
+        path: Either<i32, FsPath>,
+        #[pyarg(named, default)]
+        dir_fd: Option<i32>,
+        #[pyarg(named, default = true)]
+        follow_symlinks: bool,
+    }
+    #[pyfunction]
+    fn stat(args: StatArgs, vm: &VirtualMachine) -> PyResult {
+        if args.dir_fd.is_some() {
+            return Err(fault(
+                vm,
+                "ENOTSUP",
+                "Directory descriptors are not supported",
+            )?);
+        }
+        match args.path {
+            Either::A(fd) => {
+                if !args.follow_symlinks {
+                    return Err(
+                        vm.new_value_error("stat: cannot use fd and follow_symlinks together")
+                    );
+                }
+                fstat(fd, vm)
+            }
+            Either::B(input) => {
+                let value = exchange(
+                    vm,
+                    &json!({"op":"filesystem.stat","path":path(&input,vm)?,"follow":args.follow_symlinks}),
+                )?;
+                stat_result(&value, vm)
+            }
+        }
+    }
+    #[derive(FromArgs)]
+    struct PathArgs {
+        #[pyarg(any)]
+        path: FsPath,
+        #[pyarg(named, default)]
+        dir_fd: Option<i32>,
+    }
+    #[pyfunction]
+    fn lstat(args: PathArgs, vm: &VirtualMachine) -> PyResult {
+        if args.dir_fd.is_some() {
+            return Err(fault(
+                vm,
+                "ENOTSUP",
+                "Directory descriptors are not supported",
+            )?);
+        }
+        let value = exchange(
+            vm,
+            &json!({"op":"filesystem.stat","path":path(&args.path,vm)?,"follow":false}),
+        )?;
+        stat_result(&value, vm)
+    }
+    #[pyfunction]
+    fn readlink(args: PathArgs, vm: &VirtualMachine) -> PyResult {
+        if args.dir_fd.is_some() {
+            return Err(fault(
+                vm,
+                "ENOTSUP",
+                "Directory descriptors are not supported",
+            )?);
+        }
+        let value = exchange(
+            vm,
+            &json!({"op":"filesystem.readlink","path":path(&args.path,vm)?}),
+        )?;
+        let target = text(&value, "target", vm)?;
+        match args.path {
+            FsPath::Str(_) => Ok(vm.ctx.new_str(target).into()),
+            FsPath::Bytes(_) => Ok(vm.ctx.new_bytes(target.as_bytes().to_vec()).into()),
+        }
+    }
+    #[derive(FromArgs)]
+    struct ListDirArgs {
+        #[pyarg(any, default)]
+        path: Option<FsPath>,
+    }
+    #[pyfunction]
+    fn listdir(args: ListDirArgs, vm: &VirtualMachine) -> PyResult<Vec<PyObjectRef>> {
+        let input = args
+            .path
+            .unwrap_or_else(|| FsPath::Str(vm.ctx.new_str(".")));
+        let value = exchange(
+            vm,
+            &json!({"op":"filesystem.readdir","path":path(&input,vm)?}),
+        )?;
+        let entries = value
+            .as_array()
+            .ok_or_else(|| vm.new_runtime_error("Directory response is not an array"))?;
+        entries
+            .iter()
+            .map(|entry| {
+                let name = text(entry, "name", vm)?;
+                match &input {
+                    FsPath::Str(_) => Ok(vm.ctx.new_str(name).into()),
+                    FsPath::Bytes(_) => Ok(vm.ctx.new_bytes(name.as_bytes().to_vec()).into()),
+                }
+            })
+            .collect()
     }
 
     #[derive(Debug, FromArgs)]
@@ -222,8 +388,7 @@ pub mod native {
         if args.flags & O_TRUNC != 0 {
             creation |= 4;
         }
-        let path = std::str::from_utf8(args.path.as_bytes())
-            .map_err(|_| vm.new_value_error("Sandbox paths must be UTF-8"))?;
+        let path = path(&args.path, vm)?;
         let table = table(vm);
         let fd = available(&table, vm)?;
         let mode = args.mode & !table.mask.get();
@@ -439,13 +604,21 @@ pub mod native {
     fn fstat(fd: i32, vm: &VirtualMachine) -> PyResult {
         let description = description(fd, vm)?;
         let snapshot = refresh(&description, vm)?;
-        let stat = &snapshot;
+        stat_result(&snapshot, vm)
+    }
+    fn stat_result(stat: &Value, vm: &VirtualMachine) -> PyResult {
         let size = integer(stat, "size", vm)?;
         let atime = timestamp(stat, "atimeNs", vm)?;
         let mtime = timestamp(stat, "mtimeNs", vm)?;
         let ctime = timestamp(stat, "ctimeNs", vm)?;
+        let kind = match text(stat, "kind", vm)? {
+            "file" => 0o100000,
+            "directory" => 0o040000,
+            "symlink" => 0o120000,
+            _ => return Err(vm.new_runtime_error("Filesystem metadata has invalid kind")),
+        };
         Ok(StatResultData {
-            st_mode: 0o100000 | integer(stat, "mode", vm)?,
+            st_mode: kind | integer(stat, "mode", vm)?,
             st_ino: integer(stat, "inode", vm)?,
             st_dev: 0,
             st_nlink: integer(stat, "nlink", vm)?,

@@ -1,0 +1,148 @@
+{
+  "status": "Unreleased source; complete final local verification passed",
+  "measuredAt": "2026-10-18T20:26:14.460042+00:00",
+  "sourceBase": "4342dcc0a391f94c6d42d04671e1ecb9b8514148",
+  "sourceSha256": {
+    "crates/python/src/os.rs": "a4ccadb78ac6f582a8abbaac395d3bf332273bcad7861641492e8bb8ac5f430c",
+    "crates/python/src/filesystem.rs": "7afbfcdc23d0464d528e096966e37cf272ac9fbfdbebac168e26c0645bbfb98a",
+    "src/python-files.ts": "9c2cdaf6dbd1e5d9e8b4524b9d4cd88c8ec3071256d34571c33fa065609d45fd",
+    "src/python.ts": "25336cad27e712ff2106de94e6e78ab8bbb71789dd1e5f41d9aac0841af70cec",
+    "tests/python-paths.test.ts": "61aa634321764c35a1e639fe8ae8a74d20859f600bc5bfc09eba2e43c989c669"
+  },
+  "reproduction": {
+    "missingApi": {
+      "logSha256": "580a8e06f81fa9a062e6bf5e1fc462ef9b6ad405f1962719509e1ded863bc432",
+      "result": "Native workerd execution failed with AttributeError: module os has no attribute getcwd; 0 passing tests / 1 failure / 2.70 seconds."
+    },
+    "relativeImports": {
+      "logSha256": "f3b06e25a0b8864a8e6488e475b6fb1f80d8ecbccc226c1a188a68032f20bcda",
+      "result": "After adding cwd operations, native workerd still failed with ModuleNotFoundError for a module present in cwd because relative sys.path entries were rooted at /. The finder now resolves them from the native cwd."
+    },
+    "fixtureCorrection": "The initial fixture incorrectly supplied strings to the SDK nanosecond fields, whose decoded native contract is bigint. Corrected before recording the missing-API reproduction."
+  },
+  "change": [
+    "Native os.stat/lstat/listdir/readlink/getcwd/getcwdb/chdir reuse the existing filesystem actions and kernel metadata. No parallel filesystem or persistence owner.",
+    "Current directory identity lives in the VM-owned native table and is restored in the existing R2 heap. It starts at /; after chdir, a private current-grant lookup resolves its linked directory inode.",
+    "Relative open and relative sys.path entries use the live cwd. Directory rename changes the observed path, while removal followed by same-name recreation does not redirect the old cwd.",
+    "Stat results preserve file/directory/symlink kind, inode, links, owner and nanosecond timestamps. Directory and symlink byte paths return bytes.",
+    "Non-null directory descriptors are rejected explicitly. Metadata uses read authority; search mode is checked before changing directory. Retained context admission independently requires read and execute."
+  ],
+  "coverage": [
+    "Following symlinks vs lstat and follow_symlinks=False; UTF-8 str/bytes and path-like objects",
+    "Directory enumeration defaults, None and byte paths; stat on an open regular-file fd; rejecting fd plus follow_symlinks=False",
+    "Exact timestamps above JavaScript safe-integer precision",
+    "Missing paths, file-as-directory, unsupported dir_fd and search-mode denial",
+    "Closed original Worker before native cwd restoration and relative file reads in a replacement",
+    "Native relative sys.path imports, fresh interpreter cwd isolation, explicit reset to root",
+    "Current read grants at context admission and each ephemeral pathname operation; private cwd action denied to guest calls",
+    "Rename preserves directory identity; unlink/recreate does not reuse it; absolute chdir recovers"
+  ],
+  "hostOracle": {
+    "python": "3.14.8 (main, Oct  2 2026, 10:23:31) [GCC 16.2.1 20260810]",
+    "cwdAfterSymlink": "caf\u00e9",
+    "cwdAfterRename": "moved",
+    "bytesEntries": ["data"],
+    "size": 6,
+    "atimeNs": 1234567890123456789,
+    "mtimeNs": 1234567890987654321,
+    "fdStatMatches": true,
+    "removedCwdDoesNotBindReplacement": true,
+    "explicitChdirToReplacement": true
+  },
+  "checks": {
+    "boundary": {
+      "command": "bun test tests/python-paths.test.ts tests/python-filesystem.test.ts tests/python-descriptors.test.ts",
+      "passed": true,
+      "tests": 10,
+      "files": 3,
+      "expects": 129,
+      "seconds": 46.46,
+      "logSha256": "fdfe65017397bf060ce4cb6353248485b1593ffd373430e36dbb075bc655bb19",
+      "scope": "Before final chdir keyword-argument contract adjustment; final full check is recorded separately."
+    },
+    "full": {
+      "command": "bun run check",
+      "exitCode": 0,
+      "passed": true,
+      "tests": 453,
+      "files": 102,
+      "expects": 6610,
+      "testSeconds": 312.83,
+      "logSha256": "1d42026357a994ff77a5da38d94717122790eeb4d990f75e95d179bd8c9222da",
+      "scope": "Final build, SDK, TypeScript, workspace Clippy, all native Rust tests and actual workerd/R2 suites, including keyword arguments and relative cwd imports."
+    }
+  },
+  "limits": [
+    "Source only; public/deployed 0.27.0 and Minutei are unchanged. New Python binary requires explicit context reset when adopted.",
+    "Directory descriptors, scandir, os.path, full pathlib/stdlib/pip and complete POSIX error attributes remain open.",
+    "Removed current directories are not retained as open directory descriptors. Full cross-runtime cwd/POSIX semantics are not claimed.",
+    "Relative operations may add a fresh kernel/head lookup for cwd; no latency, CPU, heap or billing improvement is claimed.",
+    "Full upstream parity, real Minutei production/model validation and AgentOS performance/cost comparison remain open."
+  ],
+  "delivery": {
+    "sourcePush": "not performed",
+    "remoteCi": "not performed",
+    "release": "not published",
+    "deployment": "not performed",
+    "priorDocumentationCi": {
+      "runId": 39161746482,
+      "headSha": "4342dcc0a391f94c6d42d04671e1ecb9b8514148",
+      "conclusion": "success",
+      "url": "https://github.com/minutei-ai/boxes/actions/runs/39161746482"
+    }
+  },
+  "artifactComparison": {
+    "reference": "Immutable public 0.27.0 runtime archive",
+    "modules": [
+      {
+        "file": "cirro_python_bg.wasm",
+        "referenceBytes": 19720381,
+        "candidateBytes": 19756558,
+        "deltaBytes": 36177,
+        "referenceSha256": "f11ff22fc5e14ce878bf9f18895c4e90c8ac3b983226dc4669e19485fdda7151",
+        "candidateSha256": "7fff6a2e66516dae5b918360f8a5bfc6b063efbd52c21f7c59ae8135aaf8b475"
+      },
+      {
+        "file": "cirro_kernel_bg.wasm",
+        "referenceBytes": 1237113,
+        "candidateBytes": 1237113,
+        "deltaBytes": 0,
+        "referenceSha256": "2bfe109a42ec2ccd0d2e6c50d0b06a1575ce41c845dee0ee7ffc4e60658729fb",
+        "candidateSha256": "2bfe109a42ec2ccd0d2e6c50d0b06a1575ce41c845dee0ee7ffc4e60658729fb"
+      },
+      {
+        "file": "cirro_guest_bg.wasm",
+        "referenceBytes": 1150616,
+        "candidateBytes": 1150616,
+        "deltaBytes": 0,
+        "referenceSha256": "dcf1a9d66b4c3a11106076c3e9d5fa1f596b8846a811dfeec9ecf3a8744af01f",
+        "candidateSha256": "dcf1a9d66b4c3a11106076c3e9d5fa1f596b8846a811dfeec9ecf3a8744af01f"
+      },
+      {
+        "file": "cirro_wasi_bg.wasm",
+        "referenceBytes": 1707779,
+        "candidateBytes": 1707779,
+        "deltaBytes": 0,
+        "referenceSha256": "0d1fd49eb2d515f724ad1067dec002f07d009d056bb6091402807b8ac5110090",
+        "candidateSha256": "0d1fd49eb2d515f724ad1067dec002f07d009d056bb6091402807b8ac5110090"
+      },
+      {
+        "file": "cirro_compiler_bg.wasm",
+        "referenceBytes": 1943596,
+        "candidateBytes": 1943596,
+        "deltaBytes": 0,
+        "referenceSha256": "27d9b0022a634ed4eef47b6561ad38cafde3522c17e834afed1264440678bf2f",
+        "candidateSha256": "27d9b0022a634ed4eef47b6561ad38cafde3522c17e834afed1264440678bf2f"
+      },
+      {
+        "file": "index.js",
+        "referenceBytes": 429824,
+        "candidateBytes": 430172,
+        "deltaBytes": 348,
+        "referenceSha256": "25e17ef8965e7bae8f9b8ece766c28b4b19790b3a89aed811a6a47e7eaec1a08",
+        "candidateSha256": "cb15a56e8362d6a839196f35bc8e53da8dddf9e141a1fdb13c1c4bac8fd78d35"
+      }
+    ],
+    "scope": "Artifact sizes and SHA-256 only; no startup, request latency, CPU, heap or billing comparison."
+  }
+}

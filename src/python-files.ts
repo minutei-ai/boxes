@@ -32,6 +32,7 @@ export const PythonFileAction = Schema.Union([
     length: Schema.Int.check(Schema.isBetween({ minimum: 0, maximum: 262_144 })),
   }),
   Schema.Struct({ op: Schema.Literal("python.file.stat"), inode: FileStat.fields.inode }),
+  Schema.Struct({ op: Schema.Literal("python.file.cwd"), inode: FileStat.fields.inode }),
   Schema.Struct({ op: Schema.Literal("python.file.close"), inode: FileStat.fields.inode }),
   Schema.Struct({
     op: Schema.Literal("python.file.write"),
@@ -66,7 +67,7 @@ export const pythonFile = Effect.fn("python.file")(function* (
       yield* requirePermission(capability, "write");
   } else if (action.op === "python.file.write" || action.op === "python.file.resize") {
     yield* requirePermission(capability, "write");
-  } else if (action.op === "python.file.read") {
+  } else if (action.op === "python.file.read" || action.op === "python.file.cwd") {
     yield* requirePermission(capability, "read");
   } else if (action.op === "python.file.close") {
     yield* requirePermission(capability, "execute");
@@ -95,6 +96,18 @@ export const pythonFile = Effect.fn("python.file")(function* (
     return new TextEncoder().encode(Schema.encodeSync(Schema.fromJsonString(FileStat))(stat));
   }
   const inode = BigInt(action.inode);
+  if (action.op === "python.file.cwd") {
+    const stat = yield* kernelCall(() => kernel.stat_inode(inode)).pipe(
+      Effect.flatMap(Schema.decodeUnknownEffect(Schema.fromJsonString(FileStat))),
+    );
+    if (stat.kind !== "directory")
+      return yield* new Fault({
+        code: "ENOTDIR",
+        status: 400,
+        message: "Current directory no longer exists",
+      });
+    return new TextEncoder().encode(Schema.encodeSync(Schema.fromJsonString(FileStat))(stat));
+  }
   if (action.op === "python.file.close") {
     const changed = yield* kernelCall(() =>
       kernel.release_inode(owner.id, BigInt(owner.generation), inode),

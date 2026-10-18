@@ -240,6 +240,7 @@ export const python = Effect.fn("python.execute")(function* (
           action.op === "python.file.open" ||
           action.op === "python.file.read" ||
           action.op === "python.file.stat" ||
+          action.op === "python.file.cwd" ||
           action.op === "python.file.write" ||
           action.op === "python.file.resize" ||
           action.op === "python.file.close"

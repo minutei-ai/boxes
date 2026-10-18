@@ -151,6 +151,7 @@ pub const IMPORTS: &rustpython_vm::frozen::FrozenLib = rustpython_vm::py_freeze!
 import sys as _sys
 import _frozen_importlib as _bootstrap
 import _boxes_io as _io
+import os as _os
 
 class _Spec(_bootstrap.ModuleSpec):
  @property
@@ -185,7 +186,7 @@ class _Finder:
    if not isinstance(entry, str):
     continue
    if not entry.startswith('/'):
-    entry = '/' + entry
+    entry = _os.getcwd().rstrip('/') + '/' + entry
    base = entry.rstrip('/') + '/' + leaf
    package, module, directory = _io.call({'op':'filesystem.statFiles','paths':[base+'/__init__.py',base+'.py',base],'follow':True})
    filename = base + '/__init__.py'
