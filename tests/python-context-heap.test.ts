@@ -25,12 +25,12 @@ test(
               if (index === 0)
                 return {
                   ...program,
-                  source: `from _thread import allocate_lock\nplain_lock=allocate_lock()\nassert plain_lock.acquire(False)\n${program.source}`,
+                  source: `import heapq,bisect,copy,contextlib\nfrom collections import Counter\nretained_heap=[3,1,2]\nheapq.heapify(retained_heap)\noriginal_cycle=[]\noriginal_cycle.append(original_cycle)\nretained_cycle=copy.deepcopy(original_cycle)\nretained_stack=contextlib.ExitStack()\nretained_events=[]\nretained_stack.callback(retained_events.append,'closed')\nfrom _thread import allocate_lock\nplain_lock=allocate_lock()\nassert plain_lock.acquire(False)\n${program.source}`,
                 };
               if (index === 1)
                 return {
                   ...program,
-                  source: `assert plain_lock.locked()\nassert not plain_lock.acquire(False)\nplain_lock.release()\n${program.source}`,
+                  source: `assert heapq is sys.modules['heapq'] and contextlib is sys.modules['contextlib']\nassert retained_cycle[0] is retained_cycle\nassert heapq.heappop(retained_heap)==1\nassert Counter('aaabbc').most_common(2)==[('a',3),('b',2)]\nassert bisect.bisect_left([1,2,3],2)==1\nretained_stack.close()\nassert retained_events==['closed']\nassert plain_lock.locked()\nassert not plain_lock.acquire(False)\nplain_lock.release()\n${program.source}`,
                 };
               return {
                 ...program,

@@ -1,0 +1,63 @@
+{
+  "status": "local native and workerd/R2 checks passed; unreleased and undeployed",
+  "measuredAt": "2026-10-18T16:53:58.779372+00:00",
+  "sourceBase": "19ac6a5cd0af9e0121ed9c86845af7dfebf06c0a",
+  "sourceSha256": {
+    "crates/python/build.rs": "c2d173b72c3f9e269c68a9eed92e18ab49dc7f452b9ec66985f0dd4f5d43d61c",
+    "tests/python.test.ts": "a1a23a6cff8a8000402b6646e8118dff741dc585d7c7059f2400660126541f70",
+    "tests/python-context-heap.test.ts": "d421218cdee9e9784784b02fe2d9b4d7b4e25b12766cfae102d828c5b0f4aa88"
+  },
+  "ownership": "The existing RustPython 0.6.0 build freezes unchanged upstream heapq, bisect, copy, copyreg and contextlib modules alongside its bounded bootstrap. Imports remain native and lazy; no host-language implementation or runtime download.",
+  "baseline": {
+    "command": "bun test tests/python.test.ts -t 'standard library performs'",
+    "passed": 0,
+    "failed": 1,
+    "seconds": 0.681,
+    "observed": "Expanded workload completed with exit code 1 before adding its frozen module dependencies; assertion expected 0.",
+    "logSha256": "b846a9baa3253eb2d28c5ad57c0722238c98dc6a3b3782b34e37efc4598b377c"
+  },
+  "coverage": [
+    "Counter.most_common(2) retains ranked counts through heapq",
+    "Heap construction and ordered removal",
+    "bisect ordered insertion and position lookup",
+    "deepcopy preserves a cyclic graph without aliasing the original",
+    "ExitStack callback execution and suppress preserve native context-manager behavior",
+    "Closed original Worker followed by R2 restoration preserves heap, cyclic copied graph, imported module identity and a pending ExitStack callback",
+    "Existing JSON/regex, imports, descriptor rights, detached files, memory/fuel and retained buffers pass unchanged limits"
+  ],
+  "checks": {
+    "build": "passed",
+    "typecheck": "passed",
+    "clippy": "cargo clippy -p cirro-python --target wasm32-unknown-unknown -- -D warnings: passed",
+    "nativeSuite": {
+      "command": "bun test tests/python-descriptors.test.ts tests/python.test.ts tests/python-context-heap.test.ts tests/python-filesystem.test.ts",
+      "passed": 16,
+      "failed": 0,
+      "assertions": 166,
+      "seconds": 33.47,
+      "logSha256": "2fa07c415fbba786384139acb3255792f0a326f4d24d482ffd401873837e5220"
+    },
+    "moduleIdentityRegression": {
+      "command": "bun test tests/python-context-heap.test.ts",
+      "passed": 1,
+      "failed": 0,
+      "assertions": 25,
+      "seconds": 4.68,
+      "logSha256": "cec59204c285735a93f637e6530b21c1c824e039ecffe683475fd455574ca39a"
+    }
+  },
+  "limits": [
+    "This verifies the named workloads; contextlib.chdir still requires unimplemented native OS cwd operations",
+    "Remaining standard-library modules, pickle typing dependencies, native extensions and pip remain open",
+    "Full cross-context detached-inode coherence remains open",
+    "Different Python binary requires explicit retained-context reset",
+    "No production cost/latency or AgentOS comparison established"
+  ],
+  "delivery": {
+    "sourcePush": "pending",
+    "remoteCi": "pending",
+    "runtimePublication": "not performed",
+    "deployment": "not performed",
+    "minuteiUpdate": "not performed"
+  }
+}

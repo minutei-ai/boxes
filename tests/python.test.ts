@@ -147,7 +147,7 @@ test("Python standard library performs JSON, regular expressions, cached calls a
           Effect.sync(
             () =>
               new bindings.PythonGuest(
-                "import json, re, functools\nfrom collections import Counter, namedtuple\nfrom enum import IntEnum\nfrom weakref import WeakSet\n@functools.lru_cache(maxsize=8)\ndef answer(value):\n return value*2\nclass Level(IntEnum):\n ready=1\nPoint=namedtuple('Point',['x','y'])\njson.loads(json.dumps({'answer':answer(21),'matches':re.findall(r'[a-z]+','box 42 native'),'counts':dict(Counter('boxes')),'point':Point(1,2),'weak_count':len(WeakSet([Point])),'level':Level.ready,'unicode':'ação'},ensure_ascii=False,sort_keys=True))",
+                "import json, re, functools, heapq, bisect, copy, contextlib\nfrom collections import Counter, namedtuple\nfrom enum import IntEnum\nfrom weakref import WeakSet\n@functools.lru_cache(maxsize=8)\ndef answer(value):\n return value*2\nclass Level(IntEnum):\n ready=1\nPoint=namedtuple('Point',['x','y'])\nassert Counter('aaabbc').most_common(2)==[('a',3),('b',2)]\nheap=[3,1,2]\nheapq.heapify(heap)\nassert [heapq.heappop(heap) for _ in range(3)]==[1,2,3]\nordered=[1,3]\nbisect.insort(ordered,2)\nassert ordered==[1,2,3] and bisect.bisect_left(ordered,2)==1\ncycle=[]\ncycle.append(cycle)\ncloned=copy.deepcopy(cycle)\nassert cloned is not cycle and cloned[0] is cloned\nevents=[]\nwith contextlib.ExitStack() as stack:\n stack.callback(events.append,'closed')\n with contextlib.suppress(ValueError):\n  raise ValueError('suppressed')\nassert events==['closed']\njson.loads(json.dumps({'answer':answer(21),'matches':re.findall(r'[a-z]+','box 42 native'),'counts':dict(Counter('boxes')),'point':Point(1,2),'weak_count':len(WeakSet([Point])),'level':Level.ready,'unicode':'ação'},ensure_ascii=False,sort_keys=True))",
                 "/tmp/stdlib.py",
                 false,
                 1_048_576,
@@ -157,8 +157,8 @@ test("Python standard library performs JSON, regular expressions, cached calls a
           (guest) => Effect.sync(() => guest.free()),
         );
         const result = Schema.decodeUnknownSync(Schema.fromJsonString(Completed))(guest.step());
-        expect(result.output.exitCode).toBe(0);
         expect(result.output.stderr).toBe("");
+        expect(result.output.exitCode).toBe(0);
         expect(result.output.result).toEqual({
           answer: 42,
           matches: ["box", "native"],

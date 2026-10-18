@@ -43,8 +43,16 @@
     "No production latency, cost or AgentOS performance comparison established"
   ],
   "delivery": {
-    "sourcePush": "pending",
-    "remoteCi": "pending",
+    "sourcePush": "cbf0c552a62f8e97e794208bcad9ed474a84fdf6",
+    "remoteCi": {
+      "run": 39146452275,
+      "conclusion": "success",
+      "tests": 449,
+      "files": 101,
+      "seconds": 213.08,
+      "packageProof": "passed",
+      "logSha256": "22388e2db672e0985c59d5b61df03200f04b448916a3880d5e55c4e3203b2c37"
+    },
     "runtimePublication": "not performed",
     "deployment": "not performed",
     "minuteiUpdate": "not performed"

@@ -18,6 +18,11 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     }
     for module in [
         "abc.py",
+        "bisect.py",
+        "contextlib.py",
+        "copy.py",
+        "copyreg.py",
+        "heapq.py",
         "io.py",
         "_pyio.py",
         "stat.py",
