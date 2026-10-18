@@ -1,0 +1,173 @@
+{
+  "status": "0.26.0 candidate archives validated locally; publication and deployment pending",
+  "version": "0.26.0",
+  "implementationCommit": "00dab40851bcf397b60f9d048323f0090fde8b0b",
+  "measuredAt": "2026-10-18T16:58:06.123998+00:00",
+  "upgrade": "Python binary changes require explicit context reset; retained heaps are never replayed or converted automatically. JavaScript continuity is a separate production proof.",
+  "localEvidence": [
+    "python-read-descriptors-local.json",
+    "python-write-descriptors-local.json",
+    "python-exit-flush-local.json",
+    "python-detached-files-local.json",
+    "python-fileio-local.json",
+    "python-stdlib-helpers-local.json"
+  ],
+  "candidate": {
+    "assets": [
+      {
+        "file": "minutei-ai-boxes-0.26.0.tgz",
+        "bytes": 88713,
+        "sha256": "8b9b4c88f2d3a4648f33e930e81b8c245099a3bf7ad57f0b844792171373a4bf"
+      },
+      {
+        "file": "minutei-ai-boxes-runtime-0.26.0.tgz",
+        "bytes": 7298026,
+        "sha256": "72fcf45ed8bdd0894381a3e3906e22ce61be4afaa2a8527f7382bb2a48e6ce9c"
+      }
+    ],
+    "modules": [
+      {
+        "file": "cirro_compiler_bg.wasm",
+        "bytes": 1943596,
+        "sha256": "27d9b0022a634ed4eef47b6561ad38cafde3522c17e834afed1264440678bf2f",
+        "previousSha256": "27d9b0022a634ed4eef47b6561ad38cafde3522c17e834afed1264440678bf2f",
+        "unchanged": true
+      },
+      {
+        "file": "cirro_guest_bg.wasm",
+        "bytes": 1150616,
+        "sha256": "dcf1a9d66b4c3a11106076c3e9d5fa1f596b8846a811dfeec9ecf3a8744af01f",
+        "previousSha256": "dcf1a9d66b4c3a11106076c3e9d5fa1f596b8846a811dfeec9ecf3a8744af01f",
+        "unchanged": true
+      },
+      {
+        "file": "cirro_kernel_bg.wasm",
+        "bytes": 1199019,
+        "sha256": "b36dacf758d0f4898e31086ffc806f01405f29fc46f87fa06c0728c27a70c5a1",
+        "previousSha256": "b6a47273a35b12f7691e2f27dfac54d02b33dccaded0824da5389c68da9db186",
+        "unchanged": false
+      },
+      {
+        "file": "cirro_python_bg.wasm",
+        "bytes": 19751806,
+        "sha256": "2cc5155e92971aacd5514f694f449ecb8b10e42ec11c88e1f47826a79db5a43d",
+        "previousSha256": "4e1878eedc95dece9518550c836f5930e1478977bff5f467c9ac1993fadad124",
+        "unchanged": false
+      },
+      {
+        "file": "cirro_wasi_bg.wasm",
+        "bytes": 1707779,
+        "sha256": "0d1fd49eb2d515f724ad1067dec002f07d009d056bb6091402807b8ac5110090",
+        "previousSha256": "0d1fd49eb2d515f724ad1067dec002f07d009d056bb6091402807b8ac5110090",
+        "unchanged": true
+      }
+    ],
+    "packageProof": {
+      "passed": true,
+      "version": "0.26.0",
+      "transport": "native Alchemy workerd service binding and Agent RPC; local R2 and Queue",
+      "logSha256": "0cebc571f858c9f3ed284500b4fef5546e79bdde516b04df75d70efd014e3bd0"
+    }
+  },
+  "production": {
+    "status": "not deployed",
+    "before": {
+      "measuredAt": 1792342583121,
+      "profile": "minutei",
+      "worker": "cirro-sandbox-prod-rs7wexxow56rmsoz",
+      "bucket": "cirro-objects-prod-vbk2p6ruhs2m645y",
+      "placement": {
+        "mode": "smart"
+      },
+      "counts": {
+        "pages": 7,
+        "objects": 6096,
+        "processes": 1499,
+        "schedules": 2,
+        "contexts": 0,
+        "metadataAbsent": 2747
+      },
+      "formats": {
+        "run-v7": 1499,
+        "program-json-v2": 1397,
+        "program-json": 435,
+        "historical-source-text-v1": 16,
+        "cron-v2": 2
+      },
+      "statuses": {
+        "cancelled": 28,
+        "exited": 1362,
+        "failed": 109
+      },
+      "complete": true
+    },
+    "upgradeSeed": {
+      "id": "python-io-cutover-546910d0-1c6e-4242-a012-337f611ae215",
+      "seededAt": 1792342643031,
+      "sdkVersion": "0.25.0",
+      "python": {
+        "id": "before-python",
+        "context": {
+          "id": "python",
+          "generation": 0
+        },
+        "status": "exited",
+        "sourceHash": "ec878c3f3a6d58d373a2dc3b247a82ec534c11bb4fbd6712e2e73777e1f80ac3",
+        "language": "python",
+        "startedAt": 1792342645328,
+        "finishedAt": 1792342646361,
+        "output": {
+          "stdout": "",
+          "stderr": "",
+          "result": 41,
+          "exitCode": 0
+        }
+      },
+      "javascript": {
+        "id": "before-js",
+        "context": {
+          "id": "javascript",
+          "generation": 0
+        },
+        "status": "exited",
+        "sourceHash": "459851de8b6eee45f01c06c485e09bf72217d7e67b8f588a75fc0ed3d192958b",
+        "language": "javascript",
+        "startedAt": 1792342649826,
+        "finishedAt": 1792342650817,
+        "output": {
+          "stdout": "",
+          "stderr": "",
+          "result": 41,
+          "exitCode": 0
+        }
+      },
+      "unsupported": {
+        "id": "before-import",
+        "context": null,
+        "status": "exited",
+        "sourceHash": "0a13cb7edd8ac5a8f2c0716cce29741c35e97839c99b7fdcc35497d829b57393",
+        "language": "python",
+        "startedAt": 1792342651784,
+        "finishedAt": 1792342652585,
+        "output": {
+          "stdout": "",
+          "stderr": "Traceback (most recent call last):\n  File \"/tmp/main.py\", line 1, in <module>\nModuleNotFoundError: No module named 'io'\n",
+          "result": null,
+          "exitCode": 1
+        }
+      },
+      "tokenExcluded": true
+    }
+  },
+  "publication": {
+    "status": "pending"
+  },
+  "remoteCi": {
+    "status": "pending"
+  },
+  "limits": [
+    "Complete POSIX/Linux, cross-context unlinked-file coherence, remaining stdlib/pip and native extensions remain open",
+    "Source/local proof and production delivery are distinct; no production performance or AgentOS cost advantage established",
+    "Minutei consumer is not pushed or deployed by this delivery"
+  ]
+}

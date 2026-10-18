@@ -42,8 +42,13 @@
     "No production performance or cost claim"
   ],
   "delivery": {
-    "sourcePush": "pending",
-    "remoteCi": "pending",
+    "sourcePush": "19ac6a5cd0af9e0121ed9c86845af7dfebf06c0a",
+    "remoteCi": {
+      "run": 39146718205,
+      "conclusion": "success",
+      "packageProof": "passed",
+      "logSha256": "a64b68cde9d81b9732bf59f18d9fabda0f0f0a884638d3f3d3ab48855ecbd574"
+    },
     "runtimePublication": "not performed",
     "deployment": "not performed",
     "minuteiUpdate": "not performed"
