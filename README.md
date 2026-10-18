@@ -27,6 +27,8 @@ Version 0.27.0 adds coherent Python open-file inodes across contexts and Worker 
 
 Version 0.28.0 adds native Python `os.stat`/`lstat`, `listdir`, `readlink`, `getcwd`/`getcwdb` and `chdir`. Relative file opens and relative `sys.path` entries follow the interpreter’s current directory, including after rename and Worker replacement. Pinned `posixpath`/`genericpath` now provide `os.path`, with native path encoding and the bridge’s Linux errno catalog; [library evidence](docs/evidence/python-path-library-local.json) covers real metadata and restored state. Directory descriptors, `scandir` and full `pathlib` remain pending. See [local path evidence](docs/evidence/python-paths-local.json) and the separate [0.28.0 delivery record](docs/evidence/sdk-0.28.0-delivery.json).
 
+The next source increment adds native Python `os.scandir` and pinned `glob`/`fnmatch`. Directory entries reuse the existing name/type/inode listing, cache stat results and preserve iterator state through R2. The [local evidence](docs/evidence/python-scandir-local.json) separates this source increment from published runtime 0.28.0; adopting its changed Python binary requires a context reset.
+
 Version 0.28.0 also fixes filesystem traversal through symlinks followed by `..`, including batch writes, built-in shell and WASI. The [native path evidence](docs/evidence/semantic-paths-local.json) records physical inode identity, descriptor containment and replacement-Worker checks; ESM specifiers keep their URL normalization.
 
 ## Effect SDK

@@ -29,6 +29,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         "_collections_abc.py",
         "enum.py",
         "functools.py",
+        "fnmatch.py",
+        "glob.py",
         "genericpath.py",
         "keyword.py",
         "operator.py",

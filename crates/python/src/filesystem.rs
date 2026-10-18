@@ -295,6 +295,7 @@ def install(filename):
  import io
  import posixpath
  _os.path = posixpath
+ _os.curdir = posixpath.curdir
  _sys.modules['os.path'] = posixpath
  builtins.open = open
  native.open = open

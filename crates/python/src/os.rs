@@ -3,17 +3,19 @@ pub mod native {
     use crate::filesystem::{exchange, fault};
     use base64::Engine;
     use rustpython_vm::{
-        AsObject, FromArgs, PyObjectRef, PyPayload, PyRef, PyResult, VirtualMachine,
+        AsObject, FromArgs, Py, PyObjectRef, PyPayload, PyRef, PyResult, VirtualMachine,
         builtins::{PyDictRef, PyStrRef},
         convert::ToPyObject,
-        function::{ArgBytesLike, ArgMemoryBuffer, Either, FsPath, OptionalArg},
+        function::{ArgBytesLike, ArgMemoryBuffer, Either, FsPath, FuncArgs, OptionalArg},
+        protocol::PyIterReturn,
         pyclass, pystruct_sequence, pystruct_sequence_data,
         types::PyStructSequence,
+        types::{IterNext, Iterable, SelfIter},
     };
     use serde_json::{Value, json};
     use std::{
         cell::{Cell, RefCell},
-        collections::BTreeMap,
+        collections::{BTreeMap, VecDeque},
         rc::{Rc, Weak},
     };
 
@@ -282,6 +284,201 @@ pub mod native {
                 }
             })
             .collect()
+    }
+
+    #[derive(FromArgs)]
+    struct FollowArgs {
+        #[pyarg(named, default = true)]
+        follow_symlinks: bool,
+    }
+
+    #[pyattr]
+    #[pyclass(module = "os", name = "DirEntry")]
+    #[derive(Debug, PyPayload)]
+    struct DirEntry {
+        name: PyObjectRef,
+        path: PyObjectRef,
+        inode: u64,
+        kind: String,
+        stat: RefCell<Option<PyObjectRef>>,
+        lstat: RefCell<Option<PyObjectRef>>,
+    }
+
+    impl DirEntry {
+        fn metadata(&self, follow: bool, vm: &VirtualMachine) -> PyResult {
+            let follows = follow && self.kind == "symlink";
+            let cache = if follows { &self.stat } else { &self.lstat };
+            if let Some(value) = cache.borrow().as_ref() {
+                return Ok(value.clone());
+            }
+            let input = FsPath::try_from_path_like(self.path.clone(), false, vm)?;
+            let value = exchange(
+                vm,
+                &json!({"op":"filesystem.stat","path":path(&input,vm)?,"follow":follows}),
+            )?;
+            let result = stat_result(&value, vm)?;
+            cache.replace(Some(result.clone()));
+            Ok(result)
+        }
+        fn matches(&self, kind: &str, follow: bool, vm: &VirtualMachine) -> PyResult<bool> {
+            if !follow || self.kind != "symlink" {
+                return Ok(self.kind == kind);
+            }
+            match self.metadata(true, vm) {
+                Ok(value) => {
+                    let mode: u64 = value.get_attr("st_mode", vm)?.try_into_value(vm)?;
+                    let expected = match kind {
+                        "directory" => 0o040000,
+                        "file" => 0o100000,
+                        _ => return Err(vm.new_runtime_error("Invalid directory entry type")),
+                    };
+                    Ok(mode & 0o170000 == expected)
+                }
+                Err(error) if error.fast_isinstance(vm.ctx.exceptions.file_not_found_error) => {
+                    Ok(false)
+                }
+                Err(error) => Err(error),
+            }
+        }
+    }
+
+    #[pyclass(flags(DISALLOW_INSTANTIATION))]
+    impl DirEntry {
+        #[pygetset]
+        fn name(zelf: &Py<Self>) -> PyObjectRef {
+            zelf.name.clone()
+        }
+        #[pygetset]
+        fn path(zelf: &Py<Self>) -> PyObjectRef {
+            zelf.path.clone()
+        }
+        #[pymethod]
+        fn __fspath__(zelf: &Py<Self>) -> PyObjectRef {
+            zelf.path.clone()
+        }
+        #[pymethod]
+        fn inode(zelf: &Py<Self>) -> u64 {
+            zelf.inode
+        }
+        #[pymethod]
+        fn is_symlink(zelf: &Py<Self>) -> bool {
+            zelf.kind == "symlink"
+        }
+        #[pymethod]
+        fn is_dir(zelf: &Py<Self>, args: FollowArgs, vm: &VirtualMachine) -> PyResult<bool> {
+            zelf.matches("directory", args.follow_symlinks, vm)
+        }
+        #[pymethod]
+        fn is_file(zelf: &Py<Self>, args: FollowArgs, vm: &VirtualMachine) -> PyResult<bool> {
+            zelf.matches("file", args.follow_symlinks, vm)
+        }
+        #[pymethod]
+        fn stat(zelf: &Py<Self>, args: FollowArgs, vm: &VirtualMachine) -> PyResult {
+            zelf.metadata(args.follow_symlinks, vm)
+        }
+        #[pymethod]
+        fn __reduce__(_zelf: &Py<Self>, vm: &VirtualMachine) -> PyResult {
+            Err(vm.new_type_error("cannot pickle 'os.DirEntry' object"))
+        }
+    }
+
+    #[pyattr]
+    #[pyclass(module = "os", name = "ScandirIterator")]
+    #[derive(Debug, PyPayload)]
+    struct ScandirIterator {
+        entries: RefCell<VecDeque<PyObjectRef>>,
+    }
+    #[pyclass(flags(DISALLOW_INSTANTIATION), with(IterNext, Iterable))]
+    impl ScandirIterator {
+        #[pymethod]
+        fn close(zelf: &Py<Self>) {
+            zelf.entries.take();
+        }
+        #[pymethod]
+        fn __enter__(zelf: PyRef<Self>) -> PyRef<Self> {
+            zelf
+        }
+        #[pymethod]
+        fn __exit__(zelf: &Py<Self>, _args: FuncArgs) {
+            Self::close(zelf);
+        }
+        #[pymethod]
+        fn __reduce__(_zelf: &Py<Self>, vm: &VirtualMachine) -> PyResult {
+            Err(vm.new_type_error("cannot pickle 'ScandirIterator' object"))
+        }
+    }
+    impl SelfIter for ScandirIterator {}
+    impl IterNext for ScandirIterator {
+        fn next(zelf: &Py<Self>, _vm: &VirtualMachine) -> PyResult<PyIterReturn> {
+            let next = zelf.entries.borrow_mut().pop_front();
+            match next {
+                Some(value) => Ok(PyIterReturn::Return(value)),
+                None => {
+                    ScandirIterator::close(zelf);
+                    Ok(PyIterReturn::StopIteration(None))
+                }
+            }
+        }
+    }
+    #[derive(FromArgs)]
+    struct ScandirArgs {
+        #[pyarg(any, default)]
+        path: Option<Either<i32, FsPath>>,
+    }
+    #[pyfunction]
+    fn scandir(args: ScandirArgs, vm: &VirtualMachine) -> PyResult<PyRef<ScandirIterator>> {
+        let input = match args.path {
+            None => FsPath::Str(vm.ctx.new_str(".")),
+            Some(Either::B(path)) => path,
+            Some(Either::A(fd)) if fd < 0 => {
+                return Err(fault(vm, "EBADF", "Bad file descriptor")?);
+            }
+            Some(Either::A(_)) => {
+                return Err(fault(
+                    vm,
+                    "ENOTSUP",
+                    "Directory descriptors are not supported",
+                )?);
+            }
+        };
+        let value = exchange(
+            vm,
+            &json!({"op":"filesystem.readdir","path":path(&input,vm)?}),
+        )?;
+        let entries = value
+            .as_array()
+            .ok_or_else(|| vm.new_runtime_error("Directory response is not an array"))?;
+        let directory = std::str::from_utf8(input.as_bytes())
+            .map_err(|_| vm.new_value_error("Sandbox paths must be UTF-8"))?;
+        let separator = if directory.ends_with('/') { "" } else { "/" };
+        let entries = entries
+            .iter()
+            .map(|entry| {
+                let name = text(entry, "name", vm)?;
+                let joined = format!("{directory}{separator}{name}");
+                let (name, path): (PyObjectRef, PyObjectRef) = match &input {
+                    FsPath::Str(_) => (vm.ctx.new_str(name).into(), vm.ctx.new_str(joined).into()),
+                    FsPath::Bytes(_) => (
+                        vm.ctx.new_bytes(name.as_bytes().to_vec()).into(),
+                        vm.ctx.new_bytes(joined.into_bytes()).into(),
+                    ),
+                };
+                Ok(DirEntry {
+                    name,
+                    path,
+                    inode: integer(entry, "inode", vm)?,
+                    kind: text(entry, "kind", vm)?.into(),
+                    stat: RefCell::new(None),
+                    lstat: RefCell::new(None),
+                }
+                .into_ref(&vm.ctx)
+                .into())
+            })
+            .collect::<PyResult<VecDeque<_>>>()?;
+        Ok(ScandirIterator {
+            entries: RefCell::new(entries),
+        }
+        .into_ref(&vm.ctx))
     }
 
     #[derive(Debug, FromArgs)]

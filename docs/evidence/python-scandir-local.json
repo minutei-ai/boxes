@@ -1,0 +1,173 @@
+{
+  "status": "Native source checks passed; not yet published or deployed",
+  "measuredAt": "2026-10-18T22:07:37.216439+00:00",
+  "sourceBase": "57caecd869320554d7debd4974290ff9ed8a1c8b",
+  "sourceSha256": {
+    "crates/python/src/os.rs": "bdc13b0895d211d3a97eed4efff7a5835112216a3dd899ce29b6e512617acdf1",
+    "crates/python/src/filesystem.rs": "c9cc7e4ba72726a979851314f6e0cdc65fd3e2ee1d9c5645a1f3660241dcd3e6",
+    "crates/python/build.rs": "3fcd649544fdefc6fb83388b4f92b2de274b41243206b1352beb8b8d4f1cda0e",
+    "tests/python-scandir.test.ts": "cb22b8557dca4e0d1c7fbf1a2a7508225b032072c459fa19257f6a095ec03534"
+  },
+  "reproduction": {
+    "runtime": "Native Alchemy workerd service binding and actual local R2",
+    "initialFailure": "AttributeError: module 'os' has no attribute 'scandir'",
+    "baselineLogSha256": "5d772cb8be712dff9ce42619248123b9c147c9b4b524f23003aaad8e4d21fbed",
+    "scope": "Initial fixture failed before glob import. The fixture was subsequently extended with cache replacement and request-budget cases."
+  },
+  "change": [
+    "Native Rust os.scandir, DirEntry and ScandirIterator use the existing authorized filesystem.readdir/stat operations; no new filesystem transport or persistence owner.",
+    "Name, inode and non-symlink type checks use the captured directory listing, without a per-entry stat request. Native iterators support close, context manager cleanup and exhaustion.",
+    "Names and paths retain str/UTF-8 bytes mode, original relative path spelling and __fspath__ support. Positive descriptor input explicitly rejects unsupported directory-fd enumeration.",
+    "Stat caches are separate when following an enumerated symlink; enumerated non-symlinks share lstat metadata for follow modes, including namespace replacement by a symlink. Errors are preserved; dangling type checks return false on ENOENT.",
+    "Pinned standard-library glob and fnmatch are frozen unchanged; os.curdir references the pinned posixpath constant."
+  ],
+  "library": [
+    {
+      "module": "glob.py",
+      "package": "rustpython-pylib 0.6.0",
+      "bytes": 20775,
+      "sha256": "21d290be171e3d0643a444e4b58a2c4ee9bfe2c1474bb36ead043794bb769365",
+      "frozenCopiesMatch": true
+    },
+    {
+      "module": "fnmatch.py",
+      "package": "rustpython-pylib 0.6.0",
+      "bytes": 6791,
+      "sha256": "ce582bc266922e4c682e2a85d72095124430a6bf58716c6f2537103480eae742",
+      "frozenCopiesMatch": true
+    }
+  ],
+  "coverage": [
+    "str, UTF-8 bytes and path-like directory inputs; keyword, omitted and None paths; relative path identity; native entry/iterator construction denied.",
+    "File, directory, symlink, directory symlink, dangling target and loop metadata; inode identity; follow/no-follow and cache identity; stale metadata after write and non-symlink replacement.",
+    "Explicit/double close, exhaustion, context exit after exception, read-only metadata and unfinished iteration.",
+    "Closed original Worker followed by another native Worker over the same R2: cached entries, a partial native iterator, lazy glob generator, cwd and pinned module globals persist.",
+    "Current capability denies readless enumeration and readonly writes; current directory modes deny enumeration and uncached stat. Previously admitted cached metadata remains guest data. A foreign sandbox file is excluded.",
+    "Glob patterns, hidden files, recursive traversal, root_dir, bytes and iglob; fnmatch matching and case behavior.",
+    "512 distinct regular entries are classified with inode/is_file/is_dir/is_symlink under the unchanged 256 host-request ceiling. This proves bounded host access for this workload, not a latency or billing measurement."
+  ],
+  "hostOracle": {
+    "python": "3.14.8 (main, Oct  2 2026, 10:23:31) [GCC 16.2.1 20260810]",
+    "regular": {
+      "path": "./a.py",
+      "inodeEqualsStat": true,
+      "isFile": true,
+      "isDirectory": false,
+      "sharedFollowCache": true,
+      "cachedBytes": 3,
+      "currentBytes": 7
+    },
+    "symlink": {
+      "isSymlink": true,
+      "isFile": true,
+      "nofollowFile": false,
+      "targetInode": true
+    },
+    "dangling": {
+      "isSymlink": true,
+      "isFile": false,
+      "isDirectory": false
+    },
+    "bytesPathHex": "2e2f612e7079",
+    "glob": ["a.py"],
+    "hiddenGlob": [".hidden.py", "a.py"],
+    "recursiveGlob": ["deep/b.py"],
+    "rootDirGlob": ["b.py"],
+    "bytesGlobHex": ["646565702f622e7079"],
+    "fnmatch": ["a.py", "c.py"],
+    "namespaceReplacement": {
+      "initialKind": "file",
+      "replacementKind": "symlink",
+      "statIsSymlink": true,
+      "followAndNofollowShareCache": true,
+      "isFileUsesEnumeratedType": true,
+      "currentOsStatIsFile": true
+    }
+  },
+  "checks": {
+    "fullCheck": {
+      "passed": true,
+      "tests": 457,
+      "failed": 0,
+      "expects": 6669,
+      "files": 105,
+      "elapsed": "303.10s",
+      "includes": [
+        "Build SDK",
+        "TypeScript typecheck",
+        "Clippy -D warnings",
+        "Native workspace Rust tests",
+        "Actual workerd/R2/Queue suites"
+      ],
+      "logSha256": "424b846a692f5c70acc564f63e9b5f105ecd666bd6a2d6a40e10862fd679aa14"
+    }
+  },
+  "development": [
+    "First native integration reached glob and exposed missing os.curdir; it now reuses posixpath.curdir.",
+    "A test fixture included unsupported chmod.follow; the actual chmod contract was restored before the successful native run.",
+    "A CPython namespace-replacement probe showed that an enumerated non-symlink uses shared lstat metadata even after replacement by a symlink. The final implementation and native regression preserve that behavior."
+  ],
+  "references": [
+    "https://docs.python.org/3/library/os.html#os.scandir",
+    "https://docs.python.org/3/library/os.html#os.DirEntry"
+  ],
+  "artifactComparison": [
+    {
+      "module": "kernel",
+      "referenceVersion": "0.28.0",
+      "referenceBytes": 1243800,
+      "referenceSha256": "f31caad6e7db817ad9e9eff12466ba196f6003207f876b1cb545efd62b833a90",
+      "candidateBytes": 1243800,
+      "candidateSha256": "f31caad6e7db817ad9e9eff12466ba196f6003207f876b1cb545efd62b833a90",
+      "deltaBytes": 0
+    },
+    {
+      "module": "wasi",
+      "referenceVersion": "0.28.0",
+      "referenceBytes": 1706658,
+      "referenceSha256": "3f3a97b0262036b6843581f9ef019ccf394a4d65fc45e02a2f2ddcd78e01df66",
+      "candidateBytes": 1706658,
+      "candidateSha256": "3f3a97b0262036b6843581f9ef019ccf394a4d65fc45e02a2f2ddcd78e01df66",
+      "deltaBytes": 0
+    },
+    {
+      "module": "guest",
+      "referenceVersion": "0.28.0",
+      "referenceBytes": 1150616,
+      "referenceSha256": "dcf1a9d66b4c3a11106076c3e9d5fa1f596b8846a811dfeec9ecf3a8744af01f",
+      "candidateBytes": 1150616,
+      "candidateSha256": "dcf1a9d66b4c3a11106076c3e9d5fa1f596b8846a811dfeec9ecf3a8744af01f",
+      "deltaBytes": 0
+    },
+    {
+      "module": "compiler",
+      "referenceVersion": "0.28.0",
+      "referenceBytes": 1943596,
+      "referenceSha256": "27d9b0022a634ed4eef47b6561ad38cafde3522c17e834afed1264440678bf2f",
+      "candidateBytes": 1943596,
+      "candidateSha256": "27d9b0022a634ed4eef47b6561ad38cafde3522c17e834afed1264440678bf2f",
+      "deltaBytes": 0
+    },
+    {
+      "module": "python",
+      "referenceVersion": "0.28.0",
+      "referenceBytes": 19783572,
+      "referenceSha256": "39d0a027d8be9d57ccdf992e89a2b5fb928150ee85ca9cd8f33c208913b92ef4",
+      "candidateBytes": 19865414,
+      "candidateSha256": "187310908261382bc44c5d8aa33854c8505fd0591a3b739a0f23bfe4fa5f6a16",
+      "deltaBytes": 81842
+    }
+  ],
+  "limits": [
+    "Directory descriptors, resource warnings, full pathlib, complete errno/POSIX and full stdlib/pip remain open.",
+    "Directory entries use a bounded eager snapshot from the existing filesystem listing. Mutation visibility during enumeration is unspecified; cached attributes are intentionally stale.",
+    "Stock glob suppression of OSError is unchanged; unsupported directory-fd operations do not become supported through glob.",
+    "No new production, maximum-scale memory, comparative latency, CPU, billing or AgentOS cost claim.",
+    "This changes the Python binary and requires explicit reset of existing Python contexts on adoption. Published/deployed 0.28.0 is unchanged."
+  ],
+  "delivery": {
+    "publication": "not performed",
+    "deployment": "not performed",
+    "minutei": "not changed, pushed or deployed"
+  }
+}
