@@ -1,0 +1,52 @@
+{
+  "status": "local native workerd/R2 checks passed; unreleased and undeployed",
+  "measuredAt": "2026-10-18T16:45:08.237393+00:00",
+  "sourceBase": "988821fbbb54901fc5eef2117b26ff1efcca466c",
+  "sourceSha256": {
+    "crates/python/src/os.rs": "465ca1f742063b55657ddd50cc324fafefee360cf2bbb3d53d8a6197845d114e",
+    "src/python-files.ts": "18bb7bc0246158f696f3e0dfb202be9b119e53c040f4c159c6856da3e69a289a",
+    "tests/python-descriptors.test.ts": "73b7af40ed1b689d084cc278106c9f2609c2eb1ca574ad1b7a561a8be7d18c52"
+  },
+  "ownership": {
+    "descriptors": "VM-owned native table, shared inode image, independent open offsets and shared dup descriptions",
+    "persistence": "Existing native heap/R2 checkpoint; no external orphan store or manifest change",
+    "budget": "16 MiB aggregate logical cached content; last image close releases charge; physical allocation remains subject to guest heap ceiling",
+    "authority": "Every cached read checks current read grants; mutations and private internal materialization require current write grants and live sandbox"
+  },
+  "coverage": [
+    "Separate opens observe writes, append, sparse extension and resize after unlink",
+    "Buffered writer flushes after unlink and independent reader retains bytes after writer close",
+    "Close original Worker and restore native bytes and cursor from R2 under reduced grants",
+    "Recreated pathname remains distinct and unchanged by old descriptors",
+    "Replacing os module table attribute and rebuilding native module preserve descriptor owner",
+    "Aggregate cache stays charged until the last duplicate closes",
+    "Write-only mutation preserves old bytes without exposing native cache or allowing reads"
+  ],
+  "checks": {
+    "build": "passed",
+    "typecheck": "passed",
+    "clippy": "cargo clippy -p cirro-python --target wasm32-unknown-unknown -- -D warnings: passed",
+    "nativeSuite": {
+      "command": "bun test tests/python-descriptors.test.ts tests/python.test.ts tests/python-context-heap.test.ts tests/python-filesystem.test.ts",
+      "passed": 16,
+      "failed": 0,
+      "assertions": 164,
+      "seconds": 32.7,
+      "logSha256": "7da1586dd9f38e81035c94cb3af20928c19ac5f55cccd3dc32c2cb6f46ecd2c2"
+    }
+  },
+  "limits": [
+    "Mutable orphan images are shared only within one interpreter; full cross-context coherence remains open",
+    "Last-observed snapshots can miss another context mutation before unlink",
+    "Eager io.FileIO, remaining stdlib/pip and complete parity remain open",
+    "Different Python binary requires explicit retained-context reset",
+    "No production latency, cost or AgentOS performance comparison established"
+  ],
+  "delivery": {
+    "sourcePush": "pending",
+    "remoteCi": "pending",
+    "runtimePublication": "not performed",
+    "deployment": "not performed",
+    "minuteiUpdate": "not performed"
+  }
+}

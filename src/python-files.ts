@@ -26,6 +26,7 @@ export const PythonFileAction = Schema.Union([
   }),
   Schema.Struct({
     op: Schema.Literal("python.file.read"),
+    forWrite: Schema.Boolean,
     snapshot: PythonFileSnapshot,
     offset: Schema.Int.check(Schema.isBetween({ minimum: 0, maximum: Number.MAX_SAFE_INTEGER })),
     length: Schema.Int.check(Schema.isBetween({ minimum: 0, maximum: 262_144 })),
@@ -49,6 +50,7 @@ export const PythonFileRead = Schema.Struct({
   snapshot: PythonFileSnapshot,
   content: Schema.String,
 });
+const DetachedFile = Schema.Struct({ detached: Schema.Literal(true), nowNs: Schema.String });
 const PythonFileWrite = Schema.Struct({
   snapshot: PythonFileSnapshot,
   offset: Schema.Int,
@@ -67,7 +69,10 @@ export const pythonFile = Effect.fn("python.file")(function* (
       yield* requirePermission(capability, "write");
   } else if (action.op === "python.file.write" || action.op === "python.file.resize") {
     yield* requirePermission(capability, "write");
-  } else if (action.op === "python.file.read" || !capability.permissions.includes("write")) {
+  } else if (action.op === "python.file.read") {
+    if (action.forWrite) yield* requirePermission(capability, "write");
+    else yield* requirePermission(capability, "read");
+  } else if (!capability.permissions.includes("write")) {
     yield* requirePermission(capability, "read");
   }
   const session = yield* open(env, capability.sandboxId);
@@ -91,6 +96,14 @@ export const pythonFile = Effect.fn("python.file")(function* (
   }
   if (action.op === "python.file.write" || action.op === "python.file.resize") {
     const inode = BigInt(action.snapshot.stat.inode);
+    const linked = yield* kernelCall(() => kernel.inode_path(inode));
+    if (linked === undefined)
+      return new TextEncoder().encode(
+        Schema.encodeSync(Schema.fromJsonString(DetachedFile))({
+          detached: true,
+          nowNs: yieldedTime.toString(),
+        }),
+      );
     const data = Match.value(action).pipe(
       Match.when({ op: "python.file.write" }, (write) => Buffer.from(write.content, "base64")),
       Match.orElse(() => Buffer.alloc(0)),

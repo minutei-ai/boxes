@@ -621,3 +621,247 @@ partial=io.BufferedWriter.__new__(io.BufferedWriter)
     ),
   60000,
 );
+
+test(
+  "unlinked Python files share native bytes across opens and restore through R2 without replacing recreated paths",
+  () =>
+    Effect.runPromise(
+      Effect.scoped(
+        Effect.gen(function* () {
+          const directory = yield* Effect.acquireRelease(
+            Effect.promise(() => mkdtemp(join(tmpdir(), "boxes-python-detached-"))),
+            (path) => Effect.promise(() => rm(path, { recursive: true, force: true })),
+          );
+          const grants = yield* Effect.scoped(
+            Effect.gen(function* () {
+              const native = yield* connect(directory);
+              yield* native.admin.create({
+                id: "detached",
+                policy: {
+                  networkHosts: [],
+                  interruptBudget: 100000,
+                  memoryBytes: 16777216,
+                  maxOutputBytes: 1048576,
+                },
+              });
+              const full = yield* native.admin.mintCapability("detached", {
+                permissions: ["read", "write", "execute", "manage"],
+                expiresInSeconds: 3600,
+              });
+              const reduced = yield* native.admin.mintCapability("detached", {
+                permissions: ["read", "execute"],
+                expiresInSeconds: 3600,
+              });
+              const client = yield* makeBinding(native.service, Redacted.make(full.token));
+              yield* client.action("detached", {
+                op: "filesystem.writeFile",
+                path: "/tmp/open",
+                content: "abcdef",
+                encoding: "utf8",
+              });
+              yield* client.action("detached", {
+                op: "contexts.create",
+                id: "files",
+                language: "python",
+              });
+              const created = yield* client.action("detached", {
+                op: "python.execute",
+                id: "create",
+                contextId: "files",
+                source: `import os
+left=os.open('/tmp/open',os.O_RDWR)
+right=os.open('/tmp/open',os.O_RDWR|os.O_APPEND)
+alias=os.dup(left)
+original_table=os._boxes_descriptors
+os._boxes_descriptors=None
+import sys,_imp
+os_spec=os.__spec__
+del sys.modules['os']
+replacement=_imp.create_builtin(os_spec)
+assert replacement._boxes_descriptors is original_table
+sys.modules['os']=os
+await tools.call({'op':'filesystem.remove','path':'/tmp/open','recursive':False})
+assert os.write(left,b'XY')==2
+assert os.lseek(left,0,1)==2
+assert os.read(right,6)==b'XYcdef'
+assert os.write(right,b'!')==1
+os.ftruncate(left,4)
+assert os.lseek(alias,0,1)==2
+assert os.read(alias,2)==b'cd'
+os.lseek(right,0,0)
+assert os.read(right,20)==b'XYcd'
+writer=open('/tmp/buffered','w+b')
+buffer_reader=os.open('/tmp/buffered',os.O_RDONLY)
+writer.write(b'buffered')
+await tools.call({'op':'filesystem.remove','path':'/tmp/buffered','recursive':False})
+writer.flush()
+writer.close()
+assert os.read(buffer_reader,2)==b'bu'
+[os.fstat(left).st_size,os.fstat(right).st_nlink]`,
+              });
+              expect(created.output?.stderr).toBe("");
+              expect(created.output?.result).toEqual([4, 0]);
+              expect(
+                (yield* client.action("detached", { op: "filesystem.exists", path: "/tmp/open" }))
+                  .exists,
+              ).toBe(false);
+              return { full: full.token, reduced: reduced.token };
+            }),
+          );
+          yield* Effect.scoped(
+            Effect.gen(function* () {
+              const native = yield* connect(directory);
+              const client = yield* makeBinding(native.service, Redacted.make(grants.reduced));
+              const denied = yield* client.action("detached", {
+                op: "python.execute",
+                id: "denied",
+                contextId: "files",
+                source: `errors=[]
+for operation in (lambda:os.write(left,b'denied'),lambda:os.ftruncate(right,0)):
+ try:
+  operation()
+ except PermissionError as error:
+  errors.append(error.errno)
+os.lseek(right,0,0)
+assert os.read(buffer_reader,20)==b'ffered'
+[errors,os.read(right,20).decode(),os.lseek(alias,0,1)]`,
+              });
+              expect(denied.output?.stderr).toBe("");
+              expect(denied.output?.result).toEqual([[13, 13], "XYcd", 4]);
+            }),
+          );
+          const native = yield* connect(directory);
+          const client = yield* makeBinding(native.service, Redacted.make(grants.full));
+          yield* client.action("detached", {
+            op: "filesystem.writeFile",
+            path: "/tmp/open",
+            content: "recreated",
+            encoding: "utf8",
+          });
+          const restored = yield* client.action("detached", {
+            op: "python.execute",
+            id: "restore",
+            contextId: "files",
+            source: `os.lseek(left,6,0)
+assert os.write(left,b'Z')==1
+assert os.write(right,b'?')==1
+assert os.read(alias,1)==b'?'
+os.lseek(right,0,0)
+assert os.read(right,20)==b'XYcd\\x00\\x00Z?'
+assert os.fstat(right).st_size==8
+os.close(left)
+os.close(alias)
+os.close(right)
+os.close(buffer_reader)
+True`,
+          });
+          expect(restored.output?.stderr).toBe("");
+          expect(restored.output?.result).toBe(true);
+          expect(
+            Buffer.from(
+              (yield* client.action("detached", { op: "filesystem.readFile", path: "/tmp/open" }))
+                .content,
+              "base64",
+            ).toString(),
+          ).toBe("recreated");
+        }),
+      ),
+    ),
+  60000,
+);
+
+test(
+  "detached Python cache enforces aggregate size until the last alias closes and permits write-only mutation",
+  () =>
+    Effect.runPromise(
+      Effect.scoped(
+        Effect.gen(function* () {
+          const directory = yield* Effect.acquireRelease(
+            Effect.promise(() => mkdtemp(join(tmpdir(), "boxes-python-detached-quota-"))),
+            (path) => Effect.promise(() => rm(path, { recursive: true, force: true })),
+          );
+          const native = yield* connect(directory);
+          yield* native.admin.create({
+            id: "cache",
+            policy: {
+              networkHosts: [],
+              interruptBudget: 100000,
+              memoryBytes: 33554432,
+              maxOutputBytes: 1048576,
+            },
+          });
+          const full = yield* native.admin.mintCapability("cache", {
+            permissions: ["read", "write", "execute"],
+            expiresInSeconds: 3600,
+          });
+          const client = yield* makeBinding(native.service, Redacted.make(full.token));
+          const quota = yield* client.action("cache", {
+            op: "python.execute",
+            id: "quota",
+            source: `import os
+a=os.open('/tmp/a',os.O_RDWR|os.O_CREAT,0o600)
+dup=os.dup(a)
+b=os.open('/tmp/b',os.O_RDWR|os.O_CREAT,0o600)
+await tools.call({'op':'filesystem.remove','path':'/tmp/a','recursive':False})
+await tools.call({'op':'filesystem.remove','path':'/tmp/b','recursive':False})
+os.ftruncate(a,16777216)
+errors=[]
+for descriptor in (a,dup):
+ try:
+  os.ftruncate(b,1)
+ except OSError as error:
+  errors.append(error.errno)
+ else:
+  raise AssertionError('aggregate cache quota ignored')
+ os.close(descriptor)
+os.ftruncate(b,1)
+assert os.fstat(b).st_size==1
+os.lseek(b,0,0)
+assert os.read(b,1)==b'\\x00'
+os.close(b)
+errors`,
+          });
+          expect(quota.output?.stderr).toBe("");
+          expect(quota.output?.result).toEqual([28, 28]);
+          const writeGrant = yield* native.admin.mintCapability("cache", {
+            permissions: ["write", "execute"],
+            expiresInSeconds: 3600,
+          });
+          const writeOnly = yield* makeBinding(native.service, Redacted.make(writeGrant.token));
+          yield* client.action("cache", {
+            op: "filesystem.writeFile",
+            path: "/tmp/secret",
+            content: "retained",
+            encoding: "utf8",
+          });
+          const mutation = yield* writeOnly.action("cache", {
+            op: "python.execute",
+            id: "write-only",
+            source: `import os
+fd=os.open('/tmp/secret',os.O_WRONLY)
+await tools.call({'op':'filesystem.remove','path':'/tmp/secret','recursive':False})
+assert os.write(fd,b'X')==1
+assert len(repr(os._boxes_descriptors))<100
+assert not hasattr(os._boxes_descriptors,'images')
+assert os.fstat(fd).st_size==8
+try:
+ os.read(fd,1)
+except OSError as error:
+ denied=error.errno
+else:
+ raise AssertionError('write-only descriptor became readable')
+os.ftruncate(fd,0)
+os.close(fd)
+denied`,
+          });
+          expect(mutation.output?.stderr).toBe("");
+          expect(mutation.output?.result).toBe(9);
+          expect(
+            (yield* client.action("cache", { op: "filesystem.exists", path: "/tmp/secret" }))
+              .exists,
+          ).toBe(false);
+        }),
+      ),
+    ),
+  60000,
+);

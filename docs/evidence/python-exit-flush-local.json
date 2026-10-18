@@ -10,7 +10,7 @@
   "baseline": {
     "command": "bun test tests/python-descriptors.test.ts -t 'ephemeral Python flushes'",
     "observed": "Program returned 42 with empty stderr, but reading its buffered UTF-8 file through the real service binding returned empty content.",
-    "expected": "ação no fim",
+    "expected": "a\u00e7\u00e3o no fim",
     "actual": "",
     "passed": 0,
     "failed": 1,
@@ -345,8 +345,15 @@
     "No remote deployment or production performance/cost claim"
   ],
   "delivery": {
-    "sourcePush": "pending",
-    "remoteCi": "pending",
+    "sourcePush": "988821fbbb54901fc5eef2117b26ff1efcca466c",
+    "remoteCi": {
+      "run": 39144613426,
+      "conclusion": "success",
+      "tests": 447,
+      "files": 101,
+      "seconds": 213.65,
+      "logSha256": "1869177cc3bf37a1fd689f4774f05faaf215ec6f6f0bc43894687e73d9fa61c9"
+    },
     "runtimePublication": "not performed",
     "deployment": "not performed",
     "minuteiUpdate": "not performed"
