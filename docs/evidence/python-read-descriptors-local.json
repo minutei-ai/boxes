@@ -28,10 +28,7 @@
     "admission": "Kernel path/mode read admission, RustPython FsPath conversion, UTF-8 paths, explicit unsupported flag/dir_fd rejection before file mutation. Opens and duplicates are non-inheritable by default.",
     "read": "Current scoped read permission and expiry checked per private host call. Linked inodes refresh metadata/references. Detached files retain last-observed immutable references and report nlink zero. Public _boxes_io.call rejects the private namespace.",
     "bounds": {
-      "descriptorSlots": [
-        3,
-        127
-      ],
+      "descriptorSlots": [3, 127],
       "blockReferencesPerSnapshot": 64,
       "readBytesPerCall": 262144,
       "concurrentBlockReads": 2,
@@ -45,12 +42,7 @@
     "pythonWasmBytes": 19641659,
     "pythonWasmSha256": "f2b0a63bed7c7c0e6dab0dfef7e3b50cc9a1cc2f0d984a829626896aed912fa8",
     "requiresExplicitPythonContextReset": true,
-    "unchangedNativeBinaries": [
-      "kernel",
-      "guest",
-      "compiler",
-      "wasi"
-    ],
+    "unchangedNativeBinaries": ["kernel", "guest", "compiler", "wasi"],
     "workerBundleSha256": "3f291c69b1cb2b84fd2c51fa65ca1501696eb95b112af5869ac66b340ed96c6b"
   },
   "coverage": [
@@ -121,10 +113,7 @@
       "failed": 2,
       "unhandledErrors": 2,
       "seconds": 52.1,
-      "concurrentChecks": [
-        "typecheck",
-        "clippy"
-      ],
+      "concurrentChecks": ["typecheck", "clippy"],
       "observed": "Existing cancellation fixtures hit 15s and 5s limits; runner killed their Workers, followed by connection reset/refusal. All Python cases passed.",
       "logSha256": "1f950df00fc5b59b54bc4261126ef80cdcbeb76e815fe52853540ce4fa8eb755"
     },
