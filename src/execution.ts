@@ -45,6 +45,7 @@ export const execute = Effect.fn("execution.run")(function* (
   env: Env,
   capability: typeof Capability.Type,
   program: typeof Program.Type,
+  executionId: typeof StoredRun.Type.id,
   session: Effect.Success<ReturnType<typeof open>>,
   capture: OutputCapture | null,
   inputId: string | null,
@@ -66,7 +67,7 @@ export const execute = Effect.fn("execution.run")(function* (
     });
   if (program.language === "python")
     return {
-      outcome: yield* python(env, capability, program, session, capture, context).pipe(
+      outcome: yield* python(env, capability, program, executionId, session, capture, context).pipe(
         Effect.result,
       ),
       program,

@@ -16,6 +16,7 @@ import {
   Policy,
   StoredContext,
 } from "./contracts";
+import { releasePythonFiles } from "./python-files";
 import { head, StorageFailure } from "./storage";
 import type { Env } from "./resources";
 
@@ -266,6 +267,11 @@ export const changeContext = Effect.fn("contexts.change")(function* (
       code: "CONFLICT",
       status: 409,
       message: "Context changed during lifecycle mutation",
+    });
+  if (current.record.language === "python")
+    yield* releasePythonFiles(env, capability.sandboxId, {
+      id: `context:${id}`,
+      generation: current.record.generation,
     });
   return Struct.omit(record, ["heap", "claimId"]);
 });

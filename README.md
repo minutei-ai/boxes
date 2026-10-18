@@ -23,6 +23,8 @@ Licensed under [Apache 2.0](LICENSE). Maintained by [Minutei AI](https://github.
 
 Boxes does not currently provide Linux compatibility, a complete POSIX shell, npm/pip installation, indefinite processes or complete terminal job control. Python runs in a fresh RustPython Wasm instance with native instruction and memory limits. JavaScript uses QuickJS without Node modules; use `tools.call` for durable files. Python uses `await tools.call(...)`. Version 0.26.0 supports sandbox Python modules and synchronous regular-file `open()`/`io.open()` through the authorized filesystem. Full stdlib, native extensions and pip remain pending.
 
+Unreleased source adds coherent Python open-file inodes across contexts and Worker replacement, including writes after unlink, generation-scoped cleanup and snapshot restoration. It requires filesystem-v6 migration and explicit reset of existing Python contexts. The published 0.26.0 archives retain their earlier behavior.
+
 ## Effect SDK
 
 Use [`@minutei-ai/boxes`](docs/sdk.md) from Effect 4 applications and Cloudflare Workers. The SDK shares the server contracts, infers results per operation and calls a native Cloudflare service binding through `makeBinding(env.BOXES, token)`, with scoped redacted credentials and native Effect HttpClient lifetimes.

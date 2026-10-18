@@ -636,6 +636,25 @@ partial=io.BufferedWriter.__new__(io.BufferedWriter)
               "base64",
             ).toString(),
           ).toBe("complete");
+          const beforeTrap = yield* client.action("finishing", { op: "vm.status" });
+          const trapped = yield* client.action("finishing", {
+            op: "python.execute",
+            id: "unlinked-trap",
+            source: `import os
+fd=os.open('/tmp/trapped',os.O_RDWR|os.O_CREAT,0o600)
+os.write(fd,b'trapped')
+await tools.call({'op':'filesystem.remove','path':'/tmp/trapped','recursive':False})
+while True:
+ pass`,
+          });
+          expect(trapped.status).toBe("failed");
+          expect((yield* client.action("finishing", { op: "vm.status" })).filesystemBytes).toBe(
+            beforeTrap.filesystemBytes,
+          );
+          expect(
+            (yield* client.action("finishing", { op: "filesystem.exists", path: "/tmp/trapped" }))
+              .exists,
+          ).toBe(false);
         }),
       ),
     ),
@@ -791,7 +810,7 @@ True`,
 );
 
 test(
-  "detached Python cache enforces aggregate size until the last alias closes and permits write-only mutation",
+  "retained Python inodes enforce filesystem quota until the last alias closes and permit write-only mutation",
   () =>
     Effect.runPromise(
       Effect.scoped(
@@ -824,6 +843,12 @@ dup=os.dup(a)
 b=os.open('/tmp/b',os.O_RDWR|os.O_CREAT,0o600)
 await tools.call({'op':'filesystem.remove','path':'/tmp/a','recursive':False})
 await tools.call({'op':'filesystem.remove','path':'/tmp/b','recursive':False})
+fillers=[]
+for name in ('c','d','e'):
+ descriptor=os.open('/tmp/'+name,os.O_RDWR|os.O_CREAT,0o600)
+ await tools.call({'op':'filesystem.remove','path':'/tmp/'+name,'recursive':False})
+ os.ftruncate(descriptor,16777216)
+ fillers.append(descriptor)
 os.ftruncate(a,16777216)
 errors=[]
 for descriptor in (a,dup):
@@ -832,13 +857,15 @@ for descriptor in (a,dup):
  except OSError as error:
   errors.append(error.errno)
  else:
-  raise AssertionError('aggregate cache quota ignored')
+  raise AssertionError('retained inode filesystem quota ignored')
  os.close(descriptor)
 os.ftruncate(b,1)
 assert os.fstat(b).st_size==1
 os.lseek(b,0,0)
 assert os.read(b,1)==b'\\x00'
 os.close(b)
+for descriptor in fillers:
+ os.close(descriptor)
 errors`,
           });
           expect(quota.output?.stderr).toBe("");
@@ -880,6 +907,137 @@ denied`,
             (yield* client.action("cache", { op: "filesystem.exists", path: "/tmp/secret" }))
               .exists,
           ).toBe(false);
+        }),
+      ),
+    ),
+  60000,
+);
+
+test(
+  "Python contexts observe the latest shared inode after unlink and Worker replacement",
+  () =>
+    Effect.runPromise(
+      Effect.scoped(
+        Effect.gen(function* () {
+          const directory = yield* Effect.acquireRelease(
+            Effect.promise(() => mkdtemp(join(tmpdir(), "boxes-python-shared-orphan-"))),
+            (path) => Effect.promise(() => rm(path, { recursive: true, force: true })),
+          );
+          const token = yield* Effect.scoped(
+            Effect.gen(function* () {
+              const native = yield* connect(directory);
+              yield* native.admin.create({
+                id: "shared-orphan",
+                policy: {
+                  networkHosts: [],
+                  interruptBudget: 100000,
+                  memoryBytes: 16777216,
+                  maxOutputBytes: 1048576,
+                },
+              });
+              const grant = yield* native.admin.mintCapability("shared-orphan", {
+                permissions: ["read", "write", "execute", "manage"],
+                expiresInSeconds: 3600,
+              });
+              const client = yield* makeBinding(native.service, Redacted.make(grant.token));
+              yield* client.action("shared-orphan", {
+                op: "filesystem.writeFile",
+                path: "/tmp/shared",
+                content: "before",
+                encoding: "utf8",
+              });
+              for (const id of ["writer", "reader"]) {
+                yield* client.action("shared-orphan", {
+                  op: "contexts.create",
+                  id,
+                  language: "python",
+                });
+                const opened = yield* client.action("shared-orphan", {
+                  op: "python.execute",
+                  id: `open-${id}`,
+                  contextId: id,
+                  source: "import os\nfd=os.open('/tmp/shared',os.O_RDWR)\nTrue",
+                });
+                expect(opened.output?.stderr).toBe("");
+                expect(opened.output?.result).toBe(true);
+              }
+              const changed = yield* client.action("shared-orphan", {
+                op: "python.execute",
+                id: "change",
+                contextId: "writer",
+                source: "os.write(fd,b'linked')\nTrue",
+              });
+              expect(changed.output?.stderr).toBe("");
+              expect(changed.output?.result).toBe(true);
+              yield* client.action("shared-orphan", {
+                op: "filesystem.remove",
+                path: "/tmp/shared",
+                recursive: false,
+              });
+              return grant.token;
+            }),
+          );
+          const native = yield* connect(directory);
+          const client = yield* makeBinding(native.service, Redacted.make(token));
+          const observed = yield* client.action("shared-orphan", {
+            op: "python.execute",
+            id: "read-unlinked",
+            contextId: "reader",
+            source: "[os.read(fd,20).decode(),os.fstat(fd).st_nlink]",
+          });
+          expect(observed.output?.stderr).toBe("");
+          const changed = yield* client.action("shared-orphan", {
+            op: "python.execute",
+            id: "write-unlinked",
+            contextId: "writer",
+            source: "os.lseek(fd,0,0)\nos.write(fd,b'orphan')\nTrue",
+          });
+          expect(changed.output?.stderr).toBe("");
+          expect(changed.output?.result).toBe(true);
+          const refreshed = yield* client.action("shared-orphan", {
+            op: "python.execute",
+            id: "read-updated-orphan",
+            contextId: "reader",
+            source: "os.lseek(fd,0,0)\n[os.read(fd,20).decode(),os.fstat(fd).st_nlink]",
+          });
+          expect(refreshed.output?.stderr).toBe("");
+          expect([observed.output?.result, refreshed.output?.result]).toEqual([
+            ["linked", 0],
+            ["orphan", 0],
+          ]);
+          yield* client.action("shared-orphan", {
+            op: "filesystem.writeFile",
+            path: "/tmp/shared",
+            content: "new",
+            encoding: "utf8",
+          });
+          expect((yield* client.action("shared-orphan", { op: "vm.status" })).filesystemBytes).toBe(
+            9,
+          );
+          const closed = yield* client.action("shared-orphan", {
+            op: "python.execute",
+            id: "close-writer",
+            contextId: "writer",
+            source: "os.close(fd)\nTrue",
+          });
+          expect(closed.output?.stderr).toBe("");
+          expect(closed.output?.result).toBe(true);
+          expect((yield* client.action("shared-orphan", { op: "vm.status" })).filesystemBytes).toBe(
+            9,
+          );
+          yield* client.action("shared-orphan", { op: "contexts.reset", id: "reader" });
+          expect((yield* client.action("shared-orphan", { op: "vm.status" })).filesystemBytes).toBe(
+            3,
+          );
+          expect(
+            Buffer.from(
+              (yield* client.action("shared-orphan", {
+                op: "filesystem.readFile",
+                path: "/tmp/shared",
+              })).content,
+              "base64",
+            ).toString(),
+          ).toBe("new");
         }),
       ),
     ),

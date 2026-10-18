@@ -234,3 +234,25 @@ test("resize plans preserve prefix references, bound tail I/O and reject invalid
   expect(full.manifest()).toBe(manifest);
   full.free();
 });
+
+test("native retainers fence stale generations and snapshot bootstrap preserves live inode identities", () => {
+  const kernel = new Kernel();
+  kernel.write("/tmp/held", 0n, "[]");
+  const stat = Schema.decodeUnknownSync(Schema.fromJsonString(FileStat))(
+    kernel.stat("/tmp/held", true),
+  );
+  const inode = BigInt(stat.inode);
+  expect(kernel.retain_inode("context:files", 1n, inode, stat.path)).toBe(true);
+  expect(() => kernel.retain_inode("context:files", 0n, inode, stat.path)).toThrow("ESTALE");
+  expect(() => kernel.release_inode("context:files", 0n, inode)).toThrow("ESTALE");
+  expect(kernel.release_inode_owner("context:files", 0n)).toBe(false);
+  expect(() => kernel.initialize_snapshot_root()).toThrow("EPERM");
+  expect(kernel.retains_inode("context:files", 1n, inode)).toBe(true);
+  const restored = new Kernel(kernel.manifest());
+  expect(restored.retains_inode("context:files", 1n, inode)).toBe(true);
+  restored.free();
+  expect(kernel.release_inode_owner("context:files", 1n)).toBe(true);
+  kernel.initialize_snapshot_root();
+  expect(kernel.node_count()).toBe(1);
+  kernel.free();
+});

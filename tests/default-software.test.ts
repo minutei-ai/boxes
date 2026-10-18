@@ -249,10 +249,61 @@ test(
               if (block === undefined) return yield* Effect.die("Missing real shell block");
               const content = base.blocks.get(block.hash);
               if (content === undefined) return yield* Effect.die("Missing prepared shell block");
+              yield* admin.create({ id: "held", policy });
+              const heldGrant = yield* admin.mintCapability("held", {
+                permissions,
+                expiresInSeconds: 3600,
+              });
+              const held = yield* makeBinding(binding, Redacted.make(heldGrant.token));
+              yield* held.action("held", {
+                op: "contexts.create",
+                id: "files",
+                language: "python",
+              });
+              const heldOpened = yield* held.action("held", {
+                op: "python.execute",
+                id: "open-software",
+                contextId: "files",
+                source: "import os\nfd=os.open('/opt/cirro/bin/sh',os.O_RDONLY)\nTrue",
+              });
+              expect(heldOpened.output?.stderr).toBe("");
+              expect(heldOpened.output?.result).toBe(true);
+              yield* held.action("held", {
+                op: "filesystem.restore",
+                snapshot: {
+                  kind: "snapshot-export",
+                  source: {
+                    format: "boxes-filesystem-snapshot-v1",
+                    filesystem: {
+                      entries: [
+                        { path: "/", type: "directory", mode: "0755", uid: 0, gid: 0 },
+                        { path: "/tmp", type: "directory", mode: "0777", uid: 0, gid: 0 },
+                      ],
+                    },
+                  },
+                },
+              });
               yield* Effect.promise(() =>
                 objects.put(`sandboxes/second/blobs/${block.hash}`, content),
               );
               yield* Effect.promise(() => objects.delete(`software/blobs/${block.hash}`));
+              const heldRead = yield* held.action("held", {
+                op: "python.execute",
+                id: "read-after-restore",
+                contextId: "files",
+                source: "[os.read(fd,32).hex(),os.fstat(fd).st_nlink]",
+              });
+              expect(heldRead.output?.stderr).toBe("");
+              expect(heldRead.output?.result).toEqual([
+                Buffer.from(content).subarray(0, 32).toString("hex"),
+                0,
+              ]);
+              expect(
+                (yield* held.action("held", { op: "filesystem.exists", path: "/opt/cirro/bin/sh" }))
+                  .exists,
+              ).toBe(false);
+              yield* held.action("held", { op: "contexts.delete", id: "files" });
+              expect((yield* held.action("held", { op: "vm.status" })).filesystemBytes).toBe(0);
               const missing = yield* second
                 .action("second", {
                   op: "filesystem.readFile",

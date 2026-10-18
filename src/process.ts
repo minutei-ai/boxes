@@ -30,6 +30,7 @@ import { load } from "./modules";
 import { archive, restore } from "./code";
 import { initializeInput, finishInput } from "./input";
 import { execute } from "./execution";
+import { releasePythonFiles } from "./python-files";
 import { head, open, kernelCall, observeDisposal, StorageFailure } from "./storage";
 import type { Env } from "./resources";
 import type { HostBridge } from "./host";
@@ -332,6 +333,7 @@ const complete = Effect.fn("process.complete")(function* (
         env,
         capability,
         program,
+        record.id,
         session,
         capture,
         yield* Effect.sync(() => {
@@ -812,6 +814,17 @@ export const dispatch = Effect.fn("process.dispatch")(function* (env: Env, body:
   if (stored.id !== identity.id)
     return yield* new StorageFailure({ cause: "Process identity mismatch" });
   const now = yield* Clock.currentTimeMillis;
+  if (
+    stored.language === "python" &&
+    stored.context === null &&
+    stored.status !== "queued" &&
+    stored.status !== "running" &&
+    stored.status !== "cancelling"
+  )
+    yield* releasePythonFiles(env, identity.sandboxId, {
+      id: `execution:${stored.id}`,
+      generation: 0,
+    });
   const lifetime = yield* Effect.gen(function* () {
     if (stored.status !== "queued" || event.eTag !== object.etag) return null;
     return yield* observeDisposal(env, identity.sandboxId, null).pipe(Effect.result);
@@ -869,6 +882,11 @@ export const dispatch = Effect.fn("process.dispatch")(function* (env: Env, body:
       catch: (cause) => new StorageFailure({ cause }),
     });
     if (written === null) return yield* new ExecutionPending({ retryAfterSeconds: 1 });
+    if (stored.language === "python" && stored.context === null)
+      yield* releasePythonFiles(env, identity.sandboxId, {
+        id: `execution:${stored.id}`,
+        generation: 0,
+      });
     return;
   }
   if (stored.status !== "queued" || event.eTag !== object.etag) return;

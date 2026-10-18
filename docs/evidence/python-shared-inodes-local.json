@@ -1,0 +1,194 @@
+{
+  "status": "Final complete local check and exact candidate archive binding proof passed; source publication pending",
+  "measuredAt": "2026-10-18T19:20:59.341659+00:00",
+  "sourceBase": "23269f99c6f81fae35b402eec4055c60ac5345fc",
+  "sourceSha256": {
+    "alchemy.run.ts": "764f20c0656229272f8ad8be4caf92db96da84502d899b1a056e75e3254154f7",
+    "crates/kernel/src/lib.rs": "c89b37f65429f05150eac2144fc868385e317d130774aa2fc8585c67ff305cc1",
+    "crates/python/src/os.rs": "0898df67d475e8f17e516b3cd39a97a147c336e7f05c7778f10714dd6bcc78d2",
+    "src/contexts.ts": "821b43698f301a5facde0e1f6ee78f49954d0fa7807fc794b03a11653a23adc5",
+    "src/execution.ts": "fbe70349b8c39f98273e43cd99f7f37bfe4382072cddba80a4bd33a5dd500a31",
+    "src/index.ts": "a8c97c0a7e9cdec53c95cce1f0cf9bad1aa8a6ce582131e4ce70765faca0acba",
+    "src/process.ts": "986b2ab5cdb25e21ed218af9edde5e0c49ef07ae9145e7e980e8cbbd37cd2ad6",
+    "src/python-files.ts": "531a06ecb5a45ae9bf8e238a60b034933c156a44f899c3b938405f7d9acf8fe2",
+    "src/python.ts": "d9b232602fe67d604feb825c51243501b5e7396f995c5ad28d948bb38152d80c",
+    "src/snapshot.ts": "b111f23db368f3e0ceca13fbd86d346a1c7bce82011b73bbbd98b17032a1e6f8",
+    "tests/default-software.test.ts": "c55c495eeb7e7af98fa72f8f2fe1f0bcf0d48f8015dbacbad19de9d08955b38d",
+    "tests/inode-migration.test.ts": "ca729d9623a41431b2ed3b1e33ca0306b48462f82275f05bff7cbf4cb18495d4",
+    "tests/inodes.test.ts": "5e2ad7f239167deee48effcb4729841098aa3dd1500a0c7dfea512ee02133788",
+    "tests/integration.test.ts": "e8bb00675d50b2a3b582649f92dd5ad8ea4591cf2e0b86fab9f17fdb23fb0774",
+    "tests/migration-pagination.test.ts": "d7576f31e0a839f8c301db790298ffba3192a356d2cf79f0c143fd4c9874d273",
+    "tests/process-repair-metadata.test.ts": "fb9ed1e43f9ffb4dd6c2ac3215b4a17d179399811b336989e1349cf4f96c1496",
+    "tests/python-descriptors.test.ts": "c1d56c741e8470783f4d0ef60e617cf29352bd2486f57a0d0da1bf4e413fa6f5"
+  },
+  "reproduction": {
+    "runtime": "Actual Alchemy workerd/R2; two retained Python contexts and a closed/replacement Worker",
+    "expected": [
+      ["linked", 0],
+      ["orphan", 0]
+    ],
+    "observedBeforeFix": [
+      ["before", 0],
+      ["before", 0]
+    ],
+    "failedSeconds": 5.28,
+    "logSha256": "f36b76855ec3ba73fbb2b7c61a340d3e53dd6dc2eea997db65fe9700e3186a33",
+    "hostOracle": {
+      "runtime": "3.14.8",
+      "scope": "Two distinct native Python processes sharing an open inode; one writer removes its last pathname, then writes again",
+      "observed": [
+        ["linked", 0],
+        ["orphan", 0]
+      ],
+      "passed": true
+    }
+  },
+  "change": {
+    "format": 6,
+    "persistence": "Canonical inode payload and generation-scoped retainers inside the existing R2 head",
+    "privateBridge": "Inode identity and operation inputs; descriptor metadata and block snapshots removed",
+    "lifetimes": "Last local reference closes; ephemeral execution Scope unwinds; context reset/delete; Queue recovery for expired or terminal ephemeral receipts",
+    "quotas": "125 distinct inodes per owner, 16384 aggregate references and total inodes; 16 MiB per file and 64 MiB retained private filesystem bytes",
+    "snapshot": "Retained public blocks are verified and copied privately before reconstructed head publication",
+    "authorization": "Current grants and sandbox lifetime remain checked; private descriptor calls remain unavailable to guest _boxes_io.call",
+    "acquisition": "Open pin publication completes without cooperative interruption before Scope cleanup; executions without descriptor opens avoid an unnecessary cleanup read"
+  },
+  "coverage": [
+    "Latest linked mutation remains visible after another context unlinks the last name",
+    "Post-unlink writes are visible to the other context after Worker replacement",
+    "Recreated names retain independent inode identity and bytes",
+    "Separate opens and dup aliases preserve their cursor/lifetime semantics",
+    "Read-only grant reduction rejects writes and truncation; write-only descriptors do not acquire read access",
+    "Filesystem quota remains occupied until the final owner closes or resets; inode creation preflight includes retained inodes",
+    "Ephemeral native fuel traps release open unlinked inode quota",
+    "Snapshot restore preserves opened software bytes after the public block is removed",
+    "Seeded expired receipt repair preserves a live context owner and acknowledged effects without replay; duplicate delivery preserves head version",
+    "Stale generations cannot retain/release another generation; snapshot bootstrap rejects outstanding retainers",
+    "Explicit v5-to-v6 migration preserves existing graph content and replays idempotently; paginated head/checkpoint migrations remain covered"
+  ],
+  "checks": {
+    "focusedLifecycle": {
+      "command": "bun test tests/python-descriptors.test.ts tests/default-software.test.ts tests/process-repair-metadata.test.ts tests/inode-migration.test.ts tests/migration-pagination.test.ts",
+      "passed": 12,
+      "failed": 0,
+      "assertions": 204,
+      "seconds": 45.05,
+      "logSha256": "89cc278cfce5959c2adae15719d0f9f83305af29c29481926c7e2dd72d3295a6"
+    },
+    "kernel": {
+      "command": "cargo test -p cirro-kernel",
+      "passed": 54,
+      "failed": 0,
+      "logSha256": "8429f445c505eeeb6bab764d195a82a908dd6a889582f9dcec3d3b195c34e1cd"
+    },
+    "priorCompleteCheck": {
+      "command": "bun run check",
+      "status": "passed before final bootstrap/preflight guards",
+      "tests": 451,
+      "files": 101,
+      "seconds": 277.33,
+      "logSha256": "2509c5e7c833f3d856072a9d5481adada2f4de995cfa417ce3116167081dc41a"
+    },
+    "timeoutInvestigation": {
+      "completeRun": "451 passed, 1 failed due to the unchanged 5-second export test timeout",
+      "runSeconds": 294.63,
+      "logSha256": "86d5569bc96e4c3e8ff20c7ab443d93d4d05905fd5665891910b9d54cc838b88",
+      "isolatedCommand": "bun test tests/export.test.ts",
+      "isolatedPassed": 1,
+      "isolatedSeconds": 2.77,
+      "isolatedCaseSeconds": 2.39433,
+      "isolatedLogSha256": "39431d2d60edb0a7372affd03ed14004e1e540d1b48f1a3837b1e142a6b24e1b",
+      "cause": "Not established; the same case had passed in 2.11752 seconds in the earlier complete run. No timeout increase or skipped assertion.",
+      "finalCaseSeconds": 2.17527
+    },
+    "finalCompleteCheck": {
+      "command": "bun run check",
+      "status": "passed",
+      "exitCode": 0,
+      "tests": 452,
+      "files": 101,
+      "assertions": 6599,
+      "testSeconds": 276.19,
+      "logSha256": "a205cf696299ed5a1720e72a5b81a863aaa40513fa4883f4d8a2ccfda359aaca"
+    },
+    "packageProof": {
+      "command": "bun run package:proof <candidate-sdk.tgz> <candidate-runtime.tgz>",
+      "status": "passed",
+      "exitCode": 0,
+      "scope": "Exact newly packed source SDK/runtime through native Alchemy/workerd/R2 and Agent service binding, retained contexts, callbacks, Queue and terminal contracts; local candidates only",
+      "logSha256": "51c65714b6220de2f92d753e334b6a6bde34cdd573a5de2b79516faf9f2cb6c5",
+      "archives": {
+        "minutei-ai-boxes-0.26.0.tgz": {
+          "bytes": 89058,
+          "sha256": "39d54b204407ec60b9ba21cbe39ab20fb18e93fffbaf03da3cd838ef49e1ffc8"
+        },
+        "minutei-ai-boxes-runtime-0.26.0.tgz": {
+          "bytes": 7299137,
+          "sha256": "9e68e35e24ebbf5cd3b66b459845c69c2db00ed710242f8dfed182b8aea71f9c"
+        }
+      }
+    },
+    "format": "passed; repeated after final evidence formatting"
+  },
+  "artifactComparison": {
+    "reference": "Immutable public runtime 0.26.0, locally verified archive installation",
+    "files": {
+      "cirro_compiler_bg.wasm": {
+        "referenceBytes": 1943596,
+        "candidateBytes": 1943596,
+        "deltaBytes": 0,
+        "referenceSha256": "27d9b0022a634ed4eef47b6561ad38cafde3522c17e834afed1264440678bf2f",
+        "candidateSha256": "27d9b0022a634ed4eef47b6561ad38cafde3522c17e834afed1264440678bf2f"
+      },
+      "cirro_guest_bg.wasm": {
+        "referenceBytes": 1150616,
+        "candidateBytes": 1150616,
+        "deltaBytes": 0,
+        "referenceSha256": "dcf1a9d66b4c3a11106076c3e9d5fa1f596b8846a811dfeec9ecf3a8744af01f",
+        "candidateSha256": "dcf1a9d66b4c3a11106076c3e9d5fa1f596b8846a811dfeec9ecf3a8744af01f"
+      },
+      "cirro_kernel_bg.wasm": {
+        "referenceBytes": 1199019,
+        "candidateBytes": 1237113,
+        "deltaBytes": 38094,
+        "referenceSha256": "b36dacf758d0f4898e31086ffc806f01405f29fc46f87fa06c0728c27a70c5a1",
+        "candidateSha256": "2bfe109a42ec2ccd0d2e6c50d0b06a1575ce41c845dee0ee7ffc4e60658729fb"
+      },
+      "cirro_python_bg.wasm": {
+        "referenceBytes": 19751806,
+        "candidateBytes": 19720381,
+        "deltaBytes": -31425,
+        "referenceSha256": "2cc5155e92971aacd5514f694f449ecb8b10e42ec11c88e1f47826a79db5a43d",
+        "candidateSha256": "f11ff22fc5e14ce878bf9f18895c4e90c8ac3b983226dc4669e19485fdda7151"
+      },
+      "cirro_wasi_bg.wasm": {
+        "referenceBytes": 1707779,
+        "candidateBytes": 1707779,
+        "deltaBytes": 0,
+        "referenceSha256": "0d1fd49eb2d515f724ad1067dec002f07d009d056bb6091402807b8ac5110090",
+        "candidateSha256": "0d1fd49eb2d515f724ad1067dec002f07d009d056bb6091402807b8ac5110090"
+      },
+      "index.js": {
+        "referenceBytes": 426226,
+        "candidateBytes": 429824,
+        "deltaBytes": 3598,
+        "referenceSha256": "d4a423e2afc5ce462daebdf13011a4fe5c45642fe3de41988bc44953a8c69c7b",
+        "candidateSha256": "25e17ef8965e7bae8f9b8ece766c28b4b19790b3a89aed811a6a47e7eaec1a08"
+      }
+    },
+    "scope": "Standalone artifact byte sizes and hashes only; no request latency, CPU, heap-page, billing or AgentOS cost comparison"
+  },
+  "limits": [
+    "Local source evidence only; current production and published archives remain 0.26.0",
+    "Changed Python binary requires explicit context reset; filesystem-v6 is an unconditional deploy-time migration",
+    "Expired-process recovery uses a seeded receipt in real R2, not proof of an arbitrary platform crash",
+    "WASI process-local detached buffers and full cross-runtime POSIX descriptor coherence are outside this change",
+    "Full stdlib/pip, upstream parity, real Minutei production/model behavior and performance/cost gates remain open"
+  ],
+  "delivery": {
+    "sourcePush": "pending",
+    "remoteCi": "pending",
+    "release": "not published",
+    "deployment": "not performed"
+  }
+}

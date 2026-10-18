@@ -40,26 +40,9 @@ pub mod native {
     #[pyattr]
     const SEEK_END: i32 = 2;
 
-    const DETACHED_BYTES: usize = 16_777_216;
-    #[derive(Debug)]
-    struct DetachedData {
-        bytes: Vec<u8>,
-        budget: Rc<Cell<usize>>,
-    }
-    impl Drop for DetachedData {
-        fn drop(&mut self) {
-            self.budget
-                .set(self.budget.get().saturating_sub(self.bytes.len()));
-        }
-    }
-    #[derive(Debug)]
-    struct FileImage {
-        snapshot: Value,
-        detached: Option<DetachedData>,
-    }
     #[derive(Debug)]
     struct Description {
-        image: Rc<RefCell<FileImage>>,
+        inode: Rc<u64>,
         offset: u64,
         readable: bool,
         writable: bool,
@@ -76,8 +59,7 @@ pub mod native {
     struct DescriptorTable {
         entries: RefCell<BTreeMap<i32, Descriptor>>,
         mask: Cell<u32>,
-        images: RefCell<BTreeMap<u64, Weak<RefCell<FileImage>>>>,
-        detached_bytes: Rc<Cell<usize>>,
+        inodes: RefCell<BTreeMap<u64, Weak<u64>>>,
     }
     #[pyclass]
     impl DescriptorTable {}
@@ -98,8 +80,7 @@ pub mod native {
             let table = DescriptorTable {
                 entries: RefCell::new(BTreeMap::new()),
                 mask: Cell::new(0o022),
-                images: RefCell::new(BTreeMap::new()),
-                detached_bytes: Rc::new(Cell::new(0)),
+                inodes: RefCell::new(BTreeMap::new()),
             }
             .into_ref(&vm.ctx);
             tables.borrow_mut().insert(key, table.clone());
@@ -120,10 +101,8 @@ pub mod native {
         Err(fault(vm, "EBADF", "Bad file descriptor")?)
     }
     fn refresh(description: &RefCell<Description>, vm: &VirtualMachine) -> PyResult<Value> {
-        let snapshot = description.borrow().image.borrow().snapshot.clone();
-        let snapshot = exchange(vm, &json!({"op":"python.file.stat", "snapshot":snapshot}))?;
-        description.borrow().image.borrow_mut().snapshot = snapshot.clone();
-        Ok(snapshot)
+        let inode = *description.borrow().inode;
+        exchange(vm, &json!({"op":"python.file.stat", "inode":inode}))
     }
     fn integer(value: &Value, key: &str, vm: &VirtualMachine) -> PyResult<u64> {
         value
@@ -137,95 +116,6 @@ pub mod native {
             .and_then(Value::as_str)
             .and_then(|value| value.parse().ok())
             .ok_or_else(|| vm.new_runtime_error(format!("File metadata has invalid {key}")))
-    }
-
-    fn materialize(image: &RefCell<FileImage>, retain: usize, vm: &VirtualMachine) -> PyResult<()> {
-        if image.borrow().detached.is_some() {
-            return Ok(());
-        }
-        let mut snapshot = image.borrow().snapshot.clone();
-        let size = (integer(&snapshot["stat"], "size", vm)? as usize).min(retain);
-        let budget = table(vm).detached_bytes.clone();
-        if size > DETACHED_BYTES || budget.get().saturating_add(size) > DETACHED_BYTES {
-            return Err(fault(vm, "ENOSPC", "Detached file cache exceeds 16 MiB")?);
-        }
-        let mut bytes = Vec::new();
-        bytes
-            .try_reserve_exact(size)
-            .map_err(|_| vm.no_memory_error())?;
-        while bytes.len() < size {
-            let length = (size - bytes.len()).min(262144);
-            let value = exchange(
-                vm,
-                &json!({"op":"python.file.read","snapshot":snapshot,"offset":bytes.len(),"length":length,"forWrite":true}),
-            )?;
-            let encoded = value
-                .get("content")
-                .and_then(Value::as_str)
-                .ok_or_else(|| vm.new_runtime_error("Detached read has no content"))?;
-            let part = base64::engine::general_purpose::STANDARD
-                .decode(encoded)
-                .map_err(|error| vm.new_runtime_error(error.to_string()))?;
-            if part.is_empty() || part.len() > length {
-                return Err(vm.new_runtime_error("Detached read length mismatch"));
-            }
-            bytes.extend_from_slice(&part);
-            snapshot = value
-                .get("snapshot")
-                .ok_or_else(|| vm.new_runtime_error("Detached read has no snapshot"))?
-                .clone();
-        }
-        snapshot["stat"]["nlink"] = json!(0);
-        budget.set(budget.get() + size);
-        let mut image = image.borrow_mut();
-        image.snapshot = snapshot;
-        image.detached = Some(DetachedData { bytes, budget });
-        Ok(())
-    }
-    fn resize_detached(
-        image: &RefCell<FileImage>,
-        size: usize,
-        vm: &VirtualMachine,
-    ) -> PyResult<()> {
-        let mut image = image.borrow_mut();
-        let detached = image
-            .detached
-            .as_mut()
-            .ok_or_else(|| vm.new_runtime_error("Detached cache unavailable"))?;
-        let total = detached
-            .budget
-            .get()
-            .checked_sub(detached.bytes.len())
-            .and_then(|total| total.checked_add(size))
-            .ok_or_else(|| vm.new_runtime_error("Detached cache size overflow"))?;
-        if size > DETACHED_BYTES || total > DETACHED_BYTES {
-            return Err(fault(vm, "ENOSPC", "Detached file cache exceeds 16 MiB")?);
-        }
-        if size > detached.bytes.len() {
-            detached
-                .bytes
-                .try_reserve_exact(size - detached.bytes.len())
-                .map_err(|_| vm.no_memory_error())?;
-        }
-        detached.bytes.resize(size, 0);
-        detached.budget.set(total);
-        image.snapshot["stat"]["size"] = json!(size);
-        Ok(())
-    }
-    fn detached_time(
-        image: &RefCell<FileImage>,
-        reply: &Value,
-        vm: &VirtualMachine,
-    ) -> PyResult<()> {
-        let now = reply
-            .get("nowNs")
-            .and_then(Value::as_str)
-            .ok_or_else(|| vm.new_runtime_error("Detached mutation has no timestamp"))?;
-        let mut image = image.borrow_mut();
-        image.snapshot["stat"]["mtimeNs"] = json!(now);
-        image.snapshot["stat"]["ctimeNs"] = json!(now);
-        image.snapshot["stat"]["nlink"] = json!(0);
-        Ok(())
     }
 
     #[derive(Debug, FromArgs)]
@@ -341,34 +231,28 @@ pub mod native {
             vm,
             &json!({"op":"python.file.open","path":path,"access":access,"creation":creation,"mode":mode}),
         )?;
-        let inode = integer(&snapshot["stat"], "inode", vm)?;
+        let inode = integer(&snapshot, "inode", vm)?;
         table
-            .images
+            .inodes
             .borrow_mut()
-            .retain(|_, image| image.strong_count() > 0);
-        let existing = table.images.borrow().get(&inode).and_then(Weak::upgrade);
-        let image = match existing {
-            Some(image) => {
-                image.borrow_mut().snapshot = snapshot;
-                image
-            }
+            .retain(|_, inode| inode.strong_count() > 0);
+        let existing = table.inodes.borrow().get(&inode).and_then(Weak::upgrade);
+        let inode = match existing {
+            Some(inode) => inode,
             None => {
-                let image = Rc::new(RefCell::new(FileImage {
-                    snapshot,
-                    detached: None,
-                }));
+                let reference = Rc::new(inode);
                 table
-                    .images
+                    .inodes
                     .borrow_mut()
-                    .insert(inode, Rc::downgrade(&image));
-                image
+                    .insert(inode, Rc::downgrade(&reference));
+                reference
             }
         };
         table.entries.borrow_mut().insert(
             fd,
             Descriptor {
                 description: Rc::new(RefCell::new(Description {
-                    image,
+                    inode,
                     offset: 0,
                     readable: access & 1 != 0,
                     writable: access & 2 != 0,
@@ -381,8 +265,18 @@ pub mod native {
     }
     #[pyfunction]
     fn close(fd: i32, vm: &VirtualMachine) -> PyResult<()> {
-        if table(vm).entries.borrow_mut().remove(&fd).is_none() {
+        let table = table(vm);
+        let Some(entry) = table.entries.borrow_mut().remove(&fd) else {
             return Err(fault(vm, "EBADF", "Bad file descriptor")?);
+        };
+        let last = Rc::strong_count(&entry.description) == 1
+            && Rc::strong_count(&entry.description.borrow().inode) == 1;
+        if last {
+            let inode = *entry.description.borrow().inode;
+            if let Err(error) = exchange(vm, &json!({"op":"python.file.close","inode":inode})) {
+                table.entries.borrow_mut().insert(fd, entry);
+                return Err(error);
+            }
         }
         Ok(())
     }
@@ -423,35 +317,18 @@ pub mod native {
             return Err(fault(vm, "EINVAL", "Negative read length")?);
         }
         let description = description(fd, vm)?;
-        let (snapshot, offset) = {
+        let (inode, offset) = {
             let state = description.borrow();
             if !state.readable {
                 return Err(fault(vm, "EBADF", "Descriptor is not readable")?);
             }
-            (state.image.borrow().snapshot.clone(), state.offset)
+            (*state.inode, state.offset)
         };
         let length = length.min(262_144) as u64;
-        let cached = description.borrow().image.borrow().detached.is_some();
-        let requested = if cached { 0 } else { length };
         let value = exchange(
             vm,
-            &json!({"op":"python.file.read", "snapshot":snapshot, "offset":offset, "length":requested,"forWrite":false}),
+            &json!({"op":"python.file.read", "inode":inode, "offset":offset, "length":length}),
         )?;
-        if cached {
-            let bytes = {
-                let state = description.borrow();
-                let image = state.image.borrow();
-                let data = &image
-                    .detached
-                    .as_ref()
-                    .ok_or_else(|| vm.new_runtime_error("Detached cache unavailable"))?
-                    .bytes;
-                let start = offset.min(data.len() as u64) as usize;
-                data[start..(start + length as usize).min(data.len())].to_vec()
-            };
-            description.borrow_mut().offset += bytes.len() as u64;
-            return Ok(bytes);
-        }
         let encoded = value
             .get("content")
             .and_then(Value::as_str)
@@ -462,11 +339,7 @@ pub mod native {
         if bytes.len() as u64 > length {
             return Err(vm.new_runtime_error("File read exceeded requested length"));
         }
-        let snapshot = value
-            .get("snapshot")
-            .ok_or_else(|| vm.new_runtime_error("File read response has no snapshot"))?;
         let mut state = description.borrow_mut();
-        state.image.borrow_mut().snapshot = snapshot.clone();
         state.offset += bytes.len() as u64;
         Ok(bytes)
     }
@@ -492,7 +365,7 @@ pub mod native {
     #[pyfunction]
     fn write(fd: i32, data: ArgBytesLike, vm: &VirtualMachine) -> PyResult<usize> {
         let description = description(fd, vm)?;
-        let (snapshot, offset) = {
+        let (inode, offset) = {
             let state = description.borrow();
             if !state.writable {
                 return Err(fault(vm, "EBADF", "Descriptor is not writable")?);
@@ -502,7 +375,7 @@ pub mod native {
             } else {
                 Some(state.offset)
             };
-            (state.image.borrow().snapshot.clone(), offset)
+            (*state.inode, offset)
         };
         if data.is_empty() {
             return Ok(0);
@@ -512,46 +385,14 @@ pub mod native {
             .with_ref(|bytes| base64::engine::general_purpose::STANDARD.encode(&bytes[..length]));
         let result = exchange(
             vm,
-            &json!({"op":"python.file.write","snapshot":snapshot,"offset":offset,"content":encoded}),
+            &json!({"op":"python.file.write","inode":inode,"offset":offset,"content":encoded}),
         )?;
-        if result.get("detached").and_then(Value::as_bool) == Some(true) {
-            let image = description.borrow().image.clone();
-            materialize(&image, DETACHED_BYTES, vm)?;
-            let position = offset.unwrap_or(integer(&image.borrow().snapshot["stat"], "size", vm)?);
-            let Some(end) = position
-                .checked_add(length as u64)
-                .filter(|end| *end <= DETACHED_BYTES as u64)
-            else {
-                return Err(fault(vm, "EFBIG", "File size exceeds its limit")?);
-            };
-            let old_size = integer(&image.borrow().snapshot["stat"], "size", vm)?;
-            resize_detached(&image, end.max(old_size) as usize, vm)?;
-            {
-                let mut image = image.borrow_mut();
-                let detached = image
-                    .detached
-                    .as_mut()
-                    .ok_or_else(|| vm.new_runtime_error("Detached cache unavailable"))?;
-                data.with_ref(|bytes| {
-                    detached.bytes[position as usize..end as usize]
-                        .copy_from_slice(&bytes[..length])
-                });
-            }
-            detached_time(&image, &result, vm)?;
-            description.borrow_mut().offset = end;
-            return Ok(length);
-        }
         let count = integer(&result, "count", vm)?;
         if count > length as u64 {
             return Err(vm.new_runtime_error("Write acknowledgement exceeds submitted bytes"));
         }
         let offset = integer(&result, "offset", vm)?;
-        let snapshot = result
-            .get("snapshot")
-            .ok_or_else(|| vm.new_runtime_error("Write acknowledgement has no snapshot"))?;
-        let mut state = description.borrow_mut();
-        state.offset = offset;
-        state.image.borrow_mut().snapshot = snapshot.clone();
+        description.borrow_mut().offset = offset;
         Ok(count as usize)
     }
     #[pyfunction]
@@ -563,25 +404,17 @@ pub mod native {
             return Err(fault(vm, "EFBIG", "File size exceeds its limit")?);
         }
         let description = description(fd, vm)?;
-        let snapshot = {
+        let inode = {
             let state = description.borrow();
             if !state.writable {
                 return Err(fault(vm, "EBADF", "Descriptor is not writable")?);
             }
-            state.image.borrow().snapshot.clone()
+            *state.inode
         };
-        let snapshot = exchange(
+        exchange(
             vm,
-            &json!({"op":"python.file.resize","snapshot":snapshot,"size":size}),
+            &json!({"op":"python.file.resize","inode":inode,"size":size}),
         )?;
-        let image = description.borrow().image.clone();
-        if snapshot.get("detached").and_then(Value::as_bool) == Some(true) {
-            materialize(&image, size as usize, vm)?;
-            resize_detached(&image, size as usize, vm)?;
-            detached_time(&image, &snapshot, vm)?;
-        } else {
-            image.borrow_mut().snapshot = snapshot;
-        }
         Ok(())
     }
     #[pyfunction]
@@ -590,7 +423,7 @@ pub mod native {
         let base = match whence {
             SEEK_SET => 0,
             SEEK_CUR => description.borrow().offset,
-            SEEK_END => integer(&refresh(&description, vm)?["stat"], "size", vm)?,
+            SEEK_END => integer(&refresh(&description, vm)?, "size", vm)?,
             _ => return Err(fault(vm, "EINVAL", "Invalid seek origin")?),
         };
         let Some(next) = base
@@ -606,7 +439,7 @@ pub mod native {
     fn fstat(fd: i32, vm: &VirtualMachine) -> PyResult {
         let description = description(fd, vm)?;
         let snapshot = refresh(&description, vm)?;
-        let stat = &snapshot["stat"];
+        let stat = &snapshot;
         let size = integer(stat, "size", vm)?;
         let atime = timestamp(stat, "atimeNs", vm)?;
         let mtime = timestamp(stat, "mtimeNs", vm)?;

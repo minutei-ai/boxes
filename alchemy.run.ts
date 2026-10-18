@@ -214,7 +214,7 @@ const migrate = Alchemy.Action(
         while (filesystemCursors.length > 0) {
           const cursor = filesystemCursors.shift();
           const page = yield* Effect.gen(function* () {
-            const response = yield* http.post(new URL("/v1/migrations/filesystem-v5", url), {
+            const response = yield* http.post(new URL("/v1/migrations/filesystem-v6", url), {
               headers: { authorization: `Bearer ${Redacted.value(key)}` },
               body: HttpBody.text(
                 Schema.encodeSync(Schema.fromJsonString(FilesystemMigrationInput))({ cursor }),
@@ -224,7 +224,7 @@ const migrate = Alchemy.Action(
             if (response.status < 200 || response.status >= 300)
               return yield* new MigrationStatusError({
                 status: response.status,
-                path: "/v1/migrations/filesystem-v5",
+                path: "/v1/migrations/filesystem-v6",
               });
             const text = yield* response.text;
             return yield* Schema.decodeUnknownEffect(
@@ -234,7 +234,7 @@ const migrate = Alchemy.Action(
           filesystem.pages += 1;
           filesystem.migrated += page.migrated;
           yield* Effect.logInfo({
-            migration: "filesystem-v5",
+            migration: "filesystem-v6",
             page: filesystem.pages,
             migrated: page.migrated,
             hasMore: page.cursor !== null,

@@ -14,11 +14,12 @@ import {
   FilesystemAction,
   ActionResponses,
   PythonProgram,
+  StoredRun,
   RunResult,
   ToolStep,
 } from "./contracts";
 import { guestAction } from "./capabilities";
-import { PythonFileAction, pythonFile } from "./python-files";
+import { PythonFileAction, pythonFile, releasePythonFiles } from "./python-files";
 import type { OutputCapture } from "./output";
 import type { Env } from "./resources";
 import type { open } from "./storage";
@@ -41,10 +42,22 @@ export const python = Effect.fn("python.execute")(function* (
   env: Env,
   capability: typeof Capability.Type,
   program: typeof PythonProgram.Type,
+  executionId: typeof StoredRun.Type.id,
   session: Effect.Success<ReturnType<typeof open>>,
   capture: OutputCapture | null,
   context: Effect.Success<ReturnType<typeof acquireContext>> | null,
 ) {
+  const owner = yield* Effect.sync(() => {
+    if (context !== null)
+      return { id: `context:${context.record.id}`, generation: context.record.generation };
+    return { id: `execution:${executionId}`, generation: 0 };
+  });
+  const descriptors = { attemptedOpen: false };
+  if (context === null)
+    yield* Effect.addFinalizer(() => {
+      if (!descriptors.attemptedOpen) return Effect.void;
+      return releasePythonFiles(env, capability.sandboxId, owner).pipe(Effect.orDie);
+    });
   const policy = session.head.policy;
   const started = yield* Clock.currentTimeMillis;
   if (capability.expiresAt <= started)
@@ -228,9 +241,15 @@ export const python = Effect.fn("python.execute")(function* (
           action.op === "python.file.read" ||
           action.op === "python.file.stat" ||
           action.op === "python.file.write" ||
-          action.op === "python.file.resize"
-        )
-          return yield* pythonFile(env, capability, action);
+          action.op === "python.file.resize" ||
+          action.op === "python.file.close"
+        ) {
+          if (action.op === "python.file.open") {
+            descriptors.attemptedOpen = true;
+            return yield* Effect.uninterruptible(pythonFile(env, capability, owner, action));
+          }
+          return yield* pythonFile(env, capability, owner, action);
+        }
         const result = yield* guestAction(env, capability, action);
         return new TextEncoder().encode(
           Schema.encodeUnknownSync(Schema.fromJsonString(ActionResponses[action.op]))(result),

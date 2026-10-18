@@ -1,7 +1,7 @@
 import { Effect, Schema } from "effect";
 import { Kernel } from "../dist/kernel/cirro_kernel";
-import { Fault, FilesystemSnapshot } from "./contracts";
-import { kernelCall, write } from "./storage";
+import { ContentBlock, Fault, FilesystemSnapshot } from "./contracts";
+import { block, kernelCall, StorageFailure, write } from "./storage";
 import type { Env } from "./resources";
 
 export const importSnapshot = Effect.fn("filesystem.importSnapshot")(function* (
@@ -80,6 +80,9 @@ export const importSnapshot = Effect.fn("filesystem.importSnapshot")(function* (
       return { entry, mode, data };
     }),
   );
+  const retained = yield* kernelCall(() => kernel.retained_shared_blocks()).pipe(
+    Effect.flatMap(Schema.decodeUnknownEffect(Schema.fromJsonString(Schema.Array(ContentBlock)))),
+  );
   yield* kernelCall(() => kernel.reset_snapshot_root());
   const ordered = prepared.toSorted(
     (left, right) => left.entry.path.length - right.entry.path.length,
@@ -109,4 +112,16 @@ export const importSnapshot = Effect.fn("filesystem.importSnapshot")(function* (
     }),
   );
   yield* kernelCall(() => kernel.finish_snapshot_root());
+  yield* Effect.forEach(
+    retained,
+    (reference) =>
+      Effect.gen(function* () {
+        const data = yield* block(env, id, reference);
+        yield* Effect.tryPromise({
+          try: () => env.OBJECTS.put(`sandboxes/${id}/blobs/${reference.hash}`, data),
+          catch: (cause) => new StorageFailure({ cause }),
+        });
+      }),
+    { concurrency: 4, discard: true },
+  );
 });

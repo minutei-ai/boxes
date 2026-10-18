@@ -1,7 +1,7 @@
 import { Clock, Effect, Match, Schema } from "effect";
 import {
   Capability,
-  ContentBlock,
+  ContextReference,
   FileStat,
   Fault,
   Path,
@@ -12,10 +12,11 @@ import { requirePermission } from "./auth";
 import { applyWritePlan, block, kernelCall, open, publish } from "./storage";
 import type { Env } from "./resources";
 
-export const PythonFileSnapshot = Schema.Struct({
-  stat: FileStat,
-  blocks: Schema.Array(ContentBlock).check(Schema.isMaxLength(64)),
+export const PythonFileOwner = Schema.Struct({
+  id: Schema.NonEmptyString.check(Schema.isMaxLength(256)),
+  generation: ContextReference.fields.generation,
 });
+
 export const PythonFileAction = Schema.Union([
   Schema.Struct({
     op: Schema.Literal("python.file.open"),
@@ -26,15 +27,15 @@ export const PythonFileAction = Schema.Union([
   }),
   Schema.Struct({
     op: Schema.Literal("python.file.read"),
-    forWrite: Schema.Boolean,
-    snapshot: PythonFileSnapshot,
+    inode: FileStat.fields.inode,
     offset: Schema.Int.check(Schema.isBetween({ minimum: 0, maximum: Number.MAX_SAFE_INTEGER })),
     length: Schema.Int.check(Schema.isBetween({ minimum: 0, maximum: 262_144 })),
   }),
-  Schema.Struct({ op: Schema.Literal("python.file.stat"), snapshot: PythonFileSnapshot }),
+  Schema.Struct({ op: Schema.Literal("python.file.stat"), inode: FileStat.fields.inode }),
+  Schema.Struct({ op: Schema.Literal("python.file.close"), inode: FileStat.fields.inode }),
   Schema.Struct({
     op: Schema.Literal("python.file.write"),
-    snapshot: PythonFileSnapshot,
+    inode: FileStat.fields.inode,
     offset: Schema.NullOr(
       Schema.Int.check(Schema.isBetween({ minimum: 0, maximum: Number.MAX_SAFE_INTEGER })),
     ),
@@ -42,23 +43,19 @@ export const PythonFileAction = Schema.Union([
   }),
   Schema.Struct({
     op: Schema.Literal("python.file.resize"),
-    snapshot: PythonFileSnapshot,
+    inode: FileStat.fields.inode,
     size: Schema.Int.check(Schema.isBetween({ minimum: 0, maximum: 16777216 })),
   }),
 ]);
-export const PythonFileRead = Schema.Struct({
-  snapshot: PythonFileSnapshot,
-  content: Schema.String,
-});
-const DetachedFile = Schema.Struct({ detached: Schema.Literal(true), nowNs: Schema.String });
+const PythonFileRead = Schema.Struct({ content: Schema.String });
 const PythonFileWrite = Schema.Struct({
-  snapshot: PythonFileSnapshot,
   offset: Schema.Int,
   count: Schema.Int,
 });
 export const pythonFile = Effect.fn("python.file")(function* (
   env: Env,
   capability: typeof Capability.Type,
+  owner: typeof PythonFileOwner.Type,
   action: typeof PythonFileAction.Type,
 ) {
   if (capability.expiresAt <= (yield* Clock.currentTimeMillis))
@@ -70,8 +67,9 @@ export const pythonFile = Effect.fn("python.file")(function* (
   } else if (action.op === "python.file.write" || action.op === "python.file.resize") {
     yield* requirePermission(capability, "write");
   } else if (action.op === "python.file.read") {
-    if (action.forWrite) yield* requirePermission(capability, "write");
-    else yield* requirePermission(capability, "read");
+    yield* requirePermission(capability, "read");
+  } else if (action.op === "python.file.close") {
+    yield* requirePermission(capability, "execute");
   } else if (!capability.permissions.includes("write")) {
     yield* requirePermission(capability, "read");
   }
@@ -83,27 +81,34 @@ export const pythonFile = Effect.fn("python.file")(function* (
     const changed = yield* kernelCall(() =>
       kernel.open_regular(action.path, action.access, action.creation, action.mode),
     );
-    if (changed) yield* publish(env, capability.sandboxId, session);
     const stat = yield* kernelCall(() => kernel.stat(action.path, true)).pipe(
       Effect.flatMap(Schema.decodeUnknownEffect(Schema.fromJsonString(FileStat))),
     );
-    const plan = yield* kernelCall(() =>
-      kernel.read_inode_plan(BigInt(stat.inode), 0n, 16777216n),
-    ).pipe(Effect.flatMap(Schema.decodeUnknownEffect(Schema.fromJsonString(ReadPlan))));
-    return new TextEncoder().encode(
-      Schema.encodeSync(Schema.fromJsonString(PythonFileSnapshot))({ stat, blocks: plan.blocks }),
+    const released = yield* Effect.sync(() => {
+      if (owner.generation === 0) return false;
+      return kernel.release_inode_owner(owner.id, BigInt(owner.generation - 1));
+    });
+    const retained = yield* kernelCall(() =>
+      kernel.retain_inode(owner.id, BigInt(owner.generation), BigInt(stat.inode), stat.path),
     );
+    if (changed || released || retained) yield* publish(env, capability.sandboxId, session);
+    return new TextEncoder().encode(Schema.encodeSync(Schema.fromJsonString(FileStat))(stat));
   }
+  const inode = BigInt(action.inode);
+  if (action.op === "python.file.close") {
+    const changed = yield* kernelCall(() =>
+      kernel.release_inode(owner.id, BigInt(owner.generation), inode),
+    );
+    if (changed) yield* publish(env, capability.sandboxId, session);
+    return new TextEncoder().encode(Schema.encodeSync(Schema.fromJsonString(Schema.Null))(null));
+  }
+  if (!kernel.retains_inode(owner.id, BigInt(owner.generation), inode))
+    return yield* new Fault({
+      code: "EBADF",
+      status: 400,
+      message: "Descriptor owner has no inode reference",
+    });
   if (action.op === "python.file.write" || action.op === "python.file.resize") {
-    const inode = BigInt(action.snapshot.stat.inode);
-    const linked = yield* kernelCall(() => kernel.inode_path(inode));
-    if (linked === undefined)
-      return new TextEncoder().encode(
-        Schema.encodeSync(Schema.fromJsonString(DetachedFile))({
-          detached: true,
-          nowNs: yieldedTime.toString(),
-        }),
-      );
     const data = Match.value(action).pipe(
       Match.when({ op: "python.file.write" }, (write) => Buffer.from(write.content, "base64")),
       Match.orElse(() => Buffer.alloc(0)),
@@ -126,67 +131,57 @@ export const pythonFile = Effect.fn("python.file")(function* (
     }).pipe(Effect.flatMap(Schema.decodeUnknownEffect(Schema.fromJsonString(RangeWritePlan))));
     if (yield* applyWritePlan(env, capability.sandboxId, kernel, plan, data, inode))
       yield* publish(env, capability.sandboxId, session);
-    const stat = yield* kernelCall(() => kernel.stat_inode(inode)).pipe(
-      Effect.flatMap(Schema.decodeUnknownEffect(Schema.fromJsonString(FileStat))),
-    );
-    const blocks = yield* kernelCall(() => kernel.read_inode_plan(inode, 0n, 16777216n)).pipe(
-      Effect.flatMap(Schema.decodeUnknownEffect(Schema.fromJsonString(ReadPlan))),
-    );
-    const snapshot = { stat, blocks: blocks.blocks };
     if (action.op === "python.file.resize")
-      return new TextEncoder().encode(
-        Schema.encodeSync(Schema.fromJsonString(PythonFileSnapshot))(snapshot),
-      );
+      return new TextEncoder().encode(Schema.encodeSync(Schema.fromJsonString(Schema.Null))(null));
     return new TextEncoder().encode(
       Schema.encodeSync(Schema.fromJsonString(PythonFileWrite))({
-        snapshot,
         offset: plan.offset + data.byteLength,
         count: data.byteLength,
       }),
     );
   }
-  const found = yield* kernelCall(() => kernel.stat_inode(BigInt(action.snapshot.stat.inode))).pipe(
-    Effect.flatMap(Schema.decodeUnknownEffect(Schema.fromJsonString(FileStat))),
-    Effect.result,
-  );
-  const snapshot = yield* Effect.gen(function* () {
-    if (found._tag === "Failure") {
-      if (found.failure._tag !== "Fault" || found.failure.code !== "ENOENT")
-        return yield* found.failure;
-      return { ...action.snapshot, stat: { ...action.snapshot.stat, nlink: 0 } };
-    }
-    const plan = yield* kernelCall(() =>
-      kernel.read_inode_plan(BigInt(found.success.inode), 0n, 16_777_216n),
-    ).pipe(Effect.flatMap(Schema.decodeUnknownEffect(Schema.fromJsonString(ReadPlan))));
-    return { stat: found.success, blocks: plan.blocks };
-  });
-  if (action.op === "python.file.stat")
-    return new TextEncoder().encode(
-      Schema.encodeSync(Schema.fromJsonString(PythonFileSnapshot))(snapshot),
+  if (action.op === "python.file.stat") {
+    const stat = yield* kernelCall(() => kernel.stat_inode(inode)).pipe(
+      Effect.flatMap(Schema.decodeUnknownEffect(Schema.fromJsonString(FileStat))),
     );
-  const length = Math.min(action.length, Math.max(0, snapshot.stat.size - action.offset));
-  if (length === 0)
-    return new TextEncoder().encode(
-      Schema.encodeSync(Schema.fromJsonString(PythonFileRead))({ snapshot, content: "" }),
-    );
-  const first = Math.floor(action.offset / 262_144);
-  const references = snapshot.blocks.slice(
-    first,
-    first + Math.ceil(((action.offset % 262_144) + length) / 262_144),
-  );
+    return new TextEncoder().encode(Schema.encodeSync(Schema.fromJsonString(FileStat))(stat));
+  }
+  const plan = yield* kernelCall(() =>
+    kernel.read_inode_plan(inode, BigInt(action.offset), BigInt(action.length)),
+  ).pipe(Effect.flatMap(Schema.decodeUnknownEffect(Schema.fromJsonString(ReadPlan))));
   const data = yield* Effect.forEach(
-    references,
+    plan.blocks,
     (reference) => block(env, capability.sandboxId, reference),
     { concurrency: 2 },
   );
-  const content = Buffer.concat(data).subarray(
-    action.offset % 262_144,
-    (action.offset % 262_144) + length,
-  );
+  const content = Buffer.concat(data).subarray(plan.skip, plan.skip + plan.length);
   return new TextEncoder().encode(
     Schema.encodeSync(Schema.fromJsonString(PythonFileRead))({
-      snapshot,
       content: content.toString("base64"),
     }),
   );
 }, Effect.scoped);
+
+export const releasePythonFiles = Effect.fn("python.files.release")(
+  function* (
+    env: Env,
+    sandboxId: typeof Capability.Type.sandboxId,
+    owner: typeof PythonFileOwner.Type,
+  ) {
+    const opened = yield* open(env, sandboxId).pipe(Effect.result);
+    if (opened._tag === "Failure") {
+      if (opened.failure._tag === "Fault" && opened.failure.code === "ENOENT") return;
+      return yield* opened.failure;
+    }
+    const session = opened.success;
+    const changed = yield* kernelCall(() =>
+      session.kernel.release_inode_owner(owner.id, BigInt(owner.generation)),
+    );
+    if (changed) yield* publish(env, sandboxId, session);
+  },
+  Effect.scoped,
+  Effect.retry({
+    times: 3,
+    while: (failure) => failure._tag === "Fault" && failure.code === "CONFLICT",
+  }),
+);
