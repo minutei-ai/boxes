@@ -1,0 +1,2035 @@
+{
+  "status": "Native source and controlled local comparisons passed; not yet published or deployed",
+  "measuredAt": "2026-10-18T23:00:15.661805+00:00",
+  "sourceBase": "5a25c465b037788f68578415e08e57c0f6405680",
+  "sourceSha256": {
+    "src/filesystem.ts": "317b57c1fa5ba6c0a07f0a8069b3d0f5e0155d0c963657770beaeb3b577df797",
+    "tests/fixtures/clock-worker.ts": "6a87f6069d1651afb9fa14478e3ef3d08b1c6ef5b737890b40702898be224a40",
+    "tests/fixtures/filesystem-lifetime-contract.ts": "3d10d645cef707131b2f7ff50f32b0b7e1009d2b5e3c335b02f98041e516f7e8",
+    "tests/filesystem-lifetime.test.ts": "55ab7ea0daedae098d9d80909d05ed35a80436ee2e4141dcd6e15ad15c864509",
+    "tooling/benchmark-filesystem-lifetime.ts": "dfa95076cda5bbb7e71176f4f208e09df4b15cd01b38c269fe9d2dce103bdfc6"
+  },
+  "reproduction": {
+    "runtime": "Native Alchemy workerd and actual R2 through its owning Worker; counters forward native binding operations unchanged",
+    "fixture": "1,024 one-byte files. Empty execution, 16 and 64 absolute Python pathname stats, and 64 private descriptor stats use fresh Workers and isolated R2.",
+    "baselineRuns": [
+      [
+        {
+          "name": "empty",
+          "counts": {
+            "headGets": 4,
+            "conditionalHeadGets": 2,
+            "fullHeadBodies": 2,
+            "headBodyBytes": 651406,
+            "headPuts": 0
+          },
+          "kernelMemoryBefore": 2555904,
+          "kernelMemoryAfter": 2555904,
+          "elapsedMs": 410,
+          "output": {
+            "stdout": "",
+            "stderr": "",
+            "result": 42,
+            "exitCode": 0
+          }
+        },
+        {
+          "name": "path-stat-16",
+          "counts": {
+            "headGets": 20,
+            "conditionalHeadGets": 2,
+            "fullHeadBodies": 18,
+            "headBodyBytes": 5862654,
+            "headPuts": 0
+          },
+          "kernelMemoryBefore": 2555904,
+          "kernelMemoryAfter": 6619136,
+          "elapsedMs": 568,
+          "output": {
+            "stdout": "",
+            "stderr": "",
+            "result": 16,
+            "exitCode": 0
+          }
+        },
+        {
+          "name": "path-stat-64",
+          "counts": {
+            "headGets": 68,
+            "conditionalHeadGets": 2,
+            "fullHeadBodies": 66,
+            "headBodyBytes": 21496398,
+            "headPuts": 0
+          },
+          "kernelMemoryBefore": 2555904,
+          "kernelMemoryAfter": 20905984,
+          "elapsedMs": 946,
+          "output": {
+            "stdout": "",
+            "stderr": "",
+            "result": 64,
+            "exitCode": 0
+          }
+        },
+        {
+          "name": "descriptor-stat-64",
+          "counts": {
+            "headGets": 71,
+            "conditionalHeadGets": 2,
+            "fullHeadBodies": 70,
+            "headBodyBytes": 22805127,
+            "headPuts": 2
+          },
+          "kernelMemoryBefore": 2555904,
+          "kernelMemoryAfter": 3145728,
+          "elapsedMs": 990,
+          "output": {
+            "stdout": "",
+            "stderr": "",
+            "result": 64,
+            "exitCode": 0
+          }
+        }
+      ],
+      [
+        {
+          "name": "empty",
+          "counts": {
+            "headGets": 4,
+            "conditionalHeadGets": 2,
+            "fullHeadBodies": 2,
+            "headBodyBytes": 651406,
+            "headPuts": 0
+          },
+          "kernelMemoryBefore": 2555904,
+          "kernelMemoryAfter": 2555904,
+          "elapsedMs": 456,
+          "output": {
+            "stdout": "",
+            "stderr": "",
+            "result": 42,
+            "exitCode": 0
+          }
+        },
+        {
+          "name": "path-stat-16",
+          "counts": {
+            "headGets": 20,
+            "conditionalHeadGets": 2,
+            "fullHeadBodies": 18,
+            "headBodyBytes": 5862654,
+            "headPuts": 0
+          },
+          "kernelMemoryBefore": 2555904,
+          "kernelMemoryAfter": 6619136,
+          "elapsedMs": 585,
+          "output": {
+            "stdout": "",
+            "stderr": "",
+            "result": 16,
+            "exitCode": 0
+          }
+        },
+        {
+          "name": "path-stat-64",
+          "counts": {
+            "headGets": 68,
+            "conditionalHeadGets": 2,
+            "fullHeadBodies": 66,
+            "headBodyBytes": 21496398,
+            "headPuts": 0
+          },
+          "kernelMemoryBefore": 2555904,
+          "kernelMemoryAfter": 20905984,
+          "elapsedMs": 968,
+          "output": {
+            "stdout": "",
+            "stderr": "",
+            "result": 64,
+            "exitCode": 0
+          }
+        },
+        {
+          "name": "descriptor-stat-64",
+          "counts": {
+            "headGets": 71,
+            "conditionalHeadGets": 2,
+            "fullHeadBodies": 70,
+            "headBodyBytes": 22805127,
+            "headPuts": 2
+          },
+          "kernelMemoryBefore": 2555904,
+          "kernelMemoryAfter": 3145728,
+          "elapsedMs": 1069,
+          "output": {
+            "stdout": "",
+            "stderr": "",
+            "result": 64,
+            "exitCode": 0
+          }
+        }
+      ]
+    ],
+    "baselineLogsSha256": {
+      "python-fs-usage-baseline.log": "5bd8269784b1b2dfeb37cc47d8ed3cf203082be0d042b7e95b04170ef7ea5dbb",
+      "python-fs-usage-baseline-repeat.log": "7d8a7e2e9c2a4816162f71974e5342203cf6968feb5b723a0e4cdbeaa12f34f4"
+    },
+    "regressionFailure": "Native pathname-stat regression exceeded its 8 MiB kernel-capacity envelope, observing 20,905,984 bytes.",
+    "regressionFailureLogSha256": "4c1efb5dbb764fb2ce1eafbe562a38e47cc3094bd3e4861bed40f61fd3e3f7d5"
+  },
+  "rankedHypotheses": [
+    {
+      "hypothesis": "Filesystem kernel acquisitions live until the wider interpreter execution ends",
+      "prediction": "Scoping the owning filesystem action reduces native capacity growth without reducing head reads",
+      "result": "Confirmed by the one-combinator change and both alternating comparison windows"
+    },
+    {
+      "hypothesis": "Repeated full-manifest reads and reconstruction remain a separate cost",
+      "prediction": "Action-scoped release alone keeps full-head reads and body sizes unchanged",
+      "result": "Full-head-read counts and declared body sizes remain unchanged. Their separate latency/CPU contribution was not isolated."
+    },
+    {
+      "hypothesis": "Python initialization contributes a fixed request cost",
+      "prediction": "Empty executions retain a measurable cost without metadata-loop memory growth",
+      "result": "Not isolated. Empty controls measured 410/456 ms with stable kernel capacity, including routing and persistence as well as interpreter initialization. This cannot attribute that whole duration to Python startup."
+    }
+  ],
+  "change": [
+    "The filesystem domain now supplies Effect.scoped at its existing named Effect.fn owner. Every return, failure or interruption releases its acquired native kernel before returning to the caller.",
+    "HTTP, service binding and nested Python/JavaScript/TypeScript filesystem callers share that owner. No new cache, service, transport, policy fallback, migration or native Rust binary is introduced.",
+    "The benchmark and regression forward native R2 calls, observe the shared kernel module memory capacity, and derive metric reports from one Effect Schema contract."
+  ],
+  "measurementDefinitions": {
+    "kernelMemory": "WebAssembly.Memory buffer capacity high-water for the kernel instance, captured after the request. Memory cannot shrink; fresh Workers isolate each phase. This is not RSS, live allocations, total Worker memory or Python heap.",
+    "headBodyBytes": "Sum of declared sizes of returned full bodies for the sandbox head key; the valid workload consumes those bodies. This is not network-wire or billable transferred bytes.",
+    "counts": "GET/conditional GET/full-body and PUT observations on that sandbox head key, not a count of every R2 operation in the process lifecycle.",
+    "elapsed": "Native Worker clock around handleRequest and response-text consumption; excludes seeding, Worker startup and RPC transport."
+  },
+  "result": {
+    "referenceKernelCapacityBytes": 20905984,
+    "candidateKernelCapacityBytes": 2555904,
+    "reductionPercent": 87.7742946708464,
+    "interpretation": "Repeatable reduction in kernel linear-memory capacity for this workload. Full-head reads remain unchanged. Local time differences are small and tail results are mixed; no general latency, CPU or billing improvement is established."
+  },
+  "candidateControl": [
+    {
+      "name": "empty",
+      "counts": {
+        "headGets": 4,
+        "conditionalHeadGets": 2,
+        "fullHeadBodies": 2,
+        "headBodyBytes": 651406,
+        "headPuts": 0
+      },
+      "kernelMemoryBefore": 2555904,
+      "kernelMemoryAfter": 2555904,
+      "elapsedMs": 444,
+      "output": {
+        "stdout": "",
+        "stderr": "",
+        "result": 42,
+        "exitCode": 0
+      }
+    },
+    {
+      "name": "path-stat-16",
+      "counts": {
+        "headGets": 20,
+        "conditionalHeadGets": 2,
+        "fullHeadBodies": 18,
+        "headBodyBytes": 5862654,
+        "headPuts": 0
+      },
+      "kernelMemoryBefore": 2555904,
+      "kernelMemoryAfter": 2555904,
+      "elapsedMs": 570,
+      "output": {
+        "stdout": "",
+        "stderr": "",
+        "result": 16,
+        "exitCode": 0
+      }
+    },
+    {
+      "name": "path-stat-64",
+      "counts": {
+        "headGets": 68,
+        "conditionalHeadGets": 2,
+        "fullHeadBodies": 66,
+        "headBodyBytes": 21496398,
+        "headPuts": 0
+      },
+      "kernelMemoryBefore": 2555904,
+      "kernelMemoryAfter": 2555904,
+      "elapsedMs": 951,
+      "output": {
+        "stdout": "",
+        "stderr": "",
+        "result": 64,
+        "exitCode": 0
+      }
+    },
+    {
+      "name": "descriptor-stat-64",
+      "counts": {
+        "headGets": 71,
+        "conditionalHeadGets": 2,
+        "fullHeadBodies": 70,
+        "headBodyBytes": 22805127,
+        "headPuts": 2
+      },
+      "kernelMemoryBefore": 2555904,
+      "kernelMemoryAfter": 3145728,
+      "elapsedMs": 1072,
+      "output": {
+        "stdout": "",
+        "stderr": "",
+        "result": 64,
+        "exitCode": 0
+      }
+    }
+  ],
+  "comparisons": [
+    {
+      "scope": "All raw warmups, phases and measured samples retained. First run precedes metric-contract centralization; second run uses the final shared Schema. Measured Worker bytes are unchanged by that type-only refinement.",
+      "summary": {
+        "reference": {
+          "samples": 20,
+          "p50Ms": 625,
+          "p95Ms": 660,
+          "minimumMs": 591,
+          "maximumMs": 661,
+          "kernelCapacitiesBytes": [20905984],
+          "headGets": [68],
+          "fullHeadBodies": [66],
+          "headBodyBytes": [21496398],
+          "headPuts": [0]
+        },
+        "current": {
+          "samples": 20,
+          "p50Ms": 614,
+          "p95Ms": 635,
+          "minimumMs": 582,
+          "maximumMs": 643,
+          "kernelCapacitiesBytes": [2555904],
+          "headGets": [68],
+          "fullHeadBodies": [66],
+          "headBodyBytes": [21496398],
+          "headPuts": [0]
+        }
+      },
+      "raw": {
+        "measuredAt": 1792363583377,
+        "environment": "Bun 1.4.3; native Alchemy workerd and local R2; fresh Worker/R2 per phase; ABBA then BAAB",
+        "workload": "1,024 one-byte files; 64 Python absolute pathname stats per request; two warmups and five timed samples per phase; every output and unchanged full-head-read count validated",
+        "scope": "Counter forwards actual native R2 operations. Kernel memory is linear-memory capacity high-water, not RSS, live allocations, total Worker memory or Python heap. Worker-clock request elapsed time excludes setup, startup and RPC transport; this is not production latency, CPU or billing.",
+        "artifacts": {
+          "reference": [
+            {
+              "file": "cirro_compiler_bg.wasm",
+              "bytes": 1943596,
+              "sha256": "27d9b0022a634ed4eef47b6561ad38cafde3522c17e834afed1264440678bf2f"
+            },
+            {
+              "file": "cirro_guest_bg.wasm",
+              "bytes": 1150616,
+              "sha256": "dcf1a9d66b4c3a11106076c3e9d5fa1f596b8846a811dfeec9ecf3a8744af01f"
+            },
+            {
+              "file": "cirro_kernel_bg.wasm",
+              "bytes": 1246046,
+              "sha256": "63aa260e36d4fffb2fe5ffd160bdd189dc6e6ebe7a905a6eb3624222dc4b73b8"
+            },
+            {
+              "file": "cirro_python_bg.wasm",
+              "bytes": 19884411,
+              "sha256": "3ff7134c5ff8c37e9b7aecf02aff773bb843473de0b8f38e6fc2c0a73b44d40a"
+            },
+            {
+              "file": "cirro_wasi_bg.wasm",
+              "bytes": 1706658,
+              "sha256": "3f3a97b0262036b6843581f9ef019ccf394a4d65fc45e02a2f2ddcd78e01df66"
+            },
+            {
+              "file": "index.js",
+              "bytes": 456153,
+              "sha256": "8c82bb16fb7638601cd76b00e686dc56b60d1716704b52718d92c4ae615b5c5e"
+            }
+          ],
+          "current": [
+            {
+              "file": "cirro_compiler_bg.wasm",
+              "bytes": 1943596,
+              "sha256": "27d9b0022a634ed4eef47b6561ad38cafde3522c17e834afed1264440678bf2f"
+            },
+            {
+              "file": "cirro_guest_bg.wasm",
+              "bytes": 1150616,
+              "sha256": "dcf1a9d66b4c3a11106076c3e9d5fa1f596b8846a811dfeec9ecf3a8744af01f"
+            },
+            {
+              "file": "cirro_kernel_bg.wasm",
+              "bytes": 1246046,
+              "sha256": "63aa260e36d4fffb2fe5ffd160bdd189dc6e6ebe7a905a6eb3624222dc4b73b8"
+            },
+            {
+              "file": "cirro_python_bg.wasm",
+              "bytes": 19884411,
+              "sha256": "3ff7134c5ff8c37e9b7aecf02aff773bb843473de0b8f38e6fc2c0a73b44d40a"
+            },
+            {
+              "file": "cirro_wasi_bg.wasm",
+              "bytes": 1706658,
+              "sha256": "3f3a97b0262036b6843581f9ef019ccf394a4d65fc45e02a2f2ddcd78e01df66"
+            },
+            {
+              "file": "index.js",
+              "bytes": 456156,
+              "sha256": "2f0ba271a683bd22bd4e8086521ac5f88443f48ebf56a96bf7c0d4482ddbc87c"
+            }
+          ]
+        },
+        "phases": [
+          {
+            "phase": 0,
+            "variant": "reference",
+            "warmups": [
+              {
+                "elapsedMs": 978,
+                "kernelMemoryBefore": 2555904,
+                "kernelMemoryAfter": 20905984,
+                "counts": {
+                  "headGets": 68,
+                  "conditionalHeadGets": 2,
+                  "fullHeadBodies": 66,
+                  "headBodyBytes": 21496398,
+                  "headPuts": 0
+                }
+              },
+              {
+                "elapsedMs": 674,
+                "kernelMemoryBefore": 20905984,
+                "kernelMemoryAfter": 20905984,
+                "counts": {
+                  "headGets": 68,
+                  "conditionalHeadGets": 2,
+                  "fullHeadBodies": 66,
+                  "headBodyBytes": 21496398,
+                  "headPuts": 0
+                }
+              }
+            ],
+            "samples": [
+              {
+                "elapsedMs": 622,
+                "kernelMemoryBefore": 20905984,
+                "kernelMemoryAfter": 20905984,
+                "counts": {
+                  "headGets": 68,
+                  "conditionalHeadGets": 2,
+                  "fullHeadBodies": 66,
+                  "headBodyBytes": 21496398,
+                  "headPuts": 0
+                }
+              },
+              {
+                "elapsedMs": 631,
+                "kernelMemoryBefore": 20905984,
+                "kernelMemoryAfter": 20905984,
+                "counts": {
+                  "headGets": 68,
+                  "conditionalHeadGets": 2,
+                  "fullHeadBodies": 66,
+                  "headBodyBytes": 21496398,
+                  "headPuts": 0
+                }
+              },
+              {
+                "elapsedMs": 632,
+                "kernelMemoryBefore": 20905984,
+                "kernelMemoryAfter": 20905984,
+                "counts": {
+                  "headGets": 68,
+                  "conditionalHeadGets": 2,
+                  "fullHeadBodies": 66,
+                  "headBodyBytes": 21496398,
+                  "headPuts": 0
+                }
+              },
+              {
+                "elapsedMs": 660,
+                "kernelMemoryBefore": 20905984,
+                "kernelMemoryAfter": 20905984,
+                "counts": {
+                  "headGets": 68,
+                  "conditionalHeadGets": 2,
+                  "fullHeadBodies": 66,
+                  "headBodyBytes": 21496398,
+                  "headPuts": 0
+                }
+              },
+              {
+                "elapsedMs": 615,
+                "kernelMemoryBefore": 20905984,
+                "kernelMemoryAfter": 20905984,
+                "counts": {
+                  "headGets": 68,
+                  "conditionalHeadGets": 2,
+                  "fullHeadBodies": 66,
+                  "headBodyBytes": 21496398,
+                  "headPuts": 0
+                }
+              }
+            ]
+          },
+          {
+            "phase": 1,
+            "variant": "current",
+            "warmups": [
+              {
+                "elapsedMs": 975,
+                "kernelMemoryBefore": 2555904,
+                "kernelMemoryAfter": 2555904,
+                "counts": {
+                  "headGets": 68,
+                  "conditionalHeadGets": 2,
+                  "fullHeadBodies": 66,
+                  "headBodyBytes": 21496398,
+                  "headPuts": 0
+                }
+              },
+              {
+                "elapsedMs": 654,
+                "kernelMemoryBefore": 2555904,
+                "kernelMemoryAfter": 2555904,
+                "counts": {
+                  "headGets": 68,
+                  "conditionalHeadGets": 2,
+                  "fullHeadBodies": 66,
+                  "headBodyBytes": 21496398,
+                  "headPuts": 0
+                }
+              }
+            ],
+            "samples": [
+              {
+                "elapsedMs": 628,
+                "kernelMemoryBefore": 2555904,
+                "kernelMemoryAfter": 2555904,
+                "counts": {
+                  "headGets": 68,
+                  "conditionalHeadGets": 2,
+                  "fullHeadBodies": 66,
+                  "headBodyBytes": 21496398,
+                  "headPuts": 0
+                }
+              },
+              {
+                "elapsedMs": 602,
+                "kernelMemoryBefore": 2555904,
+                "kernelMemoryAfter": 2555904,
+                "counts": {
+                  "headGets": 68,
+                  "conditionalHeadGets": 2,
+                  "fullHeadBodies": 66,
+                  "headBodyBytes": 21496398,
+                  "headPuts": 0
+                }
+              },
+              {
+                "elapsedMs": 608,
+                "kernelMemoryBefore": 2555904,
+                "kernelMemoryAfter": 2555904,
+                "counts": {
+                  "headGets": 68,
+                  "conditionalHeadGets": 2,
+                  "fullHeadBodies": 66,
+                  "headBodyBytes": 21496398,
+                  "headPuts": 0
+                }
+              },
+              {
+                "elapsedMs": 623,
+                "kernelMemoryBefore": 2555904,
+                "kernelMemoryAfter": 2555904,
+                "counts": {
+                  "headGets": 68,
+                  "conditionalHeadGets": 2,
+                  "fullHeadBodies": 66,
+                  "headBodyBytes": 21496398,
+                  "headPuts": 0
+                }
+              },
+              {
+                "elapsedMs": 584,
+                "kernelMemoryBefore": 2555904,
+                "kernelMemoryAfter": 2555904,
+                "counts": {
+                  "headGets": 68,
+                  "conditionalHeadGets": 2,
+                  "fullHeadBodies": 66,
+                  "headBodyBytes": 21496398,
+                  "headPuts": 0
+                }
+              }
+            ]
+          },
+          {
+            "phase": 2,
+            "variant": "current",
+            "warmups": [
+              {
+                "elapsedMs": 961,
+                "kernelMemoryBefore": 2555904,
+                "kernelMemoryAfter": 2555904,
+                "counts": {
+                  "headGets": 68,
+                  "conditionalHeadGets": 2,
+                  "fullHeadBodies": 66,
+                  "headBodyBytes": 21496398,
+                  "headPuts": 0
+                }
+              },
+              {
+                "elapsedMs": 661,
+                "kernelMemoryBefore": 2555904,
+                "kernelMemoryAfter": 2555904,
+                "counts": {
+                  "headGets": 68,
+                  "conditionalHeadGets": 2,
+                  "fullHeadBodies": 66,
+                  "headBodyBytes": 21496398,
+                  "headPuts": 0
+                }
+              }
+            ],
+            "samples": [
+              {
+                "elapsedMs": 643,
+                "kernelMemoryBefore": 2555904,
+                "kernelMemoryAfter": 2555904,
+                "counts": {
+                  "headGets": 68,
+                  "conditionalHeadGets": 2,
+                  "fullHeadBodies": 66,
+                  "headBodyBytes": 21496398,
+                  "headPuts": 0
+                }
+              },
+              {
+                "elapsedMs": 602,
+                "kernelMemoryBefore": 2555904,
+                "kernelMemoryAfter": 2555904,
+                "counts": {
+                  "headGets": 68,
+                  "conditionalHeadGets": 2,
+                  "fullHeadBodies": 66,
+                  "headBodyBytes": 21496398,
+                  "headPuts": 0
+                }
+              },
+              {
+                "elapsedMs": 614,
+                "kernelMemoryBefore": 2555904,
+                "kernelMemoryAfter": 2555904,
+                "counts": {
+                  "headGets": 68,
+                  "conditionalHeadGets": 2,
+                  "fullHeadBodies": 66,
+                  "headBodyBytes": 21496398,
+                  "headPuts": 0
+                }
+              },
+              {
+                "elapsedMs": 616,
+                "kernelMemoryBefore": 2555904,
+                "kernelMemoryAfter": 2555904,
+                "counts": {
+                  "headGets": 68,
+                  "conditionalHeadGets": 2,
+                  "fullHeadBodies": 66,
+                  "headBodyBytes": 21496398,
+                  "headPuts": 0
+                }
+              },
+              {
+                "elapsedMs": 613,
+                "kernelMemoryBefore": 2555904,
+                "kernelMemoryAfter": 2555904,
+                "counts": {
+                  "headGets": 68,
+                  "conditionalHeadGets": 2,
+                  "fullHeadBodies": 66,
+                  "headBodyBytes": 21496398,
+                  "headPuts": 0
+                }
+              }
+            ]
+          },
+          {
+            "phase": 3,
+            "variant": "reference",
+            "warmups": [
+              {
+                "elapsedMs": 961,
+                "kernelMemoryBefore": 2555904,
+                "kernelMemoryAfter": 20905984,
+                "counts": {
+                  "headGets": 68,
+                  "conditionalHeadGets": 2,
+                  "fullHeadBodies": 66,
+                  "headBodyBytes": 21496398,
+                  "headPuts": 0
+                }
+              },
+              {
+                "elapsedMs": 663,
+                "kernelMemoryBefore": 20905984,
+                "kernelMemoryAfter": 20905984,
+                "counts": {
+                  "headGets": 68,
+                  "conditionalHeadGets": 2,
+                  "fullHeadBodies": 66,
+                  "headBodyBytes": 21496398,
+                  "headPuts": 0
+                }
+              }
+            ],
+            "samples": [
+              {
+                "elapsedMs": 623,
+                "kernelMemoryBefore": 20905984,
+                "kernelMemoryAfter": 20905984,
+                "counts": {
+                  "headGets": 68,
+                  "conditionalHeadGets": 2,
+                  "fullHeadBodies": 66,
+                  "headBodyBytes": 21496398,
+                  "headPuts": 0
+                }
+              },
+              {
+                "elapsedMs": 617,
+                "kernelMemoryBefore": 20905984,
+                "kernelMemoryAfter": 20905984,
+                "counts": {
+                  "headGets": 68,
+                  "conditionalHeadGets": 2,
+                  "fullHeadBodies": 66,
+                  "headBodyBytes": 21496398,
+                  "headPuts": 0
+                }
+              },
+              {
+                "elapsedMs": 607,
+                "kernelMemoryBefore": 20905984,
+                "kernelMemoryAfter": 20905984,
+                "counts": {
+                  "headGets": 68,
+                  "conditionalHeadGets": 2,
+                  "fullHeadBodies": 66,
+                  "headBodyBytes": 21496398,
+                  "headPuts": 0
+                }
+              },
+              {
+                "elapsedMs": 628,
+                "kernelMemoryBefore": 20905984,
+                "kernelMemoryAfter": 20905984,
+                "counts": {
+                  "headGets": 68,
+                  "conditionalHeadGets": 2,
+                  "fullHeadBodies": 66,
+                  "headBodyBytes": 21496398,
+                  "headPuts": 0
+                }
+              },
+              {
+                "elapsedMs": 591,
+                "kernelMemoryBefore": 20905984,
+                "kernelMemoryAfter": 20905984,
+                "counts": {
+                  "headGets": 68,
+                  "conditionalHeadGets": 2,
+                  "fullHeadBodies": 66,
+                  "headBodyBytes": 21496398,
+                  "headPuts": 0
+                }
+              }
+            ]
+          },
+          {
+            "phase": 4,
+            "variant": "current",
+            "warmups": [
+              {
+                "elapsedMs": 952,
+                "kernelMemoryBefore": 2555904,
+                "kernelMemoryAfter": 2555904,
+                "counts": {
+                  "headGets": 68,
+                  "conditionalHeadGets": 2,
+                  "fullHeadBodies": 66,
+                  "headBodyBytes": 21496398,
+                  "headPuts": 0
+                }
+              },
+              {
+                "elapsedMs": 647,
+                "kernelMemoryBefore": 2555904,
+                "kernelMemoryAfter": 2555904,
+                "counts": {
+                  "headGets": 68,
+                  "conditionalHeadGets": 2,
+                  "fullHeadBodies": 66,
+                  "headBodyBytes": 21496398,
+                  "headPuts": 0
+                }
+              }
+            ],
+            "samples": [
+              {
+                "elapsedMs": 617,
+                "kernelMemoryBefore": 2555904,
+                "kernelMemoryAfter": 2555904,
+                "counts": {
+                  "headGets": 68,
+                  "conditionalHeadGets": 2,
+                  "fullHeadBodies": 66,
+                  "headBodyBytes": 21496398,
+                  "headPuts": 0
+                }
+              },
+              {
+                "elapsedMs": 631,
+                "kernelMemoryBefore": 2555904,
+                "kernelMemoryAfter": 2555904,
+                "counts": {
+                  "headGets": 68,
+                  "conditionalHeadGets": 2,
+                  "fullHeadBodies": 66,
+                  "headBodyBytes": 21496398,
+                  "headPuts": 0
+                }
+              },
+              {
+                "elapsedMs": 600,
+                "kernelMemoryBefore": 2555904,
+                "kernelMemoryAfter": 2555904,
+                "counts": {
+                  "headGets": 68,
+                  "conditionalHeadGets": 2,
+                  "fullHeadBodies": 66,
+                  "headBodyBytes": 21496398,
+                  "headPuts": 0
+                }
+              },
+              {
+                "elapsedMs": 635,
+                "kernelMemoryBefore": 2555904,
+                "kernelMemoryAfter": 2555904,
+                "counts": {
+                  "headGets": 68,
+                  "conditionalHeadGets": 2,
+                  "fullHeadBodies": 66,
+                  "headBodyBytes": 21496398,
+                  "headPuts": 0
+                }
+              },
+              {
+                "elapsedMs": 582,
+                "kernelMemoryBefore": 2555904,
+                "kernelMemoryAfter": 2555904,
+                "counts": {
+                  "headGets": 68,
+                  "conditionalHeadGets": 2,
+                  "fullHeadBodies": 66,
+                  "headBodyBytes": 21496398,
+                  "headPuts": 0
+                }
+              }
+            ]
+          },
+          {
+            "phase": 5,
+            "variant": "reference",
+            "warmups": [
+              {
+                "elapsedMs": 1005,
+                "kernelMemoryBefore": 2555904,
+                "kernelMemoryAfter": 20905984,
+                "counts": {
+                  "headGets": 68,
+                  "conditionalHeadGets": 2,
+                  "fullHeadBodies": 66,
+                  "headBodyBytes": 21496398,
+                  "headPuts": 0
+                }
+              },
+              {
+                "elapsedMs": 731,
+                "kernelMemoryBefore": 20905984,
+                "kernelMemoryAfter": 20905984,
+                "counts": {
+                  "headGets": 68,
+                  "conditionalHeadGets": 2,
+                  "fullHeadBodies": 66,
+                  "headBodyBytes": 21496398,
+                  "headPuts": 0
+                }
+              }
+            ],
+            "samples": [
+              {
+                "elapsedMs": 643,
+                "kernelMemoryBefore": 20905984,
+                "kernelMemoryAfter": 20905984,
+                "counts": {
+                  "headGets": 68,
+                  "conditionalHeadGets": 2,
+                  "fullHeadBodies": 66,
+                  "headBodyBytes": 21496398,
+                  "headPuts": 0
+                }
+              },
+              {
+                "elapsedMs": 628,
+                "kernelMemoryBefore": 20905984,
+                "kernelMemoryAfter": 20905984,
+                "counts": {
+                  "headGets": 68,
+                  "conditionalHeadGets": 2,
+                  "fullHeadBodies": 66,
+                  "headBodyBytes": 21496398,
+                  "headPuts": 0
+                }
+              },
+              {
+                "elapsedMs": 661,
+                "kernelMemoryBefore": 20905984,
+                "kernelMemoryAfter": 20905984,
+                "counts": {
+                  "headGets": 68,
+                  "conditionalHeadGets": 2,
+                  "fullHeadBodies": 66,
+                  "headBodyBytes": 21496398,
+                  "headPuts": 0
+                }
+              },
+              {
+                "elapsedMs": 655,
+                "kernelMemoryBefore": 20905984,
+                "kernelMemoryAfter": 20905984,
+                "counts": {
+                  "headGets": 68,
+                  "conditionalHeadGets": 2,
+                  "fullHeadBodies": 66,
+                  "headBodyBytes": 21496398,
+                  "headPuts": 0
+                }
+              },
+              {
+                "elapsedMs": 604,
+                "kernelMemoryBefore": 20905984,
+                "kernelMemoryAfter": 20905984,
+                "counts": {
+                  "headGets": 68,
+                  "conditionalHeadGets": 2,
+                  "fullHeadBodies": 66,
+                  "headBodyBytes": 21496398,
+                  "headPuts": 0
+                }
+              }
+            ]
+          },
+          {
+            "phase": 6,
+            "variant": "reference",
+            "warmups": [
+              {
+                "elapsedMs": 967,
+                "kernelMemoryBefore": 2555904,
+                "kernelMemoryAfter": 20905984,
+                "counts": {
+                  "headGets": 68,
+                  "conditionalHeadGets": 2,
+                  "fullHeadBodies": 66,
+                  "headBodyBytes": 21496398,
+                  "headPuts": 0
+                }
+              },
+              {
+                "elapsedMs": 666,
+                "kernelMemoryBefore": 20905984,
+                "kernelMemoryAfter": 20905984,
+                "counts": {
+                  "headGets": 68,
+                  "conditionalHeadGets": 2,
+                  "fullHeadBodies": 66,
+                  "headBodyBytes": 21496398,
+                  "headPuts": 0
+                }
+              }
+            ],
+            "samples": [
+              {
+                "elapsedMs": 635,
+                "kernelMemoryBefore": 20905984,
+                "kernelMemoryAfter": 20905984,
+                "counts": {
+                  "headGets": 68,
+                  "conditionalHeadGets": 2,
+                  "fullHeadBodies": 66,
+                  "headBodyBytes": 21496398,
+                  "headPuts": 0
+                }
+              },
+              {
+                "elapsedMs": 623,
+                "kernelMemoryBefore": 20905984,
+                "kernelMemoryAfter": 20905984,
+                "counts": {
+                  "headGets": 68,
+                  "conditionalHeadGets": 2,
+                  "fullHeadBodies": 66,
+                  "headBodyBytes": 21496398,
+                  "headPuts": 0
+                }
+              },
+              {
+                "elapsedMs": 625,
+                "kernelMemoryBefore": 20905984,
+                "kernelMemoryAfter": 20905984,
+                "counts": {
+                  "headGets": 68,
+                  "conditionalHeadGets": 2,
+                  "fullHeadBodies": 66,
+                  "headBodyBytes": 21496398,
+                  "headPuts": 0
+                }
+              },
+              {
+                "elapsedMs": 628,
+                "kernelMemoryBefore": 20905984,
+                "kernelMemoryAfter": 20905984,
+                "counts": {
+                  "headGets": 68,
+                  "conditionalHeadGets": 2,
+                  "fullHeadBodies": 66,
+                  "headBodyBytes": 21496398,
+                  "headPuts": 0
+                }
+              },
+              {
+                "elapsedMs": 613,
+                "kernelMemoryBefore": 20905984,
+                "kernelMemoryAfter": 20905984,
+                "counts": {
+                  "headGets": 68,
+                  "conditionalHeadGets": 2,
+                  "fullHeadBodies": 66,
+                  "headBodyBytes": 21496398,
+                  "headPuts": 0
+                }
+              }
+            ]
+          },
+          {
+            "phase": 7,
+            "variant": "current",
+            "warmups": [
+              {
+                "elapsedMs": 962,
+                "kernelMemoryBefore": 2555904,
+                "kernelMemoryAfter": 2555904,
+                "counts": {
+                  "headGets": 68,
+                  "conditionalHeadGets": 2,
+                  "fullHeadBodies": 66,
+                  "headBodyBytes": 21496398,
+                  "headPuts": 0
+                }
+              },
+              {
+                "elapsedMs": 679,
+                "kernelMemoryBefore": 2555904,
+                "kernelMemoryAfter": 2555904,
+                "counts": {
+                  "headGets": 68,
+                  "conditionalHeadGets": 2,
+                  "fullHeadBodies": 66,
+                  "headBodyBytes": 21496398,
+                  "headPuts": 0
+                }
+              }
+            ],
+            "samples": [
+              {
+                "elapsedMs": 617,
+                "kernelMemoryBefore": 2555904,
+                "kernelMemoryAfter": 2555904,
+                "counts": {
+                  "headGets": 68,
+                  "conditionalHeadGets": 2,
+                  "fullHeadBodies": 66,
+                  "headBodyBytes": 21496398,
+                  "headPuts": 0
+                }
+              },
+              {
+                "elapsedMs": 625,
+                "kernelMemoryBefore": 2555904,
+                "kernelMemoryAfter": 2555904,
+                "counts": {
+                  "headGets": 68,
+                  "conditionalHeadGets": 2,
+                  "fullHeadBodies": 66,
+                  "headBodyBytes": 21496398,
+                  "headPuts": 0
+                }
+              },
+              {
+                "elapsedMs": 618,
+                "kernelMemoryBefore": 2555904,
+                "kernelMemoryAfter": 2555904,
+                "counts": {
+                  "headGets": 68,
+                  "conditionalHeadGets": 2,
+                  "fullHeadBodies": 66,
+                  "headBodyBytes": 21496398,
+                  "headPuts": 0
+                }
+              },
+              {
+                "elapsedMs": 613,
+                "kernelMemoryBefore": 2555904,
+                "kernelMemoryAfter": 2555904,
+                "counts": {
+                  "headGets": 68,
+                  "conditionalHeadGets": 2,
+                  "fullHeadBodies": 66,
+                  "headBodyBytes": 21496398,
+                  "headPuts": 0
+                }
+              },
+              {
+                "elapsedMs": 607,
+                "kernelMemoryBefore": 2555904,
+                "kernelMemoryAfter": 2555904,
+                "counts": {
+                  "headGets": 68,
+                  "conditionalHeadGets": 2,
+                  "fullHeadBodies": 66,
+                  "headBodyBytes": 21496398,
+                  "headPuts": 0
+                }
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "scope": "All raw warmups, phases and measured samples retained. First run precedes metric-contract centralization; second run uses the final shared Schema. Measured Worker bytes are unchanged by that type-only refinement.",
+      "summary": {
+        "reference": {
+          "samples": 20,
+          "p50Ms": 615,
+          "p95Ms": 636,
+          "minimumMs": 595,
+          "maximumMs": 638,
+          "kernelCapacitiesBytes": [20905984],
+          "headGets": [68],
+          "fullHeadBodies": [66],
+          "headBodyBytes": [21496398],
+          "headPuts": [0]
+        },
+        "current": {
+          "samples": 20,
+          "p50Ms": 611,
+          "p95Ms": 643,
+          "minimumMs": 592,
+          "maximumMs": 695,
+          "kernelCapacitiesBytes": [2555904],
+          "headGets": [68],
+          "fullHeadBodies": [66],
+          "headBodyBytes": [21496398],
+          "headPuts": [0]
+        }
+      },
+      "raw": {
+        "measuredAt": 1792364195419,
+        "environment": "Bun 1.4.3; native Alchemy workerd and local R2; fresh Worker/R2 per phase; ABBA then BAAB",
+        "workload": "1,024 one-byte files; 64 Python absolute pathname stats per request; two warmups and five timed samples per phase; every output and unchanged full-head-read count validated",
+        "scope": "Counter forwards actual native R2 operations. Kernel memory is linear-memory capacity high-water, not RSS, live allocations, total Worker memory or Python heap. Worker-clock request elapsed time excludes setup, startup and RPC transport; this is not production latency, CPU or billing.",
+        "artifacts": {
+          "reference": [
+            {
+              "file": "cirro_compiler_bg.wasm",
+              "bytes": 1943596,
+              "sha256": "27d9b0022a634ed4eef47b6561ad38cafde3522c17e834afed1264440678bf2f"
+            },
+            {
+              "file": "cirro_guest_bg.wasm",
+              "bytes": 1150616,
+              "sha256": "dcf1a9d66b4c3a11106076c3e9d5fa1f596b8846a811dfeec9ecf3a8744af01f"
+            },
+            {
+              "file": "cirro_kernel_bg.wasm",
+              "bytes": 1246046,
+              "sha256": "63aa260e36d4fffb2fe5ffd160bdd189dc6e6ebe7a905a6eb3624222dc4b73b8"
+            },
+            {
+              "file": "cirro_python_bg.wasm",
+              "bytes": 19884411,
+              "sha256": "3ff7134c5ff8c37e9b7aecf02aff773bb843473de0b8f38e6fc2c0a73b44d40a"
+            },
+            {
+              "file": "cirro_wasi_bg.wasm",
+              "bytes": 1706658,
+              "sha256": "3f3a97b0262036b6843581f9ef019ccf394a4d65fc45e02a2f2ddcd78e01df66"
+            },
+            {
+              "file": "index.js",
+              "bytes": 456153,
+              "sha256": "8c82bb16fb7638601cd76b00e686dc56b60d1716704b52718d92c4ae615b5c5e"
+            }
+          ],
+          "current": [
+            {
+              "file": "cirro_compiler_bg.wasm",
+              "bytes": 1943596,
+              "sha256": "27d9b0022a634ed4eef47b6561ad38cafde3522c17e834afed1264440678bf2f"
+            },
+            {
+              "file": "cirro_guest_bg.wasm",
+              "bytes": 1150616,
+              "sha256": "dcf1a9d66b4c3a11106076c3e9d5fa1f596b8846a811dfeec9ecf3a8744af01f"
+            },
+            {
+              "file": "cirro_kernel_bg.wasm",
+              "bytes": 1246046,
+              "sha256": "63aa260e36d4fffb2fe5ffd160bdd189dc6e6ebe7a905a6eb3624222dc4b73b8"
+            },
+            {
+              "file": "cirro_python_bg.wasm",
+              "bytes": 19884411,
+              "sha256": "3ff7134c5ff8c37e9b7aecf02aff773bb843473de0b8f38e6fc2c0a73b44d40a"
+            },
+            {
+              "file": "cirro_wasi_bg.wasm",
+              "bytes": 1706658,
+              "sha256": "3f3a97b0262036b6843581f9ef019ccf394a4d65fc45e02a2f2ddcd78e01df66"
+            },
+            {
+              "file": "index.js",
+              "bytes": 456156,
+              "sha256": "2f0ba271a683bd22bd4e8086521ac5f88443f48ebf56a96bf7c0d4482ddbc87c"
+            }
+          ]
+        },
+        "phases": [
+          {
+            "phase": 0,
+            "variant": "reference",
+            "warmups": [
+              {
+                "counts": {
+                  "headGets": 68,
+                  "conditionalHeadGets": 2,
+                  "fullHeadBodies": 66,
+                  "headBodyBytes": 21496398,
+                  "headPuts": 0
+                },
+                "kernelMemoryBefore": 2555904,
+                "kernelMemoryAfter": 20905984,
+                "elapsedMs": 963
+              },
+              {
+                "counts": {
+                  "headGets": 68,
+                  "conditionalHeadGets": 2,
+                  "fullHeadBodies": 66,
+                  "headBodyBytes": 21496398,
+                  "headPuts": 0
+                },
+                "kernelMemoryBefore": 20905984,
+                "kernelMemoryAfter": 20905984,
+                "elapsedMs": 667
+              }
+            ],
+            "samples": [
+              {
+                "counts": {
+                  "headGets": 68,
+                  "conditionalHeadGets": 2,
+                  "fullHeadBodies": 66,
+                  "headBodyBytes": 21496398,
+                  "headPuts": 0
+                },
+                "kernelMemoryBefore": 20905984,
+                "kernelMemoryAfter": 20905984,
+                "elapsedMs": 636
+              },
+              {
+                "counts": {
+                  "headGets": 68,
+                  "conditionalHeadGets": 2,
+                  "fullHeadBodies": 66,
+                  "headBodyBytes": 21496398,
+                  "headPuts": 0
+                },
+                "kernelMemoryBefore": 20905984,
+                "kernelMemoryAfter": 20905984,
+                "elapsedMs": 595
+              },
+              {
+                "counts": {
+                  "headGets": 68,
+                  "conditionalHeadGets": 2,
+                  "fullHeadBodies": 66,
+                  "headBodyBytes": 21496398,
+                  "headPuts": 0
+                },
+                "kernelMemoryBefore": 20905984,
+                "kernelMemoryAfter": 20905984,
+                "elapsedMs": 610
+              },
+              {
+                "counts": {
+                  "headGets": 68,
+                  "conditionalHeadGets": 2,
+                  "fullHeadBodies": 66,
+                  "headBodyBytes": 21496398,
+                  "headPuts": 0
+                },
+                "kernelMemoryBefore": 20905984,
+                "kernelMemoryAfter": 20905984,
+                "elapsedMs": 613
+              },
+              {
+                "counts": {
+                  "headGets": 68,
+                  "conditionalHeadGets": 2,
+                  "fullHeadBodies": 66,
+                  "headBodyBytes": 21496398,
+                  "headPuts": 0
+                },
+                "kernelMemoryBefore": 20905984,
+                "kernelMemoryAfter": 20905984,
+                "elapsedMs": 601
+              }
+            ]
+          },
+          {
+            "phase": 1,
+            "variant": "current",
+            "warmups": [
+              {
+                "counts": {
+                  "headGets": 68,
+                  "conditionalHeadGets": 2,
+                  "fullHeadBodies": 66,
+                  "headBodyBytes": 21496398,
+                  "headPuts": 0
+                },
+                "kernelMemoryBefore": 2555904,
+                "kernelMemoryAfter": 2555904,
+                "elapsedMs": 975
+              },
+              {
+                "counts": {
+                  "headGets": 68,
+                  "conditionalHeadGets": 2,
+                  "fullHeadBodies": 66,
+                  "headBodyBytes": 21496398,
+                  "headPuts": 0
+                },
+                "kernelMemoryBefore": 2555904,
+                "kernelMemoryAfter": 2555904,
+                "elapsedMs": 657
+              }
+            ],
+            "samples": [
+              {
+                "counts": {
+                  "headGets": 68,
+                  "conditionalHeadGets": 2,
+                  "fullHeadBodies": 66,
+                  "headBodyBytes": 21496398,
+                  "headPuts": 0
+                },
+                "kernelMemoryBefore": 2555904,
+                "kernelMemoryAfter": 2555904,
+                "elapsedMs": 621
+              },
+              {
+                "counts": {
+                  "headGets": 68,
+                  "conditionalHeadGets": 2,
+                  "fullHeadBodies": 66,
+                  "headBodyBytes": 21496398,
+                  "headPuts": 0
+                },
+                "kernelMemoryBefore": 2555904,
+                "kernelMemoryAfter": 2555904,
+                "elapsedMs": 607
+              },
+              {
+                "counts": {
+                  "headGets": 68,
+                  "conditionalHeadGets": 2,
+                  "fullHeadBodies": 66,
+                  "headBodyBytes": 21496398,
+                  "headPuts": 0
+                },
+                "kernelMemoryBefore": 2555904,
+                "kernelMemoryAfter": 2555904,
+                "elapsedMs": 593
+              },
+              {
+                "counts": {
+                  "headGets": 68,
+                  "conditionalHeadGets": 2,
+                  "fullHeadBodies": 66,
+                  "headBodyBytes": 21496398,
+                  "headPuts": 0
+                },
+                "kernelMemoryBefore": 2555904,
+                "kernelMemoryAfter": 2555904,
+                "elapsedMs": 615
+              },
+              {
+                "counts": {
+                  "headGets": 68,
+                  "conditionalHeadGets": 2,
+                  "fullHeadBodies": 66,
+                  "headBodyBytes": 21496398,
+                  "headPuts": 0
+                },
+                "kernelMemoryBefore": 2555904,
+                "kernelMemoryAfter": 2555904,
+                "elapsedMs": 592
+              }
+            ]
+          },
+          {
+            "phase": 2,
+            "variant": "current",
+            "warmups": [
+              {
+                "counts": {
+                  "headGets": 68,
+                  "conditionalHeadGets": 2,
+                  "fullHeadBodies": 66,
+                  "headBodyBytes": 21496398,
+                  "headPuts": 0
+                },
+                "kernelMemoryBefore": 2555904,
+                "kernelMemoryAfter": 2555904,
+                "elapsedMs": 946
+              },
+              {
+                "counts": {
+                  "headGets": 68,
+                  "conditionalHeadGets": 2,
+                  "fullHeadBodies": 66,
+                  "headBodyBytes": 21496398,
+                  "headPuts": 0
+                },
+                "kernelMemoryBefore": 2555904,
+                "kernelMemoryAfter": 2555904,
+                "elapsedMs": 651
+              }
+            ],
+            "samples": [
+              {
+                "counts": {
+                  "headGets": 68,
+                  "conditionalHeadGets": 2,
+                  "fullHeadBodies": 66,
+                  "headBodyBytes": 21496398,
+                  "headPuts": 0
+                },
+                "kernelMemoryBefore": 2555904,
+                "kernelMemoryAfter": 2555904,
+                "elapsedMs": 622
+              },
+              {
+                "counts": {
+                  "headGets": 68,
+                  "conditionalHeadGets": 2,
+                  "fullHeadBodies": 66,
+                  "headBodyBytes": 21496398,
+                  "headPuts": 0
+                },
+                "kernelMemoryBefore": 2555904,
+                "kernelMemoryAfter": 2555904,
+                "elapsedMs": 611
+              },
+              {
+                "counts": {
+                  "headGets": 68,
+                  "conditionalHeadGets": 2,
+                  "fullHeadBodies": 66,
+                  "headBodyBytes": 21496398,
+                  "headPuts": 0
+                },
+                "kernelMemoryBefore": 2555904,
+                "kernelMemoryAfter": 2555904,
+                "elapsedMs": 604
+              },
+              {
+                "counts": {
+                  "headGets": 68,
+                  "conditionalHeadGets": 2,
+                  "fullHeadBodies": 66,
+                  "headBodyBytes": 21496398,
+                  "headPuts": 0
+                },
+                "kernelMemoryBefore": 2555904,
+                "kernelMemoryAfter": 2555904,
+                "elapsedMs": 613
+              },
+              {
+                "counts": {
+                  "headGets": 68,
+                  "conditionalHeadGets": 2,
+                  "fullHeadBodies": 66,
+                  "headBodyBytes": 21496398,
+                  "headPuts": 0
+                },
+                "kernelMemoryBefore": 2555904,
+                "kernelMemoryAfter": 2555904,
+                "elapsedMs": 624
+              }
+            ]
+          },
+          {
+            "phase": 3,
+            "variant": "reference",
+            "warmups": [
+              {
+                "counts": {
+                  "headGets": 68,
+                  "conditionalHeadGets": 2,
+                  "fullHeadBodies": 66,
+                  "headBodyBytes": 21496398,
+                  "headPuts": 0
+                },
+                "kernelMemoryBefore": 2555904,
+                "kernelMemoryAfter": 20905984,
+                "elapsedMs": 1041
+              },
+              {
+                "counts": {
+                  "headGets": 68,
+                  "conditionalHeadGets": 2,
+                  "fullHeadBodies": 66,
+                  "headBodyBytes": 21496398,
+                  "headPuts": 0
+                },
+                "kernelMemoryBefore": 20905984,
+                "kernelMemoryAfter": 20905984,
+                "elapsedMs": 651
+              }
+            ],
+            "samples": [
+              {
+                "counts": {
+                  "headGets": 68,
+                  "conditionalHeadGets": 2,
+                  "fullHeadBodies": 66,
+                  "headBodyBytes": 21496398,
+                  "headPuts": 0
+                },
+                "kernelMemoryBefore": 20905984,
+                "kernelMemoryAfter": 20905984,
+                "elapsedMs": 619
+              },
+              {
+                "counts": {
+                  "headGets": 68,
+                  "conditionalHeadGets": 2,
+                  "fullHeadBodies": 66,
+                  "headBodyBytes": 21496398,
+                  "headPuts": 0
+                },
+                "kernelMemoryBefore": 20905984,
+                "kernelMemoryAfter": 20905984,
+                "elapsedMs": 618
+              },
+              {
+                "counts": {
+                  "headGets": 68,
+                  "conditionalHeadGets": 2,
+                  "fullHeadBodies": 66,
+                  "headBodyBytes": 21496398,
+                  "headPuts": 0
+                },
+                "kernelMemoryBefore": 20905984,
+                "kernelMemoryAfter": 20905984,
+                "elapsedMs": 624
+              },
+              {
+                "counts": {
+                  "headGets": 68,
+                  "conditionalHeadGets": 2,
+                  "fullHeadBodies": 66,
+                  "headBodyBytes": 21496398,
+                  "headPuts": 0
+                },
+                "kernelMemoryBefore": 20905984,
+                "kernelMemoryAfter": 20905984,
+                "elapsedMs": 602
+              },
+              {
+                "counts": {
+                  "headGets": 68,
+                  "conditionalHeadGets": 2,
+                  "fullHeadBodies": 66,
+                  "headBodyBytes": 21496398,
+                  "headPuts": 0
+                },
+                "kernelMemoryBefore": 20905984,
+                "kernelMemoryAfter": 20905984,
+                "elapsedMs": 615
+              }
+            ]
+          },
+          {
+            "phase": 4,
+            "variant": "current",
+            "warmups": [
+              {
+                "counts": {
+                  "headGets": 68,
+                  "conditionalHeadGets": 2,
+                  "fullHeadBodies": 66,
+                  "headBodyBytes": 21496398,
+                  "headPuts": 0
+                },
+                "kernelMemoryBefore": 2555904,
+                "kernelMemoryAfter": 2555904,
+                "elapsedMs": 970
+              },
+              {
+                "counts": {
+                  "headGets": 68,
+                  "conditionalHeadGets": 2,
+                  "fullHeadBodies": 66,
+                  "headBodyBytes": 21496398,
+                  "headPuts": 0
+                },
+                "kernelMemoryBefore": 2555904,
+                "kernelMemoryAfter": 2555904,
+                "elapsedMs": 657
+              }
+            ],
+            "samples": [
+              {
+                "counts": {
+                  "headGets": 68,
+                  "conditionalHeadGets": 2,
+                  "fullHeadBodies": 66,
+                  "headBodyBytes": 21496398,
+                  "headPuts": 0
+                },
+                "kernelMemoryBefore": 2555904,
+                "kernelMemoryAfter": 2555904,
+                "elapsedMs": 633
+              },
+              {
+                "counts": {
+                  "headGets": 68,
+                  "conditionalHeadGets": 2,
+                  "fullHeadBodies": 66,
+                  "headBodyBytes": 21496398,
+                  "headPuts": 0
+                },
+                "kernelMemoryBefore": 2555904,
+                "kernelMemoryAfter": 2555904,
+                "elapsedMs": 622
+              },
+              {
+                "counts": {
+                  "headGets": 68,
+                  "conditionalHeadGets": 2,
+                  "fullHeadBodies": 66,
+                  "headBodyBytes": 21496398,
+                  "headPuts": 0
+                },
+                "kernelMemoryBefore": 2555904,
+                "kernelMemoryAfter": 2555904,
+                "elapsedMs": 597
+              },
+              {
+                "counts": {
+                  "headGets": 68,
+                  "conditionalHeadGets": 2,
+                  "fullHeadBodies": 66,
+                  "headBodyBytes": 21496398,
+                  "headPuts": 0
+                },
+                "kernelMemoryBefore": 2555904,
+                "kernelMemoryAfter": 2555904,
+                "elapsedMs": 596
+              },
+              {
+                "counts": {
+                  "headGets": 68,
+                  "conditionalHeadGets": 2,
+                  "fullHeadBodies": 66,
+                  "headBodyBytes": 21496398,
+                  "headPuts": 0
+                },
+                "kernelMemoryBefore": 2555904,
+                "kernelMemoryAfter": 2555904,
+                "elapsedMs": 592
+              }
+            ]
+          },
+          {
+            "phase": 5,
+            "variant": "reference",
+            "warmups": [
+              {
+                "counts": {
+                  "headGets": 68,
+                  "conditionalHeadGets": 2,
+                  "fullHeadBodies": 66,
+                  "headBodyBytes": 21496398,
+                  "headPuts": 0
+                },
+                "kernelMemoryBefore": 2555904,
+                "kernelMemoryAfter": 20905984,
+                "elapsedMs": 974
+              },
+              {
+                "counts": {
+                  "headGets": 68,
+                  "conditionalHeadGets": 2,
+                  "fullHeadBodies": 66,
+                  "headBodyBytes": 21496398,
+                  "headPuts": 0
+                },
+                "kernelMemoryBefore": 20905984,
+                "kernelMemoryAfter": 20905984,
+                "elapsedMs": 660
+              }
+            ],
+            "samples": [
+              {
+                "counts": {
+                  "headGets": 68,
+                  "conditionalHeadGets": 2,
+                  "fullHeadBodies": 66,
+                  "headBodyBytes": 21496398,
+                  "headPuts": 0
+                },
+                "kernelMemoryBefore": 20905984,
+                "kernelMemoryAfter": 20905984,
+                "elapsedMs": 638
+              },
+              {
+                "counts": {
+                  "headGets": 68,
+                  "conditionalHeadGets": 2,
+                  "fullHeadBodies": 66,
+                  "headBodyBytes": 21496398,
+                  "headPuts": 0
+                },
+                "kernelMemoryBefore": 20905984,
+                "kernelMemoryAfter": 20905984,
+                "elapsedMs": 607
+              },
+              {
+                "counts": {
+                  "headGets": 68,
+                  "conditionalHeadGets": 2,
+                  "fullHeadBodies": 66,
+                  "headBodyBytes": 21496398,
+                  "headPuts": 0
+                },
+                "kernelMemoryBefore": 20905984,
+                "kernelMemoryAfter": 20905984,
+                "elapsedMs": 628
+              },
+              {
+                "counts": {
+                  "headGets": 68,
+                  "conditionalHeadGets": 2,
+                  "fullHeadBodies": 66,
+                  "headBodyBytes": 21496398,
+                  "headPuts": 0
+                },
+                "kernelMemoryBefore": 20905984,
+                "kernelMemoryAfter": 20905984,
+                "elapsedMs": 626
+              },
+              {
+                "counts": {
+                  "headGets": 68,
+                  "conditionalHeadGets": 2,
+                  "fullHeadBodies": 66,
+                  "headBodyBytes": 21496398,
+                  "headPuts": 0
+                },
+                "kernelMemoryBefore": 20905984,
+                "kernelMemoryAfter": 20905984,
+                "elapsedMs": 597
+              }
+            ]
+          },
+          {
+            "phase": 6,
+            "variant": "reference",
+            "warmups": [
+              {
+                "counts": {
+                  "headGets": 68,
+                  "conditionalHeadGets": 2,
+                  "fullHeadBodies": 66,
+                  "headBodyBytes": 21496398,
+                  "headPuts": 0
+                },
+                "kernelMemoryBefore": 2555904,
+                "kernelMemoryAfter": 20905984,
+                "elapsedMs": 962
+              },
+              {
+                "counts": {
+                  "headGets": 68,
+                  "conditionalHeadGets": 2,
+                  "fullHeadBodies": 66,
+                  "headBodyBytes": 21496398,
+                  "headPuts": 0
+                },
+                "kernelMemoryBefore": 20905984,
+                "kernelMemoryAfter": 20905984,
+                "elapsedMs": 665
+              }
+            ],
+            "samples": [
+              {
+                "counts": {
+                  "headGets": 68,
+                  "conditionalHeadGets": 2,
+                  "fullHeadBodies": 66,
+                  "headBodyBytes": 21496398,
+                  "headPuts": 0
+                },
+                "kernelMemoryBefore": 20905984,
+                "kernelMemoryAfter": 20905984,
+                "elapsedMs": 618
+              },
+              {
+                "counts": {
+                  "headGets": 68,
+                  "conditionalHeadGets": 2,
+                  "fullHeadBodies": 66,
+                  "headBodyBytes": 21496398,
+                  "headPuts": 0
+                },
+                "kernelMemoryBefore": 20905984,
+                "kernelMemoryAfter": 20905984,
+                "elapsedMs": 621
+              },
+              {
+                "counts": {
+                  "headGets": 68,
+                  "conditionalHeadGets": 2,
+                  "fullHeadBodies": 66,
+                  "headBodyBytes": 21496398,
+                  "headPuts": 0
+                },
+                "kernelMemoryBefore": 20905984,
+                "kernelMemoryAfter": 20905984,
+                "elapsedMs": 627
+              },
+              {
+                "counts": {
+                  "headGets": 68,
+                  "conditionalHeadGets": 2,
+                  "fullHeadBodies": 66,
+                  "headBodyBytes": 21496398,
+                  "headPuts": 0
+                },
+                "kernelMemoryBefore": 20905984,
+                "kernelMemoryAfter": 20905984,
+                "elapsedMs": 601
+              },
+              {
+                "counts": {
+                  "headGets": 68,
+                  "conditionalHeadGets": 2,
+                  "fullHeadBodies": 66,
+                  "headBodyBytes": 21496398,
+                  "headPuts": 0
+                },
+                "kernelMemoryBefore": 20905984,
+                "kernelMemoryAfter": 20905984,
+                "elapsedMs": 615
+              }
+            ]
+          },
+          {
+            "phase": 7,
+            "variant": "current",
+            "warmups": [
+              {
+                "counts": {
+                  "headGets": 68,
+                  "conditionalHeadGets": 2,
+                  "fullHeadBodies": 66,
+                  "headBodyBytes": 21496398,
+                  "headPuts": 0
+                },
+                "kernelMemoryBefore": 2555904,
+                "kernelMemoryAfter": 2555904,
+                "elapsedMs": 1036
+              },
+              {
+                "counts": {
+                  "headGets": 68,
+                  "conditionalHeadGets": 2,
+                  "fullHeadBodies": 66,
+                  "headBodyBytes": 21496398,
+                  "headPuts": 0
+                },
+                "kernelMemoryBefore": 2555904,
+                "kernelMemoryAfter": 2555904,
+                "elapsedMs": 785
+              }
+            ],
+            "samples": [
+              {
+                "counts": {
+                  "headGets": 68,
+                  "conditionalHeadGets": 2,
+                  "fullHeadBodies": 66,
+                  "headBodyBytes": 21496398,
+                  "headPuts": 0
+                },
+                "kernelMemoryBefore": 2555904,
+                "kernelMemoryAfter": 2555904,
+                "elapsedMs": 695
+              },
+              {
+                "counts": {
+                  "headGets": 68,
+                  "conditionalHeadGets": 2,
+                  "fullHeadBodies": 66,
+                  "headBodyBytes": 21496398,
+                  "headPuts": 0
+                },
+                "kernelMemoryBefore": 2555904,
+                "kernelMemoryAfter": 2555904,
+                "elapsedMs": 617
+              },
+              {
+                "counts": {
+                  "headGets": 68,
+                  "conditionalHeadGets": 2,
+                  "fullHeadBodies": 66,
+                  "headBodyBytes": 21496398,
+                  "headPuts": 0
+                },
+                "kernelMemoryBefore": 2555904,
+                "kernelMemoryAfter": 2555904,
+                "elapsedMs": 604
+              },
+              {
+                "counts": {
+                  "headGets": 68,
+                  "conditionalHeadGets": 2,
+                  "fullHeadBodies": 66,
+                  "headBodyBytes": 21496398,
+                  "headPuts": 0
+                },
+                "kernelMemoryBefore": 2555904,
+                "kernelMemoryAfter": 2555904,
+                "elapsedMs": 643
+              },
+              {
+                "counts": {
+                  "headGets": 68,
+                  "conditionalHeadGets": 2,
+                  "fullHeadBodies": 66,
+                  "headBodyBytes": 21496398,
+                  "headPuts": 0
+                },
+                "kernelMemoryBefore": 2555904,
+                "kernelMemoryAfter": 2555904,
+                "elapsedMs": 607
+              }
+            ]
+          }
+        ]
+      }
+    }
+  ],
+  "checks": {
+    "fullCheck": {
+      "passed": true,
+      "tests": 459,
+      "files": 107,
+      "expects": 6685,
+      "elapsed": "289.75s",
+      "includes": [
+        "Native build and SDK build",
+        "TypeScript typecheck",
+        "Clippy -D warnings and workspace Rust tests",
+        "Actual workerd/R2/Queue test suite"
+      ],
+      "logSha256": "54b44efe70dacd6bfeaf921a2a201db8bfd1dd1e0117ebf353c4f9f638785c0f"
+    },
+    "finalRegression": {
+      "passed": true,
+      "tests": 1,
+      "expects": 12,
+      "elapsedSeconds": 3.54,
+      "coverage": [
+        "Success-path stats release kernels within the eight MiB envelope",
+        "Sixty-four caught FileNotFoundError lookups release kernels under the same envelope",
+        "Real head reads, disposal observations, zero head writes and correct guest results"
+      ],
+      "logSha256": "f538bf07795ede9c50ec3057a0859e08656680c54acd427f8168ef3dfd84ce69"
+    },
+    "finalContractTypecheck": {
+      "passed": true,
+      "logSha256": "8366207267355d3e3d5bf3bf6e8c94c5f93f6078c34f08973fa2b38cdda6cc92"
+    },
+    "finalArtifactRebuild": {
+      "passed": true,
+      "scope": "The shared metric contract uses an erased type import in the fixture. Rebuilt measured fixture and production assets match those used by the complete suite byte for byte. The final benchmark was rerun with the shared report Schema.",
+      "unchangedCheckedAssets": {
+        "dist/clock-worker/cirro_compiler_bg.wasm": "27d9b0022a634ed4eef47b6561ad38cafde3522c17e834afed1264440678bf2f",
+        "dist/clock-worker/cirro_guest_bg.wasm": "dcf1a9d66b4c3a11106076c3e9d5fa1f596b8846a811dfeec9ecf3a8744af01f",
+        "dist/clock-worker/cirro_kernel_bg.wasm": "63aa260e36d4fffb2fe5ffd160bdd189dc6e6ebe7a905a6eb3624222dc4b73b8",
+        "dist/clock-worker/cirro_python_bg.wasm": "3ff7134c5ff8c37e9b7aecf02aff773bb843473de0b8f38e6fc2c0a73b44d40a",
+        "dist/clock-worker/cirro_wasi_bg.wasm": "3f3a97b0262036b6843581f9ef019ccf394a4d65fc45e02a2f2ddcd78e01df66",
+        "dist/clock-worker/index.js": "2f0ba271a683bd22bd4e8086521ac5f88443f48ebf56a96bf7c0d4482ddbc87c",
+        "dist/worker/cirro_compiler_bg.wasm": "27d9b0022a634ed4eef47b6561ad38cafde3522c17e834afed1264440678bf2f",
+        "dist/worker/cirro_guest_bg.wasm": "dcf1a9d66b4c3a11106076c3e9d5fa1f596b8846a811dfeec9ecf3a8744af01f",
+        "dist/worker/cirro_kernel_bg.wasm": "63aa260e36d4fffb2fe5ffd160bdd189dc6e6ebe7a905a6eb3624222dc4b73b8",
+        "dist/worker/cirro_python_bg.wasm": "3ff7134c5ff8c37e9b7aecf02aff773bb843473de0b8f38e6fc2c0a73b44d40a",
+        "dist/worker/cirro_wasi_bg.wasm": "3f3a97b0262036b6843581f9ef019ccf394a4d65fc45e02a2f2ddcd78e01df66",
+        "dist/worker/index.js": "6c463917caf3aca8cccd93fa956b009361a7c65d37f3a2873f63a6c53f3635b3"
+      },
+      "logSha256": "1f7dba403b144c5daac4f01f1c8b70310d6da3c072eff0e67e10f9534ecd9abc"
+    }
+  },
+  "prevention": "The filesystem action owns acquisition and release. A native high-water regression checks repeated successful and caught-failure calls; an outer request scope alone cannot enforce this lifetime.",
+  "limits": [
+    "Only the measured repeated-metadata workload has comparative memory/timing evidence; maximum-scale roots, other domain lifetimes, arbitrary workloads and production remain unverified.",
+    "Native allocator capacity cannot shrink in an already grown isolate. A deployment starts new code/isolates; this source has not been deployed.",
+    "Fresh reads, authority checks and conditional publication remain; no R2 request reduction or AgentOS cost advantage is claimed.",
+    "No native binary or persisted format changes relative to source 5a25c46. Earlier unpublished Python increments still require reset when adopting the combined post-0.28.0 runtime."
+  ],
+  "delivery": {
+    "publication": "not performed",
+    "deployment": "not performed",
+    "minutei": "not changed, pushed or deployed"
+  }
+}

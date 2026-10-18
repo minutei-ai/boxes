@@ -1,4 +1,6 @@
 import { env, WorkerEntrypoint } from "cloudflare:workers";
+import kernelWasm from "cirro:wasm";
+import { initSync } from "../../dist/kernel/cirro_kernel";
 import { Clock, Effect, Fiber, Schema, Schedule, Latch } from "effect";
 import * as TestClock from "effect/testing/TestClock";
 import platformProxy from "@alchemy.run/cloudflare-runtime/core/platform-proxy/worker";
@@ -7,6 +9,7 @@ import type { Fetcher } from "@cloudflare/workers-types/experimental";
 import { consume, handleRequest } from "../../src/index";
 export { Agent } from "../../src/index";
 import {
+  PythonAction,
   ProcessCancelAction,
   ProcessDelivery,
   ProcessListAction,
@@ -26,6 +29,7 @@ import { migrateContexts } from "../../src/context-migration";
 import { ContextClaimProof } from "./context-checkpoint-contract";
 import { readOutputRange } from "../../src/output";
 import type { Env } from "../../src/resources";
+import type { FilesystemUsage } from "./filesystem-lifetime-contract";
 
 const ContextMigrationTrace = ContextMigrationReceipt.mapFields((fields) => ({
   ...fields,
@@ -34,6 +38,69 @@ const ContextMigrationTrace = ContextMigrationReceipt.mapFields((fields) => ({
 
 type TestEnv = Env & { SELF: Fetcher };
 export class Control extends WorkerEntrypoint<TestEnv> {
+  pythonFilesystemUsage(sandboxId: string, token: string, action: typeof PythonAction.Type) {
+    const counts = {
+      headGets: 0,
+      conditionalHeadGets: 0,
+      fullHeadBodies: 0,
+      headBodyBytes: 0,
+      headPuts: 0,
+    };
+    const root = `sandboxes/${sandboxId}/head.json`;
+    const bindings = {
+      ...this.env,
+      OBJECTS: new Proxy(this.env.OBJECTS, {
+        get(target, property) {
+          if (property === "get")
+            return (...args: Parameters<Env["OBJECTS"]["get"]>) => {
+              if (args[0] === root) {
+                counts.headGets += 1;
+                if (args[1]?.onlyIf !== undefined) counts.conditionalHeadGets += 1;
+              }
+              return target.get(...args).then((value) => {
+                if (args[0] === root && value !== null && "body" in value) {
+                  counts.fullHeadBodies += 1;
+                  counts.headBodyBytes += value.size;
+                }
+                return value;
+              });
+            };
+          if (property === "put")
+            return (...args: Parameters<Env["OBJECTS"]["put"]>) => {
+              if (args[0] === root) counts.headPuts += 1;
+              return target.put(...args);
+            };
+          const value = Reflect.get(target, property, target);
+          if (typeof value === "function") return value.bind(target);
+          return value;
+        },
+      }),
+    };
+    const request = new Request(`https://boxes.test/v1/sandboxes/${sandboxId}/action`, {
+      method: "POST",
+      headers: { authorization: `Bearer ${token}`, "content-type": "application/json" },
+      body: Schema.encodeSync(Schema.fromJsonString(PythonAction))(action),
+    });
+    return Effect.runPromise(
+      Effect.gen(function* () {
+        const native = initSync({ module: kernelWasm });
+        const memoryBefore = native.memory.buffer.byteLength;
+        const started = yield* Clock.currentTimeNanos;
+        const response = yield* handleRequest(request, bindings);
+        const body = yield* Effect.promise(() => response.text());
+        const finished = yield* Clock.currentTimeNanos;
+        return {
+          status: response.status,
+          body,
+          counts,
+          kernelMemoryBefore: memoryBefore,
+          kernelMemoryAfter: native.memory.buffer.byteLength,
+          elapsedMs: Number(finished - started) / 1_000_000,
+        } satisfies typeof FilesystemUsage.Type;
+      }),
+    );
+  }
+
   contextBusyDelivery(
     sandboxId: string,
     token: string,

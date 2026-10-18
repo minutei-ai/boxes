@@ -411,4 +411,4 @@ export const filesystem = Effect.fn("filesystem.action")(function* (
       ),
     )
     .pipe(Match.exhaustive);
-});
+}, Effect.scoped);
