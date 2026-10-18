@@ -1,8 +1,8 @@
 {
-  "status": "Exact candidate archives and actual local Minutei consumer passed; not yet published or deployed",
+  "status": "Published and deployed; source/tag CI, exact archives, local Minutei binding and production proofs passed; scoped workloads cleaned up",
   "version": "0.29.0",
   "implementationCommit": "6447c197995bd5dc11065407fde2449248924330",
-  "measuredAt": "2026-10-18T23:15:16.943798+00:00",
+  "measuredAt": "2026-10-18T23:36:46.436689+00:00",
   "localEvidence": [
     "python-scandir-local.json",
     "python-namespace-local.json",
@@ -48,12 +48,536 @@
   },
   "upgrade": "Python native binary changes require explicit reset of existing Python contexts. JavaScript, compiler and WASI native binaries are unchanged from 0.28.0; compatibility is checked separately. Kernel APIs change without changing manifest v6. All Alchemy deployment migrations run unconditionally.",
   "delivery": {
-    "release": "not published",
-    "deployment": "not performed"
+    "release": {
+      "assets": [
+        {
+          "apiUrl": "https://api.github.com/repos/minutei-ai/boxes/releases/assets/654723887",
+          "contentType": "application/x-gtar",
+          "createdAt": "2026-10-18T23:23:41Z",
+          "digest": "sha256:37f4e73c19512a2f82fa5a6838e5e3ad79848aff5aebc49d63ff3b15b91ff5d4",
+          "downloadCount": 0,
+          "id": "RA_kwDOVHG00M4nBksv",
+          "label": "",
+          "name": "minutei-ai-boxes-0.29.0.tgz",
+          "size": 91200,
+          "state": "uploaded",
+          "updatedAt": "2026-10-18T23:23:41Z",
+          "url": "https://github.com/minutei-ai/boxes/releases/download/sdk-v0.29.0/minutei-ai-boxes-0.29.0.tgz"
+        },
+        {
+          "apiUrl": "https://api.github.com/repos/minutei-ai/boxes/releases/assets/654723882",
+          "contentType": "application/x-gtar",
+          "createdAt": "2026-10-18T23:23:41Z",
+          "digest": "sha256:f3403dfc6a2ef39a99b869da0cf10ea165d717ca5e4e1ad066d8c3040229e276",
+          "downloadCount": 0,
+          "id": "RA_kwDOVHG00M4nBksq",
+          "label": "",
+          "name": "minutei-ai-boxes-runtime-0.29.0.tgz",
+          "size": 7370595,
+          "state": "uploaded",
+          "updatedAt": "2026-10-18T23:23:42Z",
+          "url": "https://github.com/minutei-ai/boxes/releases/download/sdk-v0.29.0/minutei-ai-boxes-runtime-0.29.0.tgz"
+        },
+        {
+          "apiUrl": "https://api.github.com/repos/minutei-ai/boxes/releases/assets/654723881",
+          "contentType": "application/octet-stream",
+          "createdAt": "2026-10-18T23:23:41Z",
+          "digest": "sha256:3718c15a0c55f02907955ad38d38c1121b54d5c339d026aa71e7006bf03aad8b",
+          "downloadCount": 0,
+          "id": "RA_kwDOVHG00M4nBksp",
+          "label": "",
+          "name": "SHA256SUMS",
+          "size": 196,
+          "state": "uploaded",
+          "updatedAt": "2026-10-18T23:23:41Z",
+          "url": "https://github.com/minutei-ai/boxes/releases/download/sdk-v0.29.0/SHA256SUMS"
+        }
+      ],
+      "isPrerelease": true,
+      "publishedAt": "2026-10-18T23:23:43Z",
+      "url": "https://github.com/minutei-ai/boxes/releases/tag/sdk-v0.29.0",
+      "tag": "sdk-v0.29.0",
+      "tagObject": "59490c17a5213d5bafb18c37a5cd5c64c6dbfcce",
+      "targetCommit": "26f51fb7cc03787f3f87606108e448f584e26583",
+      "latest": false,
+      "anonymousDownloadHashesMatch": true,
+      "checksumsSha256": "3718c15a0c55f02907955ad38d38c1121b54d5c339d026aa71e7006bf03aad8b",
+      "immutableFiles": true
+    },
+    "ci": [
+      {
+        "conclusion": "success",
+        "databaseId": 39170905249,
+        "headSha": "669fb9f3f6254254ae01f54716c82e6d7ce4858c",
+        "status": "completed",
+        "url": "https://github.com/minutei-ai/boxes/actions/runs/39170905249"
+      },
+      {
+        "conclusion": "success",
+        "databaseId": 39172824313,
+        "headSha": "5a25c465b037788f68578415e08e57c0f6405680",
+        "status": "completed",
+        "url": "https://github.com/minutei-ai/boxes/actions/runs/39172824313"
+      },
+      {
+        "conclusion": "success",
+        "databaseId": 39175047733,
+        "headSha": "6447c197995bd5dc11065407fde2449248924330",
+        "status": "completed",
+        "url": "https://github.com/minutei-ai/boxes/actions/runs/39175047733"
+      },
+      {
+        "conclusion": "success",
+        "databaseId": 39175737302,
+        "headSha": "26f51fb7cc03787f3f87606108e448f584e26583",
+        "status": "completed",
+        "url": "https://github.com/minutei-ai/boxes/actions/runs/39175737302"
+      },
+      {
+        "conclusion": "success",
+        "databaseId": 39176329378,
+        "headSha": "26f51fb7cc03787f3f87606108e448f584e26583",
+        "status": "completed",
+        "url": "https://github.com/minutei-ai/boxes/actions/runs/39176329378"
+      }
+    ],
+    "deployment": {
+      "passed": true,
+      "profile": "minutei",
+      "stack": "cirro",
+      "stage": "prod",
+      "worker": "cirro-sandbox-prod-rs7wexxow56rmsoz",
+      "bucket": "cirro-objects-prod-vbk2p6ruhs2m645y",
+      "url": "https://cirro-sandbox-prod-rs7wexxow56rmsoz.manoel-carvalhoneto.workers.dev",
+      "durationSeconds": 626.2,
+      "succeeded": 6,
+      "migrationsUnconditional": true,
+      "migrations": {
+        "environment-v1": {
+          "pageReceipts": 71,
+          "migrated": 0
+        },
+        "/v1/migrations/wasm-inputs-v1": {
+          "pageReceipts": 0,
+          "migrated": 0
+        },
+        "/v1/migrations/process-receipts-v2": {
+          "pageReceipts": 0,
+          "migrated": 0
+        },
+        "process-index-v7": {
+          "pageReceipts": 31,
+          "migrated": 0
+        },
+        "input-terminal-v3": {
+          "pageReceipts": 1,
+          "migrated": 0
+        },
+        "process-deadlines-v1": {
+          "pageReceipts": 31,
+          "migrated": 0
+        },
+        "filesystem-v6": {
+          "pageReceipts": 71,
+          "migrated": 0
+        },
+        "memory-packs-v1": {
+          "pageReceipts": 229,
+          "migrated": 0
+        },
+        "context-language-v1": {
+          "pageReceipts": 10,
+          "migrated": 0
+        },
+        "cron-contexts-v2": {
+          "pageReceipts": 1,
+          "migrated": 0
+        }
+      },
+      "softwareBase": {
+        "digest": "cf8f5c4bf5774fc0e13843dd82632ca28858506d09cc1f9a97974e3fd8d03301",
+        "blocksVerified": 354,
+        "uploadedBlocks": 0,
+        "uploadedBytes": 0
+      },
+      "logSha256": "7385ab6c460b17beff90c372a36fbf85e3a4a33e2976fad14d20eb7b817dba8c"
+    }
   },
   "limits": [
     "Experimental; complete AgentOS parity, production Minutei/model behavior and comparative production CPU/latency/cost remain open.",
     "Directory descriptors, special mode bits, recursive Python helpers, full pathlib/stdlib/pip and complete POSIX compatibility remain open.",
     "Kernel-capacity reduction is a local native-workerd measurement; head reads remain unchanged and time results are mixed."
-  ]
+  ],
+  "sourceCommit": "26f51fb7cc03787f3f87606108e448f584e26583",
+  "production": {
+    "cutover": {
+      "measuredAt": 1792366258429,
+      "id": "python-io-cutover-6989f910-589a-4f16-9b22-1e46ca8b508d",
+      "seedSdkVersion": "0.28.0",
+      "verifySdkVersion": "0.29.0",
+      "rejection": {
+        "alreadyReset": false,
+        "error": "CHECKPOINT_RUNTIME_MISMATCH",
+        "status": 409,
+        "processReceiptAbsent": true,
+        "prior": {
+          "id": "python",
+          "language": "python",
+          "generation": 0,
+          "state": "idle",
+          "createdAt": 1792365195516,
+          "updatedAt": 1792365198004,
+          "executionId": "before-python",
+          "deadlineAt": null
+        },
+        "reset": {
+          "id": "python",
+          "language": "python",
+          "generation": 1,
+          "state": "idle",
+          "createdAt": 1792365195516,
+          "updatedAt": 1792366246645,
+          "executionId": null,
+          "deadlineAt": null
+        }
+      },
+      "imported": {
+        "id": "after-python",
+        "context": {
+          "id": "python",
+          "generation": 1
+        },
+        "status": "exited",
+        "sourceHash": "84f19994c164bea3e6ef4fdf66c9406fddd3920d17bbf6dbd06bb2a683576c3f",
+        "language": "python",
+        "startedAt": 1792366247854,
+        "finishedAt": 1792366251256,
+        "output": {
+          "stdout": "",
+          "stderr": "",
+          "result": [42, "ação", false],
+          "exitCode": 0
+        }
+      },
+      "ephemeral": {
+        "id": "after-automatic-flush",
+        "context": null,
+        "status": "exited",
+        "sourceHash": "dbe2f47ebd46605f2b53a05a18e51f4b01752c1b3fde34d101c439dffd943041",
+        "language": "python",
+        "startedAt": 1792366252263,
+        "finishedAt": 1792366254479,
+        "output": {
+          "stdout": "",
+          "stderr": "",
+          "result": 42,
+          "exitCode": 0
+        }
+      },
+      "automatic": {
+        "content": "YcOnw6NvIG5vIGZpbQ==",
+        "encoding": "base64",
+        "size": 13
+      },
+      "contextFile": {
+        "content": "YcOnw6Nv",
+        "encoding": "base64",
+        "size": 6
+      },
+      "javascript": {
+        "id": "after-js",
+        "context": {
+          "id": "javascript",
+          "generation": 0
+        },
+        "status": "exited",
+        "sourceHash": "211089a84f021f03ac3afe9a47c03e77dc2c56c7c9c07be64bc92e10e5cb198d",
+        "language": "javascript",
+        "startedAt": 1792366256718,
+        "finishedAt": 1792366257411,
+        "output": {
+          "stdout": "",
+          "stderr": "",
+          "result": 42,
+          "exitCode": 0
+        }
+      },
+      "jsContext": {
+        "id": "javascript",
+        "language": "javascript",
+        "generation": 0,
+        "state": "idle",
+        "createdAt": 1792365199266,
+        "updatedAt": 1792366257113,
+        "executionId": "after-js",
+        "deadlineAt": null
+      },
+      "stats": [
+        {
+          "path": "/tmp/cutover.py",
+          "stat": {
+            "path": "/tmp/cutover.py",
+            "kind": "file",
+            "size": 25,
+            "mode": 420,
+            "inode": 336,
+            "nlink": 1,
+            "uid": 0,
+            "gid": 0,
+            "atimeNs": "1792365194570000000",
+            "mtimeNs": "1792365194570000000",
+            "ctimeNs": "1792365194570000000"
+          }
+        },
+        {
+          "path": "/tmp/missing.py",
+          "stat": null,
+          "code": "ENOENT",
+          "error": "ENOENT: file does not exist"
+        }
+      ],
+      "passed": true,
+      "cleanup": {
+        "measuredAt": 1792366262679,
+        "id": "python-io-cutover-6989f910-589a-4f16-9b22-1e46ca8b508d",
+        "progress": {
+          "phase": "complete",
+          "status": "complete",
+          "removed": 0,
+          "blocking": []
+        }
+      },
+      "seedLogSha256": "53cdf4a750cf9421d17c129e42cfacde10233ecd0dc4a9589e006c513749e2fd",
+      "verifyLogSha256": "3ad56412701a17cddb5e6861601ca0d33c387bea8a452e7f9ab86ef88dd86e05"
+    },
+    "softwareStorage": {
+      "measuredAt": 1792366256218,
+      "profile": "minutei",
+      "worker": "cirro-sandbox-prod-rs7wexxow56rmsoz",
+      "bucket": "cirro-objects-prod-vbk2p6ruhs2m645y",
+      "sandboxId": "software-storage-46dced40-732e-4769-a9a7-1099a14e5000",
+      "baseDigest": "cf8f5c4bf5774fc0e13843dd82632ca28858506d09cc1f9a97974e3fd8d03301",
+      "placementMode": "smart",
+      "status": {
+        "id": "software-storage-46dced40-732e-4769-a9a7-1099a14e5000",
+        "generation": 0,
+        "filesystemBytes": 77754575,
+        "policy": {
+          "networkHosts": [],
+          "interruptBudget": 100000,
+          "memoryBytes": 8388608,
+          "maxOutputBytes": 1048576
+        }
+      },
+      "catalogPackages": 10,
+      "objectsAfterCreate": 1,
+      "privateSoftwareBlobsAfterCreate": 0,
+      "sharedObjectsBefore": 354,
+      "sharedObjectsAfterCollection": 354,
+      "reclaimed": true,
+      "passed": true,
+      "logSha256": "0470815827cf5f2afced1037124ca94a2950c64d167fe355781148dd05dbfd8b"
+    },
+    "nativeFeatures": {
+      "measuredAt": 1792366341316,
+      "profile": "minutei",
+      "targetWorker": "cirro-sandbox-prod-rs7wexxow56rmsoz",
+      "sandboxId": "native-features-572327a4-ba14-4e77-aa46-df73bc796841",
+      "sdkVersion": "0.29.0",
+      "baselineFilesystemBytes": 77754575,
+      "transport": "Cloudflare named Agent service binding via compiled SDK action transport; two preview consumers; actual production R2",
+      "consumerBundleSha256": "3f49e1928603363e6720c8e7d686d904dce636eafdd1a139fc8d4a510047e50a",
+      "origins": [
+        "https://boxes-features-initial-572327a4-ba14-4e77-aa46-df73bc796841.manoel-carvalhoneto.workers.dev",
+        "https://boxes-features-replacement-572327a4-ba14-4e77-aa46-df73bc796841.manoel-carvalhoneto.workers.dev"
+      ],
+      "proofs": [
+        {
+          "phase": "seed",
+          "runs": [
+            {
+              "id": "seed-python",
+              "context": {
+                "id": "features",
+                "generation": 0
+              },
+              "status": "exited",
+              "sourceHash": "abc77cf663d907f16cec74f09d1be3d719ca488cd19456200d58872e4e60c504",
+              "language": "python",
+              "startedAt": 1792366260076,
+              "finishedAt": 1792366291520,
+              "output": {
+                "stdout": "",
+                "stderr": "",
+                "result": 42,
+                "exitCode": 0
+              }
+            },
+            {
+              "id": "metadata-stress",
+              "context": {
+                "id": "features",
+                "generation": 0
+              },
+              "status": "exited",
+              "sourceHash": "50f94448acf0f716fee3ecffd8c71679a6786dfb5918a0488b03738167341181",
+              "language": "python",
+              "startedAt": 1792366293438,
+              "finishedAt": 1792366321884,
+              "output": {
+                "stdout": "",
+                "stderr": "",
+                "result": 42,
+                "exitCode": 0
+              }
+            }
+          ],
+          "context": {
+            "id": "features",
+            "language": "python",
+            "generation": 0,
+            "state": "idle",
+            "createdAt": 1792366258449,
+            "updatedAt": 1792366321025,
+            "executionId": "metadata-stress",
+            "deadlineAt": null
+          }
+        },
+        {
+          "phase": "resume",
+          "runs": [
+            {
+              "id": "restored-python",
+              "context": {
+                "id": "features",
+                "generation": 0
+              },
+              "status": "exited",
+              "sourceHash": "e6342b3a136a79507e4316ff39dd9a14e55ce391efcd5c04d90967e1b71ebf5a",
+              "language": "python",
+              "startedAt": 1792366329799,
+              "finishedAt": 1792366339043,
+              "output": {
+                "stdout": "",
+                "stderr": "",
+                "result": 42,
+                "exitCode": 0
+              }
+            }
+          ],
+          "context": {
+            "id": "features",
+            "language": "python",
+            "generation": 0,
+            "state": "idle",
+            "createdAt": 1792366258449,
+            "updatedAt": 1792366338026,
+            "executionId": "restored-python",
+            "deadlineAt": null
+          }
+        }
+      ],
+      "cleanup": "contexts deleted; sandbox disposed and reclaimed by completed scope",
+      "scope": "Separate production requests and consumer replacement; not an induced backend crash. Functional metadata stress does not measure production CPU, aggregate memory or cost.",
+      "passed": true,
+      "logSha256": "5e9ca6b9ad59ced204c2be2cd1be8390ce8b4b4f15d1ff33fa797ddb0be29cfd",
+      "proofSourcesSha256": {
+        "features-worker.ts": "e98a2dab78d1f0b8638eddcb06b48fece6d59d2757af44d71afd1e9f85e2ff00",
+        "features-proof.ts": "b103b6911b0c4721e8f9377c15b6a367026d7e1e28019d09929dd6adbebd6379",
+        "features-local.ts": "674e8dfd8f2cb04326f70205d9a983f5ddd428d5e90ffa554a06bd8d73c701f6"
+      },
+      "localProofLogSha256": "6331a510356935364831529c92ff213aae0af980a1b16d2279e66abdde679427"
+    },
+    "remoteBinding": {
+      "measuredAt": 1792366554276,
+      "profile": "minutei",
+      "targetWorker": "cirro-sandbox-prod-rs7wexxow56rmsoz",
+      "sandboxId": "remote-binding-83ff4181-5e51-401a-baf1-11cfd1772f24",
+      "sdkVersion": "0.29.0",
+      "consumerBundleSha256": "0a2f8d855d562dc528fd90b646288c686fcb8205cf6409344b5edbb53896c0e2",
+      "sdkModulesSha256": {
+        "../../src/sdk": "1a697b2fca2350d71c3901b03c55be41de1e04b978386c8c7a0651c8fcdb14ce",
+        "../../src/sdk-rpc": "1584f0102fe1276e12f15933aba8906f733d3de93bbce499a86275c3db01182e",
+        "../../src/sdk-tanstack": "73c62abaa449bd18b3648e9b9ae98e8c05e0c639dab182d0dfa04f4a8cc95f25",
+        "../../src/contracts": "bcacd714897e460d59b84cf10506ca43e16c0852ee06cbe37ac8bf9759738326"
+      },
+      "inlineDeadline": {
+        "requestedMs": 15000,
+        "startedAt": 1792366301786,
+        "recovery": {
+          "state": "running",
+          "checkpoints": 0,
+          "resumable": false,
+          "deadlineAt": 1792366316786
+        }
+      },
+      "passed": true,
+      "defaultSoftwareRuns": 14,
+      "descriptorCases": 5,
+      "managementDenied": 403,
+      "wrongSandboxDenied": 401,
+      "proofs": [
+        "SDK binding operations",
+        "Named Agent RPC callbacks and current authority",
+        "Default software families and descriptor execution",
+        "Terminal, detached Queue contexts, retained Python and JavaScript contexts",
+        "Persistent process and prior receipt retention"
+      ],
+      "logSha256": "61ae3684a4b532147e4cd216ab16a0c306e2cca35c8864e203e42a64200d1b40"
+    },
+    "finalAudit": {
+      "measuredAt": 1792366593337,
+      "profile": "minutei",
+      "worker": "cirro-sandbox-prod-rs7wexxow56rmsoz",
+      "bucket": "cirro-objects-prod-vbk2p6ruhs2m645y",
+      "placement": {
+        "mode": "smart"
+      },
+      "counts": {
+        "pages": 7,
+        "objects": 6133,
+        "processes": 1499,
+        "schedules": 2,
+        "contexts": 0,
+        "metadataAbsent": 2784
+      },
+      "fixtureKeys": [
+        "reclamations/native-features-572327a4-ba14-4e77-aa46-df73bc796841.json",
+        "reclamations/python-io-cutover-6989f910-589a-4f16-9b22-1e46ca8b508d.json",
+        "reclamations/remote-binding-83ff4181-5e51-401a-baf1-11cfd1772f24.json",
+        "reclamations/software-storage-46dced40-732e-4769-a9a7-1099a14e5000.json",
+        "sandboxes/native-features-572327a4-ba14-4e77-aa46-df73bc796841/head.json",
+        "sandboxes/python-io-cutover-6989f910-589a-4f16-9b22-1e46ca8b508d/head.json",
+        "sandboxes/remote-binding-83ff4181-5e51-401a-baf1-11cfd1772f24/head.json",
+        "sandboxes/software-storage-46dced40-732e-4769-a9a7-1099a14e5000/head.json"
+      ],
+      "formats": {
+        "run-v7": 1499,
+        "program-json-v2": 1397,
+        "program-json": 435,
+        "historical-source-text-v1": 16,
+        "cron-v2": 2
+      },
+      "statuses": {
+        "cancelled": 28,
+        "exited": 1362,
+        "failed": 109
+      },
+      "complete": true,
+      "passed": true,
+      "logSha256": "6dec7fed7190c7a723a3d7774aa8c2a261f71f5506ae232bafeb0251d12ed8cb",
+      "fixtureRetention": "Exactly disposal head and reclamation marker per four synthetic sandboxes; no process, context, file or checkpoint retained for these fixtures.",
+      "objectDeltaVs028": 8,
+      "objectDeltaExplanation": "Eight marker objects from four completed synthetic proof sandboxes; unrelated historical terminal receipts preserved."
+    }
+  },
+  "performance": {
+    "localEvidence": "filesystem-lifetime-local.json",
+    "kernelLinearMemoryCapacityBytes": {
+      "reference": 20905984,
+      "current": 2555904,
+      "reductionPercent": 87.7743
+    },
+    "scope": "Local native workerd workload with 1,024 files and 64 absolute Python metadata reads. Linear-memory capacity, not total Worker memory or RSS. R2 reads unchanged; mixed timing results. Production feature stress is functional evidence, not production CPU/latency/cost measurement."
+  }
 }
