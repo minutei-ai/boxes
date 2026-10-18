@@ -54,8 +54,13 @@
     "No production cost/latency or AgentOS comparison established"
   ],
   "delivery": {
-    "sourcePush": "pending",
-    "remoteCi": "pending",
+    "sourcePush": "00dab40851bcf397b60f9d048323f0090fde8b0b",
+    "remoteCi": {
+      "run": 39147159801,
+      "conclusion": "success",
+      "packageProof": "passed",
+      "logSha256": "ee2cdfa907e6f7781364fe85163385260b031cf3c9eed77ecd125278aaa6f070"
+    },
     "runtimePublication": "not performed",
     "deployment": "not performed",
     "minuteiUpdate": "not performed"

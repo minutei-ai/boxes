@@ -66,7 +66,19 @@
       "passed": true,
       "version": "0.26.0",
       "transport": "native Alchemy workerd service binding and Agent RPC; local R2 and Queue",
-      "logSha256": "0cebc571f858c9f3ed284500b4fef5546e79bdde516b04df75d70efd014e3bd0"
+      "logSha256": "0cebc571f858c9f3ed284500b4fef5546e79bdde516b04df75d70efd014e3bd0",
+      "expandedIo": {
+        "passed": true,
+        "logSha256": "8d385f1e4d9cdca5ea93f28beede89e288291d8471f3bbd91fbfb9659d239dd9",
+        "fixtureSha256": "b12f26dfaad64433a9baa9d4e79773ffebd31c5acb9cb9afa83812cf88ad066d",
+        "coverage": [
+          "Direct FileIO class import through compiled SDK service binding",
+          "Buffered write, unlink and mutation while separate open reader retains native bytes",
+          "Read-only entry in replacement Worker reads shared orphan image, denies writing and closes handles",
+          "Heap ordering, cyclic deepcopy and pending ExitStack callback survive closed Worker replacement"
+        ],
+        "development": "Initial expanded fixture tested the filesystem.exists response object rather than its exists field and failed at that assertion; corrected fixture passed with unchanged product code and memory ceiling."
+      }
     }
   },
   "production": {
