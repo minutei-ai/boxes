@@ -1,0 +1,95 @@
+{
+  "status": "local native Alchemy/workerd/R2 proof passed; optimization not deployed",
+  "measuredAt": "2026-10-18T17:50:12.098172+00:00",
+  "sourceBase": "f29d62d2fa9ed8dbcb5ed4f9b1de59fdd12a685f",
+  "sourceSha256": {
+    "src/resources.ts": "8ae5c1774e93ed6924c8dbd14ced5b4f21b887cf69728a69cba764ced49fc3c4",
+    "tests/fixtures/software-publication.alchemy.run.ts": "baa5bf760876c68a397dbd375fd8298eae7f89d197219fc2bf034c3b7ed3a5cc"
+  },
+  "baseline": {
+    "delivery": "sdk-0.26.0-delivery.json",
+    "blocks": 354,
+    "uploadedBytes": 69590215,
+    "defaultSoftwareSeconds": 394.5,
+    "behavior": "A changed kernel identity reexecuted the Action and uploaded every prepared immutable block."
+  },
+  "change": "Read existing block bodies with bounded streaming SHA-256. Missing, truncated, oversized or digest-mismatched content is uploaded serially. Publish the manifest only after verification and repairs complete. Native R2 errors propagate. Reuse is not based on metadata, ETag or an assumed object key.",
+  "verification": {
+    "command": "bunx alchemy dev tests/fixtures/software-publication.alchemy.run.ts --stage dev_software_reuse_20261018_a6 --profile minutei --no-input",
+    "runtime": "Actual Alchemy dev Action and local R2 provider, native workerd and platform-proxy gateway; no mocked bucket",
+    "providerMode": "Objects created (local); fixture also checks native AlchemyContext.dev and dev_ stage",
+    "packages": ["diffutils", "tar", "gzip"],
+    "seconds": 10.7,
+    "completedNodes": 7,
+    "metrics": [
+      {
+        "blocks": 3,
+        "uploadedBlocks": 3,
+        "uploadedBytes": 492793
+      },
+      {
+        "blocks": 3,
+        "uploadedBlocks": 0,
+        "uploadedBytes": 0
+      },
+      {
+        "blocks": 3,
+        "uploadedBlocks": 3,
+        "uploadedBytes": 492793
+      }
+    ],
+    "unchangedVersions": "Native R2 object versions sampled after cold publication are unchanged after warm publication; Damage verifies them before changing data.",
+    "repair": "One missing block, one same-length digest corruption and one oversized block are restored; all final body hashes, lengths and the published manifest are checked.",
+    "logSha256": "0a507dcf39f80db266a8b891d048e8607e1e69d6cf8b5ebc1dc8471e76ee648c",
+    "largerCatalog": {
+      "package": "sh",
+      "blocks": 39,
+      "uploadedBytes": 4305780,
+      "warmUploadedBlocks": 0,
+      "warmUploadedBytes": 0,
+      "repairedBlocks": 3,
+      "seconds": 64.3,
+      "logSha256": "639f4d75505675386dcfc9e1c81d448f04453f0262d05b749db12e6d963be6bf"
+    },
+    "modeGuard": {
+      "operation": "alchemy plan with dev_ stage but non-dev execution mode",
+      "exitCode": 1,
+      "observed": "Publication proof requires local dev",
+      "logSha256": "79adb241788ce48e721f1b4276b43dfd5e86e7663441e155f814f2027c5a2911"
+    },
+    "packageScript": {
+      "command": "bun run software:publication:proof",
+      "completedNodes": 7,
+      "seconds": 10.2,
+      "logSha256": "d396f8020f91c2e202ffac075a1ee772d73eb8026b532839aef56e0e4c222bcc"
+    }
+  },
+  "nativeConstraint": {
+    "observed": "Four concurrent cold reads failed with SQLITE_BUSY. Installed LocalR2Gateway opens a separate workerd against the same SQLite-backed bucket for each operation. Reads and writes therefore remain serial across both production and proof code.",
+    "logSha256": "80a87f6f03d5fdd96b6fce7833ffab6467b7a24fa62907a4fb322d457a47e9e4"
+  },
+  "limits": [
+    "Local deployment evidence only; no production latency, CPU, billing or AgentOS cost comparison",
+    "A cold bucket now requires an existence read before each first upload",
+    "Warm verification still downloads existing bytes to preserve SHA-256 verification",
+    "Action memoization still applies; unchanged inputs do not rerun it automatically",
+    "Full parity and Rust/runtime performance gates remain open"
+  ],
+  "checks": {
+    "typecheck": "passed",
+    "format": "passed",
+    "regression": {
+      "command": "bun test tests/shared-software.test.ts tests/default-software.test.ts",
+      "passed": 5,
+      "failed": 0,
+      "assertions": 57,
+      "seconds": 6.84,
+      "logSha256": "db3349338f2ae1860860c8dd205b08feada9e799c8077e822a206842127e7e19"
+    }
+  },
+  "delivery": {
+    "sourcePush": "pending",
+    "remoteCi": "pending",
+    "productionDeployment": "not performed; public runtime remains 0.26.0"
+  }
+}

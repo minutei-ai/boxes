@@ -1,26 +1,53 @@
 import * as Cloudflare from "alchemy/Cloudflare";
 import * as Alchemy from "alchemy";
-import { Config, Effect, Schema } from "effect";
-import { defaultSoftware, SoftwareBaseDigest } from "./default-software";
+import { Config, Effect, Schema, Stream } from "effect";
+import { defaultSoftware } from "./default-software";
+import { Digest } from "./contracts";
 import { prepareSoftwareBase, SoftwareBaseInput } from "../tooling/software-base";
 
 export const bucket = Cloudflare.R2.Bucket("Objects", { publicAccess: false });
 export const executions = Cloudflare.Queues.Queue("Executions");
-const softwareBase = Alchemy.Action(
+export const softwareBase = Alchemy.Action(
   "DefaultSoftware",
   Effect.gen(function* () {
     const objects = yield* Cloudflare.R2.ReadWriteBucket(bucket);
     return Effect.fn("deployment.softwareBase")(function* (input: typeof SoftwareBaseInput.Type) {
       const base = yield* prepareSoftwareBase(input);
-      yield* Effect.forEach(
+      const changed = yield* Effect.filter(
         base.blocks,
+        Effect.fn("deployment.verifySoftwareBlock")(function* ([hash, bytes]) {
+          const previous = yield* objects.get(`software/blobs/${hash}`);
+          if (previous === null) return true;
+          const content = { size: 0, digest: new Bun.CryptoHasher("sha256") };
+          yield* Stream.runForEachWhile(previous.body, (part) =>
+            Effect.sync(() => {
+              content.size += part.byteLength;
+              if (content.size > bytes.byteLength) return false;
+              content.digest.update(part);
+              return true;
+            }),
+          );
+          if (content.size !== bytes.byteLength) return true;
+          return content.digest.digest("hex") !== hash;
+        }),
+        { concurrency: 1 },
+      );
+      yield* Effect.forEach(
+        changed,
         ([hash, bytes]) => objects.put(`software/blobs/${hash}`, bytes),
         { concurrency: 1, discard: true },
       );
       yield* objects.put(`software/bases/${base.digest}.json`, base.manifest, {
         httpMetadata: { contentType: "application/json" },
       });
-      return { digest: Schema.decodeUnknownSync(SoftwareBaseDigest)(base.digest) };
+      const receipt = {
+        digest: Schema.decodeUnknownSync(Digest)(base.digest),
+        blocks: base.blocks.size,
+        uploadedBlocks: changed.length,
+        uploadedBytes: changed.reduce((total, [, bytes]) => total + bytes.byteLength, 0),
+      };
+      yield* Effect.logInfo({ operation: "deployment.softwareBase", ...receipt });
+      return receipt;
     });
   }).pipe(Effect.provide(Cloudflare.R2.ReadWriteBucketLocal)),
 );

@@ -85,7 +85,8 @@
     "binding:remote:proof": "bun tooling/remote-binding-proof.ts",
     "reclaim:proof": "bun tooling/reclamation-proof.ts",
     "software:defaults:proof": "bun tooling/default-software-proof.ts",
-    "software:storage:proof": "bun tooling/default-software-storage-proof.ts"
+    "software:storage:proof": "bun tooling/default-software-storage-proof.ts",
+    "software:publication:proof": "alchemy dev tests/fixtures/software-publication.alchemy.run.ts --stage dev_software_publication_$(date +%s) --profile minutei --no-input"
   },
   "devDependencies": {
     "@alchemy.run/cloudflare-runtime": "2.0.0-beta.83",
