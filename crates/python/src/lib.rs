@@ -1,7 +1,7 @@
 mod filesystem;
 mod locks;
 mod os;
-use rustpython_vm::builtins::{PyBaseException, PyCoroutine, PyDictRef};
+use rustpython_vm::builtins::{PyBaseException, PyCoroutine, PyDictRef, PyTypeRef};
 use rustpython_vm::scope::Scope;
 use rustpython_vm::{AsObject, Interpreter, PyObjectRef, VirtualMachine, compiler, py_serde};
 use serde::Serialize;
@@ -47,6 +47,8 @@ struct State {
     done: Option<String>,
     last_step: Option<Result<String, JsValue>>,
     filesystem: bool,
+    flush_on_finish: bool,
+    io_base: PyTypeRef,
 }
 thread_local! {
     static PARKED_CONTEXTS: RefCell<BTreeMap<u32, PythonGuest>> = const { RefCell::new(BTreeMap::new()) };
@@ -224,7 +226,7 @@ impl PythonGuest {
             .add_frozen_modules(BOOTSTRAP)
             .add_frozen_modules(TOOLS)
             .build();
-        let (stdout, stderr, scope, environment) = interpreter
+        let (stdout, stderr, scope, environment, io_base) = interpreter
             .enter(|vm| -> Result<_, String> {
                 let locks = locks_module
                     .create_module(vm)
@@ -239,6 +241,10 @@ impl PythonGuest {
                 let io = vm
                     .import("_io", 0)
                     .map_err(|_| "Python I/O module unavailable")?;
+                let io_base: PyTypeRef = io
+                    .get_attr("_IOBase", vm)
+                    .and_then(|value| value.try_into_value(vm))
+                    .map_err(|_| "Python I/O base unavailable")?;
                 let string_io = io
                     .get_attr("StringIO", vm)
                     .map_err(|_| "Python StringIO unavailable")?;
@@ -277,7 +283,7 @@ impl PythonGuest {
                     .globals
                     .set_item("tools", tools.clone(), vm)
                     .map_err(|_| "Python tools scope failed")?;
-                Ok((stdout, stderr, scope, values))
+                Ok((stdout, stderr, scope, values, io_base))
             })
             .map_err(|error| JsValue::from_str(&error))?;
         Ok(Self {
@@ -297,10 +303,12 @@ impl PythonGuest {
                 done: None,
                 last_step: None,
                 filesystem: false,
+                flush_on_finish: false,
+                io_base,
             }),
         })
     }
-    pub fn enable_filesystem(&mut self) -> Result<(), JsValue> {
+    pub fn enable_filesystem(&mut self, flush_on_finish: bool) -> Result<(), JsValue> {
         if self.state.filesystem || self.state.source.is_none() || self.state.done.is_some() {
             return Err(JsValue::from_str(
                 "Python filesystem requires a fresh guest",
@@ -313,6 +321,7 @@ impl PythonGuest {
                 .map_err(|_| JsValue::from_str("Python filesystem importer initialization failed"))
         })?;
         self.state.filesystem = true;
+        self.state.flush_on_finish = flush_on_finish;
         Ok(())
     }
     pub fn poll(&mut self) -> u32 {
@@ -429,12 +438,7 @@ impl PythonGuest {
                                     .map_err(|_| "Python completion is missing")?
                             }
                             Err(error) => {
-                                let mut text = String::new();
-                                vm.write_exception(&mut text, &error)
-                                    .map_err(|error| error.to_string())?;
-                                vm.call_method(&state.stderr, "write", (text,))
-                                    .map_err(|_| "Python exception capture failed")?;
-                                return state.finish(vm, Value::Null, 1).map(|step| (None, step));
+                                return state.exception(vm, &error).map(|step| (None, step));
                             }
                         }
                     }
@@ -511,12 +515,44 @@ impl State {
         vm: &VirtualMachine,
         error: &rustpython_vm::Py<PyBaseException>,
     ) -> Result<Step, String> {
+        self.report_exception(vm, error)?;
+        self.finish(vm, Value::Null, 1)
+    }
+
+    fn report_exception(
+        &self,
+        vm: &VirtualMachine,
+        error: &rustpython_vm::Py<PyBaseException>,
+    ) -> Result<(), String> {
         let mut text = String::new();
         vm.write_exception(&mut text, error)
             .map_err(|error| error.to_string())?;
         vm.call_method(&self.stderr, "write", (text,))
             .map_err(|_| "Python exception capture failed")?;
-        self.finish(vm, Value::Null, 1)
+        Ok(())
+    }
+
+    fn flush_files(&self, vm: &VirtualMachine) -> rustpython_vm::PyResult<()> {
+        if !self.flush_on_finish {
+            return Ok(());
+        }
+        for stream in vm.state.gc.get_objects(None) {
+            if !stream.fast_isinstance(&self.io_base) {
+                continue;
+            }
+            match stream
+                .get_attr("closed", vm)
+                .and_then(|value| value.try_to_bool(vm))
+            {
+                Ok(true) => continue,
+                Ok(false) => {
+                    vm.call_method(&stream, "flush", ())?;
+                }
+                Err(error) if error.fast_isinstance(vm.ctx.exceptions.value_error) => continue,
+                Err(error) => return Err(error),
+            }
+        }
+        Ok(())
     }
 
     fn capture(&self, vm: &VirtualMachine) -> Result<(String, String), String> {
@@ -540,6 +576,13 @@ impl State {
         Ok((stdout, stderr))
     }
     fn finish(&self, vm: &VirtualMachine, result: Value, exit_code: i32) -> Result<Step, String> {
+        let (result, exit_code) = match self.flush_files(vm) {
+            Ok(()) => (result, exit_code),
+            Err(error) => {
+                self.report_exception(vm, &error)?;
+                (Value::Null, 1)
+            }
+        };
         let (stdout, stderr) = self.capture(vm)?;
         let output = serde_json::to_string(&Output {
             stdout,

@@ -1,5 +1,5 @@
 {
-  "status": "current source: linked regular-file writes and retained explicit flush verified locally; no release or deployment",
+  "status": "Historical linked-write stage: native proof and complete CI passed; not released or deployed. Automatic exit flush is recorded in python-exit-flush-local.json.",
   "measuredAt": "2026-10-18T15:59:55.169378+00:00",
   "sourceBase": "786508d3367e4227e18e330ddcbee997a0e36917",
   "sourceSha256": {
@@ -76,8 +76,19 @@
     "No production latency, billing or AgentOS cost advantage claim"
   ],
   "delivery": {
-    "sourcePush": "pending",
-    "remoteCi": "pending",
+    "sourcePush": {
+      "commit": "6b1197a3bdfca0039d30ae718c02a283d43763b2",
+      "branch": "main"
+    },
+    "remoteCi": {
+      "runId": 39143074484,
+      "commit": "6b1197a3bdfca0039d30ae718c02a283d43763b2",
+      "conclusion": "success",
+      "nativeTests": 446,
+      "nativeFiles": 101,
+      "nativeSeconds": 204.37,
+      "logSha256": "de2bcec742ab780e2a62ed86dae6a2f5c0deb4125bf7ed7122ba8a8b582d21cb"
+    },
     "runtimePublication": "not performed",
     "deployment": "not performed",
     "minuteiUpdate": "not performed"

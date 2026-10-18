@@ -1,0 +1,354 @@
+{
+  "status": "unpublished source; native workerd/R2 finalization and retention checks passed; no runtime release or deployment",
+  "measuredAt": "2026-10-18T16:19:21.009242+00:00",
+  "sourceBase": "6b1197a3bdfca0039d30ae718c02a283d43763b2",
+  "sourceSha256": {
+    "crates/python/src/lib.rs": "f03f2642ef37c1fb24b33989e7cf88583b65453f4cefb7eeba906598285b3c03",
+    "src/python.ts": "1c16d92ce445c92dca600c33740cce507da2bb5f11f2885351115c5ccad1e63a",
+    "tests/python-descriptors.test.ts": "e883c7a4cccc903bb032645ab289f7f3ba726721557a2bccd5f5b8b0705149ae"
+  },
+  "baseline": {
+    "command": "bun test tests/python-descriptors.test.ts -t 'ephemeral Python flushes'",
+    "observed": "Program returned 42 with empty stderr, but reading its buffered UTF-8 file through the real service binding returned empty content.",
+    "expected": "ação no fim",
+    "actual": "",
+    "passed": 0,
+    "failed": 1,
+    "seconds": 1.89,
+    "logSha256": "dad86fbd006bc98a6381e9291b5af5d0c59cdfec1bc31edbe66ada044f68cca8"
+  },
+  "ownership": {
+    "nativeLifecycle": "State.finish flushes before output capture/serialization and Step.Done. Only non-retained filesystem executions enable the pass.",
+    "streamDiscovery": "Pinned RustPython GcInterpreterState.get_objects(None) supplies this interpreter objects across ordinary and permanent generations; original native _IOBase type is captured at initialization. No stream registry or strong-reference lifetime is added.",
+    "suspension": "Flush calls remain inside the same poll export and existing Asyncify request/response path; existing fuel, request count, memory, authority and deadline limits remain in force.",
+    "failure": "Closed streams are skipped. ValueError while reading an unusable closed state is skipped for partially initialized/detached native objects. Errors from flush itself stop the pass, report the original exception, return null result and exit code 1.",
+    "retention": "Retained contexts disable finishing flush, keeping buffers and file state in their existing native R2 heap."
+  },
+  "coverage": [
+    "Buffered UTF-8 data persists before a normal return becomes visible",
+    "Native BufferedWriter over FileIO constructed directly after io setup flushes without an open-wrapper registry",
+    "Cyclic references and gc.freeze permanent-generation objects remain discoverable",
+    "A reported Python exception retains its original diagnostic and persists buffered file data",
+    "A closed underlying descriptor causes nonzero completion with null result, original EBADF diagnostic and no committed pending bytes",
+    "An uninitialized BufferedWriter does not prevent another live writer from flushing",
+    "Existing retained-writer test still sees only explicitly flushed bytes between entries, preserves denied buffers and resumes under current grants"
+  ],
+  "checks": {
+    "build": "passed",
+    "typecheck": "passed",
+    "clippy": "cargo clippy -p cirro-python --target wasm32-unknown-unknown -- -D warnings: passed",
+    "nativeSuite": {
+      "command": "bun test tests/python-descriptors.test.ts tests/python.test.ts tests/python-context-heap.test.ts tests/python-filesystem.test.ts",
+      "passed": 14,
+      "failed": 0,
+      "assertions": 151,
+      "seconds": 26.69,
+      "logSha256": "dcf5a35482db31632b13bc26703b43ac632773ffdb63beb151630223d329a20f"
+    },
+    "cancellationRegression": {
+      "files": ["tests/cancel.test.ts", "tests/cancel-completion.test.ts"],
+      "passed": 8,
+      "failed": 0,
+      "assertions": 201,
+      "seconds": 18.08,
+      "logSha256": "66d6f60aace3e066962dae7f177510516ed4aa200c76e96054f4a731baf7861b"
+    },
+    "testDevelopment": "The expanded case exposed ValueError from the closed getter of an uninitialized native BufferedWriter; closed-state handling was adjusted, while actual flush errors still fail completion."
+  },
+  "candidate": {
+    "pythonWasmBytes": 19664316,
+    "pythonWasmSha256": "1f8d3db572d94547b3849c7ee83b444d3342f7c535cb397c74b2e7906951b418",
+    "workerBundleSha256": "ab6b592c9ce0ac3b94748aafb1f211f9efa170f7cc8fc9a47f4234e3a32309b8",
+    "requiresExplicitPythonContextReset": true
+  },
+  "microbenchmark": {
+    "scope": "Same final native Wasm; finalization enabled versus disabled; excludes construction, begin, R2/workerd and production",
+    "samples": [
+      {
+        "phase": 0,
+        "enabled": false,
+        "index": 1,
+        "elapsedMs": 1.158344999999997,
+        "fuel": 3670,
+        "memoryBytes": 8257536
+      },
+      {
+        "phase": 0,
+        "enabled": false,
+        "index": 2,
+        "elapsedMs": 1.476408000000049,
+        "fuel": 3665,
+        "memoryBytes": 8257536
+      },
+      {
+        "phase": 0,
+        "enabled": false,
+        "index": 3,
+        "elapsedMs": 1.0404310000000123,
+        "fuel": 3670,
+        "memoryBytes": 8257536
+      },
+      {
+        "phase": 0,
+        "enabled": false,
+        "index": 4,
+        "elapsedMs": 1.3824829999999793,
+        "fuel": 3665,
+        "memoryBytes": 8257536
+      },
+      {
+        "phase": 1,
+        "enabled": true,
+        "index": 1,
+        "elapsedMs": 0.9852539999999976,
+        "fuel": 32648,
+        "memoryBytes": 8257536
+      },
+      {
+        "phase": 1,
+        "enabled": true,
+        "index": 2,
+        "elapsedMs": 0.8967779999999834,
+        "fuel": 32644,
+        "memoryBytes": 8257536
+      },
+      {
+        "phase": 1,
+        "enabled": true,
+        "index": 3,
+        "elapsedMs": 0.7681039999999939,
+        "fuel": 32644,
+        "memoryBytes": 8257536
+      },
+      {
+        "phase": 1,
+        "enabled": true,
+        "index": 4,
+        "elapsedMs": 1.455173000000002,
+        "fuel": 32644,
+        "memoryBytes": 8257536
+      },
+      {
+        "phase": 2,
+        "enabled": true,
+        "index": 1,
+        "elapsedMs": 0.5522170000000415,
+        "fuel": 32662,
+        "memoryBytes": 8257536
+      },
+      {
+        "phase": 2,
+        "enabled": true,
+        "index": 2,
+        "elapsedMs": 0.5805599999999913,
+        "fuel": 32662,
+        "memoryBytes": 8257536
+      },
+      {
+        "phase": 2,
+        "enabled": true,
+        "index": 3,
+        "elapsedMs": 0.6011969999999565,
+        "fuel": 32662,
+        "memoryBytes": 8257536
+      },
+      {
+        "phase": 2,
+        "enabled": true,
+        "index": 4,
+        "elapsedMs": 0.552361000000019,
+        "fuel": 32662,
+        "memoryBytes": 8257536
+      },
+      {
+        "phase": 3,
+        "enabled": false,
+        "index": 1,
+        "elapsedMs": 0.4136479999999665,
+        "fuel": 3676,
+        "memoryBytes": 8257536
+      },
+      {
+        "phase": 3,
+        "enabled": false,
+        "index": 2,
+        "elapsedMs": 0.3731119999999919,
+        "fuel": 3676,
+        "memoryBytes": 8257536
+      },
+      {
+        "phase": 3,
+        "enabled": false,
+        "index": 3,
+        "elapsedMs": 0.44910699999991266,
+        "fuel": 3676,
+        "memoryBytes": 8257536
+      },
+      {
+        "phase": 3,
+        "enabled": false,
+        "index": 4,
+        "elapsedMs": 0.3938950000000432,
+        "fuel": 3676,
+        "memoryBytes": 8257536
+      },
+      {
+        "phase": 4,
+        "enabled": true,
+        "index": 1,
+        "elapsedMs": 0.9312429999999949,
+        "fuel": 32663,
+        "memoryBytes": 8257536
+      },
+      {
+        "phase": 4,
+        "enabled": true,
+        "index": 2,
+        "elapsedMs": 0.688160000000039,
+        "fuel": 32663,
+        "memoryBytes": 8257536
+      },
+      {
+        "phase": 4,
+        "enabled": true,
+        "index": 3,
+        "elapsedMs": 0.5873330000000578,
+        "fuel": 32663,
+        "memoryBytes": 8257536
+      },
+      {
+        "phase": 4,
+        "enabled": true,
+        "index": 4,
+        "elapsedMs": 0.5800689999999804,
+        "fuel": 32663,
+        "memoryBytes": 8257536
+      },
+      {
+        "phase": 5,
+        "enabled": false,
+        "index": 1,
+        "elapsedMs": 0.31243400000005295,
+        "fuel": 3669,
+        "memoryBytes": 8257536
+      },
+      {
+        "phase": 5,
+        "enabled": false,
+        "index": 2,
+        "elapsedMs": 0.3172830000000886,
+        "fuel": 3667,
+        "memoryBytes": 8257536
+      },
+      {
+        "phase": 5,
+        "enabled": false,
+        "index": 3,
+        "elapsedMs": 0.2848790000000463,
+        "fuel": 3669,
+        "memoryBytes": 8257536
+      },
+      {
+        "phase": 5,
+        "enabled": false,
+        "index": 4,
+        "elapsedMs": 0.33390300000007755,
+        "fuel": 3667,
+        "memoryBytes": 8257536
+      },
+      {
+        "phase": 6,
+        "enabled": false,
+        "index": 1,
+        "elapsedMs": 0.32245100000000093,
+        "fuel": 3679,
+        "memoryBytes": 8257536
+      },
+      {
+        "phase": 6,
+        "enabled": false,
+        "index": 2,
+        "elapsedMs": 0.31764799999996285,
+        "fuel": 3677,
+        "memoryBytes": 8257536
+      },
+      {
+        "phase": 6,
+        "enabled": false,
+        "index": 3,
+        "elapsedMs": 0.3465379999998959,
+        "fuel": 3677,
+        "memoryBytes": 8257536
+      },
+      {
+        "phase": 6,
+        "enabled": false,
+        "index": 4,
+        "elapsedMs": 0.34877899999992223,
+        "fuel": 3677,
+        "memoryBytes": 8257536
+      },
+      {
+        "phase": 7,
+        "enabled": true,
+        "index": 1,
+        "elapsedMs": 0.5762990000000627,
+        "fuel": 32662,
+        "memoryBytes": 8257536
+      },
+      {
+        "phase": 7,
+        "enabled": true,
+        "index": 2,
+        "elapsedMs": 0.43904200000008586,
+        "fuel": 32662,
+        "memoryBytes": 8257536
+      },
+      {
+        "phase": 7,
+        "enabled": true,
+        "index": 3,
+        "elapsedMs": 0.43220800000005966,
+        "fuel": 32662,
+        "memoryBytes": 8257536
+      },
+      {
+        "phase": 7,
+        "enabled": true,
+        "index": 4,
+        "elapsedMs": 0.47123999999996613,
+        "fuel": 32662,
+        "memoryBytes": 8257536
+      }
+    ]
+  },
+  "microbenchmarkSummary": {
+    "disabled": {
+      "samples": 16,
+      "medianElapsedMs": 0.348779,
+      "medianFuel": 3670
+    },
+    "enabled": {
+      "samples": 16,
+      "medianElapsedMs": 0.58056,
+      "medianFuel": 32662
+    },
+    "measurement": "Eight phases ABBA/BAAB, one warmup then four measured steps each. Same final Wasm, filesystem enabled in both variants, source 1+1, unchanged one-million instruction ceiling. All results equal 2. Timing includes native step and result decoding; excludes construction/begin, workerd, R2 and production.",
+    "scopeLimit": "Tiny no-file native workload only; not a production latency, cold start, R2 billing or AgentOS comparison.",
+    "operatorSha256": "16472cb4ea20203443dae1fad580e9fd1fe8695fdde7f7cf0cdb87dc2a3e2a2b"
+  },
+  "limits": [
+    "This is a buffered-stream flush pass, not full interpreter finalization, atexit or arbitrary user-defined shutdown support",
+    "Native traps, interruption and interop failures do not force borrowed interpreter cleanup",
+    "Writes after the final unlink, full cross-context detached-inode coherence, eager io.FileIO setup and remaining stdlib/pip remain open",
+    "Existing Python heaps require explicit reset when adopting this different binary; no replay or automatic conversion",
+    "No remote deployment or production performance/cost claim"
+  ],
+  "delivery": {
+    "sourcePush": "pending",
+    "remoteCi": "pending",
+    "runtimePublication": "not performed",
+    "deployment": "not performed",
+    "minuteiUpdate": "not performed"
+  }
+}

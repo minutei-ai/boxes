@@ -130,7 +130,7 @@ export const python = Effect.fn("python.execute")(function* (
           policy.maxOutputBytes,
           Schema.encodeSync(Schema.fromJsonString(Environment))(program.env),
         );
-        guest.enable_filesystem();
+        guest.enable_filesystem(context === null);
         return {
           guest,
           released: false,

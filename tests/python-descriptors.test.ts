@@ -497,3 +497,127 @@ writer.closed`,
     ),
   60000,
 );
+
+test(
+  "ephemeral Python flushes open streams before publishing completion",
+  () =>
+    Effect.runPromise(
+      Effect.scoped(
+        Effect.gen(function* () {
+          const directory = yield* Effect.acquireRelease(
+            Effect.promise(() => mkdtemp(join(tmpdir(), "boxes-python-exit-"))),
+            (path) => Effect.promise(() => rm(path, { recursive: true, force: true })),
+          );
+          const native = yield* connect(directory);
+          yield* native.admin.create({
+            id: "finishing",
+            policy: {
+              networkHosts: [],
+              interruptBudget: 100000,
+              memoryBytes: 16777216,
+              maxOutputBytes: 1048576,
+            },
+          });
+          const grant = yield* native.admin.mintCapability("finishing", {
+            permissions: ["read", "write", "execute"],
+            expiresInSeconds: 3600,
+          });
+          const client = yield* makeBinding(native.service, Redacted.make(grant.token));
+          const finished = yield* client.action("finishing", {
+            op: "python.execute",
+            id: "normal",
+            source: `writer=open('/tmp/normal','w',encoding='utf-8')
+writer.write('ação no fim')
+42`,
+          });
+          expect(finished.output?.stderr).toBe("");
+          expect(finished.output?.result).toBe(42);
+          const content = yield* client.action("finishing", {
+            op: "filesystem.readFile",
+            path: "/tmp/normal",
+          });
+          expect(Buffer.from(content.content, "base64").toString()).toBe("ação no fim");
+          const composed = yield* client.action("finishing", {
+            op: "python.execute",
+            id: "composed",
+            source: `import io,gc
+anchor=open('/tmp/anchor','w')
+anchor.write('anchor')
+raw=io.FileIO('/tmp/manual','w')
+buffered=io.BufferedWriter(raw)
+buffered.write(b'manual')
+cycle=[buffered]
+cycle.append(cycle)
+gc.freeze()
+42`,
+          });
+          expect(composed.output?.stderr).toBe("");
+          expect(composed.output?.result).toBe(42);
+          expect(
+            Buffer.from(
+              (yield* client.action("finishing", {
+                op: "filesystem.readFile",
+                path: "/tmp/manual",
+              })).content,
+              "base64",
+            ).toString(),
+          ).toBe("manual");
+          const errored = yield* client.action("finishing", {
+            op: "python.execute",
+            id: "exception",
+            source: `writer=open('/tmp/exception','wb')
+writer.write(b'preserved')
+raise ValueError('after buffering')`,
+          });
+          expect(errored.output?.exitCode).toBe(1);
+          expect(errored.output?.stderr).toContain("after buffering");
+          expect(
+            Buffer.from(
+              (yield* client.action("finishing", {
+                op: "filesystem.readFile",
+                path: "/tmp/exception",
+              })).content,
+              "base64",
+            ).toString(),
+          ).toBe("preserved");
+          const failed = yield* client.action("finishing", {
+            op: "python.execute",
+            id: "bad-fd",
+            source: `import os
+writer=open('/tmp/failure','wb')
+writer.write(b'uncommitted')
+os.close(writer.fileno())
+42`,
+          });
+          expect(failed.output?.exitCode).toBe(1);
+          expect(failed.output?.result).toBeNull();
+          expect(failed.output?.stderr).toContain("Bad file descriptor");
+          expect(
+            (yield* client.action("finishing", { op: "filesystem.readFile", path: "/tmp/failure" }))
+              .content,
+          ).toBe("");
+          const partial = yield* client.action("finishing", {
+            op: "python.execute",
+            id: "uninitialized",
+            source: `import io
+writer=open('/tmp/partial','w')
+writer.write('complete')
+partial=io.BufferedWriter.__new__(io.BufferedWriter)
+42`,
+          });
+          expect(partial.output?.stderr).toBe("");
+          expect(partial.output?.result).toBe(42);
+          expect(
+            Buffer.from(
+              (yield* client.action("finishing", {
+                op: "filesystem.readFile",
+                path: "/tmp/partial",
+              })).content,
+              "base64",
+            ).toString(),
+          ).toBe("complete");
+        }),
+      ),
+    ),
+  60000,
+);
