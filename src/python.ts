@@ -224,9 +224,11 @@ export const python = Effect.fn("python.execute")(function* (
       bridge.request = new Uint8Array(0);
       const response = yield* Effect.gen(function* () {
         if (
-          action.op === "python.file.openRead" ||
+          action.op === "python.file.open" ||
           action.op === "python.file.read" ||
-          action.op === "python.file.stat"
+          action.op === "python.file.stat" ||
+          action.op === "python.file.write" ||
+          action.op === "python.file.resize"
         )
           return yield* pythonFile(env, capability, action);
         const result = yield* guestAction(env, capability, action);

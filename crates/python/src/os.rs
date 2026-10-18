@@ -6,12 +6,16 @@ pub mod native {
         FromArgs, PyObjectRef, PyPayload, PyRef, PyResult, VirtualMachine,
         builtins::{PyDictRef, PyStrRef},
         convert::ToPyObject,
-        function::{ArgMemoryBuffer, FsPath, OptionalArg},
+        function::{ArgBytesLike, ArgMemoryBuffer, FsPath, OptionalArg},
         pyclass, pystruct_sequence, pystruct_sequence_data,
         types::PyStructSequence,
     };
     use serde_json::{Value, json};
-    use std::{cell::RefCell, collections::BTreeMap, rc::Rc};
+    use std::{
+        cell::{Cell, RefCell},
+        collections::BTreeMap,
+        rc::Rc,
+    };
 
     #[pyattr]
     const O_RDONLY: i32 = 0;
@@ -40,6 +44,9 @@ pub mod native {
     struct Description {
         snapshot: Value,
         offset: u64,
+        readable: bool,
+        writable: bool,
+        append: bool,
     }
     #[derive(Debug)]
     struct Descriptor {
@@ -51,6 +58,7 @@ pub mod native {
     #[derive(Debug, PyPayload)]
     struct DescriptorTable {
         entries: RefCell<BTreeMap<i32, Descriptor>>,
+        mask: Cell<u32>,
     }
     #[pyclass]
     impl DescriptorTable {}
@@ -59,6 +67,7 @@ pub mod native {
     fn _boxes_descriptors(_vm: &VirtualMachine) -> DescriptorTable {
         DescriptorTable {
             entries: RefCell::new(BTreeMap::new()),
+            mask: Cell::new(0o022),
         }
     }
     fn table(vm: &VirtualMachine) -> PyResult<PyRef<DescriptorTable>> {
@@ -179,25 +188,48 @@ pub mod native {
     }
     #[pyfunction]
     fn open(args: OpenArgs, vm: &VirtualMachine) -> PyResult<i32> {
-        if args.flags & !O_CLOEXEC != 0 || args.dir_fd.is_some() {
+        let allowed = O_CLOEXEC | O_WRONLY | O_RDWR | O_CREAT | O_EXCL | O_TRUNC | O_APPEND;
+        if args.flags & !allowed != 0 || args.dir_fd.is_some() || args.mode & !0o777 != 0 {
             return Err(fault(
                 vm,
                 "ENOTSUP",
-                "Only read-only regular-file descriptors are available",
+                "Unsupported regular-file open options",
             )?);
         }
-        let _mode = args.mode;
+        let access = match args.flags & 3 {
+            O_RDONLY => 1,
+            O_WRONLY => 2,
+            O_RDWR => 3,
+            _ => return Err(fault(vm, "EINVAL", "Invalid access mode")?),
+        };
+        let mut creation = 0u32;
+        if args.flags & O_CREAT != 0 {
+            creation |= 1;
+        }
+        if args.flags & O_EXCL != 0 {
+            creation |= 2;
+        }
+        if args.flags & O_TRUNC != 0 {
+            creation |= 4;
+        }
         let path = std::str::from_utf8(args.path.as_bytes())
             .map_err(|_| vm.new_value_error("Sandbox paths must be UTF-8"))?;
         let table = table(vm)?;
         let fd = available(&table, vm)?;
-        let snapshot = exchange(vm, &json!({"op":"python.file.openRead", "path":path}))?;
+        let mode = args.mode & !table.mask.get();
+        let snapshot = exchange(
+            vm,
+            &json!({"op":"python.file.open","path":path,"access":access,"creation":creation,"mode":mode}),
+        )?;
         table.entries.borrow_mut().insert(
             fd,
             Descriptor {
                 description: Rc::new(RefCell::new(Description {
                     snapshot,
                     offset: 0,
+                    readable: access & 1 != 0,
+                    writable: access & 2 != 0,
+                    append: args.flags & O_APPEND != 0,
                 })),
                 inheritable: false,
             },
@@ -250,6 +282,9 @@ pub mod native {
         let description = description(fd, vm)?;
         let (snapshot, offset) = {
             let state = description.borrow();
+            if !state.readable {
+                return Err(fault(vm, "EBADF", "Descriptor is not readable")?);
+            }
             (state.snapshot.clone(), state.offset)
         };
         let length = length.min(262_144) as u64;
@@ -289,6 +324,71 @@ pub mod native {
     fn isatty(fd: i32, vm: &VirtualMachine) -> PyResult<bool> {
         description(fd, vm)?;
         Ok(false)
+    }
+    #[pyfunction]
+    fn umask(mask: i32, vm: &VirtualMachine) -> PyResult<u32> {
+        Ok(table(vm)?.mask.replace(mask as u32 & 0o777))
+    }
+    #[pyfunction]
+    fn write(fd: i32, data: ArgBytesLike, vm: &VirtualMachine) -> PyResult<usize> {
+        let description = description(fd, vm)?;
+        let (snapshot, offset) = {
+            let state = description.borrow();
+            if !state.writable {
+                return Err(fault(vm, "EBADF", "Descriptor is not writable")?);
+            }
+            let offset = if state.append {
+                None
+            } else {
+                Some(state.offset)
+            };
+            (state.snapshot.clone(), offset)
+        };
+        if data.is_empty() {
+            return Ok(0);
+        }
+        let length = data.len().min(262144);
+        let encoded = data
+            .with_ref(|bytes| base64::engine::general_purpose::STANDARD.encode(&bytes[..length]));
+        let result = exchange(
+            vm,
+            &json!({"op":"python.file.write","snapshot":snapshot,"offset":offset,"content":encoded}),
+        )?;
+        let count = integer(&result, "count", vm)?;
+        if count as usize > length {
+            return Err(vm.new_runtime_error("Write acknowledgement exceeds submitted bytes"));
+        }
+        let offset = integer(&result, "offset", vm)?;
+        let snapshot = result
+            .get("snapshot")
+            .ok_or_else(|| vm.new_runtime_error("Write acknowledgement has no snapshot"))?;
+        let mut state = description.borrow_mut();
+        state.offset = offset;
+        state.snapshot = snapshot.clone();
+        Ok(count as usize)
+    }
+    #[pyfunction]
+    fn ftruncate(fd: i32, size: i64, vm: &VirtualMachine) -> PyResult<()> {
+        if size < 0 {
+            return Err(fault(vm, "EINVAL", "Negative file size")?);
+        }
+        if size > 16777216 {
+            return Err(fault(vm, "EFBIG", "File size exceeds its limit")?);
+        }
+        let description = description(fd, vm)?;
+        let snapshot = {
+            let state = description.borrow();
+            if !state.writable {
+                return Err(fault(vm, "EBADF", "Descriptor is not writable")?);
+            }
+            state.snapshot.clone()
+        };
+        let snapshot = exchange(
+            vm,
+            &json!({"op":"python.file.resize","snapshot":snapshot,"size":size}),
+        )?;
+        description.borrow_mut().snapshot = snapshot;
+        Ok(())
     }
     #[pyfunction]
     fn lseek(fd: i32, offset: i64, whence: i32, vm: &VirtualMachine) -> PyResult<u64> {

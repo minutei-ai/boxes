@@ -209,6 +209,7 @@ export const applyWritePlan = Effect.fn("filesystem.applyWritePlan")(function* (
   kernel: Kernel,
   plan: typeof RangeWritePlan.Type,
   data: Uint8Array,
+  target: string | bigint = plan.path,
 ) {
   if (!plan.changed) return false;
   const now = yield* Clock.currentTimeNanos;
@@ -241,9 +242,11 @@ export const applyWritePlan = Effect.fn("filesystem.applyWritePlan")(function* (
   });
   const references = yield* Schema.decodeUnknownEffect(Chunks)(hashes);
   const encoded = Schema.encodeSync(Schema.fromJsonString(Chunks))(references);
-  const needed = yield* kernelCall(() =>
-    kernel.prepare_write(plan.path, BigInt(plan.size), encoded),
-  ).pipe(Effect.flatMap(Schema.decodeUnknownEffect(Schema.fromJsonString(Chunks))));
+  const needed = yield* kernelCall(() => {
+    if (typeof target === "bigint")
+      return kernel.prepare_inode_write(target, BigInt(plan.size), encoded);
+    return kernel.prepare_write(target, BigInt(plan.size), encoded);
+  }).pipe(Effect.flatMap(Schema.decodeUnknownEffect(Schema.fromJsonString(Chunks))));
   yield* Effect.forEach(
     needed,
     (hash) =>
@@ -265,7 +268,10 @@ export const applyWritePlan = Effect.fn("filesystem.applyWritePlan")(function* (
       }),
     { concurrency: 4 },
   );
-  yield* kernelCall(() => kernel.write(plan.path, BigInt(plan.size), encoded));
+  yield* kernelCall(() => {
+    if (typeof target === "bigint") return kernel.write_inode(target, BigInt(plan.size), encoded);
+    return kernel.write(target, BigInt(plan.size), encoded);
+  });
   return true;
 });
 

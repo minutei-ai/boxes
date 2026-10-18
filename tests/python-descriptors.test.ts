@@ -133,7 +133,15 @@ errors`,
                 path: "/tmp/renamed.bin",
               });
               expect(missing.exists).toBe(false);
-              const modes = yield* client.action("descriptors", {
+              const reducedGrant = yield* native.admin.mintCapability("descriptors", {
+                permissions: ["read", "execute"],
+                expiresInSeconds: 3600,
+              });
+              const readOnly = yield* makeBinding(
+                native.service,
+                Redacted.make(reducedGrant.token),
+              );
+              const modes = yield* readOnly.action("descriptors", {
                 op: "python.execute",
                 id: "reject",
                 source: `import os,_boxes_io
@@ -146,7 +154,7 @@ for operation in [lambda:os.open('/tmp/uncreated',os.O_WRONLY|os.O_CREAT),lambda
 errors`,
               });
               expect(modes.output?.stderr).toBe("");
-              expect(modes.output?.result).toEqual([95, 95, 13]);
+              expect(modes.output?.result).toEqual([13, 95, 13]);
               expect(
                 (yield* client.action("descriptors", {
                   op: "filesystem.exists",
@@ -293,7 +301,12 @@ os.close(fd)
           );
           const native = yield* connect(directory);
           const client = yield* makeBinding(native.service, Redacted.make(token));
-          const resumed = yield* client.action("reading", {
+          const reducedGrant = yield* native.admin.mintCapability("reading", {
+            permissions: ["read", "execute"],
+            expiresInSeconds: 3600,
+          });
+          const readOnly = yield* makeBinding(native.service, Redacted.make(reducedGrant.token));
+          const resumed = yield* readOnly.action("reading", {
             op: "python.execute",
             id: "resume",
             contextId: "stream",
@@ -309,7 +322,7 @@ for mode in ('w','a','x','r+'):
 [errors,stream.closed]`,
           });
           expect(resumed.output?.stderr).toBe("");
-          expect(resumed.output?.result).toEqual([[95, 95, 95, 95], true]);
+          expect(resumed.output?.result).toEqual([[13, 13, 13, 13], true]);
           expect(
             (yield* client.action("reading", { op: "filesystem.exists", path: "/tmp/uncreated" }))
               .exists,
@@ -318,4 +331,169 @@ for mode in ('w','a','x','r+'):
       ),
     ),
   60_000,
+);
+
+test(
+  "Python writes and retained buffered flush publish to R2 with inode rights and exclusive creation",
+  () =>
+    Effect.runPromise(
+      Effect.scoped(
+        Effect.gen(function* () {
+          const directory = yield* Effect.acquireRelease(
+            Effect.promise(() => mkdtemp(join(tmpdir(), "boxes-python-write-"))),
+            (path) => Effect.promise(() => rm(path, { recursive: true, force: true })),
+          );
+          const grants = yield* Effect.scoped(
+            Effect.gen(function* () {
+              const native = yield* connect(directory);
+              yield* native.admin.create({
+                id: "writing",
+                policy: {
+                  networkHosts: [],
+                  interruptBudget: 100000,
+                  memoryBytes: 16777216,
+                  maxOutputBytes: 1048576,
+                },
+              });
+              const full = yield* native.admin.mintCapability("writing", {
+                permissions: ["read", "write", "execute", "manage"],
+                expiresInSeconds: 3600,
+              });
+              const readOnly = yield* native.admin.mintCapability("writing", {
+                permissions: ["read", "execute"],
+                expiresInSeconds: 3600,
+              });
+              const client = yield* makeBinding(native.service, Redacted.make(full.token));
+              yield* client.action("writing", {
+                op: "contexts.create",
+                id: "writer",
+                language: "python",
+              });
+              const created = yield* client.action("writing", {
+                op: "python.execute",
+                id: "create",
+                contextId: "writer",
+                source: `import os
+assert os.umask(0o077)==0o022
+writer=open('/tmp/text','w+',encoding='utf-8')
+assert writer.write('ação\\n')==5
+writer.flush()
+writer.write('pendente')
+[writer.closed,writer.writable()]`,
+              });
+              expect(created.output?.stderr).toBe("");
+              expect(created.output?.result).toEqual([false, true]);
+              const content = yield* client.action("writing", {
+                op: "filesystem.readFile",
+                path: "/tmp/text",
+              });
+              expect(Buffer.from(content.content, "base64").toString()).toBe("ação\n");
+              return { full: full.token, readOnly: readOnly.token };
+            }),
+          );
+          const native = yield* connect(directory);
+          const readOnly = yield* makeBinding(native.service, Redacted.make(grants.readOnly));
+          const denied = yield* readOnly.action("writing", {
+            op: "python.execute",
+            id: "denied",
+            contextId: "writer",
+            source: `try:
+ writer.flush()
+except PermissionError as error:
+ denied=error.errno
+else:
+ raise AssertionError('readonly flush succeeded')
+denied`,
+          });
+          expect(denied.output?.stderr).toBe("");
+          expect(denied.output?.result).toBe(13);
+          const client = yield* makeBinding(native.service, Redacted.make(grants.full));
+          const resumed = yield* client.action("writing", {
+            op: "python.execute",
+            id: "resume",
+            contextId: "writer",
+            source: `import os
+assert os.umask(0o022)==0o077
+assert os.fstat(writer.fileno()).st_mode & 0o777 == 0o600
+writer.flush()
+writer.seek(0)
+assert writer.read()=='ação\\npendente'
+writer.close()
+with open('/tmp/raw','w+b',buffering=0) as raw:
+ assert raw.write(b'abc')==3
+ raw.seek(5)
+ assert raw.write(b'Z')==1
+ raw.seek(0)
+ assert raw.read()==b'abc\\x00\\x00Z'
+ raw.seek(6)
+ raw.truncate(2)
+ assert raw.tell()==6
+ await tools.call({'op':'filesystem.move','from':'/tmp/raw','to':'/tmp/moved'})
+ await tools.call({'op':'filesystem.chmod','path':'/tmp/moved','mode':0})
+ raw.seek(0,2)
+ assert raw.write(b'!')==1
+ raw.seek(0)
+ assert raw.read()==b'ab!'
+try:
+ open('/tmp/text','x')
+except FileExistsError as error:
+ assert error.errno==17
+else:
+ raise AssertionError('exclusive open replaced file')
+await tools.call({'op':'filesystem.symlink','path':'/tmp/dangling','target':'/tmp/missing-target'})
+try:
+ open('/tmp/dangling','x')
+except FileExistsError:
+ pass
+else:
+ raise AssertionError('exclusive open followed symlink')
+with open('/tmp/text','a',encoding='utf-8') as appended:
+ appended.seek(0)
+ appended.write('!')
+append_fd=os.open('/tmp/text',os.O_WRONLY|os.O_APPEND)
+os.lseek(append_fd,0,os.SEEK_SET)
+assert os.write(append_fd,b'')==0
+assert os.lseek(append_fd,0,os.SEEK_CUR)==0
+os.close(append_fd)
+with open('/tmp/chunks','wb') as chunks:
+ assert chunks.write(b'a'*262145)==262145
+writer.closed`,
+          });
+          expect(resumed.output?.stderr).toBe("");
+          expect(resumed.output?.result).toBe(true);
+          expect(
+            Buffer.from(
+              (yield* client.action("writing", { op: "filesystem.readFile", path: "/tmp/text" }))
+                .content,
+              "base64",
+            ).toString(),
+          ).toBe("ação\npendente!");
+          expect(
+            (yield* client.action("writing", {
+              op: "filesystem.exists",
+              path: "/tmp/missing-target",
+            })).exists,
+          ).toBe(false);
+          expect(
+            (yield* client.action("writing", { op: "filesystem.exists", path: "/tmp/raw" })).exists,
+          ).toBe(false);
+          expect(
+            (yield* client.action("writing", {
+              op: "filesystem.stat",
+              path: "/tmp/chunks",
+              follow: true,
+            })).size,
+          ).toBe(262145);
+          expect(
+            (yield* client.action("writing", {
+              op: "filesystem.readFile",
+              path: "/tmp/chunks",
+              offset: 262144,
+              length: 1,
+            })).content,
+          ).toBe("YQ==");
+        }),
+      ),
+    ),
+  60000,
 );

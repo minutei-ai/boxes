@@ -480,6 +480,15 @@ impl Node {
 impl Kernel {
     fn file_plan(&self, path: &str, mutation: FileMutation) -> Result<String, JsValue> {
         let path = self.resolve(path, true).map_err(|error| fail(&error))?;
+        self.file_plan_resolved(path, mutation, false)
+    }
+
+    fn file_plan_resolved(
+        &self,
+        path: String,
+        mutation: FileMutation,
+        descriptor: bool,
+    ) -> Result<String, JsValue> {
         self.package_writable(&path, false)
             .map_err(|error| fail(&error))?;
         let old_size = self.state.node(&path).map_or(0, Node::size);
@@ -547,7 +556,7 @@ impl Kernel {
             })
             .map(|(index, _)| (size - index as u64 * 262_144).min(262_144))
             .sum();
-        self.writable_file(&path, private_size, false)
+        self.writable_file(&path, private_size, descriptor)
             .map_err(|error| fail(&error))?;
         serde_json::to_string(&RangeWritePlan {
             path: &path,
@@ -1327,6 +1336,83 @@ impl Kernel {
         self.file_plan(path, FileMutation::Resize { size })
     }
 
+    pub fn write_inode_range_plan(
+        &self,
+        inode: u64,
+        offset: Option<u64>,
+        length: u64,
+    ) -> Result<String, JsValue> {
+        let path = self
+            .inode_path(inode)
+            .ok_or_else(|| fail("ENOENT: inode does not exist"))?;
+        self.file_plan_resolved(path, FileMutation::Write { offset, length }, true)
+    }
+
+    pub fn resize_inode_plan(&self, inode: u64, size: u64) -> Result<String, JsValue> {
+        let path = self
+            .inode_path(inode)
+            .ok_or_else(|| fail("ENOENT: inode does not exist"))?;
+        self.file_plan_resolved(path, FileMutation::Resize { size }, true)
+    }
+
+    pub fn open_regular(
+        &mut self,
+        path: &str,
+        access: u32,
+        flags: u32,
+        mode: u32,
+    ) -> Result<bool, JsValue> {
+        if !(1..=3).contains(&access)
+            || flags & !7 != 0
+            || mode & !0o777 != 0
+            || flags & 2 != 0 && flags & 1 == 0
+            || flags & 4 != 0 && access & 2 == 0
+        {
+            return Err(fail("EINVAL: invalid regular-file open options"));
+        }
+        if flags & 2 != 0 {
+            let entry = self.resolve(path, false).map_err(|error| fail(&error))?;
+            if self.state.nodes.contains_key(&entry) {
+                return Err(fail("EEXIST: file exists"));
+            }
+        }
+        let path = self.resolve(path, true).map_err(|error| fail(&error))?;
+        let exists = self.state.nodes.contains_key(&path);
+        if exists && flags & 2 != 0 {
+            return Err(fail("EEXIST: file exists"));
+        }
+        if !exists && flags & 1 == 0 {
+            return Err(fail("ENOENT: file does not exist"));
+        }
+        if exists && access & 1 != 0 {
+            self.read_plan_resolved(&path, 0, 0, false, false)?;
+        }
+        if access & 2 != 0 || !exists {
+            self.package_writable(&path, false)
+                .map_err(|error| fail(&error))?;
+            let private_size = match self.state.node(&path) {
+                Some(node) if flags & 4 == 0 => self.private_file_bytes(node),
+                _ => 0,
+            };
+            self.writable_file(&path, private_size, false)
+                .map_err(|error| fail(&error))?;
+        }
+        if !exists || flags & 4 != 0 {
+            let mode = self.state.node(&path).map_or(mode, Node::mode);
+            self.insert(
+                path,
+                Node::File {
+                    mode,
+                    size: 0,
+                    chunks: Vec::new(),
+                },
+            )
+            .map_err(|error| fail(&error))?;
+            return Ok(true);
+        }
+        Ok(false)
+    }
+
     pub fn prepare_write(&self, path: &str, size: u64, chunks: &str) -> Result<String, JsValue> {
         let plan = self
             .write_plan(path, size, chunks)
@@ -1935,6 +2021,63 @@ mod tests {
         assert_eq!((link.uid, link.gid, link.ctime_ns), (1000, 1001, 20));
         kernel.validate()?;
         Ok(())
+    }
+
+    #[test]
+    fn admitted_regular_inode_ranges_preserve_mode_and_track_append_and_resize()
+    -> Result<(), String> {
+        let mut kernel = Kernel::fresh();
+        assert!(
+            kernel
+                .open_regular("/tmp/descriptor", 3, 1, 0)
+                .map_err(|_| "open failed")?
+        );
+        let inode = kernel
+            .state
+            .metadata("/tmp/descriptor")
+            .ok_or("missing inode")?
+            .inode;
+        let plan: serde_json::Value = serde_json::from_str(
+            &kernel
+                .write_inode_range_plan(inode, Some(5), 1)
+                .map_err(|_| "range failed")?,
+        )
+        .map_err(|error| error.to_string())?;
+        assert_eq!(plan["offset"], 5);
+        assert_eq!(plan["size"], 6);
+        assert_eq!(plan["blocks"][0]["size"], 6);
+        let chunks = serde_json::to_string(&["a".repeat(64)]).map_err(|error| error.to_string())?;
+        kernel
+            .prepare_inode_write(inode, 6, &chunks)
+            .map_err(|_| "prepare failed")?;
+        kernel
+            .write_inode(inode, 6, &chunks)
+            .map_err(|_| "commit failed")?;
+        assert_eq!(
+            kernel
+                .state
+                .node("/tmp/descriptor")
+                .ok_or("missing file")?
+                .mode(),
+            0
+        );
+        let appended: serde_json::Value = serde_json::from_str(
+            &kernel
+                .write_inode_range_plan(inode, None, 2)
+                .map_err(|_| "append failed")?,
+        )
+        .map_err(|error| error.to_string())?;
+        assert_eq!(appended["offset"], 6);
+        assert_eq!(appended["size"], 8);
+        let resized: serde_json::Value = serde_json::from_str(
+            &kernel
+                .resize_inode_plan(inode, 2)
+                .map_err(|_| "resize failed")?,
+        )
+        .map_err(|error| error.to_string())?;
+        assert_eq!(resized["size"], 2);
+        assert_eq!(resized["blocks"][0]["previous"]["size"], 6);
+        kernel.validate()
     }
 
     #[test]

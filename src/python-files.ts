@@ -1,7 +1,15 @@
-import { Clock, Effect, Schema } from "effect";
-import { Capability, ContentBlock, FileStat, Fault, Path, ReadPlan } from "./contracts";
+import { Clock, Effect, Match, Schema } from "effect";
+import {
+  Capability,
+  ContentBlock,
+  FileStat,
+  Fault,
+  Path,
+  ReadPlan,
+  RangeWritePlan,
+} from "./contracts";
 import { requirePermission } from "./auth";
-import { block, kernelCall, open } from "./storage";
+import { applyWritePlan, block, kernelCall, open, publish } from "./storage";
 import type { Env } from "./resources";
 
 export const PythonFileSnapshot = Schema.Struct({
@@ -9,7 +17,13 @@ export const PythonFileSnapshot = Schema.Struct({
   blocks: Schema.Array(ContentBlock).check(Schema.isMaxLength(64)),
 });
 export const PythonFileAction = Schema.Union([
-  Schema.Struct({ op: Schema.Literal("python.file.openRead"), path: Path }),
+  Schema.Struct({
+    op: Schema.Literal("python.file.open"),
+    path: Path,
+    access: Schema.Int.check(Schema.isBetween({ minimum: 1, maximum: 3 })),
+    creation: Schema.Int.check(Schema.isBetween({ minimum: 0, maximum: 7 })),
+    mode: Schema.Int.check(Schema.isBetween({ minimum: 0, maximum: 511 })),
+  }),
   Schema.Struct({
     op: Schema.Literal("python.file.read"),
     snapshot: PythonFileSnapshot,
@@ -17,10 +31,28 @@ export const PythonFileAction = Schema.Union([
     length: Schema.Int.check(Schema.isBetween({ minimum: 0, maximum: 262_144 })),
   }),
   Schema.Struct({ op: Schema.Literal("python.file.stat"), snapshot: PythonFileSnapshot }),
+  Schema.Struct({
+    op: Schema.Literal("python.file.write"),
+    snapshot: PythonFileSnapshot,
+    offset: Schema.NullOr(
+      Schema.Int.check(Schema.isBetween({ minimum: 0, maximum: Number.MAX_SAFE_INTEGER })),
+    ),
+    content: Schema.String.check(Schema.isMaxLength(349528)),
+  }),
+  Schema.Struct({
+    op: Schema.Literal("python.file.resize"),
+    snapshot: PythonFileSnapshot,
+    size: Schema.Int.check(Schema.isBetween({ minimum: 0, maximum: 16777216 })),
+  }),
 ]);
 export const PythonFileRead = Schema.Struct({
   snapshot: PythonFileSnapshot,
   content: Schema.String,
+});
+const PythonFileWrite = Schema.Struct({
+  snapshot: PythonFileSnapshot,
+  offset: Schema.Int,
+  count: Schema.Int,
 });
 export const pythonFile = Effect.fn("python.file")(function* (
   env: Env,
@@ -29,18 +61,75 @@ export const pythonFile = Effect.fn("python.file")(function* (
 ) {
   if (capability.expiresAt <= (yield* Clock.currentTimeMillis))
     return yield* new Fault({ code: "UNAUTHORIZED", status: 401, message: "Capability expired" });
-  yield* requirePermission(capability, "read");
+  if (action.op === "python.file.open") {
+    if ((action.access & 1) !== 0) yield* requirePermission(capability, "read");
+    if ((action.access & 2) !== 0 || (action.creation & 1) !== 0)
+      yield* requirePermission(capability, "write");
+  } else if (action.op === "python.file.write" || action.op === "python.file.resize") {
+    yield* requirePermission(capability, "write");
+  } else if (action.op === "python.file.read" || !capability.permissions.includes("write")) {
+    yield* requirePermission(capability, "read");
+  }
   const session = yield* open(env, capability.sandboxId);
   const kernel = session.kernel;
-  if (action.op === "python.file.openRead") {
+  const yieldedTime = yield* Clock.currentTimeNanos;
+  yield* kernelCall(() => kernel.set_time(yieldedTime));
+  if (action.op === "python.file.open") {
+    const changed = yield* kernelCall(() =>
+      kernel.open_regular(action.path, action.access, action.creation, action.mode),
+    );
+    if (changed) yield* publish(env, capability.sandboxId, session);
     const stat = yield* kernelCall(() => kernel.stat(action.path, true)).pipe(
       Effect.flatMap(Schema.decodeUnknownEffect(Schema.fromJsonString(FileStat))),
     );
     const plan = yield* kernelCall(() =>
-      kernel.read_plan(action.path, 0n, 16_777_216n, false),
+      kernel.read_inode_plan(BigInt(stat.inode), 0n, 16777216n),
     ).pipe(Effect.flatMap(Schema.decodeUnknownEffect(Schema.fromJsonString(ReadPlan))));
     return new TextEncoder().encode(
       Schema.encodeSync(Schema.fromJsonString(PythonFileSnapshot))({ stat, blocks: plan.blocks }),
+    );
+  }
+  if (action.op === "python.file.write" || action.op === "python.file.resize") {
+    const inode = BigInt(action.snapshot.stat.inode);
+    const data = Match.value(action).pipe(
+      Match.when({ op: "python.file.write" }, (write) => Buffer.from(write.content, "base64")),
+      Match.orElse(() => Buffer.alloc(0)),
+    );
+    if (
+      action.op === "python.file.write" &&
+      (data.byteLength > 262144 || data.toString("base64") !== action.content)
+    )
+      return yield* new Fault({
+        code: "EINVAL",
+        status: 400,
+        message: "Invalid native file write content",
+      });
+    const plan = yield* kernelCall(() => {
+      if (action.op === "python.file.resize")
+        return kernel.resize_inode_plan(inode, BigInt(action.size));
+      if (action.offset === null)
+        return kernel.write_inode_range_plan(inode, undefined, BigInt(data.byteLength));
+      return kernel.write_inode_range_plan(inode, BigInt(action.offset), BigInt(data.byteLength));
+    }).pipe(Effect.flatMap(Schema.decodeUnknownEffect(Schema.fromJsonString(RangeWritePlan))));
+    if (yield* applyWritePlan(env, capability.sandboxId, kernel, plan, data, inode))
+      yield* publish(env, capability.sandboxId, session);
+    const stat = yield* kernelCall(() => kernel.stat_inode(inode)).pipe(
+      Effect.flatMap(Schema.decodeUnknownEffect(Schema.fromJsonString(FileStat))),
+    );
+    const blocks = yield* kernelCall(() => kernel.read_inode_plan(inode, 0n, 16777216n)).pipe(
+      Effect.flatMap(Schema.decodeUnknownEffect(Schema.fromJsonString(ReadPlan))),
+    );
+    const snapshot = { stat, blocks: blocks.blocks };
+    if (action.op === "python.file.resize")
+      return new TextEncoder().encode(
+        Schema.encodeSync(Schema.fromJsonString(PythonFileSnapshot))(snapshot),
+      );
+    return new TextEncoder().encode(
+      Schema.encodeSync(Schema.fromJsonString(PythonFileWrite))({
+        snapshot,
+        offset: plan.offset + data.byteLength,
+        count: data.byteLength,
+      }),
     );
   }
   const found = yield* kernelCall(() => kernel.stat_inode(BigInt(action.snapshot.stat.inode))).pipe(

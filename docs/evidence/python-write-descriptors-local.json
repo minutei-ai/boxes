@@ -1,0 +1,85 @@
+{
+  "status": "current source: linked regular-file writes and retained explicit flush verified locally; no release or deployment",
+  "measuredAt": "2026-10-18T15:59:55.169378+00:00",
+  "sourceBase": "786508d3367e4227e18e330ddcbee997a0e36917",
+  "sourceSha256": {
+    "crates/kernel/src/lib.rs": "c80a7d2bf36eeb97f3bb1de944fb2702a4a471b5639a9af376016a36d3a0ffa6",
+    "crates/python/src/os.rs": "9758764c579d6577f066d677e0d82cd639ce151482d1bf752a4be911b655764d",
+    "crates/python/src/filesystem.rs": "8ae78fc71248ebc39afe797d846962d2f2463e9c588def718b10489d78f62695",
+    "src/storage.ts": "e1b49c4b207fd7cc999f32b9f982d3f9cc88cd99c8c41588dc7c0ed26cc1df68",
+    "src/python-files.ts": "fb87566d389ab81015763d7004af047f73b195d295c3736dfa7ec76e8b645b57",
+    "src/python.ts": "7fbee38959bb0d378f928806ed7ab21636359acf17be2421b1899b7125358f54",
+    "tests/python-descriptors.test.ts": "c57a7cdaa271339ff8436ad33dc1c22cee87c10df486593ef1f2fed5e23da2f3"
+  },
+  "ownership": {
+    "kernel": "regular open admission, exclusive directory-entry check, captured inode mode rights, bounded range/resize plan and quotas",
+    "storage": "existing immutable-block uploader and conditional head publisher, now supporting inode targets without copying a whole file",
+    "python": "native descriptor access/append flags, acknowledged offsets, umask and existing RustPython/native _io buffer lifecycle",
+    "authority": "every actual write, resize, creation and buffered flush requires current write grant; reads require current read grant"
+  },
+  "coverage": [
+    "Native UTF-8 writer flushes acknowledged bytes, retains unflushed data in R2 heap, and restores after closing the original Worker",
+    "Read-only resumed flush fails with PermissionError 13; subsequent authorized flush preserves data without duplication",
+    "Umask 077 and resulting mode 0600 survive original Worker closure",
+    "Sparse positional writes zero-fill gaps; truncate preserves cursor; admitted descriptor writes continue after rename and chmod zero",
+    "Append respects current EOF after seek; zero-byte append does not move cursor",
+    "Exclusive creation rejects an existing file and a dangling final symlink without creating its target",
+    "Native buffered output crosses the 256 KiB host-write boundary and persists the final byte",
+    "Existing append/resize/staged quota and inode-aliasing tests remain intact"
+  ],
+  "checks": {
+    "build": "passed",
+    "typecheck": "passed",
+    "pythonClippy": "cargo clippy -p cirro-python --target wasm32-unknown-unknown -- -D warnings: passed",
+    "kernelClippy": "cargo clippy -p cirro-kernel --all-targets -- -D warnings: passed",
+    "kernelUnit": {
+      "command": "cargo test -p cirro-kernel admitted_regular_inode_ranges_preserve_mode_and_track_append_and_resize",
+      "passed": 1,
+      "failed": 0,
+      "logSha256": "718998e724eb81329ef448fa9e1c8127f68b7abde56aca0e5a59d44ed257c547"
+    },
+    "focusedWrite": {
+      "command": "bun test tests/python-descriptors.test.ts -t 'Python writes'",
+      "passed": 1,
+      "failed": 0,
+      "assertions": 12,
+      "seconds": 4.45,
+      "logSha256": "09f06385f875947429d139f4237e290d6a14f07adcfaead6f87d4804ebdbfb18"
+    },
+    "storageRegression": {
+      "files": ["tests/append.test.ts", "tests/resize.test.ts", "tests/write-staging.test.ts"],
+      "passed": 3,
+      "failed": 0,
+      "assertions": 43,
+      "seconds": 7.62,
+      "logSha256": "52d1cdf14f862bfac97a9c3b97b388b862e049436942d40dc7c11c5569204348"
+    },
+    "readRegression": "Both read/retention cases passed on this native implementation before the final test-only os import/umask assertions.",
+    "testDevelopmentFailure": "Expanded write scenario first failed with NameError because its new direct-os assertions omitted import os. The explicit import was added; the focused final scenario passed. No assertion or timeout was relaxed."
+  },
+  "binaries": {
+    "kernel": {
+      "bytes": 1199019,
+      "sha256": "b36dacf758d0f4898e31086ffc806f01405f29fc46f87fa06c0728c27a70c5a1"
+    },
+    "python": {
+      "bytes": 19662824,
+      "sha256": "c8dd81fdfd26a774e65028db37a58192d3c1432128e1ba704de8ad6d2f008c83"
+    }
+  },
+  "limits": [
+    "Automatic flushing at ephemeral process exit is not implemented; use explicit flush/close or a context manager",
+    "Writes after the final unlink and full cross-context detached-inode coherence remain open",
+    "Eager io.FileIO integration before lazy setup, directory/stdio descriptors, non-null dir_fd and full stdlib/pip remain open",
+    "Writes preserve existing R2 conditional-publication conflict behavior; there is no automatic retry of uncertain guest effects",
+    "New Python binary requires explicit context reset; no replay or heap conversion",
+    "No production latency, billing or AgentOS cost advantage claim"
+  ],
+  "delivery": {
+    "sourcePush": "pending",
+    "remoteCi": "pending",
+    "runtimePublication": "not performed",
+    "deployment": "not performed",
+    "minuteiUpdate": "not performed"
+  }
+}

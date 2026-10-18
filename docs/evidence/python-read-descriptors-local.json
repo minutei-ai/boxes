@@ -1,5 +1,5 @@
 {
-  "status": "unpublished source; native read-descriptor and open tests passed; parallel regression timeouts remain recorded; no release or deployment",
+  "status": "Historical read stage: native read/open proof and complete CI passed; not released or deployed. Current linked-write extension is recorded in python-write-descriptors-local.json.",
   "measuredAt": "2026-10-17T12:09:11.941058+00:00",
   "sourceBase": "db0028d11207d108a2e7139eb72341c8e7d44b2d",
   "sourceSha256": {
@@ -138,8 +138,19 @@
     "The optimized descriptor-boundary fixture has not passed locally; the latest attempt timed out and its subsequent proxy connection failed. Earlier repeated-open fixtures passed the same native capacity guard."
   ],
   "delivery": {
-    "sourcePush": "pending",
-    "remoteCi": "pending",
+    "sourcePush": {
+      "commit": "26a38a283ea79d155657d1283f5aa4f57dce4345",
+      "formatCorrection": "786508d3367e4227e18e330ddcbee997a0e36917"
+    },
+    "remoteCi": {
+      "runId": 39142285544,
+      "commit": "786508d3367e4227e18e330ddcbee997a0e36917",
+      "conclusion": "success",
+      "nativeTests": 445,
+      "nativeFiles": 101,
+      "nativeSeconds": 202.06,
+      "logSha256": "9f443e59c36a4ca15256276775c42737ec6d96d52ebc826c0b2225a50a4dce52"
+    },
     "runtimePublication": "not performed",
     "deployment": "not performed",
     "minuteiUpdate": "not performed"
