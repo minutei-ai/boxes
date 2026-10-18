@@ -1,0 +1,59 @@
+{
+  "status": "Exact candidate archives and actual local Minutei consumer passed; not yet published or deployed",
+  "version": "0.29.0",
+  "implementationCommit": "6447c197995bd5dc11065407fde2449248924330",
+  "measuredAt": "2026-10-18T23:15:16.943798+00:00",
+  "localEvidence": [
+    "python-scandir-local.json",
+    "python-namespace-local.json",
+    "filesystem-lifetime-local.json"
+  ],
+  "candidate": {
+    "assets": [
+      {
+        "file": "minutei-ai-boxes-0.29.0.tgz",
+        "bytes": 91200,
+        "sha256": "37f4e73c19512a2f82fa5a6838e5e3ad79848aff5aebc49d63ff3b15b91ff5d4"
+      },
+      {
+        "file": "minutei-ai-boxes-runtime-0.29.0.tgz",
+        "bytes": 7370595,
+        "sha256": "f3403dfc6a2ef39a99b869da0cf10ea165d717ca5e4e1ad066d8c3040229e276"
+      }
+    ],
+    "packageProof": {
+      "passed": true,
+      "version": "0.29.0",
+      "transport": "native Alchemy workerd service binding and Agent RPC; local R2 and Queue",
+      "logSha256": "2b9dd2062a5cdade420218077b3d347cd4b4b7076f7e3f12bb962c5918d448f4"
+    },
+    "minuteiProof": {
+      "clientVersion": "0.26.0",
+      "runtimeVersion": "0.29.0",
+      "runtimeArchiveSha256": "f3403dfc6a2ef39a99b869da0cf10ea165d717ca5e4e1ad066d8c3040229e276",
+      "consumerCommit": "d8bf6237cd2e7e2022546f3609e3e3b8e2559e65",
+      "consumerBundleSha256": "9c5cb5bb051fd1ebbaf984b2cbec59c7af2254d74288804fcbb425b88d13070a",
+      "transport": "native workerd Agent service binding; actual Minutei Code Mode and tenant SQLite; local R2, KV and Queue",
+      "retention": true,
+      "isolatedRegistry": true,
+      "capabilities": true,
+      "consumerFixturesSha256": {
+        "boxes-retention.ts": "2f90aacc149345cf51ffefc0f00e468c51e00d75cbe7f3e3dd68c532714edf70",
+        "boxes-code.worker.ts": "c3d6f06ea5f5afe322076052267468c4702fe79aff596fa847d68bdc3045e5f4"
+      },
+      "passed": true,
+      "logSha256": "f63f6de2d2986e58f7ddcc9233522e701d0d8bd2ff64c999a9bdeba382e4d8d1",
+      "scope": "Actual local Minutei Code Mode and tenant SQLite with installed SDK 0.26.0; no Minutei dependency update, push or deploy. History Queue processing and production/model behavior excluded."
+    }
+  },
+  "upgrade": "Python native binary changes require explicit reset of existing Python contexts. JavaScript, compiler and WASI native binaries are unchanged from 0.28.0; compatibility is checked separately. Kernel APIs change without changing manifest v6. All Alchemy deployment migrations run unconditionally.",
+  "delivery": {
+    "release": "not published",
+    "deployment": "not performed"
+  },
+  "limits": [
+    "Experimental; complete AgentOS parity, production Minutei/model behavior and comparative production CPU/latency/cost remain open.",
+    "Directory descriptors, special mode bits, recursive Python helpers, full pathlib/stdlib/pip and complete POSIX compatibility remain open.",
+    "Kernel-capacity reduction is a local native-workerd measurement; head reads remain unchanged and time results are mixed."
+  ]
+}
