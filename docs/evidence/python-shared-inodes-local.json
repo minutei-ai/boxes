@@ -1,6 +1,6 @@
 {
-  "status": "Final complete local check and exact candidate archive binding proof passed; source publication pending",
-  "measuredAt": "2026-10-18T19:20:59.341659+00:00",
+  "status": "Source implementation pushed; complete local verification, exact candidate archives, actual Minutei binding proof and remote CI passed",
+  "measuredAt": "2026-10-18T19:39:30.146203+00:00",
   "sourceBase": "23269f99c6f81fae35b402eec4055c60ac5345fc",
   "sourceSha256": {
     "alchemy.run.ts": "764f20c0656229272f8ad8be4caf92db96da84502d899b1a056e75e3254154f7",
@@ -126,9 +126,32 @@
           "bytes": 7299137,
           "sha256": "9e68e35e24ebbf5cd3b66b459845c69c2db00ed710242f8dfed182b8aea71f9c"
         }
-      }
+      },
+      "candidateIdentity": "Private unreleased source candidates use the current development package version; public 0.26.0 assets remain immutable."
     },
-    "format": "passed; repeated after final evidence formatting"
+    "format": "passed; repeated after final evidence formatting",
+    "minuteiProof": {
+      "command": "bun run minutei:proof <minutei-checkout> <candidate-runtime.tgz>",
+      "status": "passed",
+      "exitCode": 0,
+      "report": {
+        "clientVersion": "0.26.0",
+        "runtimeVersion": "0.26.0",
+        "runtimeArchiveSha256": "9e68e35e24ebbf5cd3b66b459845c69c2db00ed710242f8dfed182b8aea71f9c",
+        "consumerCommit": "d8bf6237cd2e7e2022546f3609e3e3b8e2559e65",
+        "consumerBundleSha256": "9c5cb5bb051fd1ebbaf984b2cbec59c7af2254d74288804fcbb425b88d13070a",
+        "transport": "native workerd Agent service binding; actual Minutei Code Mode and tenant SQLite; local R2, KV and Queue",
+        "retention": true,
+        "isolatedRegistry": true,
+        "capabilities": true,
+        "consumerFixturesSha256": {
+          "boxes-retention.ts": "2f90aacc149345cf51ffefc0f00e468c51e00d75cbe7f3e3dd68c532714edf70",
+          "boxes-code.worker.ts": "c3d6f06ea5f5afe322076052267468c4702fe79aff596fa847d68bdc3045e5f4"
+        }
+      },
+      "logSha256": "eaa8712680a17495aaa864f523bdc33cb476d0014732a9e70bcc1e918b2ff30e",
+      "limits": "Local actual consumer only; checkout unchanged, no Minutei push or deployment. SQLite trigger failures deliberately exercise cleanup recovery. History Queue consumption, authenticated production/model behavior and Python tool-budget suitability remain outside this proof."
+    }
   },
   "artifactComparison": {
     "reference": "Immutable public runtime 0.26.0, locally verified archive installation",
@@ -186,8 +209,22 @@
     "Full stdlib/pip, upstream parity, real Minutei production/model behavior and performance/cost gates remain open"
   ],
   "delivery": {
-    "sourcePush": "pending",
-    "remoteCi": "pending",
+    "sourcePush": {
+      "sha": "a9ae451736a2fe80bdff57e3958535a3e8b3f239",
+      "branch": "main",
+      "remote": "minutei-ai/boxes",
+      "verified": true
+    },
+    "remoteCi": {
+      "runId": 39158802587,
+      "status": "completed",
+      "url": "https://github.com/minutei-ai/boxes/actions/runs/39158802587",
+      "conclusion": "success",
+      "headSha": "a9ae451736a2fe80bdff57e3958535a3e8b3f239",
+      "tests": 452,
+      "files": 101,
+      "testSeconds": 220.67
+    },
     "release": "not published",
     "deployment": "not performed"
   }
