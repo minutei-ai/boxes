@@ -1,0 +1,40 @@
+{
+  "status": "Candidate exact archive proof passed; unpublished and not deployed",
+  "version": "0.28.0",
+  "implementationCommit": "176d9e2697798d98d8fc482e1b1a9409c91de643",
+  "measuredAt": "2026-10-18T21:23:20.760744+00:00",
+  "localEvidence": [
+    "python-paths-local.json",
+    "python-path-library-local.json",
+    "semantic-paths-local.json"
+  ],
+  "upgrade": "Python and WASI native binaries change. Existing Python contexts require explicit reset; unchanged JavaScript context compatibility is verified separately. Exact-build WASI checkpoint compatibility still applies. Filesystem v6 data shape is unchanged; all deploy migrations run unconditionally.",
+  "candidate": {
+    "assets": [
+      {
+        "file": "minutei-ai-boxes-0.28.0.tgz",
+        "bytes": 90235,
+        "sha256": "312aa5ddbcdaed4816a61d22f20f99fc986b2a1afb3b427abcdc9c2b011571d6"
+      },
+      {
+        "file": "minutei-ai-boxes-runtime-0.28.0.tgz",
+        "bytes": 7334368,
+        "sha256": "ac114b32bdada7a8faf932d7b1ff7fd81a7b2fab6e1bd6c0b02229b8fb168c40"
+      }
+    ],
+    "packageProof": {
+      "passed": true,
+      "version": "0.28.0",
+      "transport": "native Alchemy workerd service binding and Agent RPC; local R2 and Queue",
+      "logSha256": "c7845151fcc706111ea3788662bbaae77c35638d9df4cb2fb5ace51d6af9cd80"
+    }
+  },
+  "delivery": {
+    "release": "not published",
+    "deployment": "not performed"
+  },
+  "limits": [
+    "Experimental prerelease; complete upstream parity, real Minutei production/model behavior and comparative performance/cost remain open.",
+    "Full pathlib, scandir, directory descriptors, general POSIX/error compatibility, stdlib/pip, Node/npm, mounts and full cross-runtime inode/cwd coherence remain open."
+  ]
+}
