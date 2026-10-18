@@ -1,0 +1,36 @@
+{
+  "status": "Candidate exact archive proof passed; unpublished and not deployed",
+  "version": "0.27.0",
+  "implementationCommit": "a9ae451736a2fe80bdff57e3958535a3e8b3f239",
+  "measuredAt": "2026-10-18T19:40:53.844211+00:00",
+  "localEvidence": ["python-shared-inodes-local.json"],
+  "candidate": {
+    "assets": [
+      {
+        "file": "minutei-ai-boxes-0.27.0.tgz",
+        "bytes": 89060,
+        "sha256": "b47019a65eb6dfe81c69245173106dcf3c06220dc38bb2446c2042ddc11f85d4"
+      },
+      {
+        "file": "minutei-ai-boxes-runtime-0.27.0.tgz",
+        "bytes": 7299137,
+        "sha256": "625af48d711b592bccecdfac7f6276cb49f7e00642188d972381ffccea12d97d"
+      }
+    ],
+    "packageProof": {
+      "passed": true,
+      "version": "0.27.0",
+      "transport": "native Alchemy workerd service binding and Agent RPC; local R2 and Queue",
+      "logSha256": "f7fe65a19f229f6082b0d87dbc67022f7811704b81e6b973ebec88401733fb3e"
+    }
+  },
+  "upgrade": "Unconditional filesystem-v6 migration. Existing Python contexts require explicit reset; old heaps must fail before process reservation. JavaScript continuity is checked independently.",
+  "delivery": {
+    "release": "not published",
+    "deployment": "not performed"
+  },
+  "limits": [
+    "Full upstream parity, actual Minutei production/model behavior and comparative performance/cost remain open.",
+    "WASI process-local detached files are outside Python shared-inode coherence."
+  ]
+}
