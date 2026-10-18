@@ -258,6 +258,90 @@ pub mod native {
         }
     }
     #[derive(FromArgs)]
+    struct MkdirArgs {
+        #[pyarg(any)]
+        path: FsPath,
+        #[pyarg(any, default = 0o777)]
+        mode: u32,
+        #[pyarg(named, default)]
+        dir_fd: Option<i32>,
+    }
+    #[pyfunction]
+    fn mkdir(args: MkdirArgs, vm: &VirtualMachine) -> PyResult<()> {
+        if args.dir_fd.is_some() || args.mode & !0o777 != 0 {
+            return Err(fault(
+                vm,
+                "ENOTSUP",
+                "Unsupported directory creation options",
+            )?);
+        }
+        let mode = args.mode & !table(vm).mask.get();
+        exchange(
+            vm,
+            &json!({"op":"python.file.mkdir","path":path(&args.path,vm)?,"mode":mode}),
+        )?;
+        Ok(())
+    }
+    #[pyfunction]
+    #[pyfunction(name = "unlink")]
+    fn remove(args: PathArgs, vm: &VirtualMachine) -> PyResult<()> {
+        if args.dir_fd.is_some() {
+            return Err(fault(
+                vm,
+                "ENOTSUP",
+                "Directory descriptors are not supported",
+            )?);
+        }
+        exchange(
+            vm,
+            &json!({"op":"python.file.remove","path":path(&args.path,vm)?,"directory":false}),
+        )?;
+        Ok(())
+    }
+    #[pyfunction]
+    fn rmdir(args: PathArgs, vm: &VirtualMachine) -> PyResult<()> {
+        if args.dir_fd.is_some() {
+            return Err(fault(
+                vm,
+                "ENOTSUP",
+                "Directory descriptors are not supported",
+            )?);
+        }
+        exchange(
+            vm,
+            &json!({"op":"python.file.remove","path":path(&args.path,vm)?,"directory":true}),
+        )?;
+        Ok(())
+    }
+    #[derive(FromArgs)]
+    struct RenameArgs {
+        #[pyarg(any)]
+        src: FsPath,
+        #[pyarg(any)]
+        dst: FsPath,
+        #[pyarg(named, default)]
+        src_dir_fd: Option<i32>,
+        #[pyarg(named, default)]
+        dst_dir_fd: Option<i32>,
+    }
+    #[pyfunction]
+    #[pyfunction(name = "replace")]
+    fn rename(args: RenameArgs, vm: &VirtualMachine) -> PyResult<()> {
+        if args.src_dir_fd.is_some() || args.dst_dir_fd.is_some() {
+            return Err(fault(
+                vm,
+                "ENOTSUP",
+                "Directory descriptors are not supported",
+            )?);
+        }
+        exchange(
+            vm,
+            &json!({"op":"filesystem.move","from":path(&args.src,vm)?,"to":path(&args.dst,vm)?}),
+        )?;
+        Ok(())
+    }
+
+    #[derive(FromArgs)]
     struct ListDirArgs {
         #[pyarg(any, default)]
         path: Option<FsPath>,

@@ -17,13 +17,20 @@ export const PythonFileOwner = Schema.Struct({
   generation: ContextReference.fields.generation,
 });
 
+const PermissionMode = Schema.Int.check(Schema.isBetween({ minimum: 0, maximum: 511 }));
 export const PythonFileAction = Schema.Union([
+  Schema.Struct({ op: Schema.Literal("python.file.mkdir"), path: Path, mode: PermissionMode }),
+  Schema.Struct({
+    op: Schema.Literal("python.file.remove"),
+    path: Path,
+    directory: Schema.Boolean,
+  }),
   Schema.Struct({
     op: Schema.Literal("python.file.open"),
     path: Path,
     access: Schema.Int.check(Schema.isBetween({ minimum: 1, maximum: 3 })),
     creation: Schema.Int.check(Schema.isBetween({ minimum: 0, maximum: 7 })),
-    mode: Schema.Int.check(Schema.isBetween({ minimum: 0, maximum: 511 })),
+    mode: PermissionMode,
   }),
   Schema.Struct({
     op: Schema.Literal("python.file.read"),
@@ -65,7 +72,12 @@ export const pythonFile = Effect.fn("python.file")(function* (
     if ((action.access & 1) !== 0) yield* requirePermission(capability, "read");
     if ((action.access & 2) !== 0 || (action.creation & 1) !== 0)
       yield* requirePermission(capability, "write");
-  } else if (action.op === "python.file.write" || action.op === "python.file.resize") {
+  } else if (
+    action.op === "python.file.write" ||
+    action.op === "python.file.resize" ||
+    action.op === "python.file.mkdir" ||
+    action.op === "python.file.remove"
+  ) {
     yield* requirePermission(capability, "write");
   } else if (action.op === "python.file.read" || action.op === "python.file.cwd") {
     yield* requirePermission(capability, "read");
@@ -78,6 +90,16 @@ export const pythonFile = Effect.fn("python.file")(function* (
   const kernel = session.kernel;
   const yieldedTime = yield* Clock.currentTimeNanos;
   yield* kernelCall(() => kernel.set_time(yieldedTime));
+  if (action.op === "python.file.mkdir") {
+    yield* kernelCall(() => kernel.mkdir_one(action.path, action.mode));
+    yield* publish(env, capability.sandboxId, session);
+    return new TextEncoder().encode(Schema.encodeSync(Schema.fromJsonString(Schema.Null))(null));
+  }
+  if (action.op === "python.file.remove") {
+    yield* kernelCall(() => kernel.remove_one(action.path, action.directory));
+    yield* publish(env, capability.sandboxId, session);
+    return new TextEncoder().encode(Schema.encodeSync(Schema.fromJsonString(Schema.Null))(null));
+  }
   if (action.op === "python.file.open") {
     const changed = yield* kernelCall(() =>
       kernel.open_regular(action.path, action.access, action.creation, action.mode),

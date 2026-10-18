@@ -1,0 +1,218 @@
+{
+  "status": "Native source checks passed; not yet published or deployed",
+  "measuredAt": "2026-10-18T22:32:35.035292+00:00",
+  "sourceBase": "669fb9f3f6254254ae01f54716c82e6d7ce4858c",
+  "sourceSha256": {
+    "crates/kernel/src/lib.rs": "098ff3753e85c20519ea047b870342b50292cda7df4c46af14462c732a00d808",
+    "crates/python/src/os.rs": "ef50032a83e148ab30a043bf1b01d93e30aceedd552813fa9ff72d7f1e5fefbc",
+    "src/python-files.ts": "267274a78814fd50d4bdc725339ca28fba43c857a2b05ca3cc3deac84e440b8f",
+    "src/python.ts": "8d8286996bfc807c26e89b431b1869bc6ed97174aa59cc2b97097f6a75f2a8b6",
+    "tests/python-namespace.test.ts": "c62054555d9172a3e3c01c61c5bd5812377e776f4a0f4b7846034532767472f4",
+    "tests/default-software.test.ts": "f03535e263f12d37469c8a04f46cf6386d87f52f0ce662ba18e57dc449f5195a"
+  },
+  "upstreamReference": {
+    "repository": "rivet-dev/agentos",
+    "verifiedMainCommit": "4d48628304c1ddedafc9d55f60752093fcf6f3d2",
+    "unchangedFromParityInventory": true
+  },
+  "reproduction": {
+    "runtime": "Native Alchemy workerd service binding and actual local R2",
+    "initialFailure": "AttributeError: module 'os' has no attribute 'mkdir'",
+    "baselineLogSha256": "9bde98478859737250dcfebd06a3612b83ffbdf70e94b431958dbf15bcb8e44f",
+    "fixtureCorrection": "An initial non-ASCII bytes literal was corrected to UTF-8 encode before the actual missing-mkdir reproduction.",
+    "dotEntryFailure": "Native regression initially accepted rmdir(directory/.) and reached AssertionError. The kernel now rejects a terminal dot entry before mutation.",
+    "dotEntryBaselineLogSha256": "ea7016a94cb9650b79feb307dc6ba898dc00bbe2f5c2de8603a6a476f05591ba"
+  },
+  "change": [
+    "Native Python mkdir, unlink/remove, rmdir and POSIX-style rename/replace. FromArgs uses the pinned FsPath conversion, preserving str, UTF-8 bytes, path-like inputs, keyword arguments and NUL rejection.",
+    "The Rust mkdir_one primitive creates one directory with the supplied permission mode, applied with the interpreter umask before host dispatch. Existing regular files and symlinks, including dangling links and trailing slashes, report EEXIST.",
+    "The Rust remove_one primitive checks entry kind and terminal-dot semantics without following the final symlink. Existing kernel removal retains open/unlinked inodes and readonly-software guards.",
+    "Private Effect Schema requests own acquisition, current write authorization and one R2 head publication after the kernel mutation. Rename/replace reuse the existing authorized filesystem.move operation. A multi-action Python program remains multiple acknowledged effects.",
+    "Directory-fd options and unsupported special mode bits fail explicitly; no shadow filesystem, compatibility branch, new service or persisted-shape migration is introduced."
+  ],
+  "coverage": [
+    "Default/explicit/zero directory modes and preserved umask through closed/replacement Workers; str, bytes, path-like and keyword arguments.",
+    "Existing file/directory/symlink/dangling entries; absent parents; unlink versus rmdir; empty versus nonempty directories; trailing slashes; rmdir terminal dot entry refusal without removing its directory.",
+    "Rename/replace preserve an overwritten open inode after unlink, across original Worker closure and R2 restoration; later writes/close do not recreate its pathname.",
+    "Renaming the cwd ancestor preserves cwd inode identity; explicitly removing an empty cwd makes getcwd fail until an absolute chdir.",
+    "Current readonly authority denies every namespace mutation and leaves target paths intact. Write/execute-only authority creates, renames and removes a private directory without acquiring read authority.",
+    "Private native mkdir/remove requests remain denied through guest _boxes_io.call.",
+    "The actual pinned shared sh/jq image rejects Python mkdir, unlink, rmdir, rename and replace with EROFS; the existing native software restoration/corruption proof still passes."
+  ],
+  "hostOracle": {
+    "python": "3.14.8 (main, Oct  2 2026, 10:23:31) [GCC 16.2.1 20260810]",
+    "umask": "0o27",
+    "createdMode": "0o750",
+    "zeroMode": "0o0",
+    "errors": {
+      "mkdirFile": {
+        "type": "FileExistsError",
+        "errno": 17
+      },
+      "mkdirDirectory": {
+        "type": "FileExistsError",
+        "errno": 17
+      },
+      "mkdirDangling": {
+        "type": "FileExistsError",
+        "errno": 17
+      },
+      "unlinkDirectory": {
+        "type": "IsADirectoryError",
+        "errno": 21
+      },
+      "rmdirFile": {
+        "type": "NotADirectoryError",
+        "errno": 20
+      },
+      "rmdirSymlink": {
+        "type": "NotADirectoryError",
+        "errno": 20
+      },
+      "rmdirNonempty": {
+        "type": "OSError",
+        "errno": 39
+      },
+      "unlinkMissing": {
+        "type": "FileNotFoundError",
+        "errno": 2
+      }
+    },
+    "replacedOpenFile": {
+      "content": "original",
+      "links": 0,
+      "newContent": "new"
+    },
+    "replaceContent": "final",
+    "removeLeftPath": false,
+    "terminalSelfEntryErrors": {
+      ".": 22,
+      "./": 22
+    },
+    "trailingSlashErrors": {
+      "mkdir:dir/": 17,
+      "mkdir:alias/": 17,
+      "mkdir:dangling/": 17,
+      "mkdir:file/": 17,
+      "unlink:dir/": 21,
+      "unlink:alias/": 20,
+      "unlink:dangling/": 20,
+      "unlink:file/": 20,
+      "rmdir:dir/": "success",
+      "rmdir:alias/": 20,
+      "rmdir:dangling/": 20,
+      "rmdir:file/": 20
+    }
+  },
+  "checks": {
+    "fullCheck": {
+      "passed": true,
+      "tests": 458,
+      "failed": 0,
+      "expects": 6678,
+      "files": 106,
+      "elapsed": "288.45s",
+      "includes": [
+        "Build SDK",
+        "TypeScript typecheck",
+        "Clippy -D warnings",
+        "Native workspace Rust tests",
+        "Actual workerd/R2/Queue suites"
+      ],
+      "logSha256": "cd2401c7f7c696fc523727e1c322d637bc3198dd26dacf77cc28ebf873c6e48c"
+    }
+  },
+  "development": {
+    "initialFullCheck": {
+      "passed": false,
+      "tests": 458,
+      "passedTests": 455,
+      "failedTests": 3,
+      "unhandledErrors": 3,
+      "elapsedSeconds": 305.59,
+      "newPythonNamespaceCasePassed": true,
+      "failures": [
+        "Existing tanstack bulk-disposal test timed out at 15 seconds",
+        "Following queued-cleanup test timed out at 3 seconds after the shared Worker replacement",
+        "Existing terminal-attributes test timed out at 5 seconds; connection/schema errors occurred after interruption"
+      ],
+      "logSha256": "433784ed624ff3b85a02ede78d786fa93b84e9623e7bae43b8e6161b9e4ce2d2"
+    },
+    "isolatedUnchangedReproduction": {
+      "passed": true,
+      "tests": 7,
+      "files": 3,
+      "expects": 95,
+      "elapsedSeconds": 21.82,
+      "logSha256": "e4aa4f01fc9381d0a1537c44f8c967caae614f596720438369a05290a258535f",
+      "scope": "The three failing existing paths and the then-current namespace case passed in an isolated run before the independent dot-entry correction. Their full-suite timeout cause remains unestablished. No timeout or existing failing-test code changed."
+    },
+    "independentCorrection": "A Linux host oracle and a native failing regression established terminal-dot rmdir semantics. The final kernel rejects this entry. This does not establish a causal fix for the earlier full-suite timeout failures."
+  },
+  "references": [
+    "https://github.com/rivet-dev/agentos/tree/4d48628304c1ddedafc9d55f60752093fcf6f3d2",
+    "https://docs.python.org/3/library/os.html#os.mkdir",
+    "https://docs.python.org/3/library/os.html#os.remove",
+    "https://docs.python.org/3/library/os.html#os.rmdir",
+    "https://docs.python.org/3/library/os.html#os.rename"
+  ],
+  "artifactComparison": [
+    {
+      "module": "kernel",
+      "referenceSource": "669fb9f3f6254254ae01f54716c82e6d7ce4858c",
+      "referenceBytes": 1243800,
+      "referenceSha256": "f31caad6e7db817ad9e9eff12466ba196f6003207f876b1cb545efd62b833a90",
+      "candidateBytes": 1246046,
+      "candidateSha256": "63aa260e36d4fffb2fe5ffd160bdd189dc6e6ebe7a905a6eb3624222dc4b73b8",
+      "deltaBytes": 2246
+    },
+    {
+      "module": "wasi",
+      "referenceSource": "669fb9f3f6254254ae01f54716c82e6d7ce4858c",
+      "referenceBytes": 1706658,
+      "referenceSha256": "3f3a97b0262036b6843581f9ef019ccf394a4d65fc45e02a2f2ddcd78e01df66",
+      "candidateBytes": 1706658,
+      "candidateSha256": "3f3a97b0262036b6843581f9ef019ccf394a4d65fc45e02a2f2ddcd78e01df66",
+      "deltaBytes": 0
+    },
+    {
+      "module": "guest",
+      "referenceSource": "669fb9f3f6254254ae01f54716c82e6d7ce4858c",
+      "referenceBytes": 1150616,
+      "referenceSha256": "dcf1a9d66b4c3a11106076c3e9d5fa1f596b8846a811dfeec9ecf3a8744af01f",
+      "candidateBytes": 1150616,
+      "candidateSha256": "dcf1a9d66b4c3a11106076c3e9d5fa1f596b8846a811dfeec9ecf3a8744af01f",
+      "deltaBytes": 0
+    },
+    {
+      "module": "compiler",
+      "referenceSource": "669fb9f3f6254254ae01f54716c82e6d7ce4858c",
+      "referenceBytes": 1943596,
+      "referenceSha256": "27d9b0022a634ed4eef47b6561ad38cafde3522c17e834afed1264440678bf2f",
+      "candidateBytes": 1943596,
+      "candidateSha256": "27d9b0022a634ed4eef47b6561ad38cafde3522c17e834afed1264440678bf2f",
+      "deltaBytes": 0
+    },
+    {
+      "module": "python",
+      "referenceSource": "669fb9f3f6254254ae01f54716c82e6d7ce4858c",
+      "referenceBytes": 19865414,
+      "referenceSha256": "187310908261382bc44c5d8aa33854c8505fd0591a3b739a0f23bfe4fa5f6a16",
+      "candidateBytes": 19884411,
+      "candidateSha256": "3ff7134c5ff8c37e9b7aecf02aff773bb843473de0b8f38e6fc2c0a73b44d40a",
+      "deltaBytes": 18997
+    }
+  ],
+  "limits": [
+    "Directory descriptors, special mode bits, recursive Python helpers, full pathlib/stdlib/pip and complete POSIX/error-attribute compatibility remain open.",
+    "Virtual-root protection retains the existing kernel policy. Each operation consumes the existing Python instruction, memory and 256 host-request limits.",
+    "The initial full-suite timeout/connection failures were not reproduced in isolation; their cause is not established by a later successful run.",
+    "No new production, maximum-scale memory, latency, CPU, billing or AgentOS cost claim.",
+    "This changes the Python native binary and requires explicit reset of existing Python contexts on adoption. Kernel manifest v6 is unchanged."
+  ],
+  "delivery": {
+    "publication": "not performed",
+    "deployment": "not performed",
+    "minutei": "not changed, pushed or deployed"
+  }
+}

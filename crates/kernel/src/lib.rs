@@ -1859,6 +1859,26 @@ impl Kernel {
         Ok(resolved)
     }
 
+    pub fn mkdir_one(&mut self, path: &str, mode: u32) -> Result<(), JsValue> {
+        if mode > 0o777 {
+            return Err(fail("EINVAL: unsupported directory mode"));
+        }
+        let path = absolute(path, "/").map_err(|error| fail(&error))?;
+        let entry = match path.trim_end_matches('/') {
+            "" => "/",
+            entry => entry,
+        };
+        let path = self.resolve(entry, false).map_err(|error| fail(&error))?;
+        if self.state.nodes.contains_key(&path) {
+            return Err(fail("EEXIST: directory entry exists"));
+        }
+        self.writable_parent(&path).map_err(|error| fail(&error))?;
+        self.package_writable(&path, false)
+            .map_err(|error| fail(&error))?;
+        self.insert(path, Node::Directory { mode })
+            .map_err(|error| fail(&error))
+    }
+
     pub fn mkdir(&mut self, path: &str, recursive: bool) -> Result<(), JsValue> {
         let path = absolute(path, "/").map_err(|e| fail(&e))?;
         if path == "/" {
@@ -1982,6 +2002,25 @@ impl Kernel {
             .walk(path, max_depth, exclude)
             .map_err(|error| fail(&error))?;
         serde_json::to_string(&entries).map_err(|_| fail("EIO: serialization failed"))
+    }
+
+    pub fn remove_one(&mut self, path: &str, directory: bool) -> Result<(), JsValue> {
+        let names_self = directory && path.trim_end_matches('/').rsplit('/').next() == Some(".");
+        let path = self.resolve(path, false).map_err(|error| fail(&error))?;
+        if names_self {
+            return Err(fail("EINVAL: rmdir cannot remove a dot entry"));
+        }
+        let node = self
+            .state
+            .node(&path)
+            .ok_or_else(|| fail("ENOENT: entry does not exist"))?;
+        if directory && !matches!(node, Node::Directory { .. }) {
+            return Err(fail("ENOTDIR: rmdir requires a directory entry"));
+        }
+        if !directory && matches!(node, Node::Directory { .. }) {
+            return Err(fail("EISDIR: unlink cannot remove a directory entry"));
+        }
+        self.remove(&path, false)
     }
 
     pub fn remove(&mut self, path: &str, recursive: bool) -> Result<(), JsValue> {

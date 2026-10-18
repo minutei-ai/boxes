@@ -264,7 +264,17 @@ test(
                 op: "python.execute",
                 id: "open-software",
                 contextId: "files",
-                source: "import os\nfd=os.open('/opt/cirro/bin/sh',os.O_RDONLY)\nTrue",
+                source: `import os,errno
+for action in [lambda:os.mkdir('/opt/cirro/bin/new'),lambda:os.unlink('/opt/cirro/bin/sh'),lambda:os.rmdir('/opt/cirro/bin'),lambda:os.rename('/opt/cirro/bin/sh','/tmp/moved-sh'),lambda:os.replace('/opt/cirro/bin/sh','/tmp/replaced-sh')]:
+ try:
+  action()
+ except OSError as error:
+  assert error.errno==errno.EROFS
+ else:
+  raise AssertionError('shared software mutated through Python namespace API')
+assert os.path.isfile('/opt/cirro/bin/sh') and not os.path.exists('/opt/cirro/bin/new')
+fd=os.open('/opt/cirro/bin/sh',os.O_RDONLY)
+True`,
               });
               expect(heldOpened.output?.stderr).toBe("");
               expect(heldOpened.output?.result).toBe(true);
