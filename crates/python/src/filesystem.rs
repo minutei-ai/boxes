@@ -1,6 +1,59 @@
 use rustpython_vm::{AsObject, PyObjectRef, PyResult, VirtualMachine, py_serde};
 use serde_json::Value;
 
+const ERROR_CODES: &[(&str, i32, &str)] = &[
+    ("EPERM", 1, "Operation not permitted"),
+    ("ENOENT", 2, "No such file or directory"),
+    ("EINTR", 4, "Interrupted system call"),
+    ("EIO", 5, "Input/output error"),
+    ("EBADF", 9, "Bad file descriptor"),
+    ("EAGAIN", 11, "Resource temporarily unavailable"),
+    ("EACCES", 13, "Permission denied"),
+    ("EBUSY", 16, "Device or resource busy"),
+    ("EEXIST", 17, "File exists"),
+    ("ENOTDIR", 20, "Not a directory"),
+    ("EISDIR", 21, "Is a directory"),
+    ("EINVAL", 22, "Invalid argument"),
+    ("EMFILE", 24, "Too many open files"),
+    ("EFBIG", 27, "File too large"),
+    ("ENOSPC", 28, "No space left on device"),
+    ("ESPIPE", 29, "Illegal seek"),
+    ("EROFS", 30, "Read-only file system"),
+    ("EPIPE", 32, "Broken pipe"),
+    ("ENAMETOOLONG", 36, "File name too long"),
+    ("ENOTEMPTY", 39, "Directory not empty"),
+    ("ELOOP", 40, "Too many levels of symbolic links"),
+    ("ENOTSUP", 95, "Operation not supported"),
+    ("ETIMEDOUT", 110, "Connection timed out"),
+    ("ESTALE", 116, "Stale file handle"),
+];
+
+pub(crate) fn strerror(code: i32) -> String {
+    ERROR_CODES
+        .iter()
+        .find(|entry| entry.1 == code)
+        .map(|entry| entry.2.to_owned())
+        .unwrap_or_else(|| format!("Unknown error {code}"))
+}
+
+#[rustpython_vm::pymodule(name = "errno")]
+pub mod errno {
+    use super::ERROR_CODES;
+    use rustpython_vm::{Py, PyResult, VirtualMachine, builtins::PyModule};
+
+    pub(crate) fn module_exec(vm: &VirtualMachine, module: &Py<PyModule>) -> PyResult<()> {
+        __module_exec(vm, module);
+        let errorcode = vm.ctx.new_dict();
+        for &(name, value, _) in ERROR_CODES {
+            module.set_attr(name, vm.ctx.new_int(value), vm)?;
+            let number = vm.new_pyobj(value);
+            errorcode.set_item(&*number, vm.ctx.new_str(name).into(), vm)?;
+        }
+        module.set_attr("errorcode", errorcode, vm)?;
+        Ok(())
+    }
+}
+
 #[cfg(target_arch = "wasm32")]
 #[link(wasm_import_module = "boxes_python")]
 unsafe extern "C" {
@@ -58,22 +111,25 @@ pub(crate) fn fault(
     message: &str,
 ) -> PyResult<rustpython_vm::PyRef<rustpython_vm::builtins::PyBaseException>> {
     let exceptions = &vm.ctx.exceptions;
-    let (kind, errno) = match code {
-        "ENOENT" => (exceptions.file_not_found_error, Some(2)),
-        "ENOTDIR" => (exceptions.not_a_directory_error, Some(20)),
-        "EISDIR" => (exceptions.is_a_directory_error, Some(21)),
-        "EEXIST" => (exceptions.file_exists_error, Some(17)),
-        "EACCES" | "FORBIDDEN" | "UNAUTHORIZED" => (exceptions.permission_error, Some(13)),
-        "EPERM" => (exceptions.permission_error, Some(1)),
-        "ETIMEDOUT" => (exceptions.timeout_error, Some(110)),
-        "EFBIG" => (exceptions.os_error, Some(27)),
-        "ENOSPC" => (exceptions.os_error, Some(28)),
-        "EIO" => (exceptions.os_error, Some(5)),
-        "EBADF" => (exceptions.os_error, Some(9)),
-        "EINVAL" => (exceptions.os_error, Some(22)),
-        "EMFILE" => (exceptions.os_error, Some(24)),
-        "ENOTSUP" => (exceptions.os_error, Some(95)),
-        _ => (exceptions.os_error, None),
+    let name = match code {
+        "FORBIDDEN" | "UNAUTHORIZED" => "EACCES",
+        _ => code,
+    };
+    let errno = ERROR_CODES
+        .iter()
+        .find(|entry| entry.0 == name)
+        .map(|entry| entry.1);
+    let kind = match name {
+        "ENOENT" => exceptions.file_not_found_error,
+        "ENOTDIR" => exceptions.not_a_directory_error,
+        "EISDIR" => exceptions.is_a_directory_error,
+        "EEXIST" => exceptions.file_exists_error,
+        "EACCES" | "EPERM" => exceptions.permission_error,
+        "ETIMEDOUT" => exceptions.timeout_error,
+        "EINTR" => exceptions.interrupted_error,
+        "EAGAIN" => exceptions.blocking_io_error,
+        "EPIPE" => exceptions.broken_pipe_error,
+        _ => exceptions.os_error,
     };
     let error = vm
         .new_os_subtype_error(kind.to_owned(), errno, message)
@@ -237,6 +293,9 @@ def install(filename):
  import builtins
  import _io as native
  import io
+ import posixpath
+ _os.path = posixpath
+ _sys.modules['os.path'] = posixpath
  builtins.open = open
  native.open = open
  native.__getattr__ = _io_attribute

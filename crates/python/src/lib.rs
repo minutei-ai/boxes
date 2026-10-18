@@ -218,10 +218,12 @@ impl PythonGuest {
         let environment_module = os::native::module_def(&builder.ctx);
         let locks_module = locks::single_thread::module_def(&builder.ctx);
         let filesystem_module = filesystem::native::module_def(&builder.ctx);
+        let errno_module = filesystem::errno::module_def(&builder.ctx);
         let interpreter = builder
             .add_native_module(environment_module)
             .add_native_module(locks_module)
             .add_native_module(filesystem_module)
+            .add_native_module(errno_module)
             .add_frozen_modules(filesystem::IMPORTS)
             .add_frozen_modules(BOOTSTRAP)
             .add_frozen_modules(TOOLS)

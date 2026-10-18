@@ -1,0 +1,305 @@
+{
+  "status": "Unreleased source; complete final local verification passed",
+  "measuredAt": "2026-10-18T20:44:49.399094+00:00",
+  "sourceBase": "5d8812c7e88a02ffc3c6a64cdc0d54c0ab4ed481",
+  "sourceSha256": {
+    "crates/python/build.rs": "2123db1278efa2f99f23b0e9a9cb56dd643805c27836e194aa10f24696d10344",
+    "crates/python/src/filesystem.rs": "b3770e8a0f65eb6192076f062fe28c3a624c38fde125ad1bf3f419f555187daa",
+    "crates/python/src/lib.rs": "71a4373653d2b91a4732ad0db46c6fe9d63033ec0a40ccc1b2ca6c881ccfa329",
+    "crates/python/src/os.rs": "6fc891493b01a2b3d3e45b22f36b44b9c33b79d30af2afc522c141f800710173",
+    "tests/python-path-library.test.ts": "613d4aafdb153c77915f223175c7648fe0686f9cf25170d46dc28f79b75438eb"
+  },
+  "reproduction": {
+    "logSha256": "7793e766d442fd0e46e3ceb66e4e9b20c2626d354a29d56e40040412174ecafe",
+    "result": "Actual workerd execution failed with AttributeError: module os has no attribute path. 0 pass / 1 fail.",
+    "setupCorrection": "The initial fixture interpolated its Python ${ROOT} expression as a TypeScript template value. Escaped before the actual missing-path reproduction."
+  },
+  "library": {
+    "package": "rustpython-pylib",
+    "version": "0.6.0",
+    "sources": [
+      {
+        "file": "posixpath.py",
+        "bytes": 18813,
+        "sha256": "8a5bc2b6674e76efe0f507b873a41d746beba466a191153ed18a7580ef6e08e1",
+        "generatedCopiesMatch": true
+      },
+      {
+        "file": "genericpath.py",
+        "bytes": 6247,
+        "sha256": "cdac5a68dd738051e0d66fc81d5947d6a1776248fc6fe862253477608d870ec4",
+        "generatedCopiesMatch": true
+      }
+    ],
+    "scope": "Unchanged pinned standard-library modules, copied by the existing frozen-library generator; not a rewritten posixpath implementation."
+  },
+  "errnoDiagnosis": {
+    "package": "rustpython-vm",
+    "version": "0.6.0",
+    "file": "src/stdlib/errno.rs",
+    "sha256": "1df55b4533ac330336cf18244db1a0c65738c88bf176ef69663652f2a1c3a7c2",
+    "observedSource": "The native VM exposes an empty ERROR_CODES table on targets outside Unix, Windows and WASI, including wasm32-unknown-unknown. The Boxes bridge already uses Linux values; its supported catalog now owns numbers/text for fault mapping, errno and strerror."
+  },
+  "change": [
+    "Register os.path and sys.modules[os.path] as the same pinned posixpath module during the existing filesystem bootstrap.",
+    "Native fsencode/fsdecode use RustPython UTF-8/surrogateescape codecs, preserve byte/string inputs and consume the native path-like protocol. Keyword filename is supported.",
+    "One supported Linux errno catalog supplies constants, errorcode reverse lookup, strerror and native fault numbers/subclasses. Authorization aliases preserve the original source code while using EACCES numerically; unknown codes retain their name/message and no invented errno.",
+    "Filesystem-aware library operations use the existing native stat/lstat/readlink/fstat/cwd and authorized R2 actions; lexical operations stay in the guest."
+  ],
+  "coverage": [
+    "Module identity through os.path, import os.path, posixpath and restored sys.modules; saved native-heap functions survive closed Worker replacement.",
+    "Lexical str/bytes joins, normalization, common/relative paths, file extension, mixed-type rejection and path-like input.",
+    "UTF-8 conversions, NUL and non-UTF-8 surrogateescape roundtrip without expanding the UTF-8 filesystem path contract.",
+    "Environment-backed expanduser/expandvars, including bytes; updated environment after context reentry.",
+    "Metadata predicates, dangling exists versus lexists, size, samefile and sameopenfile against actual sandbox bytes.",
+    "Strict str/bytes realpath, missing targets, symlink cycles with ELOOP and non-directory traversal with ENOTDIR.",
+    "Read-only restored context reads canonical bytes but cannot create files. Execute-only context observes no metadata and strict realpath raises PermissionError.",
+    "Native fault classification for EAGAIN/EINTR/EPIPE and permission aliases; unknown source errors preserved."
+  ],
+  "hostPathOracle": {
+    "python": "3.14.8 (main, Oct  2 2026, 10:23:31) [GCC 16.2.1 20260810]",
+    "platform": "linux",
+    "normpath": "/a/c",
+    "byteNormpath": "/a/c",
+    "relativePath": "../b",
+    "commonPath": "/a",
+    "strictErrorCodes": [40, 20],
+    "danglingExists": false,
+    "danglingLexists": true,
+    "aliasResolvesToData": true,
+    "surrogateescapeRoundtrip": true,
+    "errno": {
+      "ENOENT": 2,
+      "ENOTDIR": 20,
+      "ELOOP": 40,
+      "ENOTSUP": 95
+    },
+    "strerrorENOTDIR": "Not a directory"
+  },
+  "hostErrnoOracle": {
+    "platform": "Linux CPython native errno/strerror",
+    "catalogEntries": 24,
+    "allNumbersMatch": true,
+    "allMessagesMatch": true,
+    "scope": "Supported catalog only; no complete POSIX errno inventory or RustPython OSError constructor parity claim.",
+    "sourceSha256": "b3770e8a0f65eb6192076f062fe28c3a624c38fde125ad1bf3f419f555187daa",
+    "codes": [
+      {
+        "name": "EPERM",
+        "value": 1,
+        "message": "Operation not permitted"
+      },
+      {
+        "name": "ENOENT",
+        "value": 2,
+        "message": "No such file or directory"
+      },
+      {
+        "name": "EINTR",
+        "value": 4,
+        "message": "Interrupted system call"
+      },
+      {
+        "name": "EIO",
+        "value": 5,
+        "message": "Input/output error"
+      },
+      {
+        "name": "EBADF",
+        "value": 9,
+        "message": "Bad file descriptor"
+      },
+      {
+        "name": "EAGAIN",
+        "value": 11,
+        "message": "Resource temporarily unavailable"
+      },
+      {
+        "name": "EACCES",
+        "value": 13,
+        "message": "Permission denied"
+      },
+      {
+        "name": "EBUSY",
+        "value": 16,
+        "message": "Device or resource busy"
+      },
+      {
+        "name": "EEXIST",
+        "value": 17,
+        "message": "File exists"
+      },
+      {
+        "name": "ENOTDIR",
+        "value": 20,
+        "message": "Not a directory"
+      },
+      {
+        "name": "EISDIR",
+        "value": 21,
+        "message": "Is a directory"
+      },
+      {
+        "name": "EINVAL",
+        "value": 22,
+        "message": "Invalid argument"
+      },
+      {
+        "name": "EMFILE",
+        "value": 24,
+        "message": "Too many open files"
+      },
+      {
+        "name": "EFBIG",
+        "value": 27,
+        "message": "File too large"
+      },
+      {
+        "name": "ENOSPC",
+        "value": 28,
+        "message": "No space left on device"
+      },
+      {
+        "name": "ESPIPE",
+        "value": 29,
+        "message": "Illegal seek"
+      },
+      {
+        "name": "EROFS",
+        "value": 30,
+        "message": "Read-only file system"
+      },
+      {
+        "name": "EPIPE",
+        "value": 32,
+        "message": "Broken pipe"
+      },
+      {
+        "name": "ENAMETOOLONG",
+        "value": 36,
+        "message": "File name too long"
+      },
+      {
+        "name": "ENOTEMPTY",
+        "value": 39,
+        "message": "Directory not empty"
+      },
+      {
+        "name": "ELOOP",
+        "value": 40,
+        "message": "Too many levels of symbolic links"
+      },
+      {
+        "name": "ENOTSUP",
+        "value": 95,
+        "message": "Operation not supported"
+      },
+      {
+        "name": "ETIMEDOUT",
+        "value": 110,
+        "message": "Connection timed out"
+      },
+      {
+        "name": "ESTALE",
+        "value": 116,
+        "message": "Stale file handle"
+      }
+    ]
+  },
+  "checks": {
+    "initialProof": {
+      "command": "bun test tests/python-path-library.test.ts",
+      "passed": true,
+      "tests": 1,
+      "files": 1,
+      "expects": 8,
+      "seconds": 5.2,
+      "logSha256": "37bb82d3d539b9d17f37938e101aad9351e26bf4481f8c9d7e1dbf6f97892521",
+      "scope": "Before adding filename-keyword, unknown-fault and environment-reentry assertions; final full check is recorded separately."
+    },
+    "full": {
+      "command": "bun run check",
+      "passed": true,
+      "exitCode": 0,
+      "tests": 454,
+      "files": 103,
+      "expects": 6616,
+      "testSeconds": 307.85,
+      "logSha256": "65f7d0788d701acf99c6c1f0d7b8e7c001fff757346f75f897b220d2acee1761",
+      "scope": "Final build, SDK build, TypeScript, workspace Clippy, all native Rust tests and workerd/R2 suites; includes filename keywords, error classification, unknown faults and environment reentry."
+    }
+  },
+  "limits": [
+    "Source only: published/deployed 0.27.0 and Minutei are unchanged. New Python binary requires explicit context reset when adopted.",
+    "Full pathlib, scandir, directory descriptors, complete errno inventory, general OSError constructor compatibility, full POSIX error attributes, stdlib/pip and full upstream parity remain open.",
+    "Strict realpath follows the pinned library algorithm and may issue multiple current-head metadata reads. No request-count, latency, CPU, heap or billing improvement is claimed.",
+    "No production/model proof for this source or AgentOS cost/performance comparison is claimed."
+  ],
+  "delivery": {
+    "sourcePush": "not part of this local measurement",
+    "remoteCi": "not part of this local measurement",
+    "release": "not published",
+    "deployment": "not performed",
+    "previousSourceCi": {
+      "runId": 39163297032,
+      "headSha": "5d8812c7e88a02ffc3c6a64cdc0d54c0ab4ed481",
+      "status": "completed",
+      "conclusion": "success",
+      "url": "https://github.com/minutei-ai/boxes/actions/runs/39163297032"
+    }
+  },
+  "artifactComparison": {
+    "reference": "Immutable public 0.27.0 runtime; source includes both previously added pathname APIs and this standard-library integration.",
+    "modules": [
+      {
+        "file": "cirro_python_bg.wasm",
+        "referenceBytes": 19720381,
+        "candidateBytes": 19783572,
+        "deltaBytes": 63191,
+        "referenceSha256": "f11ff22fc5e14ce878bf9f18895c4e90c8ac3b983226dc4669e19485fdda7151",
+        "candidateSha256": "39d0a027d8be9d57ccdf992e89a2b5fb928150ee85ca9cd8f33c208913b92ef4"
+      },
+      {
+        "file": "cirro_kernel_bg.wasm",
+        "referenceBytes": 1237113,
+        "candidateBytes": 1237113,
+        "deltaBytes": 0,
+        "referenceSha256": "2bfe109a42ec2ccd0d2e6c50d0b06a1575ce41c845dee0ee7ffc4e60658729fb",
+        "candidateSha256": "2bfe109a42ec2ccd0d2e6c50d0b06a1575ce41c845dee0ee7ffc4e60658729fb"
+      },
+      {
+        "file": "cirro_guest_bg.wasm",
+        "referenceBytes": 1150616,
+        "candidateBytes": 1150616,
+        "deltaBytes": 0,
+        "referenceSha256": "dcf1a9d66b4c3a11106076c3e9d5fa1f596b8846a811dfeec9ecf3a8744af01f",
+        "candidateSha256": "dcf1a9d66b4c3a11106076c3e9d5fa1f596b8846a811dfeec9ecf3a8744af01f"
+      },
+      {
+        "file": "cirro_wasi_bg.wasm",
+        "referenceBytes": 1707779,
+        "candidateBytes": 1707779,
+        "deltaBytes": 0,
+        "referenceSha256": "0d1fd49eb2d515f724ad1067dec002f07d009d056bb6091402807b8ac5110090",
+        "candidateSha256": "0d1fd49eb2d515f724ad1067dec002f07d009d056bb6091402807b8ac5110090"
+      },
+      {
+        "file": "cirro_compiler_bg.wasm",
+        "referenceBytes": 1943596,
+        "candidateBytes": 1943596,
+        "deltaBytes": 0,
+        "referenceSha256": "27d9b0022a634ed4eef47b6561ad38cafde3522c17e834afed1264440678bf2f",
+        "candidateSha256": "27d9b0022a634ed4eef47b6561ad38cafde3522c17e834afed1264440678bf2f"
+      },
+      {
+        "file": "index.js",
+        "referenceBytes": 429824,
+        "candidateBytes": 430172,
+        "deltaBytes": 348,
+        "referenceSha256": "25e17ef8965e7bae8f9b8ece766c28b4b19790b3a89aed811a6a47e7eaec1a08",
+        "candidateSha256": "832ce7396158e9de4ff6132dd6ea45b014d2dc300008738a4c4caa99aecfc3cf"
+      }
+    ],
+    "scope": "Byte sizes and hashes only; not a startup, request-latency, CPU, heap or cost comparison."
+  }
+}

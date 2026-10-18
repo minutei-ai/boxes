@@ -25,7 +25,7 @@ Boxes does not currently provide Linux compatibility, a complete POSIX shell, np
 
 Version 0.27.0 adds coherent Python open-file inodes across contexts and Worker replacement, including writes after unlink, generation-scoped cleanup and snapshot restoration. It requires filesystem-v6 migration and explicit reset of existing Python contexts. The [delivery evidence](docs/evidence/sdk-0.27.0-delivery.json) records publication, CI, deployment and consumer checks separately.
 
-Unreleased source adds native Python `os.stat`/`lstat`, `listdir`, `readlink`, `getcwd`/`getcwdb` and `chdir`. Relative file opens and relative `sys.path` entries follow the interpreter’s current directory, including after rename and Worker replacement. Directory descriptors, `scandir`, `os.path` and full `pathlib` remain pending. See [local path evidence](docs/evidence/python-paths-local.json).
+Unreleased source adds native Python `os.stat`/`lstat`, `listdir`, `readlink`, `getcwd`/`getcwdb` and `chdir`. Relative file opens and relative `sys.path` entries follow the interpreter’s current directory, including after rename and Worker replacement. Pinned `posixpath`/`genericpath` now provide `os.path`, with native path encoding and the bridge’s Linux errno catalog; [library evidence](docs/evidence/python-path-library-local.json) covers real metadata and restored state. Directory descriptors, `scandir` and full `pathlib` remain pending. See [local path evidence](docs/evidence/python-paths-local.json).
 
 ## Effect SDK
 

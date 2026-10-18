@@ -3,7 +3,7 @@ pub mod native {
     use crate::filesystem::{exchange, fault};
     use base64::Engine;
     use rustpython_vm::{
-        FromArgs, PyObjectRef, PyPayload, PyRef, PyResult, VirtualMachine,
+        AsObject, FromArgs, PyObjectRef, PyPayload, PyRef, PyResult, VirtualMachine,
         builtins::{PyDictRef, PyStrRef},
         convert::ToPyObject,
         function::{ArgBytesLike, ArgMemoryBuffer, Either, FsPath, OptionalArg},
@@ -349,6 +349,37 @@ pub mod native {
     #[pyfunction]
     fn fspath(path: PyObjectRef, vm: &VirtualMachine) -> PyResult {
         Ok(FsPath::try_from_path_like(path, false, vm)?.to_pyobject(vm))
+    }
+
+    #[derive(FromArgs)]
+    struct FsEncodingArgs {
+        #[pyarg(any)]
+        filename: PyObjectRef,
+    }
+
+    #[pyfunction]
+    fn fsencode(args: FsEncodingArgs, vm: &VirtualMachine) -> PyResult {
+        match FsPath::try_from_path_like(args.filename, false, vm)? {
+            FsPath::Bytes(value) => Ok(value.into()),
+            FsPath::Str(value) => {
+                vm.call_method(value.as_object(), "encode", ("utf-8", "surrogateescape"))
+            }
+        }
+    }
+
+    #[pyfunction]
+    fn fsdecode(args: FsEncodingArgs, vm: &VirtualMachine) -> PyResult {
+        match FsPath::try_from_path_like(args.filename, false, vm)? {
+            FsPath::Str(value) => Ok(value.into()),
+            FsPath::Bytes(value) => {
+                vm.call_method(value.as_object(), "decode", ("utf-8", "surrogateescape"))
+            }
+        }
+    }
+
+    #[pyfunction]
+    fn strerror(code: i32) -> String {
+        crate::filesystem::strerror(code)
     }
 
     #[derive(FromArgs)]
