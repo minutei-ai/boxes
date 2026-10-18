@@ -1,8 +1,8 @@
 {
-  "status": "Candidate exact archive proof passed; unpublished and not deployed",
+  "status": "Published and deployed; source/tag CI, exact archives, local Minutei binding and production proofs passed; scoped workloads cleaned up",
   "version": "0.28.0",
   "implementationCommit": "176d9e2697798d98d8fc482e1b1a9409c91de643",
-  "measuredAt": "2026-10-18T21:23:20.760744+00:00",
+  "measuredAt": "2026-10-18T21:46:54.343558+00:00",
   "localEvidence": [
     "python-paths-local.json",
     "python-path-library-local.json",
@@ -27,14 +27,646 @@
       "version": "0.28.0",
       "transport": "native Alchemy workerd service binding and Agent RPC; local R2 and Queue",
       "logSha256": "c7845151fcc706111ea3788662bbaae77c35638d9df4cb2fb5ace51d6af9cd80"
-    }
+    },
+    "minuteiProof": {
+      "clientVersion": "0.26.0",
+      "runtimeVersion": "0.28.0",
+      "runtimeArchiveSha256": "ac114b32bdada7a8faf932d7b1ff7fd81a7b2fab6e1bd6c0b02229b8fb168c40",
+      "consumerCommit": "d8bf6237cd2e7e2022546f3609e3e3b8e2559e65",
+      "consumerBundleSha256": "9c5cb5bb051fd1ebbaf984b2cbec59c7af2254d74288804fcbb425b88d13070a",
+      "transport": "native workerd Agent service binding; actual Minutei Code Mode and tenant SQLite; local R2, KV and Queue",
+      "retention": true,
+      "isolatedRegistry": true,
+      "capabilities": true,
+      "consumerFixturesSha256": {
+        "boxes-retention.ts": "2f90aacc149345cf51ffefc0f00e468c51e00d75cbe7f3e3dd68c532714edf70",
+        "boxes-code.worker.ts": "c3d6f06ea5f5afe322076052267468c4702fe79aff596fa847d68bdc3045e5f4"
+      },
+      "passed": true,
+      "logSha256": "d74c171dcfd42c0c6a16841449a00e0753887bc269d02b991ad70bbdd91e5c76",
+      "scope": "Actual local Minutei Code Mode and tenant SQLite; installed SDK 0.26.0 unchanged; history Queue processing and production/model behavior excluded. Minutei not pushed or deployed."
+    },
+    "modules": [
+      {
+        "file": "cirro_compiler_bg.wasm",
+        "bytes": 1943596,
+        "sha256": "27d9b0022a634ed4eef47b6561ad38cafde3522c17e834afed1264440678bf2f"
+      },
+      {
+        "file": "cirro_guest_bg.wasm",
+        "bytes": 1150616,
+        "sha256": "dcf1a9d66b4c3a11106076c3e9d5fa1f596b8846a811dfeec9ecf3a8744af01f"
+      },
+      {
+        "file": "cirro_kernel_bg.wasm",
+        "bytes": 1243800,
+        "sha256": "f31caad6e7db817ad9e9eff12466ba196f6003207f876b1cb545efd62b833a90"
+      },
+      {
+        "file": "cirro_python_bg.wasm",
+        "bytes": 19783572,
+        "sha256": "39d0a027d8be9d57ccdf992e89a2b5fb928150ee85ca9cd8f33c208913b92ef4"
+      },
+      {
+        "file": "cirro_wasi_bg.wasm",
+        "bytes": 1706658,
+        "sha256": "3f3a97b0262036b6843581f9ef019ccf394a4d65fc45e02a2f2ddcd78e01df66"
+      }
+    ]
   },
   "delivery": {
-    "release": "not published",
-    "deployment": "not performed"
+    "release": {
+      "assets": [
+        {
+          "apiUrl": "https://api.github.com/repos/minutei-ai/boxes/releases/assets/654535085",
+          "contentType": "application/x-gtar",
+          "createdAt": "2026-10-18T21:31:55Z",
+          "digest": "sha256:312aa5ddbcdaed4816a61d22f20f99fc986b2a1afb3b427abcdc9c2b011571d6",
+          "downloadCount": 0,
+          "id": "RA_kwDOVHG00M4nA2mt",
+          "label": "",
+          "name": "minutei-ai-boxes-0.28.0.tgz",
+          "size": 90235,
+          "state": "uploaded",
+          "updatedAt": "2026-10-18T21:31:55Z",
+          "url": "https://github.com/minutei-ai/boxes/releases/download/sdk-v0.28.0/minutei-ai-boxes-0.28.0.tgz"
+        },
+        {
+          "apiUrl": "https://api.github.com/repos/minutei-ai/boxes/releases/assets/654535093",
+          "contentType": "application/x-gtar",
+          "createdAt": "2026-10-18T21:31:55Z",
+          "digest": "sha256:ac114b32bdada7a8faf932d7b1ff7fd81a7b2fab6e1bd6c0b02229b8fb168c40",
+          "downloadCount": 0,
+          "id": "RA_kwDOVHG00M4nA2m1",
+          "label": "",
+          "name": "minutei-ai-boxes-runtime-0.28.0.tgz",
+          "size": 7334368,
+          "state": "uploaded",
+          "updatedAt": "2026-10-18T21:31:56Z",
+          "url": "https://github.com/minutei-ai/boxes/releases/download/sdk-v0.28.0/minutei-ai-boxes-runtime-0.28.0.tgz"
+        },
+        {
+          "apiUrl": "https://api.github.com/repos/minutei-ai/boxes/releases/assets/654535086",
+          "contentType": "application/octet-stream",
+          "createdAt": "2026-10-18T21:31:55Z",
+          "digest": "sha256:ba2a799bdb23da00483ff9b5c56e2ae169a4e1ba3df3db31e3dd58b2edb52a03",
+          "downloadCount": 0,
+          "id": "RA_kwDOVHG00M4nA2mu",
+          "label": "",
+          "name": "SHA256SUMS",
+          "size": 196,
+          "state": "uploaded",
+          "updatedAt": "2026-10-18T21:31:55Z",
+          "url": "https://github.com/minutei-ai/boxes/releases/download/sdk-v0.28.0/SHA256SUMS"
+        }
+      ],
+      "isPrerelease": true,
+      "publishedAt": "2026-10-18T21:31:57Z",
+      "url": "https://github.com/minutei-ai/boxes/releases/tag/sdk-v0.28.0",
+      "tag": "sdk-v0.28.0",
+      "tagObject": "c77b3a22babd8b088665db9520ce8c742792267b",
+      "targetCommit": "a4653bbdb653b7c3fde7eb4ded52daff239a0dd4",
+      "latest": false,
+      "anonymousDownloadHashesMatch": true,
+      "checksumsSha256": "ba2a799bdb23da00483ff9b5c56e2ae169a4e1ba3df3db31e3dd58b2edb52a03",
+      "immutableFiles": "Uploaded once; anonymous downloads matched exact candidate archives; previous releases unchanged."
+    },
+    "deployment": {
+      "passed": true,
+      "profile": "minutei",
+      "stack": "cirro",
+      "stage": "prod",
+      "worker": "cirro-sandbox-prod-rs7wexxow56rmsoz",
+      "bucket": "cirro-objects-prod-vbk2p6ruhs2m645y",
+      "url": "https://cirro-sandbox-prod-rs7wexxow56rmsoz.manoel-carvalhoneto.workers.dev",
+      "durationSeconds": 662.5,
+      "succeeded": 6,
+      "migrationsUnconditional": true,
+      "migrations": {
+        "environment-v1": {
+          "pageReceipts": 71,
+          "migrated": 0
+        },
+        "/v1/migrations/wasm-inputs-v1": {
+          "pageReceipts": 0,
+          "migrated": 0
+        },
+        "/v1/migrations/process-receipts-v2": {
+          "pageReceipts": 0,
+          "migrated": 0
+        },
+        "process-index-v7": {
+          "pageReceipts": 31,
+          "migrated": 0
+        },
+        "input-terminal-v3": {
+          "pageReceipts": 1,
+          "migrated": 0
+        },
+        "process-deadlines-v1": {
+          "pageReceipts": 31,
+          "migrated": 0
+        },
+        "filesystem-v6": {
+          "pageReceipts": 71,
+          "migrated": 0
+        },
+        "memory-packs-v1": {
+          "pageReceipts": 229,
+          "migrated": 0
+        },
+        "context-language-v1": {
+          "pageReceipts": 10,
+          "migrated": 0
+        },
+        "cron-contexts-v2": {
+          "pageReceipts": 1,
+          "migrated": 0
+        }
+      },
+      "softwareBase": {
+        "digest": "cf8f5c4bf5774fc0e13843dd82632ca28858506d09cc1f9a97974e3fd8d03301",
+        "blocksVerified": 354,
+        "uploadedBlocks": 0,
+        "uploadedBytes": 0
+      },
+      "logSha256": "e5d18488b25999898271812e1a3272bf3d0d84d37ab0e52bd80a3f5dd67c8f99"
+    },
+    "ci": [
+      {
+        "conclusion": "success",
+        "databaseId": 39167360864,
+        "headSha": "176d9e2697798d98d8fc482e1b1a9409c91de643",
+        "status": "completed",
+        "url": "https://github.com/minutei-ai/boxes/actions/runs/39167360864"
+      },
+      {
+        "conclusion": "success",
+        "databaseId": 39167621534,
+        "headSha": "a4653bbdb653b7c3fde7eb4ded52daff239a0dd4",
+        "status": "completed",
+        "url": "https://github.com/minutei-ai/boxes/actions/runs/39167621534"
+      },
+      {
+        "conclusion": "success",
+        "databaseId": 39168249254,
+        "headSha": "a4653bbdb653b7c3fde7eb4ded52daff239a0dd4",
+        "status": "completed",
+        "url": "https://github.com/minutei-ai/boxes/actions/runs/39168249254"
+      }
+    ]
   },
   "limits": [
     "Experimental prerelease; complete upstream parity, real Minutei production/model behavior and comparative performance/cost remain open.",
     "Full pathlib, scandir, directory descriptors, general POSIX/error compatibility, stdlib/pip, Node/npm, mounts and full cross-runtime inode/cwd coherence remain open."
-  ]
+  ],
+  "sourceCommit": "a4653bbdb653b7c3fde7eb4ded52daff239a0dd4",
+  "production": {
+    "cutover": {
+      "passed": true,
+      "sandboxId": "python-io-cutover-64a1ef7b-c9d0-41ac-8b86-a681e3f96a64",
+      "seedSdkVersion": "0.27.0",
+      "verifySdkVersion": "0.28.0",
+      "rejection": {
+        "alreadyReset": false,
+        "error": "CHECKPOINT_RUNTIME_MISMATCH",
+        "status": 409,
+        "processReceiptAbsent": true,
+        "prior": {
+          "id": "python",
+          "language": "python",
+          "generation": 0,
+          "state": "idle",
+          "createdAt": 1792358551541,
+          "updatedAt": 1792358554052,
+          "executionId": "before-python",
+          "deadlineAt": null
+        },
+        "reset": {
+          "id": "python",
+          "language": "python",
+          "generation": 1,
+          "state": "idle",
+          "createdAt": 1792358551541,
+          "updatedAt": 1792359595515,
+          "executionId": null,
+          "deadlineAt": null
+        }
+      },
+      "newPythonResult": [42, "ação", false],
+      "javascriptResult": 42,
+      "javascriptContext": {
+        "id": "javascript",
+        "language": "javascript",
+        "generation": 0,
+        "state": "idle",
+        "createdAt": 1792358555799,
+        "updatedAt": 1792359604033,
+        "executionId": "after-js",
+        "deadlineAt": null
+      },
+      "cleanup": {
+        "measuredAt": 1792359610675,
+        "id": "python-io-cutover-64a1ef7b-c9d0-41ac-8b86-a681e3f96a64",
+        "progress": {
+          "phase": "complete",
+          "status": "complete",
+          "removed": 0,
+          "blocking": []
+        },
+        "passed": true,
+        "logSha256": "51d159947db627325b5a54a3544d164f965705d6c9c05fc1af9a501e04f05c28"
+      },
+      "seedLogSha256": "4d0eae00c9f856d16914811b7e20443494a77a5102039cf0e4273625263480a5",
+      "verifyLogSha256": "b4ab9b1d02b1fa5c32d7145796e4189b542993555b839748b20ec14784cdf921"
+    },
+    "softwareStorage": {
+      "measuredAt": 1792359614483,
+      "profile": "minutei",
+      "worker": "cirro-sandbox-prod-rs7wexxow56rmsoz",
+      "bucket": "cirro-objects-prod-vbk2p6ruhs2m645y",
+      "sandboxId": "software-storage-2d015491-2261-440d-936a-f4916d61e094",
+      "baseDigest": "cf8f5c4bf5774fc0e13843dd82632ca28858506d09cc1f9a97974e3fd8d03301",
+      "placementMode": "smart",
+      "status": {
+        "id": "software-storage-2d015491-2261-440d-936a-f4916d61e094",
+        "generation": 0,
+        "filesystemBytes": 77754575,
+        "policy": {
+          "networkHosts": [],
+          "interruptBudget": 100000,
+          "memoryBytes": 8388608,
+          "maxOutputBytes": 1048576
+        }
+      },
+      "catalogPackages": 10,
+      "objectsAfterCreate": 1,
+      "privateSoftwareBlobsAfterCreate": 0,
+      "sharedObjectsBefore": 354,
+      "sharedObjectsAfterCollection": 354,
+      "reclaimed": true,
+      "passed": true,
+      "logSha256": "661783fd59ff30892dbf055521592d5e7478a7d9bb6fde604668e83c8b98612d"
+    },
+    "nativePaths": {
+      "measuredAt": 1792359671667,
+      "profile": "minutei",
+      "targetWorker": "cirro-sandbox-prod-rs7wexxow56rmsoz",
+      "sandboxId": "native-paths-142cf108-0e64-4403-acfa-d878decef5e8",
+      "sdkVersion": "0.28.0",
+      "baselineFilesystemBytes": 77754575,
+      "transport": "Cloudflare named Agent service binding via compiled SDK action transport; two preview consumers; actual production R2",
+      "consumerBundleSha256": "2093af7700c391d9a825e1105686552acdf880683c2d9e3b0fe55e26f48aef8e",
+      "origins": [
+        "https://boxes-paths-initial-142cf108-0e64-4403-acfa-d878decef5e8.manoel-carvalhoneto.workers.dev",
+        "https://boxes-paths-replacement-142cf108-0e64-4403-acfa-d878decef5e8.manoel-carvalhoneto.workers.dev"
+      ],
+      "proofs": [
+        {
+          "phase": "seed",
+          "runs": [
+            {
+              "id": "seed-python",
+              "context": {
+                "id": "paths",
+                "generation": 0
+              },
+              "status": "exited",
+              "sourceHash": "218241116746802d36c02c4a70552eef35e5bb4e9efe9ac99b38ad9f61a5bfcd",
+              "language": "python",
+              "startedAt": 1792359628399,
+              "finishedAt": 1792359637108,
+              "output": {
+                "stdout": "",
+                "stderr": "",
+                "result": 42,
+                "exitCode": 0
+              }
+            },
+            {
+              "id": "lexical-module",
+              "context": null,
+              "status": "exited",
+              "sourceHash": "1503e960152bade59b297d3bd6f88c8f096c4fe4c24a98c767ff653329469cf1",
+              "language": "javascript",
+              "startedAt": 1792359638347,
+              "finishedAt": 1792359639677,
+              "output": {
+                "stdout": "13\n",
+                "stderr": "",
+                "result": null,
+                "exitCode": 0
+              }
+            },
+            {
+              "id": "physical-entry",
+              "context": null,
+              "status": "exited",
+              "sourceHash": "ff6823f8ef00894f8d3365ec8a306433c14da70a9d21c8620dc26147f3ee1640",
+              "language": "javascript",
+              "startedAt": 1792359641362,
+              "finishedAt": 1792359642602,
+              "output": {
+                "stdout": "42\n",
+                "stderr": "",
+                "result": null,
+                "exitCode": 0
+              }
+            },
+            {
+              "id": "wasi-paths",
+              "context": null,
+              "status": "exited",
+              "sourceHash": "7dd75c35fe3d00686f20cc9141ce1ea777f8a4b38aa61c6ed8645688825453cd",
+              "language": "wasm",
+              "startedAt": 1792359643854,
+              "finishedAt": 1792359647806,
+              "output": {
+                "stdout": "semantic paths verified\n",
+                "stderr": "",
+                "result": null,
+                "exitCode": 0
+              }
+            },
+            {
+              "id": "shell-paths",
+              "context": null,
+              "status": "exited",
+              "sourceHash": "bdc2a1019dc2d22f7a31da8ab1f5cac20311fbd52459d578eed1c108e37a50fd",
+              "language": "shell",
+              "startedAt": 1792359648602,
+              "finishedAt": 1792359651485,
+              "output": {
+                "stdout": "right",
+                "stderr": "",
+                "result": null,
+                "exitCode": 0
+              }
+            }
+          ],
+          "context": {
+            "id": "paths",
+            "language": "python",
+            "generation": 0,
+            "state": "idle",
+            "createdAt": 1792359626674,
+            "updatedAt": 1792359636218,
+            "executionId": "seed-python",
+            "deadlineAt": null
+          }
+        },
+        {
+          "phase": "resume",
+          "runs": [
+            {
+              "id": "restored-python",
+              "context": {
+                "id": "paths",
+                "generation": 0
+              },
+              "status": "exited",
+              "sourceHash": "52efa20099d5050b72056852df9c34438bdbc77d512c6ec4c637e2bef6b10818",
+              "language": "python",
+              "startedAt": 1792359659232,
+              "finishedAt": 1792359669326,
+              "output": {
+                "stdout": "",
+                "stderr": "",
+                "result": 42,
+                "exitCode": 0
+              }
+            }
+          ],
+          "context": {
+            "id": "paths",
+            "language": "python",
+            "generation": 0,
+            "state": "idle",
+            "createdAt": 1792359626674,
+            "updatedAt": 1792359668486,
+            "executionId": "restored-python",
+            "deadlineAt": null
+          }
+        }
+      ],
+      "cleanup": "contexts deleted; sandbox disposed and reclaimed by completed scope",
+      "scope": "Consumer replacement and separate production requests; not an induced restart of the Boxes Worker",
+      "passed": true,
+      "logSha256": "0eb86ebf7af08f7799e4b99104857d1857aa15e4864724f88130a59a9062b312",
+      "proofSourcesSha256": {
+        "paths-worker.ts": "25f0c42f9ff1c5c1e20873f585e3d9b1b4e4ae6079bc603e55d420425ea20eea",
+        "paths-proof.ts": "b73a233768d3a58fc903f61efe1dafd06b2c775e78b715a580b4827054b93502"
+      },
+      "localProofLogSha256": "46916b3b8c10158b36d017083231bef9a9d6f6002b03cdcdd8bccb4a3a203b18"
+    },
+    "remoteBinding": {
+      "passed": true,
+      "measuredAt": 1792359899895,
+      "profile": "minutei",
+      "targetWorker": "cirro-sandbox-prod-rs7wexxow56rmsoz",
+      "sandboxId": "remote-binding-7d791513-04a5-47ec-a789-a634600234e3",
+      "sdkVersion": "0.28.0",
+      "consumerBundleSha256": "0a2f8d855d562dc528fd90b646288c686fcb8205cf6409344b5edbb53896c0e2",
+      "sdkModulesSha256": {
+        "../../src/sdk": "1a697b2fca2350d71c3901b03c55be41de1e04b978386c8c7a0651c8fcdb14ce",
+        "../../src/sdk-rpc": "1584f0102fe1276e12f15933aba8906f733d3de93bbce499a86275c3db01182e",
+        "../../src/sdk-tanstack": "73c62abaa449bd18b3648e9b9ae98e8c05e0c639dab182d0dfa04f4a8cc95f25",
+        "../../src/contracts": "bcacd714897e460d59b84cf10506ca43e16c0852ee06cbe37ac8bf9759738326"
+      },
+      "inlineDeadline": {
+        "requestedMs": 15000,
+        "startedAt": 1792359661808,
+        "recovery": {
+          "state": "running",
+          "checkpoints": 0,
+          "resumable": false,
+          "deadlineAt": 1792359676808
+        }
+      },
+      "defaultSoftwareRuns": 14,
+      "descriptorCases": 5,
+      "managementDenied": 403,
+      "wrongSandboxDenied": 401,
+      "proofs": [
+        "SDK binding operations",
+        "Named Agent RPC callbacks and current authority",
+        "Default software families and descriptor execution",
+        "Terminal, detached Queue contexts, retained Python and JavaScript contexts",
+        "Persistent process and prior receipt retention"
+      ],
+      "logSha256": "519c41ae82bb4590743312b0ed9284d795b6a650c0b4cf174caeb8584aa8789c"
+    },
+    "finalAudit": {
+      "measuredAt": 1792360004708,
+      "profile": "minutei",
+      "worker": "cirro-sandbox-prod-rs7wexxow56rmsoz",
+      "bucket": "cirro-objects-prod-vbk2p6ruhs2m645y",
+      "placement": {
+        "mode": "smart"
+      },
+      "counts": {
+        "pages": 7,
+        "objects": 6125,
+        "processes": 1499,
+        "schedules": 2,
+        "contexts": 0,
+        "metadataAbsent": 2776
+      },
+      "fixtureKeys": [
+        "reclamations/native-paths-142cf108-0e64-4403-acfa-d878decef5e8.json",
+        "reclamations/python-io-cutover-64a1ef7b-c9d0-41ac-8b86-a681e3f96a64.json",
+        "reclamations/remote-binding-7d791513-04a5-47ec-a789-a634600234e3.json",
+        "reclamations/software-storage-2d015491-2261-440d-936a-f4916d61e094.json",
+        "sandboxes/native-paths-142cf108-0e64-4403-acfa-d878decef5e8/head.json",
+        "sandboxes/python-io-cutover-64a1ef7b-c9d0-41ac-8b86-a681e3f96a64/head.json",
+        "sandboxes/remote-binding-7d791513-04a5-47ec-a789-a634600234e3/head.json",
+        "sandboxes/software-storage-2d015491-2261-440d-936a-f4916d61e094/head.json"
+      ],
+      "formats": {
+        "run-v7": 1499,
+        "program-json-v2": 1397,
+        "program-json": 435,
+        "historical-source-text-v1": 16,
+        "cron-v2": 2
+      },
+      "statuses": {
+        "cancelled": 28,
+        "exited": 1362,
+        "failed": 109
+      },
+      "complete": true,
+      "passed": true,
+      "logSha256": "03773117bcbad4531d7ffaaf8c1f5e2376d91b30c2441a171c964eeb4933728e",
+      "fixtureRetention": "Exactly one disposed head and one reclamation marker per synthetic sandbox; no context, process, input or private content remains for these workloads.",
+      "objectDeltaVs027": 8,
+      "objectDeltaExplanation": "Eight disposal/reclamation markers from the four synthetic workloads; exact fixture keys verified by complete native inventory."
+    }
+  },
+  "performance": {
+    "status": "Both exact extracted runtimes completed all native workerd/R2 phases; this is a regression measurement, not an optimization claim",
+    "referenceVersion": "0.27.0",
+    "referenceRuntimeArchiveSha256": "625af48d711b592bccecdfac7f6276cb49f7e00642188d972381ffccea12d97d",
+    "currentVersion": "0.28.0",
+    "currentRuntimeArchiveSha256": "ac114b32bdada7a8faf932d7b1ff7fd81a7b2fab6e1bd6c0b02229b8fb168c40",
+    "toolSha256": "ab7999535bf669c3331a29a5c0deeada29bb9437fdd8d6de3f2185758194ece5",
+    "pooled": {
+      "reference": {
+        "samples": 48,
+        "p50Ms": 1159.310916,
+        "p95Ms": 1464.348032,
+        "minMs": 995.746789,
+        "maxMs": 6874.409798
+      },
+      "current": {
+        "samples": 48,
+        "p50Ms": 1204.221672,
+        "p95Ms": 1518.193781,
+        "minMs": 993.254873,
+        "maxMs": 22906.289306
+      }
+    },
+    "p50ChangePercent": 3.8739181508750775,
+    "p95ChangePercent": 3.6771141711753774,
+    "raw": {
+      "measuredAt": "2026-10-18T21:34:08.342Z",
+      "environment": "local native Alchemy workerd; runtime module directories; fresh R2 per phase; sequential ABBA then BAAB",
+      "workload": "128 new files with distinct small contents per request; four warmups and twelve timed samples per phase; ordered acknowledgements and three sampled contents verified; nearest-rank quantiles",
+      "phases": [
+        {
+          "version": "reference",
+          "phase": 0,
+          "warmups": 4,
+          "samplesMs": [
+            6874.409798, 995.746789, 1021.410531, 1032.350631, 1031.943135, 1005.410475,
+            1015.637751, 1046.30635, 1082.734975, 1017.00195, 1036.942673, 1057.242504
+          ],
+          "p50Ms": 1031.943135,
+          "p95Ms": 6874.409798
+        },
+        {
+          "version": "current",
+          "phase": 1,
+          "warmups": 4,
+          "samplesMs": [
+            1048.982871, 1035.826338, 1060.560755, 1087.451865, 1006.593367, 1016.763573,
+            1081.115871, 1230.740616, 22906.289306, 1208.536578, 1207.218051, 1240.474361
+          ],
+          "p50Ms": 1081.115871,
+          "p95Ms": 22906.289306
+        },
+        {
+          "version": "current",
+          "phase": 2,
+          "warmups": 4,
+          "samplesMs": [
+            1193.35383, 1195.670704, 1171.023888, 1222.273911, 1267.505093, 1204.221672,
+            1254.508305, 1254.781564, 1338.867164, 1235.825414, 1276.360841, 1208.397906
+          ],
+          "p50Ms": 1222.273911,
+          "p95Ms": 1338.867164
+        },
+        {
+          "version": "reference",
+          "phase": 3,
+          "warmups": 4,
+          "samplesMs": [
+            1158.00729, 1304.621228, 1209.800349, 1562.234701, 1218.118417, 1464.348032,
+            1227.799058, 1277.1433, 1308.109267, 1140.357824, 1247.423537, 1194.272838
+          ],
+          "p50Ms": 1227.799058,
+          "p95Ms": 1562.234701
+        },
+        {
+          "version": "current",
+          "phase": 4,
+          "warmups": 4,
+          "samplesMs": [
+            1183.169725, 1294.872146, 1189.724934, 1307.489753, 1303.901759, 2396.722021,
+            1233.871579, 1214.512132, 1338.572613, 1399.43529, 1301.206745, 1186.030025
+          ],
+          "p50Ms": 1294.872146,
+          "p95Ms": 2396.722021
+        },
+        {
+          "version": "reference",
+          "phase": 5,
+          "warmups": 4,
+          "samplesMs": [
+            1080.131101, 1106.056871, 1169.064936, 1190.186283, 1206.697889, 1210.00571,
+            1233.653049, 1265.484282, 1424.586213, 1138.785259, 1158.224955, 1159.310916
+          ],
+          "p50Ms": 1169.064936,
+          "p95Ms": 1424.586213
+        },
+        {
+          "version": "reference",
+          "phase": 6,
+          "warmups": 4,
+          "samplesMs": [
+            1238.573736, 1407.059405, 1284.270628, 1191.99539, 1183.454524, 1230.075995,
+            1060.419865, 1048.760147, 1075.774328, 1002.824332, 1078.244243, 1093.885794
+          ],
+          "p50Ms": 1093.885794,
+          "p95Ms": 1407.059405
+        },
+        {
+          "version": "current",
+          "phase": 7,
+          "warmups": 4,
+          "samplesMs": [
+            1013.785702, 1019.507583, 993.254873, 1004.153566, 1043.557992, 1008.656843,
+            1037.936404, 1205.226726, 1066.556488, 1038.13938, 1023.39713, 1518.193781
+          ],
+          "p50Ms": 1023.39713,
+          "p95Ms": 1518.193781
+        }
+      ]
+    },
+    "limits": [
+      "All samples retained, including substantial per-phase outliers. Four warmups discarded according to the existing workload.",
+      "Shared-host variation and one local run do not establish a stable regression or improvement.",
+      "Deployment was running remotely during this local benchmark. No local build or other local workerd proof ran concurrently.",
+      "Bare sandbox, native local R2, warm batch requests only; no production latency, CPU, billing, peak memory or AgentOS comparison."
+    ]
+  }
 }
