@@ -972,9 +972,17 @@ pub mod native {
         entry.inheritable = inheritable;
         Ok(())
     }
-    fn read_bytes(fd: i32, length: i64, vm: &VirtualMachine) -> PyResult<Vec<u8>> {
+    fn read_bytes(
+        fd: i32,
+        length: i64,
+        position: Option<i64>,
+        vm: &VirtualMachine,
+    ) -> PyResult<Vec<u8>> {
         if length < 0 {
             return Err(fault(vm, "EINVAL", "Negative read length")?);
+        }
+        if position.is_some_and(|value| !(0..=9_007_199_254_740_991).contains(&value)) {
+            return Err(fault(vm, "EINVAL", "Invalid read position")?);
         }
         let description = description(fd, vm)?;
         let (inode, offset) = {
@@ -982,7 +990,10 @@ pub mod native {
             if !state.readable {
                 return Err(fault(vm, "EBADF", "Descriptor is not readable")?);
             }
-            (*state.inode, state.offset)
+            (
+                *state.inode,
+                position.map_or(state.offset, |value| value as u64),
+            )
         };
         let length = length.min(262_144) as u64;
         let value = exchange(
@@ -999,17 +1010,25 @@ pub mod native {
         if bytes.len() as u64 > length {
             return Err(vm.new_runtime_error("File read exceeded requested length"));
         }
-        let mut state = description.borrow_mut();
-        state.offset += bytes.len() as u64;
+        if position.is_none() {
+            description.borrow_mut().offset += bytes.len() as u64;
+        }
         Ok(bytes)
     }
     #[pyfunction]
     fn read(fd: i32, length: i64, vm: &VirtualMachine) -> PyResult {
-        Ok(vm.ctx.new_bytes(read_bytes(fd, length, vm)?).into())
+        Ok(vm.ctx.new_bytes(read_bytes(fd, length, None, vm)?).into())
+    }
+    #[pyfunction]
+    fn pread(fd: i32, length: i64, offset: i64, vm: &VirtualMachine) -> PyResult {
+        Ok(vm
+            .ctx
+            .new_bytes(read_bytes(fd, length, Some(offset), vm)?)
+            .into())
     }
     #[pyfunction]
     fn readinto(fd: i32, buffer: ArgMemoryBuffer, vm: &VirtualMachine) -> PyResult<usize> {
-        let bytes = read_bytes(fd, buffer.len().min(262_144) as i64, vm)?;
+        let bytes = read_bytes(fd, buffer.len().min(262_144) as i64, None, vm)?;
         buffer.borrow_buf_mut()[..bytes.len()].copy_from_slice(&bytes);
         Ok(bytes.len())
     }
@@ -1024,6 +1043,21 @@ pub mod native {
     }
     #[pyfunction]
     fn write(fd: i32, data: ArgBytesLike, vm: &VirtualMachine) -> PyResult<usize> {
+        write_bytes(fd, data, None, vm)
+    }
+    #[pyfunction]
+    fn pwrite(fd: i32, data: ArgBytesLike, offset: i64, vm: &VirtualMachine) -> PyResult<usize> {
+        write_bytes(fd, data, Some(offset), vm)
+    }
+    fn write_bytes(
+        fd: i32,
+        data: ArgBytesLike,
+        position: Option<i64>,
+        vm: &VirtualMachine,
+    ) -> PyResult<usize> {
+        if position.is_some_and(|value| !(0..=9_007_199_254_740_991).contains(&value)) {
+            return Err(fault(vm, "EINVAL", "Invalid write position")?);
+        }
         let description = description(fd, vm)?;
         let (inode, offset) = {
             let state = description.borrow();
@@ -1033,7 +1067,7 @@ pub mod native {
             let offset = if state.append {
                 None
             } else {
-                Some(state.offset)
+                Some(position.map_or(state.offset, |value| value as u64))
             };
             (*state.inode, offset)
         };
@@ -1052,7 +1086,9 @@ pub mod native {
             return Err(vm.new_runtime_error("Write acknowledgement exceeds submitted bytes"));
         }
         let offset = integer(&result, "offset", vm)?;
-        description.borrow_mut().offset = offset;
+        if position.is_none() {
+            description.borrow_mut().offset = offset;
+        }
         Ok(count as usize)
     }
 

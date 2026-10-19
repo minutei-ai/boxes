@@ -3360,11 +3360,11 @@ test("published libc host filesystem imports preserve modes, detached files and 
   expect(denied.output?.stdout).toBe("temporary file denied\n");
 });
 
-test("Python evaluate and file execution preserve source identity, diagnostics and per-run globals", async () => {
-  const token = await setup("python-entry");
+test("Python evaluation returns structured Unicode results", async () => {
+  const token = await setup("python-evaluation");
   const value = Schema.decodeUnknownSync(RunRecord)(
     await (
-      await act("python-entry", token, {
+      await act("python-evaluation", token, {
         op: "python.evaluate",
         id: "evaluate",
         expression: "{'unicode':'nuvem ☁', 'values':[n*n for n in range(4)]}",
@@ -3374,9 +3374,13 @@ test("Python evaluate and file execution preserve source identity, diagnostics a
   );
   expect(value.output?.exitCode).toBe(0);
   expect(value.output?.result).toEqual({ unicode: "nuvem ☁", values: [0, 1, 4, 9] });
+});
+
+test("Python file execution isolates per-run globals", async () => {
+  const token = await setup("python-file-entry");
   expect(
     (
-      await act("python-entry", token, {
+      await act("python-file-entry", token, {
         op: "filesystem.writeFile",
         path: "/tmp/code.py",
         content: "marker = 'private'\nprint('file executed')\nmarker",
@@ -3386,7 +3390,7 @@ test("Python evaluate and file execution preserve source identity, diagnostics a
   ).toBe(200);
   const file = Schema.decodeUnknownSync(RunRecord)(
     await (
-      await act("python-entry", token, {
+      await act("python-file-entry", token, {
         op: "python.executeFile",
         id: "file",
         path: "/tmp/code.py",
@@ -3397,7 +3401,7 @@ test("Python evaluate and file execution preserve source identity, diagnostics a
   expect(file.output?.result).toBe("private");
   const empty = Schema.decodeUnknownSync(RunRecord)(
     await (
-      await act("python-entry", token, {
+      await act("python-file-entry", token, {
         op: "python.evaluate",
         id: "fresh",
         expression: "'marker' in globals()",
@@ -3405,9 +3409,13 @@ test("Python evaluate and file execution preserve source identity, diagnostics a
     ).json(),
   );
   expect(empty.output?.result).toBe(false);
+});
+
+test("Python entry failures preserve source diagnostics and captured output", async () => {
+  const token = await setup("python-error-entry");
   const bad = Schema.decodeUnknownSync(RunRecord)(
     await (
-      await act("python-entry", token, {
+      await act("python-error-entry", token, {
         op: "python.execute",
         id: "syntax",
         source: "if True\n pass",
@@ -3420,7 +3428,7 @@ test("Python evaluate and file execution preserve source identity, diagnostics a
   expect(bad.output?.stderr).toContain("/tmp/syntax.py");
   const exception = Schema.decodeUnknownSync(RunRecord)(
     await (
-      await act("python-entry", token, {
+      await act("python-error-entry", token, {
         op: "python.execute",
         id: "exception",
         source: "print('before exception')\n1/0",

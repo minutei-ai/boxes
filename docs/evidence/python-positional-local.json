@@ -1,0 +1,217 @@
+{
+  "schemaVersion": 1,
+  "measuredAt": "2026-10-19T11:48:21.959611+00:00",
+  "scope": "Unreleased native Python positional descriptor I/O through actual Alchemy workerd, R2 and service bindings. Source validation only; no production deployment or archive publication for these operations.",
+  "reference": {
+    "runtime": "Python 3.14.8",
+    "platform": "Linux x64",
+    "documentation": "https://docs.python.org/3/library/os.html#os.pread",
+    "writeDocumentation": "https://docs.python.org/3/library/os.html#os.pwrite",
+    "programs": "tests/fixtures/python-positional-inputs.ts",
+    "appendBehavior": "Linux pwrite on O_APPEND appends at EOF without advancing the shared file cursor. The same program asserts this in CPython and Boxes.",
+    "upstreamScope": "This is CPython behavioral comparison at the implemented Python boundary, not execution of the full AgentOS runtime or proof of total parity."
+  },
+  "before": {
+    "CPythonReferencePassed": true,
+    "nativeResult": "AttributeError: pread",
+    "testsPassed": 1,
+    "testsFailed": 1
+  },
+  "after": {
+    "focusedCommand": "bun test tests/python-positional.test.ts",
+    "testsPassed": 2,
+    "testsFailed": 0,
+    "elapsedSeconds": 5.4,
+    "assertions": 10,
+    "fullCommand": "bun run test (after build, SDK build, typecheck, Clippy and Cargo tests from bun run check; typecheck repeated after the test-only restructure)",
+    "fullSuiteExitCode": 0,
+    "fullTestsPassed": 467,
+    "fullTestsFailed": 0,
+    "fullTestFiles": 110,
+    "fullTestsElapsedSeconds": 337.73,
+    "formatCommand": "bun run format:check",
+    "formatExitCode": 0,
+    "typecheckClippyCargoAndNativeWorkers": "passed"
+  },
+  "initialFullSuiteFailure": {
+    "passed": 456,
+    "failed": 9,
+    "errors": 1,
+    "elapsedSeconds": 329.94,
+    "firstFailure": "Existing integration test grouped five independent fresh Python entries and hit Bun default deadline at 5002.34 ms. Bun killed two dangling processes; the next eight cases then failed ECONNREFUSED.",
+    "change": "Split structured evaluation, file/global isolation and error diagnostics into three behavior-bearing tests. Preserved every original assertion and five native Python entries; ordinary five-second runner deadline unchanged. Added two sandbox setup operations. Runtime budgets unchanged.",
+    "isolatedComparison": {
+      "scope": "Same original test and Alchemy workerd/HTTP/R2 fixture, only the native Python Wasm asset differs. Fresh Worker per sample; no retained context crosses the engine swap. Import/export descriptors verified equal. This is not a published-runtime or production CPU/billing comparison and does not reproduce full-suite contention.",
+      "phaseOrder": ["reference", "current", "current", "reference"],
+      "samples": [
+        {
+          "phase": 0,
+          "label": "reference",
+          "repeat": 0,
+          "exitCode": 0,
+          "logSha256": "6b7aec9e51af14695f4cd4d743f37df5cc51363fe901c446fd5ee7f8a3c3a37c",
+          "elapsedMs": 1304.95
+        },
+        {
+          "phase": 0,
+          "label": "reference",
+          "repeat": 1,
+          "exitCode": 0,
+          "logSha256": "95a6abafa28bdac413357a8023694a73ad62f58b43b6eb5b4b4933e2eff6555e",
+          "elapsedMs": 1546.57
+        },
+        {
+          "phase": 0,
+          "label": "reference",
+          "repeat": 2,
+          "exitCode": 0,
+          "logSha256": "2f10be11ea30a7f3b70ca1bda53e016147bde60453cf718e4537f493fe25528c",
+          "elapsedMs": 1253.81
+        },
+        {
+          "phase": 1,
+          "label": "current",
+          "repeat": 0,
+          "exitCode": 0,
+          "logSha256": "ab4cfcf0e984e83bfb386a15345162b88e50b07952301eafdd9c39822e1371eb",
+          "elapsedMs": 1400.12
+        },
+        {
+          "phase": 1,
+          "label": "current",
+          "repeat": 1,
+          "exitCode": 0,
+          "logSha256": "e5fa1a2cce9cf80769250aa530c1d04bb39916d18ca99875759481d76a72d0d5",
+          "elapsedMs": 1277.8
+        },
+        {
+          "phase": 1,
+          "label": "current",
+          "repeat": 2,
+          "exitCode": 0,
+          "logSha256": "b281502603a5e671399ea3145e8e38e9b523d37a48f2697c55daa9d9ad3203e1",
+          "elapsedMs": 1318.18
+        },
+        {
+          "phase": 2,
+          "label": "current",
+          "repeat": 0,
+          "exitCode": 0,
+          "logSha256": "a19cfc5ad6eb29bc685960bf7d1993c5f005f521ec2e4768d21ae24daa5d659b",
+          "elapsedMs": 1244.76
+        },
+        {
+          "phase": 2,
+          "label": "current",
+          "repeat": 1,
+          "exitCode": 0,
+          "logSha256": "406087fff3852b26d112efdfbf76f3a8d5b8bb493a1e5bd388d126184c6db2ec",
+          "elapsedMs": 1273.5
+        },
+        {
+          "phase": 2,
+          "label": "current",
+          "repeat": 2,
+          "exitCode": 0,
+          "logSha256": "4d0a9d0b29e6952bb153d09b263a95f306cb272032c17a7ee22fa29d6d49eb4a",
+          "elapsedMs": 1480.94
+        },
+        {
+          "phase": 3,
+          "label": "reference",
+          "repeat": 0,
+          "exitCode": 0,
+          "logSha256": "8b276874092308bfa0aacba53b5225c2010f0bdf098e78135b5aed4e60a9a59f",
+          "elapsedMs": 1225.32
+        },
+        {
+          "phase": 3,
+          "label": "reference",
+          "repeat": 1,
+          "exitCode": 0,
+          "logSha256": "7a6690215a2730d684f0feedd097ba794021e9e1c93e84d8ed922a442ce60777",
+          "elapsedMs": 1273.55
+        },
+        {
+          "phase": 3,
+          "label": "reference",
+          "repeat": 2,
+          "exitCode": 0,
+          "logSha256": "ce9d7be35b44022710b00801cc6b7db01a68ab49ce02f37e909f0d6af6df5505",
+          "elapsedMs": 1320.04
+        }
+      ],
+      "referenceMedianMs": 1289.25,
+      "currentMedianMs": 1297.99,
+      "conclusion": "No large latency difference demonstrated by this isolated workload; full-suite timeout cause remains limited to the observed runner deadline and secondary transport shutdown."
+    },
+    "afterSplitIntegration": {
+      "passed": 86,
+      "failed": 0,
+      "elapsedSeconds": 22.5,
+      "caseElapsedMs": [186.42, 354.57, 339.63]
+    }
+  },
+  "covered": [
+    "Explicit reads and writes preserve cursor shared by dup aliases",
+    "Exact bytes including binary memoryview input, EOF, zero transfers and zero-filled holes",
+    "Descriptor read/write modes, invalid descriptor rejection, negative offsets/lengths",
+    "Linux append behavior preserves explicit-write cursor even after lseek",
+    "Closed original Worker before R2 heap restoration in a replacement Worker",
+    "Unlinked original inode remains distinct from recreated pathname",
+    "Current read-only capability denies positional write without moving cursor",
+    "Write-only capability cannot acquire retained context; existing read+execute admission remains enforced",
+    "Write-only ephemeral positional mutation succeeds without exposing readable descriptor bytes",
+    "256 KiB short transfers, safe integer offset checks and 16 MiB file ceiling",
+    "Ordinary reads continue advancing shared cursor after positional calls",
+    "Context deletion, disposal and bounded paginated reclamation complete"
+  ],
+  "implementation": {
+    "owner": "crates/python/src/os.rs",
+    "newPublicPythonFunctions": ["os.pread", "os.pwrite"],
+    "existingBridgeOperations": ["python.file.read", "python.file.write"],
+    "filesystemFormatChanged": false,
+    "SDKTransportContractChanged": false,
+    "maximumTransferBytes": 262144,
+    "maximumFileBytes": 16777216,
+    "maximumPosition": 9007199254740991,
+    "changedPythonBinaryRequiresExplicitContextReset": true
+  },
+  "artifacts": [
+    {
+      "label": "published031",
+      "bytes": 20002118,
+      "sha256": "b25ded28c883f526f713f0527709a7c6bce1e572cdbd152fad34a2c4bfb6d07a"
+    },
+    {
+      "label": "currentSource",
+      "bytes": 20008718,
+      "sha256": "f457dabd8d2fe9beaf924d1573511c0dafe2ed231c03f0b4caa7fa6b0cf08869"
+    }
+  ],
+  "fixtures": [
+    {
+      "path": "tests/fixtures/python-positional-inputs.ts",
+      "sha256": "d07bd9702a495765468ba75b4e6f167b7eb1b285058698922c01bb1db6375280"
+    },
+    {
+      "path": "tests/python-positional.test.ts",
+      "sha256": "a236cce5a92661fee2d6bef4bf18d584a3ad473e9c879047491ae45c1aa4543d"
+    },
+    {
+      "path": "tests/integration.test.ts",
+      "sha256": "46c26742b39b38478b1b209f539df9705ed226c4b6582392323c39fe8f448a07"
+    },
+    {
+      "path": "crates/python/src/os.rs",
+      "sha256": "4d50496ae2b28becf2a3431c6b263329e38177d024847cafb6443dbf0dfc56ee"
+    }
+  ],
+  "remaining": [
+    "Published SDK/runtime release and native archive consumer proof",
+    "Alchemy production deployment and authenticated binding proof",
+    "Actual local Minutei consumer proof against the new runtime",
+    "Complete Python stdlib, pip and POSIX compatibility",
+    "Full AgentOS parity and comparative production performance/cost"
+  ]
+}
