@@ -4,6 +4,7 @@ import {
   ContextReference,
   FileStat,
   Fault,
+  Nanoseconds,
   Path,
   ReadPlan,
   RangeWritePlan,
@@ -19,6 +20,12 @@ export const PythonFileOwner = Schema.Struct({
 
 const PermissionMode = Schema.Int.check(Schema.isBetween({ minimum: 0, maximum: 511 }));
 export const PythonFileAction = Schema.Union([
+  Schema.Struct({
+    op: Schema.Literal("python.file.utime"),
+    path: Path,
+    times: Schema.NullOr(Schema.Tuple([Nanoseconds, Nanoseconds])),
+    follow: Schema.Boolean,
+  }),
   Schema.Struct({ op: Schema.Literal("python.file.mkdir"), path: Path, mode: PermissionMode }),
   Schema.Struct({
     op: Schema.Literal("python.file.remove"),
@@ -73,6 +80,7 @@ export const pythonFile = Effect.fn("python.file")(function* (
     if ((action.access & 2) !== 0 || (action.creation & 1) !== 0)
       yield* requirePermission(capability, "write");
   } else if (
+    action.op === "python.file.utime" ||
     action.op === "python.file.write" ||
     action.op === "python.file.resize" ||
     action.op === "python.file.mkdir" ||
@@ -90,6 +98,16 @@ export const pythonFile = Effect.fn("python.file")(function* (
   const kernel = session.kernel;
   const yieldedTime = yield* Clock.currentTimeNanos;
   yield* kernelCall(() => kernel.set_time(yieldedTime));
+  if (action.op === "python.file.utime") {
+    const times = action.times;
+    if (times === null) {
+      yield* kernelCall(() => kernel.set_times(action.path, action.follow, 0n, 0n, 10));
+    } else {
+      yield* kernelCall(() => kernel.set_times(action.path, action.follow, times[0], times[1], 5));
+    }
+    yield* publish(env, capability.sandboxId, session);
+    return new TextEncoder().encode(Schema.encodeSync(Schema.fromJsonString(Schema.Null))(null));
+  }
   if (action.op === "python.file.mkdir") {
     yield* kernelCall(() => kernel.mkdir_one(action.path, action.mode));
     yield* publish(env, capability.sandboxId, session);

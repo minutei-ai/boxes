@@ -11,6 +11,7 @@ const ERROR_CODES: &[(&str, i32, &str)] = &[
     ("EACCES", 13, "Permission denied"),
     ("EBUSY", 16, "Device or resource busy"),
     ("EEXIST", 17, "File exists"),
+    ("EXDEV", 18, "Invalid cross-device link"),
     ("ENOTDIR", 20, "Not a directory"),
     ("EISDIR", 21, "Is a directory"),
     ("EINVAL", 22, "Invalid argument"),
@@ -286,6 +287,17 @@ def _io_attribute(name):
   return _install_io().FileIO
  raise AttributeError(name)
 
+def _os_attribute(name):
+ if name in ('PathLike','walk','_walk_symlinks_as_files'):
+  import _boxes_paths
+  _boxes_paths.PathLike.__module__ = 'os'
+  _boxes_paths.walk.__module__ = 'os'
+  _os.PathLike = _boxes_paths.PathLike
+  _os.walk = _boxes_paths.walk
+  _os._walk_symlinks_as_files = _boxes_paths._walk_symlinks_as_files
+  return getattr(_boxes_paths,name)
+ raise AttributeError(name)
+
 def open(*args, **kwargs):
  return _install_io().open(*args, **kwargs)
 
@@ -294,8 +306,10 @@ def install(filename):
  import _io as native
  import io
  import posixpath
+ _os.__getattr__ = _os_attribute
  _os.path = posixpath
  _os.curdir = posixpath.curdir
+ _os.supports_follow_symlinks = {_os.stat, _os.link, _os.utime}
  _sys.modules['os.path'] = posixpath
  builtins.open = open
  native.open = open

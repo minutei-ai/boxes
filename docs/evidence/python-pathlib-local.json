@@ -1,0 +1,251 @@
+{
+  "status": "Locally verified unreleased source; not published or deployed",
+  "measuredAt": "2026-10-19T00:09:15.094941+00:00",
+  "baseCommit": "1bfd1ebde01e21324f9dbb88953a4c239f119364",
+  "referenceRuntime": "0.29.0",
+  "scope": "Pinned pathlib and ntpath over the existing Rust filesystem and R2 owner; lazy original PathLike/walk helpers and native permission/link/timestamp operations.",
+  "nativeOperations": {
+    "chmod": "Path modes 0..0777 with current write authority; no-follow and directory-fd options fail ENOTSUP.",
+    "link": "Current write authority; follow_symlinks reaches the existing canonical inode owner.",
+    "symlink": "Relative UTF-8 target text is preserved; unsupported Windows and directory-fd options fail explicitly. Empty or oversized targets fail through Python OSError.",
+    "utime": "Current write authority; exact unsigned 64-bit nanoseconds or split seconds/fraction conversion; omitted timestamps use one acquired native Effect clock value; follow_symlinks is honored before one conditional R2 head publication.",
+    "bounds": "Native path and target validation exposes ENAMETOOLONG before an oversized request can fail the driver Schema boundary.",
+    "PathLike": "Unchanged pinned ABC and GenericAlias semantics, registered as os.PathLike lazily.",
+    "walk": "Unchanged pinned generator with top/bottom ordering, pruning, bytes, link traversal and error callbacks; native DirEntry.is_junction is false for this POSIX-only filesystem."
+  },
+  "stdlib": {
+    "package": "rustpython-pylib",
+    "version": "0.6.0",
+    "copiedModules": [
+      {
+        "path": "ntpath.py",
+        "bytes": 30905,
+        "sha256": "bf16566322f41f7052b7516fb684b2d64a437b39f5bbd21731b1bda1697d1a2e",
+        "unchanged": true
+      },
+      {
+        "path": "pathlib/__init__.py",
+        "bytes": 46807,
+        "sha256": "042a4d0a5e1ef66778daa86dc269af205bd42d06e793e53d8b99dff4c45928ca",
+        "unchanged": true
+      },
+      {
+        "path": "pathlib/_local.py",
+        "bytes": 262,
+        "sha256": "dd1067a4fc49212d10583e0a340cd87eb638a7d70725203d40834b70272fa675",
+        "unchanged": true
+      },
+      {
+        "path": "pathlib/_os.py",
+        "bytes": 18161,
+        "sha256": "61e844988e54bdf47c0b11ad2b3fd961f058bb370793428f4c6868bd40cab6f2",
+        "unchanged": true
+      }
+    ],
+    "osPySha256": "976bdb3e24925f2fb3ce43a4d788de6dcbb88a7cc8604c60ae690fbdd6507546",
+    "unchangedExtractedSlices": {
+      "PathLike": "d891399f440c656ba087e683a742186e2bf548216354e77acf466f2153021718",
+      "walk": "7378f10f0b368a79224be46fe52383d9c3ed7a3e0fbf98f6f7fdec9ebe7d179a"
+    },
+    "license": "../../licenses/python.txt",
+    "loading": "The os helpers are loaded on first attribute request; a native regression verifies ordinary programs do not import them eagerly."
+  },
+  "coverage": [
+    "Native Alchemy workerd service binding and local R2; no filesystem mocks.",
+    "Path lexical POSIX/Windows operations, abstract/generic/path-like protocol, text/binary I/O, recursive mkdir, glob/rglob and preserved metadata copy.",
+    "Relative symlinks, hard links, link no-follow behavior, namespace errors, rename/replace and file/tree copy/move.",
+    "Partial iterdir and walk generators, buffered readers, module identity and moved cwd after closing the original Worker and restoring in a new one.",
+    "Current readonly grants deny chmod/touch/utime/links/writes without namespace or timestamp changes; native execute-only protocol objects cannot make fresh filesystem reads.",
+    "Write+execute authority without read successfully changes permissions/timestamps and creates both link kinds; full authority reads back exact metadata, target text and shared inode identity.",
+    "Retained context execution requires read authority; the execute-only request is rejected by the actual transport with 403.",
+    "Default software rejects the added permission/timestamp/hardlink/symlink mutations with EROFS before the existing corruption/replacement checks.",
+    "Timestamp integer/fraction range/type validation, exact uint64 boundary, bytes, NUL and oversized UTF-8 paths.",
+    "Path.move failure preserves its source and missing destination parent, matching the CPython oracle."
+  ],
+  "reproductions": {
+    "missingPathlib": {
+      "logSha256": "83a6b16984ac096f0618bb31a548605ba8c71152fe21b45183714f045423e7db",
+      "observed": "ModuleNotFoundError for pathlib on runtime 0.29.0."
+    },
+    "PathLikeDependency": {
+      "logSha256": "a062747b63de41d822894ccb6133267712f92d2c42de7d50df6f24aeb88ec494",
+      "observed": "Initial pinned pathlib import reached the missing os.PathLike declaration."
+    },
+    "fractionalTimestamp": {
+      "logSha256": "dcedb24cff74404a94fa01fa8f5e489163bc0e4cce3d132dded702cc9410ee6e",
+      "observed": "Direct multiplication of epoch seconds lost fractional nanoseconds; the native comparison now matches 1700000001125000000."
+    },
+    "oversizedPaths": {
+      "logSha256": "b6e2a44247ce83f614c82e824657cddf2f6c13273d51642128b5010ed52814d8",
+      "observed": "Oversized path failed the host request boundary instead of returning a catchable Python OSError."
+    },
+    "missingEXDEV": {
+      "logSha256": "2b51645c514055a6e897f84ed9fba4789a61e87a57eb422d06b922c2f4902f45",
+      "observed": "Path.move to a missing parent raised NameError because errno.EXDEV was absent; the central native catalog now provides it."
+    }
+  },
+  "checks": {
+    "targetedBeforeMoveRegression": {
+      "passed": 3,
+      "failed": 0,
+      "expectations": 45,
+      "tests": 3,
+      "files": 2,
+      "bunSuiteSeconds": 15.74,
+      "logSha256": "7d17be128b0bf9093f48263282efd64472e5f9ba4c401de98797f0dcf2a980c2"
+    },
+    "firstFullBeforeMoveRegression": {
+      "passed": 461,
+      "failed": 0,
+      "expectations": 6696,
+      "tests": 461,
+      "files": 108,
+      "bunSuiteSeconds": 308.08,
+      "logSha256": "172d8ebbb94b8017a50ae2cdb842219b80ecf081f5fbdda227b42f5b8049478c"
+    },
+    "completeFull": {
+      "passed": 461,
+      "failed": 0,
+      "expectations": 6697,
+      "tests": 461,
+      "files": 108,
+      "bunSuiteSeconds": 302.35,
+      "logSha256": "3c41b695b590a631b729e67766646a0699c3dd9786ad115ddf6906f06de81da2",
+      "testSourceSha256": "5fc03ee13e321ffbfa6046c22d6086e9a76e25817a7b5b2591f42fe578d83c09"
+    },
+    "followupWriteOnlyAssertions": {
+      "passed": 2,
+      "failed": 0,
+      "expectations": 12,
+      "tests": 2,
+      "files": 1,
+      "bunSuiteSeconds": 9.18,
+      "logSha256": "309165dd7c2d220f0167ec205f89b46c64468ab5b2d0403f8638677aa994c55b"
+    },
+    "followupTypecheck": {
+      "passed": true,
+      "logSha256": "8366207267355d3e3d5bf3bf6e8c94c5f93f6078c34f08973fa2b38cdda6cc92"
+    },
+    "runtimeAssetsByteIdenticalAfterFollowup": true,
+    "commands": ["bun run format", "bun run check"],
+    "included": [
+      "Rust build and frozen-library generation",
+      "TypeScript SDK build and typecheck",
+      "cargo clippy --workspace --all-targets -- -D warnings",
+      "cargo test --workspace",
+      "Native workerd/R2 Bun test suite"
+    ]
+  },
+  "cpythonOracle": {
+    "python": "3.14.8",
+    "fractionalSeconds": 1700000001.125,
+    "mtimeNs": 1700000001125000000,
+    "moveFailure": {
+      "type": "FileNotFoundError",
+      "errno": 2,
+      "sourcePreserved": true,
+      "parentAbsent": true
+    },
+    "EXDEV": 18,
+    "strerror": "Invalid cross-device link"
+  },
+  "bootstrapObservation": {
+    "scope": "Native metered Wasm in Bun: construction, filesystem bootstrap and one expression. Deterministic fuel and linear-memory capacity only; not workerd timing, total Worker memory, production CPU or billing.",
+    "assets": {
+      "reference": "3ff7134c5ff8c37e9b7aecf02aff773bb843473de0b8f38e6fc2c0a73b44d40a",
+      "current": "52324bf0b32c3c727f66df4210508caffd2ede3d1023321ed48f448f15189696"
+    },
+    "samples": [
+      {
+        "label": "reference",
+        "bootstrapFuel": "5503708",
+        "totalFuel": "5544365",
+        "memoryBytes": 8912896,
+        "result": 42
+      },
+      {
+        "label": "current",
+        "bootstrapFuel": "5504065",
+        "totalFuel": "5544805",
+        "memoryBytes": 8978432,
+        "result": 42
+      },
+      {
+        "label": "current",
+        "bootstrapFuel": "5508293",
+        "totalFuel": "5549037",
+        "memoryBytes": 8978432,
+        "result": 42
+      },
+      {
+        "label": "reference",
+        "bootstrapFuel": "5499903",
+        "totalFuel": "5540559",
+        "memoryBytes": 8912896,
+        "result": 42
+      }
+    ]
+  },
+  "bootstrapLimits": "Four fresh ABBA samples with a 100,000,000-fuel bootstrap ceiling and 512 memory pages. Initial native construction is already bounded separately from user instruction fuel; these counts do not imply that a normal expression needs the same user budget. This is not a production CPU or latency distribution.",
+  "assets": [
+    {
+      "file": "cirro_compiler_bg.wasm",
+      "bytes": 1943596,
+      "sha256": "27d9b0022a634ed4eef47b6561ad38cafde3522c17e834afed1264440678bf2f",
+      "referenceBytes": 1943596,
+      "referenceSha256": "27d9b0022a634ed4eef47b6561ad38cafde3522c17e834afed1264440678bf2f",
+      "deltaBytes": 0
+    },
+    {
+      "file": "cirro_guest_bg.wasm",
+      "bytes": 1150616,
+      "sha256": "dcf1a9d66b4c3a11106076c3e9d5fa1f596b8846a811dfeec9ecf3a8744af01f",
+      "referenceBytes": 1150616,
+      "referenceSha256": "dcf1a9d66b4c3a11106076c3e9d5fa1f596b8846a811dfeec9ecf3a8744af01f",
+      "deltaBytes": 0
+    },
+    {
+      "file": "cirro_kernel_bg.wasm",
+      "bytes": 1246046,
+      "sha256": "63aa260e36d4fffb2fe5ffd160bdd189dc6e6ebe7a905a6eb3624222dc4b73b8",
+      "referenceBytes": 1246046,
+      "referenceSha256": "63aa260e36d4fffb2fe5ffd160bdd189dc6e6ebe7a905a6eb3624222dc4b73b8",
+      "deltaBytes": 0
+    },
+    {
+      "file": "cirro_python_bg.wasm",
+      "bytes": 19994081,
+      "sha256": "52324bf0b32c3c727f66df4210508caffd2ede3d1023321ed48f448f15189696",
+      "referenceBytes": 19884411,
+      "referenceSha256": "3ff7134c5ff8c37e9b7aecf02aff773bb843473de0b8f38e6fc2c0a73b44d40a",
+      "deltaBytes": 109670
+    },
+    {
+      "file": "cirro_wasi_bg.wasm",
+      "bytes": 1706658,
+      "sha256": "3f3a97b0262036b6843581f9ef019ccf394a4d65fc45e02a2f2ddcd78e01df66",
+      "referenceBytes": 1706658,
+      "referenceSha256": "3f3a97b0262036b6843581f9ef019ccf394a4d65fc45e02a2f2ddcd78e01df66",
+      "deltaBytes": 0
+    }
+  ],
+  "sourceSha256": {
+    "crates/python/build.rs": "e0c1af05fc4cf7733144eaf0c56af235f6e99052a6db24e6aab2563d98ae3fc2",
+    "crates/python/src/os.rs": "aa026bf08ec1eaaf2b18fa2a6b67dce42b38263ab510827431d6c99e5994b862",
+    "crates/python/src/filesystem.rs": "8530fc1c28fc8721f65501acd51ce65ef6f245de2ef0a1444831f2477d4096a1",
+    "src/contracts.ts": "4c794647b49f24a2d9cac5d8cae48bd1cd44bcfea47c0e7562ba3a88558b692e",
+    "src/python-files.ts": "003b41a1550ba4cfc9408a920ea10e1deaee0eda0186a820d19d9c3590b62f70",
+    "src/python.ts": "029e1d17a174ae77c049c13eed20cebe1fd4d1dcc4e6f01e91fb1af2952e2cdf",
+    "tests/python-pathlib.test.ts": "179e25805be60dc3121a412ec6e077f8532c20ee51856b0867b1e4d925d977d1",
+    "tests/default-software.test.ts": "1ea26a034a09fa3c00c59c831427c90431be0a27d6a7ca53c28aa9c49a9f2d12"
+  },
+  "upgrade": "Python native binary changes require explicit reset of existing Python contexts. Other four Wasm engines are byte-identical to 0.29.0; filesystem v6 and checkpoint format stay unchanged. No archive has been published or deployment performed for this source.",
+  "limits": [
+    "Complete AgentOS parity and comparative production CPU, latency, cost and aggregate isolate-memory admission remain open.",
+    "Directory descriptors, special mode bits, chmod no-follow, Windows link flags and pre-epoch timestamps are unsupported.",
+    "URI helpers, pathlib.types/typing, complete stdlib/pip, all errno/POSIX attributes and arbitrary-crash/cross-build heap recovery remain open.",
+    "Unfrozen optional platform-module import probes still require current read authority; no stubs or swallowed permission failures were added.",
+    "All feature programs retain actual instruction, memory, host-call, filesystem and output limits; no global policy ceiling was raised.",
+    "Publication, source/tag CI, production binding proofs and actual local/production Minutei validation are separate next gates."
+  ]
+}

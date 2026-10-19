@@ -4,7 +4,7 @@ pub mod native {
     use base64::Engine;
     use rustpython_vm::{
         AsObject, FromArgs, Py, PyObjectRef, PyPayload, PyRef, PyResult, VirtualMachine,
-        builtins::{PyDictRef, PyStrRef},
+        builtins::{PyDictRef, PyStrRef, PyTupleRef},
         convert::ToPyObject,
         function::{ArgBytesLike, ArgMemoryBuffer, Either, FsPath, FuncArgs, OptionalArg},
         protocol::PyIterReturn,
@@ -18,6 +18,9 @@ pub mod native {
         collections::{BTreeMap, VecDeque},
         rc::{Rc, Weak},
     };
+
+    #[pyattr(name = "name")]
+    const NAME: &str = "posix";
 
     #[pyattr]
     const O_RDONLY: i32 = 0;
@@ -142,10 +145,30 @@ pub mod native {
         if value.is_empty() {
             return Err(fault(vm, "ENOENT", "Empty filesystem path")?);
         }
+        if value.len() > 4096 {
+            return Err(fault(
+                vm,
+                "ENAMETOOLONG",
+                "Filesystem path exceeds its bound",
+            )?);
+        }
         if value.starts_with('/') {
             return Ok(value.into());
         }
-        Ok(format!("{}/{value}", cwd(vm)?))
+        let directory = cwd(vm)?;
+        let resolved = if directory == "/" {
+            format!("/{value}")
+        } else {
+            format!("{directory}/{value}")
+        };
+        if resolved.len() > 4096 {
+            return Err(fault(
+                vm,
+                "ENAMETOOLONG",
+                "Filesystem path exceeds its bound",
+            )?);
+        }
+        Ok(resolved)
     }
 
     #[pyfunction]
@@ -342,6 +365,162 @@ pub mod native {
     }
 
     #[derive(FromArgs)]
+    struct ChmodArgs {
+        #[pyarg(any)]
+        path: FsPath,
+        #[pyarg(any)]
+        mode: u32,
+        #[pyarg(named, default)]
+        dir_fd: Option<i32>,
+        #[pyarg(named, default = true)]
+        follow_symlinks: bool,
+    }
+    #[pyfunction]
+    fn chmod(args: ChmodArgs, vm: &VirtualMachine) -> PyResult<()> {
+        if args.dir_fd.is_some() || !args.follow_symlinks || args.mode & !0o777 != 0 {
+            return Err(fault(vm, "ENOTSUP", "Unsupported permission options")?);
+        }
+        exchange(
+            vm,
+            &json!({"op":"filesystem.chmod","path":path(&args.path,vm)?,"mode":args.mode}),
+        )?;
+        Ok(())
+    }
+    #[derive(FromArgs)]
+    struct LinkArgs {
+        #[pyarg(any)]
+        src: FsPath,
+        #[pyarg(any)]
+        dst: FsPath,
+        #[pyarg(named, default)]
+        src_dir_fd: Option<i32>,
+        #[pyarg(named, default)]
+        dst_dir_fd: Option<i32>,
+        #[pyarg(named, default = true)]
+        follow_symlinks: bool,
+    }
+    #[pyfunction]
+    fn link(args: LinkArgs, vm: &VirtualMachine) -> PyResult<()> {
+        if args.src_dir_fd.is_some() || args.dst_dir_fd.is_some() {
+            return Err(fault(
+                vm,
+                "ENOTSUP",
+                "Directory descriptors are not supported",
+            )?);
+        }
+        exchange(
+            vm,
+            &json!({"op":"filesystem.link","from":path(&args.src,vm)?,"to":path(&args.dst,vm)?,"follow":args.follow_symlinks}),
+        )?;
+        Ok(())
+    }
+    #[derive(FromArgs)]
+    struct SymlinkArgs {
+        #[pyarg(any)]
+        src: FsPath,
+        #[pyarg(any)]
+        dst: FsPath,
+        #[pyarg(any, default = false)]
+        target_is_directory: bool,
+        #[pyarg(named, default)]
+        dir_fd: Option<i32>,
+    }
+    #[pyfunction]
+    fn symlink(args: SymlinkArgs, vm: &VirtualMachine) -> PyResult<()> {
+        if args.dir_fd.is_some() || args.target_is_directory {
+            return Err(fault(vm, "ENOTSUP", "Unsupported symlink options")?);
+        }
+        let target = std::str::from_utf8(args.src.as_bytes())
+            .map_err(|_| vm.new_value_error("Sandbox paths must be UTF-8"))?;
+        if target.is_empty() {
+            return Err(fault(vm, "ENOENT", "Empty symlink target")?);
+        }
+        if target.len() > 4096 {
+            return Err(fault(
+                vm,
+                "ENAMETOOLONG",
+                "Symlink target exceeds its bound",
+            )?);
+        }
+        exchange(
+            vm,
+            &json!({"op":"filesystem.symlink","path":path(&args.dst,vm)?,"target":target}),
+        )?;
+        Ok(())
+    }
+    #[derive(FromArgs)]
+    struct UtimeArgs {
+        #[pyarg(any)]
+        path: FsPath,
+        #[pyarg(any, default)]
+        times: Option<PyTupleRef>,
+        #[pyarg(named, default)]
+        ns: Option<PyTupleRef>,
+        #[pyarg(named, default)]
+        dir_fd: Option<i32>,
+        #[pyarg(named, default = true)]
+        follow_symlinks: bool,
+    }
+    #[pyfunction]
+    fn utime(args: UtimeArgs, vm: &VirtualMachine) -> PyResult<()> {
+        if args.dir_fd.is_some() {
+            return Err(fault(
+                vm,
+                "ENOTSUP",
+                "Directory descriptors are not supported",
+            )?);
+        }
+        let times = match (args.times, args.ns) {
+            (None, None) => Value::Null,
+            (Some(_), Some(_)) => {
+                return Err(vm.new_value_error("utime: cannot specify both times and ns"));
+            }
+            (times, ns) => {
+                let nanoseconds = ns.is_some();
+                let values = times
+                    .or(ns)
+                    .ok_or_else(|| vm.new_runtime_error("Missing timestamp tuple"))?;
+                if values.len() != 2 {
+                    return Err(vm.new_type_error("utime: expected a tuple of two timestamps"));
+                }
+                let converted = values
+                    .iter()
+                    .map(|value| -> PyResult<String> {
+                        if nanoseconds {
+                            let value: u64 = value.try_index(vm)?.try_to_primitive_in_range(vm)?;
+                            return Ok(value.to_string());
+                        }
+                        let value = value.try_float(vm)?.to_f64();
+                        if value.is_nan() {
+                            return Err(vm.new_value_error("Invalid timestamp NaN"));
+                        }
+                        if !value.is_finite() || !(0.0..18_446_744_074.0).contains(&value) {
+                            return Err(
+                                vm.new_overflow_error("Timestamp is outside the sandbox range")
+                            );
+                        }
+                        let seconds = value.floor();
+                        let fraction = ((value - seconds) * 1_000_000_000.0).floor() as u64;
+                        let nanoseconds = (seconds as u64)
+                            .checked_mul(1_000_000_000)
+                            .and_then(|seconds| seconds.checked_add(fraction))
+                            .ok_or_else(|| {
+                                vm.new_overflow_error("Timestamp is outside the sandbox range")
+                            })?;
+                        Ok(nanoseconds.to_string())
+                    })
+                    .collect::<PyResult<Vec<_>>>()?;
+                json!(converted)
+            }
+        };
+        exchange(
+            vm,
+            &json!({"op":"python.file.utime","path":path(&args.path,vm)?,"times":times,"follow":args.follow_symlinks}),
+        )?;
+        Ok(())
+    }
+
+    #[derive(FromArgs)]
     struct ListDirArgs {
         #[pyarg(any, default)]
         path: Option<FsPath>,
@@ -447,6 +626,10 @@ pub mod native {
         #[pymethod]
         fn is_symlink(zelf: &Py<Self>) -> bool {
             zelf.kind == "symlink"
+        }
+        #[pymethod]
+        fn is_junction(_zelf: &Py<Self>) -> bool {
+            false
         }
         #[pymethod]
         fn is_dir(zelf: &Py<Self>, args: FollowArgs, vm: &VirtualMachine) -> PyResult<bool> {

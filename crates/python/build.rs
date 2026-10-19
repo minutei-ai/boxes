@@ -34,6 +34,10 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         "genericpath.py",
         "keyword.py",
         "operator.py",
+        "ntpath.py",
+        "pathlib/__init__.py",
+        "pathlib/_local.py",
+        "pathlib/_os.py",
         "posixpath.py",
         "reprlib.py",
         "types.py",
@@ -54,6 +58,23 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         std::fs::create_dir_all(target.parent().ok_or("Invalid Python library path")?)?;
         std::fs::copy(source.join(module), target)?;
     }
+    let os = std::fs::read_to_string(source.join("os.py"))?;
+    let pathlike = os
+        .split_once("class PathLike(abc.ABC):")
+        .and_then(|(_, body)| body.split_once("\n\nif name == 'nt':"))
+        .map(|(body, _)| body)
+        .ok_or("Pinned os.PathLike declaration is unavailable")?;
+    let walk = os
+        .split_once("_walk_symlinks_as_files = object()")
+        .and_then(|(_, body)| body.split_once("\n__all__.append(\"walk\")"))
+        .map(|(body, _)| body)
+        .ok_or("Pinned os.walk declaration is unavailable")?;
+    std::fs::write(
+        library.join("_boxes_paths.py"),
+        format!(
+            "import abc\nimport sys\nfrom _collections_abc import _check_methods\nfrom types import GenericAlias\nfrom os import path,scandir,fspath\nclass PathLike(abc.ABC):{pathlike}\n_walk_symlinks_as_files = object(){walk}\n"
+        ),
+    )?;
     let module = format!(
         "pub const BOOTSTRAP: &rustpython_vm::frozen::FrozenLib = rustpython_vm::py_freeze!(dir = {:?});",
         Path::new(&root).join("bootstrap")

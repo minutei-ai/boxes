@@ -265,7 +265,7 @@ test(
                 id: "open-software",
                 contextId: "files",
                 source: `import os,errno
-for action in [lambda:os.mkdir('/opt/cirro/bin/new'),lambda:os.unlink('/opt/cirro/bin/sh'),lambda:os.rmdir('/opt/cirro/bin'),lambda:os.rename('/opt/cirro/bin/sh','/tmp/moved-sh'),lambda:os.replace('/opt/cirro/bin/sh','/tmp/replaced-sh')]:
+for action in [lambda:os.mkdir('/opt/cirro/bin/new'),lambda:os.unlink('/opt/cirro/bin/sh'),lambda:os.rmdir('/opt/cirro/bin'),lambda:os.rename('/opt/cirro/bin/sh','/tmp/moved-sh'),lambda:os.replace('/opt/cirro/bin/sh','/tmp/replaced-sh'),lambda:os.chmod('/opt/cirro/bin/sh',0o600),lambda:os.utime('/opt/cirro/bin/sh'),lambda:os.link('/opt/cirro/bin/sh','/tmp/hard-sh'),lambda:os.symlink('/tmp/target','/opt/cirro/bin/new-link')]:
  try:
   action()
  except OSError as error:

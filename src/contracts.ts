@@ -99,7 +99,7 @@ export const FilesystemSnapshot = Schema.Struct({
   }),
 });
 
-const Nanoseconds = Schema.String.check(Schema.isPattern(/^(0|[1-9][0-9]{0,19})$/))
+export const Nanoseconds = Schema.String.check(Schema.isPattern(/^(0|[1-9][0-9]{0,19})$/))
   .pipe(Schema.decodeTo(Schema.BigIntFromString))
   .check(Schema.isBetweenBigInt({ minimum: 0n, maximum: 18_446_744_073_709_551_615n }));
 const FileOffset = Schema.Int.check(
