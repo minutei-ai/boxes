@@ -1055,6 +1055,77 @@ pub mod native {
         description.borrow_mut().offset = offset;
         Ok(count as usize)
     }
+
+    #[derive(FromArgs)]
+    struct CopyRangeArgs {
+        #[pyarg(positional)]
+        src: i32,
+        #[pyarg(positional)]
+        dst: i32,
+        #[pyarg(positional)]
+        count: i64,
+        #[pyarg(any, default)]
+        offset_src: Option<i64>,
+        #[pyarg(any, default)]
+        offset_dst: Option<i64>,
+    }
+    #[pyfunction]
+    fn copy_file_range(args: CopyRangeArgs, vm: &VirtualMachine) -> PyResult<u64> {
+        if args.count < 0
+            || args.offset_src.is_some_and(|offset| offset < 0)
+            || args.offset_dst.is_some_and(|offset| offset < 0)
+        {
+            return Err(vm.new_value_error("Copy count and offsets must be nonnegative"));
+        }
+        if args.count > 9_007_199_254_740_991
+            || args
+                .offset_src
+                .is_some_and(|offset| offset > 9_007_199_254_740_991)
+            || args
+                .offset_dst
+                .is_some_and(|offset| offset > 9_007_199_254_740_991)
+        {
+            return Err(vm.new_overflow_error("Copy range exceeds its bound"));
+        }
+        let source = description(args.src, vm)?;
+        let destination = description(args.dst, vm)?;
+        let (source_inode, source_offset) = {
+            let source = source.borrow();
+            if !source.readable {
+                return Err(fault(vm, "EBADF", "Source descriptor is not readable")?);
+            }
+            (
+                *source.inode,
+                args.offset_src
+                    .map_or(source.offset, |offset| offset as u64),
+            )
+        };
+        let (destination_inode, destination_offset) = {
+            let destination = destination.borrow();
+            if !destination.writable || destination.append {
+                return Err(fault(
+                    vm,
+                    "EBADF",
+                    "Destination descriptor is not range writable",
+                )?);
+            }
+            (
+                *destination.inode,
+                args.offset_dst
+                    .map_or(destination.offset, |offset| offset as u64),
+            )
+        };
+        let copied=exchange(vm,&json!({"op":"python.file.copyRange","source":source_inode,"destination":destination_inode,"sourceOffset":source_offset,"destinationOffset":destination_offset,"count":args.count}))?
+            .as_u64().filter(|count|*count <= args.count as u64)
+            .ok_or_else(||vm.new_runtime_error("Invalid file copy acknowledgement"))?;
+        if args.offset_src.is_none() {
+            source.borrow_mut().offset = source_offset + copied;
+        }
+        if args.offset_dst.is_none() {
+            destination.borrow_mut().offset = destination_offset + copied;
+        }
+        Ok(copied)
+    }
     #[pyfunction]
     fn ftruncate(fd: i32, size: i64, vm: &VirtualMachine) -> PyResult<()> {
         if size < 0 {

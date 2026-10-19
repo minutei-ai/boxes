@@ -237,6 +237,7 @@ export const python = Effect.fn("python.execute")(function* (
       bridge.request = new Uint8Array(0);
       const response = yield* Effect.gen(function* () {
         if (
+          action.op === "python.file.copyRange" ||
           action.op === "python.file.utime" ||
           action.op === "python.file.mkdir" ||
           action.op === "python.file.remove" ||

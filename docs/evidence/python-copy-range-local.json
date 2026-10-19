@@ -1,0 +1,353 @@
+{
+  "status": "Locally verified unreleased source; not published or deployed",
+  "measuredAt": "2026-10-19T01:15:16.604657+00:00",
+  "baseCommit": "0c446053ad58ca5bde102ec47919fd2aed139662",
+  "referenceRuntime": "0.30.0",
+  "scope": "Native Python copy_file_range and automatic pinned pathlib acceleration through canonical retained inodes, native Rust plans and conditional R2 head publication.",
+  "baseline": {
+    "productionEvidence": "sdk-0.30.0-delivery.json",
+    "productionSingleCopyMs": 124732,
+    "localFailingRegression": {
+      "expectedMaximumHeadPuts": 8,
+      "observedHeadPuts": 68,
+      "logSha256": "4658a09f206369275197a4d196175d04dd62a0f0bd8d8dce433d56671be40882"
+    },
+    "overlapRegression": {
+      "sourceBytes": 16777216,
+      "sourceOffset": 0,
+      "destinationOffset": 8388608,
+      "count": 16777216,
+      "hostCPythonErrno": 22,
+      "nativeBeforeFix": "Incorrectly copied 8 MiB instead of rejecting the overlapping requested ranges",
+      "failingLogSha256": "3a1342255bd9a9f85d736d8e73b4d6badadee064e938e7428c593ca15a105ef2",
+      "fixedTargetedLogSha256": "2cba9a7c641bbfeff03689ce2a5f9e859ddf6232e44740a25215a52aa4ecdc6c"
+    }
+  },
+  "implementation": [
+    "Rust shares the existing typed range-write planner and quota policy; no persisted filesystem shape changes.",
+    "Aligned complete blocks without a destination hole reuse immutable source references, then update the existing destination inode once. Other ranges read a bounded span and reuse existing patch/hash/upload logic.",
+    "Both descriptor owners and current read/write grants are checked. Native Python validates descriptor modes and append state, preserves explicit offsets and advances implicit cursors only after success.",
+    "Copy calls may return short counts: at most 8 MiB aligned or 256 KiB otherwise. Zero/EOF calls publish nothing. Inode overlap is validated across the requested effective source interval before short-transfer limits, including aliases.",
+    "Pinned pathlib discovers the native accelerator without modifying its source. ETXTBSY is supplied by the existing errno owner so actual accelerated-copy failures retain their source exception."
+  ],
+  "coverage": [
+    "16 MiB varying-byte pathlib copy with complete SHA-256 readback and bounded root publications in real workerd/R2.",
+    "Implicit and explicit offsets, partial-block overwrites, sparse gaps, EOF, negative arguments, overlap and file-size limits.",
+    "Descriptor access modes and append rejection, retained unlinked source/destination inodes, current readonly denial, fresh Worker restoration and recreated-path isolation.",
+    "Existing pathlib text, metadata, namespace, copied-tree, permission and restored-iterator/reader checks."
+  ],
+  "checks": {
+    "full": {
+      "passed": 463,
+      "failed": 0,
+      "expectations": 6711,
+      "files": 109,
+      "bunSuiteSeconds": 303.1,
+      "logSha256": "c7445571b01960a8a578354f869828abd0854a1022d3cb0d1fa3c1f1a5c699e2"
+    },
+    "commands": ["bun run format", "bun run typecheck", "bun run check"],
+    "included": [
+      "Rust/Wasm build and SDK generation",
+      "TypeScript typecheck",
+      "cargo clippy --workspace --all-targets -- -D warnings",
+      "cargo test --workspace",
+      "Native workerd/R2 Bun tests"
+    ],
+    "initialToolingTypecheckFailure": "A benchmark import was renamed incorrectly; corrected before the successful complete check.",
+    "initialToolingCheckLogSha256": "236dc9ca271bdcd5fed3b359e11e781e7eb5ec0621f6ec9b3a7b88173f115173"
+  },
+  "measurement": {
+    "metrics": {
+      "reference": {
+        "samples": 4,
+        "headGets": [195],
+        "headPuts": [68],
+        "localElapsedMs": {
+          "min": 2270,
+          "p50NearestRank": 2330,
+          "max": 2348
+        }
+      },
+      "current": {
+        "samples": 4,
+        "headGets": [70],
+        "headPuts": [6],
+        "localElapsedMs": {
+          "min": 563,
+          "p50NearestRank": 576,
+          "max": 612
+        }
+      }
+    },
+    "headPublicationReductionPercent": 91.17647058823529,
+    "headGetReductionPercent": 64.1025641025641,
+    "raw": {
+      "measuredAt": 1792372505669,
+      "environment": "Bun 1.4.3; native Alchemy workerd and local R2 without default software; fresh Worker/R2 per phase; ABBA",
+      "workload": "16 MiB varying-byte pathlib copy; one warmup and two samples per phase; full readback SHA-256 after every sample; immutable-block and fallback runtimes recorded separately",
+      "scope": "Counter forwards actual native R2 operations. Kernel memory is linear-memory capacity high-water, not RSS, live allocations, total Worker memory or Python heap. Worker-clock request elapsed time excludes setup, startup and RPC transport; this is not production latency, CPU or billing.",
+      "artifacts": {
+        "reference": [
+          {
+            "file": "cirro_compiler_bg.wasm",
+            "bytes": 1943596,
+            "sha256": "27d9b0022a634ed4eef47b6561ad38cafde3522c17e834afed1264440678bf2f"
+          },
+          {
+            "file": "cirro_guest_bg.wasm",
+            "bytes": 1150616,
+            "sha256": "dcf1a9d66b4c3a11106076c3e9d5fa1f596b8846a811dfeec9ecf3a8744af01f"
+          },
+          {
+            "file": "cirro_kernel_bg.wasm",
+            "bytes": 1246046,
+            "sha256": "63aa260e36d4fffb2fe5ffd160bdd189dc6e6ebe7a905a6eb3624222dc4b73b8"
+          },
+          {
+            "file": "cirro_python_bg.wasm",
+            "bytes": 19994081,
+            "sha256": "52324bf0b32c3c727f66df4210508caffd2ede3d1023321ed48f448f15189696"
+          },
+          {
+            "file": "cirro_wasi_bg.wasm",
+            "bytes": 1706658,
+            "sha256": "3f3a97b0262036b6843581f9ef019ccf394a4d65fc45e02a2f2ddcd78e01df66"
+          },
+          {
+            "file": "index.js",
+            "bytes": 456524,
+            "sha256": "22900fb8c6cbe6b71eab1862981bd56daa05dcfa357a310a1548bfd25843ba33"
+          }
+        ],
+        "current": [
+          {
+            "file": "cirro_compiler_bg.wasm",
+            "bytes": 1943596,
+            "sha256": "27d9b0022a634ed4eef47b6561ad38cafde3522c17e834afed1264440678bf2f"
+          },
+          {
+            "file": "cirro_guest_bg.wasm",
+            "bytes": 1150616,
+            "sha256": "dcf1a9d66b4c3a11106076c3e9d5fa1f596b8846a811dfeec9ecf3a8744af01f"
+          },
+          {
+            "file": "cirro_kernel_bg.wasm",
+            "bytes": 1249306,
+            "sha256": "d3c87f6b04ed0100f5dc275ec72e1aa0fbaae27be5406ecc81a00876a937f43d"
+          },
+          {
+            "file": "cirro_python_bg.wasm",
+            "bytes": 20002118,
+            "sha256": "b25ded28c883f526f713f0527709a7c6bce1e572cdbd152fad34a2c4bfb6d07a"
+          },
+          {
+            "file": "cirro_wasi_bg.wasm",
+            "bytes": 1706658,
+            "sha256": "3f3a97b0262036b6843581f9ef019ccf394a4d65fc45e02a2f2ddcd78e01df66"
+          },
+          {
+            "file": "index.js",
+            "bytes": 458164,
+            "sha256": "940758d89149eb0950428ab4022f0b3f93fa74956cd5a0852368e0dc44c5e6c2"
+          }
+        ]
+      },
+      "phases": [
+        {
+          "phase": 0,
+          "variant": "reference",
+          "warmups": [
+            {
+              "counts": {
+                "headGets": 195,
+                "conditionalHeadGets": 2,
+                "fullHeadBodies": 194,
+                "headBodyBytes": 1469660,
+                "headPuts": 68
+              },
+              "kernelMemoryBefore": 1245184,
+              "kernelMemoryAfter": 1245184,
+              "elapsedMs": 2858
+            }
+          ],
+          "samples": [
+            {
+              "counts": {
+                "headGets": 195,
+                "conditionalHeadGets": 2,
+                "fullHeadBodies": 194,
+                "headBodyBytes": 1744586,
+                "headPuts": 68
+              },
+              "kernelMemoryBefore": 1245184,
+              "kernelMemoryAfter": 1245184,
+              "elapsedMs": 2348
+            },
+            {
+              "counts": {
+                "headGets": 195,
+                "conditionalHeadGets": 2,
+                "fullHeadBodies": 194,
+                "headBodyBytes": 1744676,
+                "headPuts": 68
+              },
+              "kernelMemoryBefore": 1245184,
+              "kernelMemoryAfter": 1245184,
+              "elapsedMs": 2337
+            }
+          ]
+        },
+        {
+          "phase": 1,
+          "variant": "current",
+          "warmups": [
+            {
+              "counts": {
+                "headGets": 70,
+                "conditionalHeadGets": 2,
+                "fullHeadBodies": 69,
+                "headBodyBytes": 433966,
+                "headPuts": 6
+              },
+              "kernelMemoryBefore": 1245184,
+              "kernelMemoryAfter": 1245184,
+              "elapsedMs": 976
+            }
+          ],
+          "samples": [
+            {
+              "counts": {
+                "headGets": 70,
+                "conditionalHeadGets": 2,
+                "fullHeadBodies": 69,
+                "headBodyBytes": 708788,
+                "headPuts": 6
+              },
+              "kernelMemoryBefore": 1245184,
+              "kernelMemoryAfter": 1245184,
+              "elapsedMs": 612
+            },
+            {
+              "counts": {
+                "headGets": 70,
+                "conditionalHeadGets": 2,
+                "fullHeadBodies": 69,
+                "headBodyBytes": 708788,
+                "headPuts": 6
+              },
+              "kernelMemoryBefore": 1245184,
+              "kernelMemoryAfter": 1245184,
+              "elapsedMs": 576
+            }
+          ]
+        },
+        {
+          "phase": 2,
+          "variant": "current",
+          "warmups": [
+            {
+              "counts": {
+                "headGets": 70,
+                "conditionalHeadGets": 2,
+                "fullHeadBodies": 69,
+                "headBodyBytes": 433966,
+                "headPuts": 6
+              },
+              "kernelMemoryBefore": 1245184,
+              "kernelMemoryAfter": 1245184,
+              "elapsedMs": 1030
+            }
+          ],
+          "samples": [
+            {
+              "counts": {
+                "headGets": 70,
+                "conditionalHeadGets": 2,
+                "fullHeadBodies": 69,
+                "headBodyBytes": 708788,
+                "headPuts": 6
+              },
+              "kernelMemoryBefore": 1245184,
+              "kernelMemoryAfter": 1245184,
+              "elapsedMs": 594
+            },
+            {
+              "counts": {
+                "headGets": 70,
+                "conditionalHeadGets": 2,
+                "fullHeadBodies": 69,
+                "headBodyBytes": 708788,
+                "headPuts": 6
+              },
+              "kernelMemoryBefore": 1245184,
+              "kernelMemoryAfter": 1245184,
+              "elapsedMs": 563
+            }
+          ]
+        },
+        {
+          "phase": 3,
+          "variant": "reference",
+          "warmups": [
+            {
+              "counts": {
+                "headGets": 195,
+                "conditionalHeadGets": 2,
+                "fullHeadBodies": 194,
+                "headBodyBytes": 1469660,
+                "headPuts": 68
+              },
+              "kernelMemoryBefore": 1245184,
+              "kernelMemoryAfter": 1245184,
+              "elapsedMs": 2745
+            }
+          ],
+          "samples": [
+            {
+              "counts": {
+                "headGets": 195,
+                "conditionalHeadGets": 2,
+                "fullHeadBodies": 194,
+                "headBodyBytes": 1744586,
+                "headPuts": 68
+              },
+              "kernelMemoryBefore": 1245184,
+              "kernelMemoryAfter": 1245184,
+              "elapsedMs": 2270
+            },
+            {
+              "counts": {
+                "headGets": 195,
+                "conditionalHeadGets": 2,
+                "fullHeadBodies": 194,
+                "headBodyBytes": 1744676,
+                "headPuts": 68
+              },
+              "kernelMemoryBefore": 1245184,
+              "kernelMemoryAfter": 1245184,
+              "elapsedMs": 2330
+            }
+          ]
+        }
+      ]
+    },
+    "logSha256": "4368509c40638fee4e04172ec7b1c4a79c30dd1cbef55546572ce928c2f0d648",
+    "scope": "Four fresh native workerd/local R2 phases in ABBA order, one warmup and two samples per phase, full SHA-256 readback after every copy. Bare filesystem without default software. Head counters are not all R2 operations, billed requests or wire bytes. Local request elapsed time is not production latency, CPU or billing; the 125-second production reference is not a comparable local sample."
+  },
+  "sourceSha256": {
+    "crates/kernel/src/lib.rs": "8e87ba0cb3d3595f5b3b4bad96df853b263352e771f3896bc2ec2bec1e1c28a8",
+    "crates/python/src/os.rs": "5a3c08cf06d994f59c707502341cf84122544dc2897016e707286d0a64e8efb0",
+    "crates/python/src/filesystem.rs": "dcdb3f5aeecf2d997fe050aa9e68d7a3eac0e3ed8a6ef91f3b3335343d898d89",
+    "src/python-files.ts": "8d2dc5b919dc889043fa348a81a7d49c7f95e906e5ee2b3bf5798fca27f2d969",
+    "src/python.ts": "01b2507a115cd1a58657040729f50b7712aebd541574b6db6692b56a67ed91b3",
+    "tests/python-copy-range.test.ts": "713557ee571c5f73e85c08fc04f3b40b193aec2bf34affeb94b5ce7bbc871415",
+    "tooling/benchmark-copy-range.ts": "e9e21b4ba5eb3dd28680e7055a501967d01363b8b2bfe64146f282f99a8394fe"
+  },
+  "limits": [
+    "Full AgentOS parity, production Minutei/model behavior, aggregate isolate-memory admission and comparative production cost/performance remain open.",
+    "The current published runtime remains 0.30.0. Archives, source/tag CI, deployment and production binding verification are separate gates.",
+    "Changed native Python binaries require explicit reset of existing Python contexts; engine digests remain exact-build guards. Kernel manifest v6 and heap storage shapes are unchanged.",
+    "Each copy_file_range call publishes at most one head; Path.copy is a sequence of calls and descriptor updates rather than one filesystem transaction.",
+    "Reused immutable blocks retain normal read-time integrity validation. No claim that cloning rereads every source payload, eliminates all storage calls, or measures total Worker memory."
+  ]
+}

@@ -1,6 +1,7 @@
 import { Clock, Effect, Match, Schema } from "effect";
 import {
   Capability,
+  Chunks,
   ContextReference,
   FileStat,
   Fault,
@@ -20,6 +21,14 @@ export const PythonFileOwner = Schema.Struct({
 
 const PermissionMode = Schema.Int.check(Schema.isBetween({ minimum: 0, maximum: 511 }));
 export const PythonFileAction = Schema.Union([
+  Schema.Struct({
+    op: Schema.Literal("python.file.copyRange"),
+    source: FileStat.fields.inode,
+    destination: FileStat.fields.inode,
+    sourceOffset: RangeWritePlan.fields.offset,
+    destinationOffset: RangeWritePlan.fields.offset,
+    count: RangeWritePlan.fields.offset,
+  }),
   Schema.Struct({
     op: Schema.Literal("python.file.utime"),
     path: Path,
@@ -63,6 +72,11 @@ export const PythonFileAction = Schema.Union([
   }),
 ]);
 const PythonFileRead = Schema.Struct({ content: Schema.String });
+const PythonCopyPlan = Schema.Struct({
+  length: Schema.Int.check(Schema.isBetween({ minimum: 0, maximum: 8388608 })),
+  source: Schema.NullOr(ReadPlan),
+  target: RangeWritePlan,
+});
 const PythonFileWrite = Schema.Struct({
   offset: Schema.Int,
   count: Schema.Int,
@@ -75,7 +89,10 @@ export const pythonFile = Effect.fn("python.file")(function* (
 ) {
   if (capability.expiresAt <= (yield* Clock.currentTimeMillis))
     return yield* new Fault({ code: "UNAUTHORIZED", status: 401, message: "Capability expired" });
-  if (action.op === "python.file.open") {
+  if (action.op === "python.file.copyRange") {
+    yield* requirePermission(capability, "read");
+    yield* requirePermission(capability, "write");
+  } else if (action.op === "python.file.open") {
     if ((action.access & 1) !== 0) yield* requirePermission(capability, "read");
     if ((action.access & 2) !== 0 || (action.creation & 1) !== 0)
       yield* requirePermission(capability, "write");
@@ -134,6 +151,58 @@ export const pythonFile = Effect.fn("python.file")(function* (
     );
     if (changed || released || retained) yield* publish(env, capability.sandboxId, session);
     return new TextEncoder().encode(Schema.encodeSync(Schema.fromJsonString(FileStat))(stat));
+  }
+  if (action.op === "python.file.copyRange") {
+    const source = BigInt(action.source);
+    const destination = BigInt(action.destination);
+    if (
+      !kernel.retains_inode(owner.id, BigInt(owner.generation), source) ||
+      !kernel.retains_inode(owner.id, BigInt(owner.generation), destination)
+    )
+      return yield* new Fault({
+        code: "EBADF",
+        status: 400,
+        message: "Descriptor owner has no copy inode reference",
+      });
+    const plan = yield* kernelCall(() =>
+      kernel.copy_inode_range_plan(
+        source,
+        destination,
+        BigInt(action.sourceOffset),
+        BigInt(action.destinationOffset),
+        BigInt(action.count),
+      ),
+    ).pipe(Effect.flatMap(Schema.decodeUnknownEffect(Schema.fromJsonString(PythonCopyPlan))));
+    const read = plan.source;
+    if (read === null) {
+      if (plan.length !== 0) {
+        const chunks = yield* Schema.decodeUnknownEffect(Chunks)(plan.target.chunks);
+        yield* kernelCall(() =>
+          kernel.write_inode(
+            destination,
+            BigInt(plan.target.size),
+            Schema.encodeSync(Schema.fromJsonString(Chunks))(chunks),
+          ),
+        );
+        yield* publish(env, capability.sandboxId, session);
+      }
+      return new TextEncoder().encode(
+        Schema.encodeSync(Schema.fromJsonString(Schema.Int))(plan.length),
+      );
+    }
+    const data = yield* Effect.gen(function* () {
+      const parts = yield* Effect.forEach(
+        read.blocks,
+        (reference) => block(env, capability.sandboxId, reference),
+        { concurrency: 2 },
+      );
+      return Buffer.concat(parts).subarray(read.skip, read.skip + read.length);
+    });
+    if (yield* applyWritePlan(env, capability.sandboxId, kernel, plan.target, data, destination))
+      yield* publish(env, capability.sandboxId, session);
+    return new TextEncoder().encode(
+      Schema.encodeSync(Schema.fromJsonString(Schema.Int))(plan.length),
+    );
   }
   const inode = BigInt(action.inode);
   if (action.op === "python.file.cwd") {

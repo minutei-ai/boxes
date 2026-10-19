@@ -225,6 +225,13 @@ struct RangeWritePlan<'a> {
     blocks: Vec<PatchBlock<'a>>,
 }
 
+#[derive(Serialize)]
+struct CopyRangePlan<'a> {
+    length: u64,
+    source: Option<ReadPlan<'a>>,
+    target: RangeWritePlan<'a>,
+}
+
 enum FileMutation {
     Write { offset: Option<u64>, length: u64 },
     Resize { size: u64 },
@@ -576,7 +583,16 @@ impl Kernel {
         target: FileTarget,
         mutation: FileMutation,
     ) -> Result<String, JsValue> {
-        let (path, node) = self.file_target(&target).map_err(|error| fail(&error))?;
+        let plan = self.range_plan_target(&target, mutation)?;
+        serde_json::to_string(&plan).map_err(|error| fail(&error.to_string()))
+    }
+
+    fn range_plan_target<'a>(
+        &'a self,
+        target: &'a FileTarget,
+        mutation: FileMutation,
+    ) -> Result<RangeWritePlan<'a>, JsValue> {
+        let (path, node) = self.file_target(target).map_err(|error| fail(&error))?;
         let old_size = node.map_or(0, Node::size);
         let exists = node.is_some();
         let (offset, length, size, changed) = match mutation {
@@ -642,9 +658,9 @@ impl Kernel {
             })
             .map(|(index, _)| (size - index as u64 * 262_144).min(262_144))
             .sum();
-        self.admit_file_write(&target, private_size)
+        self.admit_file_write(target, private_size)
             .map_err(|error| fail(&error))?;
-        serde_json::to_string(&RangeWritePlan {
+        Ok(RangeWritePlan {
             path,
             offset,
             size,
@@ -652,7 +668,6 @@ impl Kernel {
             chunks,
             blocks,
         })
-        .map_err(|error| fail(&error.to_string()))
     }
 
     fn read_plan_resolved(
@@ -1648,6 +1663,89 @@ impl Kernel {
             FileTarget::Inode(inode),
             FileMutation::Write { offset, length },
         )
+    }
+
+    pub fn copy_inode_range_plan(
+        &self,
+        source: u64,
+        destination: u64,
+        source_offset: u64,
+        destination_offset: u64,
+        count: u64,
+    ) -> Result<String, JsValue> {
+        let inode = self
+            .state
+            .inodes
+            .get(&source)
+            .ok_or_else(|| fail("ENOENT: source inode does not exist"))?;
+        let Node::File { size, chunks, .. } = &inode.node else {
+            return Err(fail("EISDIR: source is not a regular file"));
+        };
+        let requested = size.saturating_sub(source_offset).min(count);
+        if source == destination
+            && requested != 0
+            && source_offset < destination_offset.saturating_add(requested)
+            && destination_offset < source_offset + requested
+        {
+            return Err(fail("EINVAL: overlapping file copy ranges"));
+        }
+        let available = requested.min(8_388_608);
+        let destination_size = self
+            .state
+            .inodes
+            .get(&destination)
+            .map_or(0, |inode| inode.node.size());
+        let aligned = source_offset.is_multiple_of(262_144)
+            && destination_offset.is_multiple_of(262_144)
+            && destination_offset <= destination_size
+            && available >= 262_144;
+        let length = if aligned {
+            available / 262_144 * 262_144
+        } else {
+            available.min(262_144)
+        };
+        let target = FileTarget::Inode(destination);
+        let mut plan = self.range_plan_target(
+            &target,
+            FileMutation::Write {
+                offset: Some(destination_offset),
+                length,
+            },
+        )?;
+        let read = if aligned {
+            let first = destination_offset / 262_144;
+            let end = first + length / 262_144;
+            for index in first..end {
+                plan.chunks[index as usize] =
+                    Some(&chunks[(source_offset / 262_144 + index - first) as usize]);
+            }
+            plan.blocks
+                .retain(|block| (block.index as u64) < first || block.index as u64 >= end);
+            None
+        } else if length == 0 {
+            None
+        } else {
+            let mut blocks = Vec::new();
+            for index in source_offset / 262_144..(source_offset + length).div_ceil(262_144) {
+                let hash = &chunks[index as usize];
+                blocks.push(ContentBlock {
+                    hash,
+                    size: (size - index * 262_144).min(262_144),
+                    shared: self.state.shared_chunks.contains(hash),
+                });
+            }
+            Some(ReadPlan {
+                blocks,
+                skip: source_offset % 262_144,
+                length,
+            })
+        };
+        serde_json::to_string(&CopyRangePlan {
+            length,
+            source: read,
+            target: plan,
+        })
+        .map_err(|error| fail(&error.to_string()))
     }
 
     pub fn resize_inode_plan(&self, inode: u64, size: u64) -> Result<String, JsValue> {
