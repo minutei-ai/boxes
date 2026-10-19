@@ -1,0 +1,61 @@
+{
+  "status": "Verified candidate archives and source CI; publication and production delivery pending",
+  "version": "0.31.0",
+  "implementationCommit": "df4b435fa68750ec357b6b82dd520cce682e7621",
+  "measuredAt": "2026-10-19T10:19:53.836047+00:00",
+  "localEvidence": ["python-copy-range-local.json"],
+  "candidate": {
+    "assets": [
+      {
+        "file": "minutei-ai-boxes-0.31.0.tgz",
+        "bytes": 91969,
+        "sha256": "62e13818b8381231428e982d9fdce685a92ff2483fca0b697898642130c6d74e"
+      },
+      {
+        "file": "minutei-ai-boxes-runtime-0.31.0.tgz",
+        "bytes": 7444090,
+        "sha256": "7cf2c7adb7254fd5b103d7d678d72ddcdcd67f2f97cb4dd979d406bca17ce899"
+      }
+    ],
+    "checksums": {
+      "file": "SHA256SUMS",
+      "bytes": 196,
+      "sha256": "c985a881759bffbdc8e946c6dbcbfefdabc30ae1b7b29c8982c1152de80e1fd2"
+    },
+    "packageProof": {
+      "version": "0.31.0",
+      "transport": "native Alchemy workerd service binding and Agent RPC; local R2 and Queue",
+      "coverage": "SDK archive exports and consumer declarations; runtime archive; filesystem snapshot restore; hard-link metadata; RPC callbacks and cooperative disposal; ephemeral context disposal with 1024 files and concurrent closes; persistent driver contexts and cancellation; retained native heaps and current callback authority; scoped authority",
+      "logSha256": "57549ef2d866ead3aec91c75f1c54f3a8e491420e24b3b47028e9270f89b7144"
+    },
+    "minutei": {
+      "clientVersion": "0.26.0",
+      "runtimeVersion": "0.31.0",
+      "runtimeArchiveSha256": "7cf2c7adb7254fd5b103d7d678d72ddcdcd67f2f97cb4dd979d406bca17ce899",
+      "consumerCommit": "d8bf6237cd2e7e2022546f3609e3e3b8e2559e65",
+      "consumerBundleSha256": "9c5cb5bb051fd1ebbaf984b2cbec59c7af2254d74288804fcbb425b88d13070a",
+      "transport": "native workerd Agent service binding; actual Minutei Code Mode and tenant SQLite; local R2, KV and Queue",
+      "isolatedRegistry": true
+    },
+    "minuteiLogSha256": "088c04a6b6577da8ab0d6e031ff8b96b31f86f80a07eacd4f846eb8826bbaf6a",
+    "matchingDeploymentAssets": true
+  },
+  "upgrade": "Native Python engine bytes changed. An older retained Python heap requires explicit reset and is rejected before an execution receipt. Filesystem v6 and persisted heap shapes remain unchanged. JavaScript uses its unchanged engine.",
+  "delivery": {
+    "sourceCI": {
+      "id": 39184518268,
+      "sha": "df4b435fa68750ec357b6b82dd520cce682e7621",
+      "conclusion": "success"
+    },
+    "releasePublished": false,
+    "productionVerified": false,
+    "minuteiPushed": false,
+    "minuteiDeployed": false
+  },
+  "limits": [
+    "Full AgentOS parity, npm/pip and complete POSIX/stdlib support remain open.",
+    "Local head counters do not establish billed R2 operations, production CPU, total isolate memory or a cost advantage over AgentOS.",
+    "Minutei production/model behavior, global collection and arbitrary crash recovery remain separate completion gates.",
+    "Production named RPC ignores Smart Placement; source config remains mode smart for eligible event handlers."
+  ]
+}
