@@ -1,0 +1,266 @@
+{
+  "status": "Candidate exact archives and local Minutei proof passed; release and production pending",
+  "version": "0.30.0",
+  "implementationCommit": "520cbc2cbbe144460b052a6e4d62de4f645ec683",
+  "measuredAt": "2026-10-19T00:19:33.032091+00:00",
+  "localEvidence": ["python-pathlib-local.json"],
+  "candidate": {
+    "assets": [
+      {
+        "file": "minutei-ai-boxes-0.30.0.tgz",
+        "bytes": 91469,
+        "sha256": "ed00e4921e19d78966a696f2eb89fec0a820b166c3c139fccf3891ab97927edb"
+      },
+      {
+        "file": "minutei-ai-boxes-runtime-0.30.0.tgz",
+        "bytes": 7433045,
+        "sha256": "fb1b757d63a48f00a9a55569df4b0dd8ce178db29425d32119508cb1f4b28dab"
+      }
+    ],
+    "modules": [
+      {
+        "file": "cirro_compiler_bg.wasm",
+        "bytes": 1943596,
+        "sha256": "27d9b0022a634ed4eef47b6561ad38cafde3522c17e834afed1264440678bf2f"
+      },
+      {
+        "file": "cirro_guest_bg.wasm",
+        "bytes": 1150616,
+        "sha256": "dcf1a9d66b4c3a11106076c3e9d5fa1f596b8846a811dfeec9ecf3a8744af01f"
+      },
+      {
+        "file": "cirro_kernel_bg.wasm",
+        "bytes": 1246046,
+        "sha256": "63aa260e36d4fffb2fe5ffd160bdd189dc6e6ebe7a905a6eb3624222dc4b73b8"
+      },
+      {
+        "file": "cirro_python_bg.wasm",
+        "bytes": 19994081,
+        "sha256": "52324bf0b32c3c727f66df4210508caffd2ede3d1023321ed48f448f15189696"
+      },
+      {
+        "file": "cirro_wasi_bg.wasm",
+        "bytes": 1706658,
+        "sha256": "3f3a97b0262036b6843581f9ef019ccf394a4d65fc45e02a2f2ddcd78e01df66"
+      }
+    ],
+    "packageProof": {
+      "passed": true,
+      "version": "0.30.0",
+      "transport": "native Alchemy workerd service binding and Agent RPC; local R2 and Queue",
+      "logSha256": "c1a8f57e56821c53b8b35543d2de61b15786f472c594f4c6aceb50b776f13e16"
+    },
+    "minuteiProof": {
+      "clientVersion": "0.26.0",
+      "runtimeVersion": "0.30.0",
+      "runtimeArchiveSha256": "fb1b757d63a48f00a9a55569df4b0dd8ce178db29425d32119508cb1f4b28dab",
+      "consumerCommit": "d8bf6237cd2e7e2022546f3609e3e3b8e2559e65",
+      "consumerBundleSha256": "9c5cb5bb051fd1ebbaf984b2cbec59c7af2254d74288804fcbb425b88d13070a",
+      "transport": "native workerd Agent service binding; actual Minutei Code Mode and tenant SQLite; local R2, KV and Queue",
+      "retention": true,
+      "isolatedRegistry": true,
+      "capabilities": true,
+      "consumerFixturesSha256": {
+        "boxes-retention.ts": "2f90aacc149345cf51ffefc0f00e468c51e00d75cbe7f3e3dd68c532714edf70",
+        "boxes-code.worker.ts": "c3d6f06ea5f5afe322076052267468c4702fe79aff596fa847d68bdc3045e5f4"
+      },
+      "passed": true,
+      "logSha256": "a47b8739b08aae518b78ca52f2419c3bebc02583a1c2f58192ab9d9ae58e4f6c",
+      "scope": "Actual local Minutei Code Mode and tenant SQLite; installed SDK unchanged. Minutei not pushed or deployed; production/model behavior remains open."
+    },
+    "maximumFileCopy": {
+      "source": {
+        "path": "/tmp/source",
+        "kind": "file",
+        "size": 16777216,
+        "mode": 420,
+        "inode": 5,
+        "nlink": 1,
+        "uid": 0,
+        "gid": 0,
+        "atimeNs": "1792368944994000000",
+        "mtimeNs": "1792368948052000000",
+        "ctimeNs": "1792368948052000000"
+      },
+      "run": {
+        "id": "copy-boundary",
+        "context": null,
+        "status": "exited",
+        "sourceHash": "2295ae45f621d6dbfa07b08000472ebe8b056729780a9649831e3feff8dfbddd",
+        "language": "python",
+        "startedAt": 1792368948153,
+        "finishedAt": 1792368950878,
+        "output": {
+          "stdout": "",
+          "stderr": "",
+          "result": 42,
+          "exitCode": 0
+        }
+      },
+      "copied": {
+        "_id": "Result",
+        "_tag": "Success",
+        "value": {
+          "path": "/tmp/copied",
+          "kind": "file",
+          "size": 16777216,
+          "mode": 420,
+          "inode": 6,
+          "nlink": 1,
+          "uid": 0,
+          "gid": 0,
+          "atimeNs": "1792368949066000000",
+          "mtimeNs": "1792368950832000000",
+          "ctimeNs": "1792368950832000000"
+        }
+      },
+      "actualSha256": "287507f403176f1f5b22b9a4d9cb49f7d7f88ac19e406b5ae87ce109564846bd",
+      "expectedSha256": "287507f403176f1f5b22b9a4d9cb49f7d7f88ac19e406b5ae87ce109564846bd",
+      "verifiedBytes": 16777216,
+      "passed": true,
+      "logSha256": "7209c9582f6e91f7e2d79b32137f790d4d6e8cdcacafe5160130ed8180a06c83",
+      "scope": "Native local workerd and R2, 16 MiB varying bytes, complete readback SHA-256. Functional evidence, not production CPU/latency/cost."
+    },
+    "featureBinding": {
+      "largeCopy": {
+        "verifiedBytes": 16777216,
+        "actualSha256": "287507f403176f1f5b22b9a4d9cb49f7d7f88ac19e406b5ae87ce109564846bd",
+        "expectedSha256": "287507f403176f1f5b22b9a4d9cb49f7d7f88ac19e406b5ae87ce109564846bd"
+      },
+      "version": "0.30.0",
+      "native": "Alchemy workerd Agent binding and R2",
+      "proofs": [
+        {
+          "phase": "seed",
+          "runs": [
+            {
+              "id": "seed-python",
+              "context": {
+                "id": "features",
+                "generation": 0
+              },
+              "status": "exited",
+              "sourceHash": "02b8d68496b6cc04e142a15bd076a057b66ed294bce3b300a120c6c1cd30a2f5",
+              "language": "python",
+              "startedAt": 1792369129308,
+              "finishedAt": 1792369131096,
+              "output": {
+                "stdout": "",
+                "stderr": "",
+                "result": 42,
+                "exitCode": 0
+              }
+            }
+          ],
+          "context": {
+            "id": "features",
+            "language": "python",
+            "generation": 0,
+            "state": "idle",
+            "createdAt": 1792369129264,
+            "updatedAt": 1792369131084,
+            "executionId": "seed-python",
+            "deadlineAt": null
+          }
+        },
+        {
+          "phase": "copy",
+          "runs": [
+            {
+              "id": "copy-boundary",
+              "context": null,
+              "status": "exited",
+              "sourceHash": "66545ec02baed4eaa23cb2d4ba1bc9bf8d965441f0196643eb1f3c1b0d860ef3",
+              "language": "python",
+              "startedAt": 1792369131128,
+              "finishedAt": 1792369133302,
+              "output": {
+                "stdout": "",
+                "stderr": "",
+                "result": 42,
+                "exitCode": 0
+              }
+            }
+          ],
+          "context": {
+            "id": "features",
+            "language": "python",
+            "generation": 0,
+            "state": "idle",
+            "createdAt": 1792369129264,
+            "updatedAt": 1792369131084,
+            "executionId": "seed-python",
+            "deadlineAt": null
+          }
+        },
+        {
+          "phase": "resume",
+          "runs": [
+            {
+              "id": "restored-python",
+              "context": {
+                "id": "features",
+                "generation": 0
+              },
+              "status": "exited",
+              "sourceHash": "cdd04a3795e875bbb06d4069a85904b287a018f1841ed05c89005e220e679043",
+              "language": "python",
+              "startedAt": 1792369133408,
+              "finishedAt": 1792369134047,
+              "output": {
+                "stdout": "",
+                "stderr": "",
+                "result": 42,
+                "exitCode": 0
+              }
+            }
+          ],
+          "context": {
+            "id": "features",
+            "language": "python",
+            "generation": 0,
+            "state": "idle",
+            "createdAt": 1792369129264,
+            "updatedAt": 1792369134037,
+            "executionId": "restored-python",
+            "deadlineAt": null
+          }
+        },
+        {
+          "phase": "writer",
+          "runs": [
+            {
+              "id": "write-only",
+              "context": null,
+              "status": "exited",
+              "sourceHash": "f43d4b72c346e1325559e9b0f32caee3c49ae891a7f01c2d48aeea45f24e6f77",
+              "language": "python",
+              "startedAt": 1792369134110,
+              "finishedAt": 1792369134275,
+              "output": {
+                "stdout": "",
+                "stderr": "",
+                "result": 42,
+                "exitCode": 0
+              }
+            }
+          ],
+          "context": null
+        }
+      ],
+      "passed": true,
+      "logSha256": "5886595692ceb036c81925d43bef9fc74fe7c8c0e177f2c0adc4cd8ca0b1e6a3",
+      "scope": "Exact runtime archive with native Agent binding and R2; three separate consumer Workers; not an induced backend crash."
+    }
+  },
+  "upgrade": "Python native binary changes require explicit reset of existing Python contexts. Other four Wasm engines are byte-identical to 0.29.0. Filesystem v6 and heap persistence formats are unchanged. All deployment migrations run unconditionally.",
+  "delivery": {
+    "release": "not published",
+    "deployment": "in progress; not yet verified"
+  },
+  "limits": [
+    "Experimental; full AgentOS parity, production Minutei/model behavior and comparative production CPU/latency/cost remain open.",
+    "Directory descriptors, special mode bits, chmod no-follow, Windows symlink flags and pre-epoch timestamps remain unsupported.",
+    "URI/typing helpers, full stdlib/pip, complete POSIX attributes, arbitrary-crash/cross-build recovery and aggregate isolate-memory admission remain open."
+  ]
+}
