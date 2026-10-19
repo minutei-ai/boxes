@@ -40,12 +40,12 @@ Version 0.26.0 also adds the pinned standard-library `heapq`, `bisect`, `copy`, 
 
 Runtime 0.31.0 `os.copy_file_range(src, dst, count, offset_src=None, offset_dst=None)` copies between owned regular-file descriptors with current read and write grants. Omitted offsets advance their shared descriptor cursor; explicit offsets leave it unchanged. It returns the bytes copied, possibly fewer than requested: each call transfers at most 8 MiB in aligned immutable blocks or 256 KiB through the partial-block path. EOF returns zero. Overlapping ranges of one inode, append destinations and invalid descriptor rights fail explicitly. Every successful nonempty call publishes one head against its acquired ETag; an entire `Path.copy()` remains a sequence of calls and descriptor lifetime updates. Unlinked descriptors and restored contexts retain inode identity. [Local evidence](evidence/python-copy-range-local.json) records exact content, offset/error checks, authority, closed-Worker restoration and storage counters. This operation requires the matching 0.31.0 runtime and explicit reset of older Python contexts. The [delivery record](evidence/sdk-0.31.0-delivery.json) tracks archive, publication and deployment gates.
 
-Unreleased source adds `os.pread(fd, n, offset)` and `os.pwrite(fd, data, offset)` for regular-file descriptors. Explicit offsets preserve the shared cursor, including through `dup` and restored contexts. Current read/write grants and descriptor access modes still apply after unlink. Transfers may be short and are bounded at 256 KiB per call; offsets must be nonnegative safe integers and file writes retain the 16 MiB file ceiling. On append descriptors, `pwrite` follows Linux behavior: append at EOF without changing the cursor. These operations require the new Python binary and explicit reset of existing Python contexts; published runtime 0.31.0 does not provide them.
+Runtime 0.32.0 adds `os.pread(fd, n, offset)` and `os.pwrite(fd, data, offset)` for regular-file descriptors. Explicit offsets preserve the shared cursor, including through `dup` and restored contexts. Current read/write grants and descriptor access modes still apply after unlink. Transfers may be short and are bounded at 256 KiB per call; offsets must be nonnegative safe integers and file writes retain the 16 MiB file ceiling. On append descriptors, `pwrite` follows Linux behavior: append at EOF without changing the cursor. These operations require the new Python binary and explicit reset of existing Python contexts; published runtime 0.31.0 does not provide them.
 
-Install the matching SDK archive from the [experimental 0.31.0 release](https://github.com/minutei-ai/boxes/releases/tag/sdk-v0.31.0):
+Install the matching SDK archive from the [experimental 0.32.0 release](https://github.com/minutei-ai/boxes/releases/tag/sdk-v0.32.0):
 
 ```sh
-bun add https://github.com/minutei-ai/boxes/releases/download/sdk-v0.31.0/minutei-ai-boxes-0.31.0.tgz
+bun add https://github.com/minutei-ai/boxes/releases/download/sdk-v0.32.0/minutei-ai-boxes-0.32.0.tgz
 ```
 
 Use the service binding from the Minutei Worker environment:
