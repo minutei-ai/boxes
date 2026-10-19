@@ -1,0 +1,1681 @@
+{
+  "schemaVersion": 1,
+  "scope": "Production ordinary Worker named Agent service binding; published SDK/runtime 0.31.0; synthetic isolated Python contexts. Functional concurrency and retention observations, not a capacity, CPU, RSS, billing, AgentOS cost, fairness or crash-recovery proof.",
+  "sourceHead": "4f6e5daa6c57ac92a46598e6ef8a3cea6ed1b0ff",
+  "runtimeDelivery": "sdk-0.31.0-delivery.json",
+  "sdkArchiveSha256": "62e13818b8381231428e982d9fdce685a92ff2483fca0b697898642130c6d74e",
+  "runtimeArchiveSha256": "7cf2c7adb7254fd5b103d7d678d72ddcdcd67f2f97cb4dd979d406bca17ce899",
+  "transport": "Native Alchemy createEdgeSession consumer with BOXES_AGENT bound to entrypoint Agent; makeAgentBinding from the exact published SDK; Effect.forEach concurrency equal to lane count. New preview consumer for each width and phase, not an induced backend replacement.",
+  "policy": {
+    "networkHosts": [],
+    "interruptBudget": 100000,
+    "memoryBytes": 33554432,
+    "maxOutputBytes": 1048576
+  },
+  "workloads": [
+    {
+      "index": 1,
+      "seed": "payload=bytearray([1])*2097152\npayload[-1]=2\ncounter=1\nwith open('/tmp/identity','w') as writer:\n writer.write(str(1))\n[counter,len(payload),payload.count(1),payload[-1]]",
+      "resume": "with open('/tmp/identity') as reader:\n assert reader.read()==str(1)\ncounter+=100\n[counter,len(payload),payload.count(1),payload[-1]]"
+    },
+    {
+      "index": 2,
+      "seed": "payload=bytearray([2])*2097152\npayload[-1]=3\ncounter=2\nwith open('/tmp/identity','w') as writer:\n writer.write(str(2))\n[counter,len(payload),payload.count(2),payload[-1]]",
+      "resume": "with open('/tmp/identity') as reader:\n assert reader.read()==str(2)\ncounter+=100\n[counter,len(payload),payload.count(2),payload[-1]]"
+    },
+    {
+      "index": 3,
+      "seed": "payload=bytearray([3])*2097152\npayload[-1]=4\ncounter=3\nwith open('/tmp/identity','w') as writer:\n writer.write(str(3))\n[counter,len(payload),payload.count(3),payload[-1]]",
+      "resume": "with open('/tmp/identity') as reader:\n assert reader.read()==str(3)\ncounter+=100\n[counter,len(payload),payload.count(3),payload[-1]]"
+    },
+    {
+      "index": 4,
+      "seed": "payload=bytearray([4])*2097152\npayload[-1]=5\ncounter=4\nwith open('/tmp/identity','w') as writer:\n writer.write(str(4))\n[counter,len(payload),payload.count(4),payload[-1]]",
+      "resume": "with open('/tmp/identity') as reader:\n assert reader.read()==str(4)\ncounter+=100\n[counter,len(payload),payload.count(4),payload[-1]]"
+    },
+    {
+      "index": 5,
+      "seed": "payload=bytearray([5])*2097152\npayload[-1]=6\ncounter=5\nwith open('/tmp/identity','w') as writer:\n writer.write(str(5))\n[counter,len(payload),payload.count(5),payload[-1]]",
+      "resume": "with open('/tmp/identity') as reader:\n assert reader.read()==str(5)\ncounter+=100\n[counter,len(payload),payload.count(5),payload[-1]]"
+    },
+    {
+      "index": 6,
+      "seed": "payload=bytearray([6])*2097152\npayload[-1]=7\ncounter=6\nwith open('/tmp/identity','w') as writer:\n writer.write(str(6))\n[counter,len(payload),payload.count(6),payload[-1]]",
+      "resume": "with open('/tmp/identity') as reader:\n assert reader.read()==str(6)\ncounter+=100\n[counter,len(payload),payload.count(6),payload[-1]]"
+    },
+    {
+      "index": 7,
+      "seed": "payload=bytearray([7])*2097152\npayload[-1]=8\ncounter=7\nwith open('/tmp/identity','w') as writer:\n writer.write(str(7))\n[counter,len(payload),payload.count(7),payload[-1]]",
+      "resume": "with open('/tmp/identity') as reader:\n assert reader.read()==str(7)\ncounter+=100\n[counter,len(payload),payload.count(7),payload[-1]]"
+    },
+    {
+      "index": 8,
+      "seed": "payload=bytearray([8])*2097152\npayload[-1]=9\ncounter=8\nwith open('/tmp/identity','w') as writer:\n writer.write(str(8))\n[counter,len(payload),payload.count(8),payload[-1]]",
+      "resume": "with open('/tmp/identity') as reader:\n assert reader.read()==str(8)\ncounter+=100\n[counter,len(payload),payload.count(8),payload[-1]]"
+    }
+  ],
+  "proof": {
+    "nonce": "77316693-5f1d-4081-acdc-66630992d693",
+    "worker": "cirro-sandbox-prod-rs7wexxow56rmsoz",
+    "measuredAt": 1792408414384,
+    "sdkVersion": "0.31.0",
+    "payloadBytesPerLane": 2097152,
+    "policyMemoryBytes": 33554432,
+    "consumerBundleSha256": "c93f7da6c1b671d7931fcda069084b1d3f87bdb4d3e5b2721396638d32a29621",
+    "origins": [
+      "https://boxes-cw1-seed-77316693-5f1d-4081-acdc-66630992d693.manoel-carvalhoneto.workers.dev",
+      "https://boxes-cw1-resume-77316693-5f1d-4081-acdc-66630992d693.manoel-carvalhoneto.workers.dev",
+      "https://boxes-cw2-seed-77316693-5f1d-4081-acdc-66630992d693.manoel-carvalhoneto.workers.dev",
+      "https://boxes-cw2-resume-77316693-5f1d-4081-acdc-66630992d693.manoel-carvalhoneto.workers.dev",
+      "https://boxes-cw4-seed-77316693-5f1d-4081-acdc-66630992d693.manoel-carvalhoneto.workers.dev",
+      "https://boxes-cw4-resume-77316693-5f1d-4081-acdc-66630992d693.manoel-carvalhoneto.workers.dev",
+      "https://boxes-cw8-seed-77316693-5f1d-4081-acdc-66630992d693.manoel-carvalhoneto.workers.dev",
+      "https://boxes-cw8-resume-77316693-5f1d-4081-acdc-66630992d693.manoel-carvalhoneto.workers.dev"
+    ],
+    "proofs": [
+      {
+        "phase": "seed",
+        "startedAt": 1792408254879,
+        "finishedAt": 1792408265718,
+        "lanes": [
+          {
+            "sandboxId": "concurrent-77316693-5f1d-4081-acdc-66630992d693-w1-1",
+            "index": 1,
+            "run": {
+              "id": "seed",
+              "context": {
+                "id": "heap",
+                "generation": 0
+              },
+              "status": "exited",
+              "sourceHash": "63208d683f979cd17d4d5d99190101daeaa998ceb73dee133331c3cc4f4c5ec2",
+              "language": "python",
+              "startedAt": 1792408256127,
+              "finishedAt": 1792408264596,
+              "output": {
+                "stdout": "",
+                "stderr": "",
+                "result": [1, 2097152, 2097151, 2],
+                "exitCode": 0
+              }
+            },
+            "context": {
+              "id": "heap",
+              "language": "python",
+              "generation": 0,
+              "state": "idle",
+              "createdAt": 1792408250238,
+              "updatedAt": 1792408263555,
+              "executionId": "seed",
+              "deadlineAt": null
+            }
+          }
+        ]
+      },
+      {
+        "phase": "resume",
+        "startedAt": 1792408270016,
+        "finishedAt": 1792408280222,
+        "lanes": [
+          {
+            "sandboxId": "concurrent-77316693-5f1d-4081-acdc-66630992d693-w1-1",
+            "index": 1,
+            "run": {
+              "id": "resume",
+              "context": {
+                "id": "heap",
+                "generation": 0
+              },
+              "status": "exited",
+              "sourceHash": "b1dbcaf0fa6d2c2b08b1b2e22fcb9323900740353187ce48de5221d2eca98ac6",
+              "language": "python",
+              "startedAt": 1792408271254,
+              "finishedAt": 1792408278974,
+              "output": {
+                "stdout": "",
+                "stderr": "",
+                "result": [101, 2097152, 2097151, 2],
+                "exitCode": 0
+              }
+            },
+            "context": {
+              "id": "heap",
+              "language": "python",
+              "generation": 0,
+              "state": "idle",
+              "createdAt": 1792408250238,
+              "updatedAt": 1792408278127,
+              "executionId": "resume",
+              "deadlineAt": null
+            }
+          }
+        ]
+      },
+      {
+        "phase": "seed",
+        "startedAt": 1792408287110,
+        "finishedAt": 1792408299241,
+        "lanes": [
+          {
+            "sandboxId": "concurrent-77316693-5f1d-4081-acdc-66630992d693-w2-1",
+            "index": 1,
+            "run": {
+              "id": "seed",
+              "context": {
+                "id": "heap",
+                "generation": 0
+              },
+              "status": "exited",
+              "sourceHash": "63208d683f979cd17d4d5d99190101daeaa998ceb73dee133331c3cc4f4c5ec2",
+              "language": "python",
+              "startedAt": 1792408288834,
+              "finishedAt": 1792408298128,
+              "output": {
+                "stdout": "",
+                "stderr": "",
+                "result": [1, 2097152, 2097151, 2],
+                "exitCode": 0
+              }
+            },
+            "context": {
+              "id": "heap",
+              "language": "python",
+              "generation": 0,
+              "state": "idle",
+              "createdAt": 1792408281256,
+              "updatedAt": 1792408297138,
+              "executionId": "seed",
+              "deadlineAt": null
+            }
+          },
+          {
+            "sandboxId": "concurrent-77316693-5f1d-4081-acdc-66630992d693-w2-2",
+            "index": 2,
+            "run": {
+              "id": "seed",
+              "context": {
+                "id": "heap",
+                "generation": 0
+              },
+              "status": "exited",
+              "sourceHash": "fbe3da92d0adfd2c9ef8b925ba4c7179bd172e7fce4b50ed6af70f03a971a3ab",
+              "language": "python",
+              "startedAt": 1792408288763,
+              "finishedAt": 1792408297509,
+              "output": {
+                "stdout": "",
+                "stderr": "",
+                "result": [2, 2097152, 2097151, 3],
+                "exitCode": 0
+              }
+            },
+            "context": {
+              "id": "heap",
+              "language": "python",
+              "generation": 0,
+              "state": "idle",
+              "createdAt": 1792408282514,
+              "updatedAt": 1792408296698,
+              "executionId": "seed",
+              "deadlineAt": null
+            }
+          }
+        ]
+      },
+      {
+        "phase": "resume",
+        "startedAt": 1792408303369,
+        "finishedAt": 1792408314541,
+        "lanes": [
+          {
+            "sandboxId": "concurrent-77316693-5f1d-4081-acdc-66630992d693-w2-1",
+            "index": 1,
+            "run": {
+              "id": "resume",
+              "context": {
+                "id": "heap",
+                "generation": 0
+              },
+              "status": "exited",
+              "sourceHash": "b1dbcaf0fa6d2c2b08b1b2e22fcb9323900740353187ce48de5221d2eca98ac6",
+              "language": "python",
+              "startedAt": 1792408304795,
+              "finishedAt": 1792408313439,
+              "output": {
+                "stdout": "",
+                "stderr": "",
+                "result": [101, 2097152, 2097151, 2],
+                "exitCode": 0
+              }
+            },
+            "context": {
+              "id": "heap",
+              "language": "python",
+              "generation": 0,
+              "state": "idle",
+              "createdAt": 1792408281256,
+              "updatedAt": 1792408312619,
+              "executionId": "resume",
+              "deadlineAt": null
+            }
+          },
+          {
+            "sandboxId": "concurrent-77316693-5f1d-4081-acdc-66630992d693-w2-2",
+            "index": 2,
+            "run": {
+              "id": "resume",
+              "context": {
+                "id": "heap",
+                "generation": 0
+              },
+              "status": "exited",
+              "sourceHash": "3bc7ed3c2df5f118c960a10bcc02f36e6e0894eaa5208596267a73da0981049f",
+              "language": "python",
+              "startedAt": 1792408304827,
+              "finishedAt": 1792408312788,
+              "output": {
+                "stdout": "",
+                "stderr": "",
+                "result": [102, 2097152, 2097151, 3],
+                "exitCode": 0
+              }
+            },
+            "context": {
+              "id": "heap",
+              "language": "python",
+              "generation": 0,
+              "state": "idle",
+              "createdAt": 1792408282514,
+              "updatedAt": 1792408311996,
+              "executionId": "resume",
+              "deadlineAt": null
+            }
+          }
+        ]
+      },
+      {
+        "phase": "seed",
+        "startedAt": 1792408324442,
+        "finishedAt": 1792408338053,
+        "lanes": [
+          {
+            "sandboxId": "concurrent-77316693-5f1d-4081-acdc-66630992d693-w4-1",
+            "index": 1,
+            "run": {
+              "id": "seed",
+              "context": {
+                "id": "heap",
+                "generation": 0
+              },
+              "status": "exited",
+              "sourceHash": "63208d683f979cd17d4d5d99190101daeaa998ceb73dee133331c3cc4f4c5ec2",
+              "language": "python",
+              "startedAt": 1792408326003,
+              "finishedAt": 1792408335712,
+              "output": {
+                "stdout": "",
+                "stderr": "",
+                "result": [1, 2097152, 2097151, 2],
+                "exitCode": 0
+              }
+            },
+            "context": {
+              "id": "heap",
+              "language": "python",
+              "generation": 0,
+              "state": "idle",
+              "createdAt": 1792408315597,
+              "updatedAt": 1792408334488,
+              "executionId": "seed",
+              "deadlineAt": null
+            }
+          },
+          {
+            "sandboxId": "concurrent-77316693-5f1d-4081-acdc-66630992d693-w4-2",
+            "index": 2,
+            "run": {
+              "id": "seed",
+              "context": {
+                "id": "heap",
+                "generation": 0
+              },
+              "status": "exited",
+              "sourceHash": "fbe3da92d0adfd2c9ef8b925ba4c7179bd172e7fce4b50ed6af70f03a971a3ab",
+              "language": "python",
+              "startedAt": 1792408325937,
+              "finishedAt": 1792408336951,
+              "output": {
+                "stdout": "",
+                "stderr": "",
+                "result": [2, 2097152, 2097151, 3],
+                "exitCode": 0
+              }
+            },
+            "context": {
+              "id": "heap",
+              "language": "python",
+              "generation": 0,
+              "state": "idle",
+              "createdAt": 1792408316972,
+              "updatedAt": 1792408336095,
+              "executionId": "seed",
+              "deadlineAt": null
+            }
+          },
+          {
+            "sandboxId": "concurrent-77316693-5f1d-4081-acdc-66630992d693-w4-3",
+            "index": 3,
+            "run": {
+              "id": "seed",
+              "context": {
+                "id": "heap",
+                "generation": 0
+              },
+              "status": "exited",
+              "sourceHash": "5111c8453adf0036d77fd942666d2760ef76879a6ed06a1c06df431c9d56c344",
+              "language": "python",
+              "startedAt": 1792408325977,
+              "finishedAt": 1792408335960,
+              "output": {
+                "stdout": "",
+                "stderr": "",
+                "result": [3, 2097152, 2097151, 4],
+                "exitCode": 0
+              }
+            },
+            "context": {
+              "id": "heap",
+              "language": "python",
+              "generation": 0,
+              "state": "idle",
+              "createdAt": 1792408318630,
+              "updatedAt": 1792408335066,
+              "executionId": "seed",
+              "deadlineAt": null
+            }
+          },
+          {
+            "sandboxId": "concurrent-77316693-5f1d-4081-acdc-66630992d693-w4-4",
+            "index": 4,
+            "run": {
+              "id": "seed",
+              "context": {
+                "id": "heap",
+                "generation": 0
+              },
+              "status": "exited",
+              "sourceHash": "cc67c3c120c13383be922b911285061a6d38f6a260d3072c2150c91ad0ae6e00",
+              "language": "python",
+              "startedAt": 1792408325914,
+              "finishedAt": 1792408335466,
+              "output": {
+                "stdout": "",
+                "stderr": "",
+                "result": [4, 2097152, 2097151, 5],
+                "exitCode": 0
+              }
+            },
+            "context": {
+              "id": "heap",
+              "language": "python",
+              "generation": 0,
+              "state": "idle",
+              "createdAt": 1792408319953,
+              "updatedAt": 1792408333933,
+              "executionId": "seed",
+              "deadlineAt": null
+            }
+          }
+        ]
+      },
+      {
+        "phase": "resume",
+        "startedAt": 1792408342504,
+        "finishedAt": 1792408355221,
+        "lanes": [
+          {
+            "sandboxId": "concurrent-77316693-5f1d-4081-acdc-66630992d693-w4-1",
+            "index": 1,
+            "run": {
+              "id": "resume",
+              "context": {
+                "id": "heap",
+                "generation": 0
+              },
+              "status": "exited",
+              "sourceHash": "b1dbcaf0fa6d2c2b08b1b2e22fcb9323900740353187ce48de5221d2eca98ac6",
+              "language": "python",
+              "startedAt": 1792408343972,
+              "finishedAt": 1792408353613,
+              "output": {
+                "stdout": "",
+                "stderr": "",
+                "result": [101, 2097152, 2097151, 2],
+                "exitCode": 0
+              }
+            },
+            "context": {
+              "id": "heap",
+              "language": "python",
+              "generation": 0,
+              "state": "idle",
+              "createdAt": 1792408315597,
+              "updatedAt": 1792408352813,
+              "executionId": "resume",
+              "deadlineAt": null
+            }
+          },
+          {
+            "sandboxId": "concurrent-77316693-5f1d-4081-acdc-66630992d693-w4-2",
+            "index": 2,
+            "run": {
+              "id": "resume",
+              "context": {
+                "id": "heap",
+                "generation": 0
+              },
+              "status": "exited",
+              "sourceHash": "3bc7ed3c2df5f118c960a10bcc02f36e6e0894eaa5208596267a73da0981049f",
+              "language": "python",
+              "startedAt": 1792408343842,
+              "finishedAt": 1792408353606,
+              "output": {
+                "stdout": "",
+                "stderr": "",
+                "result": [102, 2097152, 2097151, 3],
+                "exitCode": 0
+              }
+            },
+            "context": {
+              "id": "heap",
+              "language": "python",
+              "generation": 0,
+              "state": "idle",
+              "createdAt": 1792408316972,
+              "updatedAt": 1792408352828,
+              "executionId": "resume",
+              "deadlineAt": null
+            }
+          },
+          {
+            "sandboxId": "concurrent-77316693-5f1d-4081-acdc-66630992d693-w4-3",
+            "index": 3,
+            "run": {
+              "id": "resume",
+              "context": {
+                "id": "heap",
+                "generation": 0
+              },
+              "status": "exited",
+              "sourceHash": "cba4135efa9863d5cd2c101cb761d4abb3f1ca0728f35debb56b691765e12541",
+              "language": "python",
+              "startedAt": 1792408343800,
+              "finishedAt": 1792408353626,
+              "output": {
+                "stdout": "",
+                "stderr": "",
+                "result": [103, 2097152, 2097151, 4],
+                "exitCode": 0
+              }
+            },
+            "context": {
+              "id": "heap",
+              "language": "python",
+              "generation": 0,
+              "state": "idle",
+              "createdAt": 1792408318630,
+              "updatedAt": 1792408352883,
+              "executionId": "resume",
+              "deadlineAt": null
+            }
+          },
+          {
+            "sandboxId": "concurrent-77316693-5f1d-4081-acdc-66630992d693-w4-4",
+            "index": 4,
+            "run": {
+              "id": "resume",
+              "context": {
+                "id": "heap",
+                "generation": 0
+              },
+              "status": "exited",
+              "sourceHash": "84d0244c0430e13e2949ce39f25dba2272883340dc9c748f40c4fabd7679c384",
+              "language": "python",
+              "startedAt": 1792408343859,
+              "finishedAt": 1792408353771,
+              "output": {
+                "stdout": "",
+                "stderr": "",
+                "result": [104, 2097152, 2097151, 5],
+                "exitCode": 0
+              }
+            },
+            "context": {
+              "id": "heap",
+              "language": "python",
+              "generation": 0,
+              "state": "idle",
+              "createdAt": 1792408319953,
+              "updatedAt": 1792408353018,
+              "executionId": "resume",
+              "deadlineAt": null
+            }
+          }
+        ]
+      },
+      {
+        "phase": "seed",
+        "startedAt": 1792408369924,
+        "finishedAt": 1792408388326,
+        "lanes": [
+          {
+            "sandboxId": "concurrent-77316693-5f1d-4081-acdc-66630992d693-w8-1",
+            "index": 1,
+            "run": {
+              "id": "seed",
+              "context": {
+                "id": "heap",
+                "generation": 0
+              },
+              "status": "exited",
+              "sourceHash": "63208d683f979cd17d4d5d99190101daeaa998ceb73dee133331c3cc4f4c5ec2",
+              "language": "python",
+              "startedAt": 1792408371293,
+              "finishedAt": 1792408386777,
+              "output": {
+                "stdout": "",
+                "stderr": "",
+                "result": [1, 2097152, 2097151, 2],
+                "exitCode": 0
+              }
+            },
+            "context": {
+              "id": "heap",
+              "language": "python",
+              "generation": 0,
+              "state": "idle",
+              "createdAt": 1792408356579,
+              "updatedAt": 1792408385526,
+              "executionId": "seed",
+              "deadlineAt": null
+            }
+          },
+          {
+            "sandboxId": "concurrent-77316693-5f1d-4081-acdc-66630992d693-w8-2",
+            "index": 2,
+            "run": {
+              "id": "seed",
+              "context": {
+                "id": "heap",
+                "generation": 0
+              },
+              "status": "exited",
+              "sourceHash": "fbe3da92d0adfd2c9ef8b925ba4c7179bd172e7fce4b50ed6af70f03a971a3ab",
+              "language": "python",
+              "startedAt": 1792408371731,
+              "finishedAt": 1792408381722,
+              "output": {
+                "stdout": "",
+                "stderr": "",
+                "result": [2, 2097152, 2097151, 3],
+                "exitCode": 0
+              }
+            },
+            "context": {
+              "id": "heap",
+              "language": "python",
+              "generation": 0,
+              "state": "idle",
+              "createdAt": 1792408357874,
+              "updatedAt": 1792408380943,
+              "executionId": "seed",
+              "deadlineAt": null
+            }
+          },
+          {
+            "sandboxId": "concurrent-77316693-5f1d-4081-acdc-66630992d693-w8-3",
+            "index": 3,
+            "run": {
+              "id": "seed",
+              "context": {
+                "id": "heap",
+                "generation": 0
+              },
+              "status": "exited",
+              "sourceHash": "5111c8453adf0036d77fd942666d2760ef76879a6ed06a1c06df431c9d56c344",
+              "language": "python",
+              "startedAt": 1792408371416,
+              "finishedAt": 1792408386844,
+              "output": {
+                "stdout": "",
+                "stderr": "",
+                "result": [3, 2097152, 2097151, 4],
+                "exitCode": 0
+              }
+            },
+            "context": {
+              "id": "heap",
+              "language": "python",
+              "generation": 0,
+              "state": "idle",
+              "createdAt": 1792408359134,
+              "updatedAt": 1792408385963,
+              "executionId": "seed",
+              "deadlineAt": null
+            }
+          },
+          {
+            "sandboxId": "concurrent-77316693-5f1d-4081-acdc-66630992d693-w8-4",
+            "index": 4,
+            "run": {
+              "id": "seed",
+              "context": {
+                "id": "heap",
+                "generation": 0
+              },
+              "status": "exited",
+              "sourceHash": "cc67c3c120c13383be922b911285061a6d38f6a260d3072c2150c91ad0ae6e00",
+              "language": "python",
+              "startedAt": 1792408371429,
+              "finishedAt": 1792408387230,
+              "output": {
+                "stdout": "",
+                "stderr": "",
+                "result": [4, 2097152, 2097151, 5],
+                "exitCode": 0
+              }
+            },
+            "context": {
+              "id": "heap",
+              "language": "python",
+              "generation": 0,
+              "state": "idle",
+              "createdAt": 1792408360565,
+              "updatedAt": 1792408386464,
+              "executionId": "seed",
+              "deadlineAt": null
+            }
+          },
+          {
+            "sandboxId": "concurrent-77316693-5f1d-4081-acdc-66630992d693-w8-5",
+            "index": 5,
+            "run": {
+              "id": "seed",
+              "context": {
+                "id": "heap",
+                "generation": 0
+              },
+              "status": "exited",
+              "sourceHash": "ee22cefc11dad6dde1d1077298e6aa00b7733cd97c42fa4eef76353f500af8d0",
+              "language": "python",
+              "startedAt": 1792408371732,
+              "finishedAt": 1792408381717,
+              "output": {
+                "stdout": "",
+                "stderr": "",
+                "result": [5, 2097152, 2097151, 6],
+                "exitCode": 0
+              }
+            },
+            "context": {
+              "id": "heap",
+              "language": "python",
+              "generation": 0,
+              "state": "idle",
+              "createdAt": 1792408361829,
+              "updatedAt": 1792408380819,
+              "executionId": "seed",
+              "deadlineAt": null
+            }
+          },
+          {
+            "sandboxId": "concurrent-77316693-5f1d-4081-acdc-66630992d693-w8-6",
+            "index": 6,
+            "run": {
+              "id": "seed",
+              "context": {
+                "id": "heap",
+                "generation": 0
+              },
+              "status": "exited",
+              "sourceHash": "47ee8e25688857ca653d9d0345eec107a5ae687998b3bdf027d10f3530e524ce",
+              "language": "python",
+              "startedAt": 1792408371353,
+              "finishedAt": 1792408386650,
+              "output": {
+                "stdout": "",
+                "stderr": "",
+                "result": [6, 2097152, 2097151, 7],
+                "exitCode": 0
+              }
+            },
+            "context": {
+              "id": "heap",
+              "language": "python",
+              "generation": 0,
+              "state": "idle",
+              "createdAt": 1792408362954,
+              "updatedAt": 1792408385182,
+              "executionId": "seed",
+              "deadlineAt": null
+            }
+          },
+          {
+            "sandboxId": "concurrent-77316693-5f1d-4081-acdc-66630992d693-w8-7",
+            "index": 7,
+            "run": {
+              "id": "seed",
+              "context": {
+                "id": "heap",
+                "generation": 0
+              },
+              "status": "exited",
+              "sourceHash": "03c98576a8d734a8ffcd34261eb8bfbd8b5b6dfa10e126021f5e3b646973ed1e",
+              "language": "python",
+              "startedAt": 1792408371461,
+              "finishedAt": 1792408385976,
+              "output": {
+                "stdout": "",
+                "stderr": "",
+                "result": [7, 2097152, 2097151, 8],
+                "exitCode": 0
+              }
+            },
+            "context": {
+              "id": "heap",
+              "language": "python",
+              "generation": 0,
+              "state": "idle",
+              "createdAt": 1792408364213,
+              "updatedAt": 1792408382360,
+              "executionId": "seed",
+              "deadlineAt": null
+            }
+          },
+          {
+            "sandboxId": "concurrent-77316693-5f1d-4081-acdc-66630992d693-w8-8",
+            "index": 8,
+            "run": {
+              "id": "seed",
+              "context": {
+                "id": "heap",
+                "generation": 0
+              },
+              "status": "exited",
+              "sourceHash": "5a52002fe4366d87dc687db9b5d125cb6462b2bd13d6f9a89900a9a61fbe98d4",
+              "language": "python",
+              "startedAt": 1792408371323,
+              "finishedAt": 1792408386794,
+              "output": {
+                "stdout": "",
+                "stderr": "",
+                "result": [8, 2097152, 2097151, 9],
+                "exitCode": 0
+              }
+            },
+            "context": {
+              "id": "heap",
+              "language": "python",
+              "generation": 0,
+              "state": "idle",
+              "createdAt": 1792408365474,
+              "updatedAt": 1792408385543,
+              "executionId": "seed",
+              "deadlineAt": null
+            }
+          }
+        ]
+      },
+      {
+        "phase": "resume",
+        "startedAt": 1792408392304,
+        "finishedAt": 1792408414370,
+        "lanes": [
+          {
+            "sandboxId": "concurrent-77316693-5f1d-4081-acdc-66630992d693-w8-1",
+            "index": 1,
+            "run": {
+              "id": "resume",
+              "context": {
+                "id": "heap",
+                "generation": 0
+              },
+              "status": "exited",
+              "sourceHash": "b1dbcaf0fa6d2c2b08b1b2e22fcb9323900740353187ce48de5221d2eca98ac6",
+              "language": "python",
+              "startedAt": 1792408394155,
+              "finishedAt": 1792408412523,
+              "output": {
+                "stdout": "",
+                "stderr": "",
+                "result": [101, 2097152, 2097151, 2],
+                "exitCode": 0
+              }
+            },
+            "context": {
+              "id": "heap",
+              "language": "python",
+              "generation": 0,
+              "state": "idle",
+              "createdAt": 1792408356579,
+              "updatedAt": 1792408411378,
+              "executionId": "resume",
+              "deadlineAt": null
+            }
+          },
+          {
+            "sandboxId": "concurrent-77316693-5f1d-4081-acdc-66630992d693-w8-2",
+            "index": 2,
+            "run": {
+              "id": "resume",
+              "context": {
+                "id": "heap",
+                "generation": 0
+              },
+              "status": "exited",
+              "sourceHash": "3bc7ed3c2df5f118c960a10bcc02f36e6e0894eaa5208596267a73da0981049f",
+              "language": "python",
+              "startedAt": 1792408393791,
+              "finishedAt": 1792408412707,
+              "output": {
+                "stdout": "",
+                "stderr": "",
+                "result": [102, 2097152, 2097151, 3],
+                "exitCode": 0
+              }
+            },
+            "context": {
+              "id": "heap",
+              "language": "python",
+              "generation": 0,
+              "state": "idle",
+              "createdAt": 1792408357874,
+              "updatedAt": 1792408411679,
+              "executionId": "resume",
+              "deadlineAt": null
+            }
+          },
+          {
+            "sandboxId": "concurrent-77316693-5f1d-4081-acdc-66630992d693-w8-3",
+            "index": 3,
+            "run": {
+              "id": "resume",
+              "context": {
+                "id": "heap",
+                "generation": 0
+              },
+              "status": "exited",
+              "sourceHash": "cba4135efa9863d5cd2c101cb761d4abb3f1ca0728f35debb56b691765e12541",
+              "language": "python",
+              "startedAt": 1792408393548,
+              "finishedAt": 1792408412437,
+              "output": {
+                "stdout": "",
+                "stderr": "",
+                "result": [103, 2097152, 2097151, 4],
+                "exitCode": 0
+              }
+            },
+            "context": {
+              "id": "heap",
+              "language": "python",
+              "generation": 0,
+              "state": "idle",
+              "createdAt": 1792408359134,
+              "updatedAt": 1792408410917,
+              "executionId": "resume",
+              "deadlineAt": null
+            }
+          },
+          {
+            "sandboxId": "concurrent-77316693-5f1d-4081-acdc-66630992d693-w8-4",
+            "index": 4,
+            "run": {
+              "id": "resume",
+              "context": {
+                "id": "heap",
+                "generation": 0
+              },
+              "status": "exited",
+              "sourceHash": "84d0244c0430e13e2949ce39f25dba2272883340dc9c748f40c4fabd7679c384",
+              "language": "python",
+              "startedAt": 1792408393972,
+              "finishedAt": 1792408412712,
+              "output": {
+                "stdout": "",
+                "stderr": "",
+                "result": [104, 2097152, 2097151, 5],
+                "exitCode": 0
+              }
+            },
+            "context": {
+              "id": "heap",
+              "language": "python",
+              "generation": 0,
+              "state": "idle",
+              "createdAt": 1792408360565,
+              "updatedAt": 1792408411580,
+              "executionId": "resume",
+              "deadlineAt": null
+            }
+          },
+          {
+            "sandboxId": "concurrent-77316693-5f1d-4081-acdc-66630992d693-w8-5",
+            "index": 5,
+            "run": {
+              "id": "resume",
+              "context": {
+                "id": "heap",
+                "generation": 0
+              },
+              "status": "exited",
+              "sourceHash": "5a10e79190e5c3e8447ec3bbed2565864b9e10ab863e9bd01a75bd6357c1cbfb",
+              "language": "python",
+              "startedAt": 1792408394219,
+              "finishedAt": 1792408413238,
+              "output": {
+                "stdout": "",
+                "stderr": "",
+                "result": [105, 2097152, 2097151, 6],
+                "exitCode": 0
+              }
+            },
+            "context": {
+              "id": "heap",
+              "language": "python",
+              "generation": 0,
+              "state": "idle",
+              "createdAt": 1792408361829,
+              "updatedAt": 1792408412339,
+              "executionId": "resume",
+              "deadlineAt": null
+            }
+          },
+          {
+            "sandboxId": "concurrent-77316693-5f1d-4081-acdc-66630992d693-w8-6",
+            "index": 6,
+            "run": {
+              "id": "resume",
+              "context": {
+                "id": "heap",
+                "generation": 0
+              },
+              "status": "exited",
+              "sourceHash": "344b6e325ffadb47858278aaf69003df32fd76b4bbbebe778814f4a485cac4f1",
+              "language": "python",
+              "startedAt": 1792408394166,
+              "finishedAt": 1792408412529,
+              "output": {
+                "stdout": "",
+                "stderr": "",
+                "result": [106, 2097152, 2097151, 7],
+                "exitCode": 0
+              }
+            },
+            "context": {
+              "id": "heap",
+              "language": "python",
+              "generation": 0,
+              "state": "idle",
+              "createdAt": 1792408362954,
+              "updatedAt": 1792408411548,
+              "executionId": "resume",
+              "deadlineAt": null
+            }
+          },
+          {
+            "sandboxId": "concurrent-77316693-5f1d-4081-acdc-66630992d693-w8-7",
+            "index": 7,
+            "run": {
+              "id": "resume",
+              "context": {
+                "id": "heap",
+                "generation": 0
+              },
+              "status": "exited",
+              "sourceHash": "b8108e9e18c7d7bd39068ccad58ae6bc5aa2df5c1c2b1b19938dd9abfba1ce83",
+              "language": "python",
+              "startedAt": 1792408393743,
+              "finishedAt": 1792408412395,
+              "output": {
+                "stdout": "",
+                "stderr": "",
+                "result": [107, 2097152, 2097151, 8],
+                "exitCode": 0
+              }
+            },
+            "context": {
+              "id": "heap",
+              "language": "python",
+              "generation": 0,
+              "state": "idle",
+              "createdAt": 1792408364213,
+              "updatedAt": 1792408411032,
+              "executionId": "resume",
+              "deadlineAt": null
+            }
+          },
+          {
+            "sandboxId": "concurrent-77316693-5f1d-4081-acdc-66630992d693-w8-8",
+            "index": 8,
+            "run": {
+              "id": "resume",
+              "context": {
+                "id": "heap",
+                "generation": 0
+              },
+              "status": "exited",
+              "sourceHash": "79da8a5b88ab2d1baaa7e073f1a8359df3a310cc387949ef261fec2afab28271",
+              "language": "python",
+              "startedAt": 1792408393652,
+              "finishedAt": 1792408412482,
+              "output": {
+                "stdout": "",
+                "stderr": "",
+                "result": [108, 2097152, 2097151, 9],
+                "exitCode": 0
+              }
+            },
+            "context": {
+              "id": "heap",
+              "language": "python",
+              "generation": 0,
+              "state": "idle",
+              "createdAt": 1792408365474,
+              "updatedAt": 1792408411227,
+              "executionId": "resume",
+              "deadlineAt": null
+            }
+          }
+        ]
+      }
+    ],
+    "observations": [
+      {
+        "width": 1,
+        "phase": "seed",
+        "startedAt": 1792408254479,
+        "finishedAt": 1792408265712,
+        "elapsedMs": 11233,
+        "callerElapsedMs": 10839
+      },
+      {
+        "width": 1,
+        "phase": "resume",
+        "startedAt": 1792408269631,
+        "finishedAt": 1792408280213,
+        "elapsedMs": 10582,
+        "callerElapsedMs": 10206
+      },
+      {
+        "width": 2,
+        "phase": "seed",
+        "startedAt": 1792408286671,
+        "finishedAt": 1792408299242,
+        "elapsedMs": 12571,
+        "callerElapsedMs": 12131
+      },
+      {
+        "width": 2,
+        "phase": "resume",
+        "startedAt": 1792408302940,
+        "finishedAt": 1792408314551,
+        "elapsedMs": 11611,
+        "callerElapsedMs": 11172
+      },
+      {
+        "width": 4,
+        "phase": "seed",
+        "startedAt": 1792408323991,
+        "finishedAt": 1792408338048,
+        "elapsedMs": 14057,
+        "callerElapsedMs": 13611
+      },
+      {
+        "width": 4,
+        "phase": "resume",
+        "startedAt": 1792408342116,
+        "finishedAt": 1792408355232,
+        "elapsedMs": 13116,
+        "callerElapsedMs": 12717
+      },
+      {
+        "width": 8,
+        "phase": "seed",
+        "startedAt": 1792408369597,
+        "finishedAt": 1792408388356,
+        "elapsedMs": 18759,
+        "callerElapsedMs": 18402
+      },
+      {
+        "width": 8,
+        "phase": "resume",
+        "startedAt": 1792408391889,
+        "finishedAt": 1792408414383,
+        "elapsedMs": 22494,
+        "callerElapsedMs": 22066
+      }
+    ],
+    "limitations": "One sample per width/phase; separate preview callers do not force backend replacement or prove one backend isolate; logical payload bytes are not RSS, Worker memory, CPU or billing. Scope disposes and reclaims every created sandbox."
+  },
+  "measurements": [
+    {
+      "width": 1,
+      "phase": "seed",
+      "startedAt": 1792408254479,
+      "finishedAt": 1792408265712,
+      "elapsedMs": 11233,
+      "callerElapsedMs": 10839,
+      "httpStatus": 200,
+      "peakOverlappingReceiptIntervals": 1
+    },
+    {
+      "width": 1,
+      "phase": "resume",
+      "startedAt": 1792408269631,
+      "finishedAt": 1792408280213,
+      "elapsedMs": 10582,
+      "callerElapsedMs": 10206,
+      "httpStatus": 200,
+      "peakOverlappingReceiptIntervals": 1
+    },
+    {
+      "width": 2,
+      "phase": "seed",
+      "startedAt": 1792408286671,
+      "finishedAt": 1792408299242,
+      "elapsedMs": 12571,
+      "callerElapsedMs": 12131,
+      "httpStatus": 200,
+      "peakOverlappingReceiptIntervals": 2
+    },
+    {
+      "width": 2,
+      "phase": "resume",
+      "startedAt": 1792408302940,
+      "finishedAt": 1792408314551,
+      "elapsedMs": 11611,
+      "callerElapsedMs": 11172,
+      "httpStatus": 200,
+      "peakOverlappingReceiptIntervals": 2
+    },
+    {
+      "width": 4,
+      "phase": "seed",
+      "startedAt": 1792408323991,
+      "finishedAt": 1792408338048,
+      "elapsedMs": 14057,
+      "callerElapsedMs": 13611,
+      "httpStatus": 200,
+      "peakOverlappingReceiptIntervals": 4
+    },
+    {
+      "width": 4,
+      "phase": "resume",
+      "startedAt": 1792408342116,
+      "finishedAt": 1792408355232,
+      "elapsedMs": 13116,
+      "callerElapsedMs": 12717,
+      "httpStatus": 200,
+      "peakOverlappingReceiptIntervals": 4
+    },
+    {
+      "width": 8,
+      "phase": "seed",
+      "startedAt": 1792408369597,
+      "finishedAt": 1792408388356,
+      "elapsedMs": 18759,
+      "callerElapsedMs": 18402,
+      "httpStatus": 200,
+      "peakOverlappingReceiptIntervals": 8
+    },
+    {
+      "width": 8,
+      "phase": "resume",
+      "startedAt": 1792408391889,
+      "finishedAt": 1792408414383,
+      "elapsedMs": 22494,
+      "callerElapsedMs": 22066,
+      "httpStatus": 200,
+      "peakOverlappingReceiptIntervals": 8
+    }
+  ],
+  "persistedMemoryObservations": [
+    {
+      "measuredAt": 1792408298202,
+      "contexts": [
+        {
+          "sandboxId": "concurrent-77316693-5f1d-4081-acdc-66630992d693-w1-1",
+          "state": "idle",
+          "generation": 0,
+          "updatedAt": 1792408278127,
+          "heap": {
+            "runtime": "b25ded28c883f526f713f0527709a7c6bce1e572cdbd152fad34a2c4bfb6d07a",
+            "codec": "zlib-packs-v1",
+            "memoryBytes": 13303808,
+            "memoryLimitBytes": 33554432,
+            "maxOutputBytes": 1048576,
+            "logicalPages": 203
+          }
+        },
+        {
+          "sandboxId": "concurrent-77316693-5f1d-4081-acdc-66630992d693-w2-1",
+          "state": "idle",
+          "generation": 0,
+          "updatedAt": 1792408281256,
+          "heap": null
+        },
+        {
+          "sandboxId": "concurrent-77316693-5f1d-4081-acdc-66630992d693-w2-2",
+          "state": "running",
+          "generation": 0,
+          "updatedAt": 1792408288137,
+          "heap": null
+        }
+      ],
+      "scope": "Owned synthetic roots only; persisted linear-memory capacity and page hashes, not RSS or aggregate isolate memory.",
+      "nontransactionalObservation": true
+    },
+    {
+      "measuredAt": 1792408385959,
+      "contexts": [
+        {
+          "sandboxId": "concurrent-77316693-5f1d-4081-acdc-66630992d693-w1-1",
+          "state": "idle",
+          "generation": 0,
+          "updatedAt": 1792408278127,
+          "heap": {
+            "runtime": "b25ded28c883f526f713f0527709a7c6bce1e572cdbd152fad34a2c4bfb6d07a",
+            "codec": "zlib-packs-v1",
+            "memoryBytes": 13303808,
+            "memoryLimitBytes": 33554432,
+            "maxOutputBytes": 1048576,
+            "logicalPages": 203
+          }
+        },
+        {
+          "sandboxId": "concurrent-77316693-5f1d-4081-acdc-66630992d693-w2-1",
+          "state": "idle",
+          "generation": 0,
+          "updatedAt": 1792408312619,
+          "heap": {
+            "runtime": "b25ded28c883f526f713f0527709a7c6bce1e572cdbd152fad34a2c4bfb6d07a",
+            "codec": "zlib-packs-v1",
+            "memoryBytes": 13303808,
+            "memoryLimitBytes": 33554432,
+            "maxOutputBytes": 1048576,
+            "logicalPages": 203
+          }
+        },
+        {
+          "sandboxId": "concurrent-77316693-5f1d-4081-acdc-66630992d693-w2-2",
+          "state": "idle",
+          "generation": 0,
+          "updatedAt": 1792408311996,
+          "heap": {
+            "runtime": "b25ded28c883f526f713f0527709a7c6bce1e572cdbd152fad34a2c4bfb6d07a",
+            "codec": "zlib-packs-v1",
+            "memoryBytes": 13303808,
+            "memoryLimitBytes": 33554432,
+            "maxOutputBytes": 1048576,
+            "logicalPages": 203
+          }
+        },
+        {
+          "sandboxId": "concurrent-77316693-5f1d-4081-acdc-66630992d693-w4-1",
+          "state": "idle",
+          "generation": 0,
+          "updatedAt": 1792408352813,
+          "heap": {
+            "runtime": "b25ded28c883f526f713f0527709a7c6bce1e572cdbd152fad34a2c4bfb6d07a",
+            "codec": "zlib-packs-v1",
+            "memoryBytes": 13303808,
+            "memoryLimitBytes": 33554432,
+            "maxOutputBytes": 1048576,
+            "logicalPages": 203
+          }
+        },
+        {
+          "sandboxId": "concurrent-77316693-5f1d-4081-acdc-66630992d693-w4-2",
+          "state": "idle",
+          "generation": 0,
+          "updatedAt": 1792408352828,
+          "heap": {
+            "runtime": "b25ded28c883f526f713f0527709a7c6bce1e572cdbd152fad34a2c4bfb6d07a",
+            "codec": "zlib-packs-v1",
+            "memoryBytes": 13303808,
+            "memoryLimitBytes": 33554432,
+            "maxOutputBytes": 1048576,
+            "logicalPages": 203
+          }
+        },
+        {
+          "sandboxId": "concurrent-77316693-5f1d-4081-acdc-66630992d693-w4-3",
+          "state": "idle",
+          "generation": 0,
+          "updatedAt": 1792408352883,
+          "heap": {
+            "runtime": "b25ded28c883f526f713f0527709a7c6bce1e572cdbd152fad34a2c4bfb6d07a",
+            "codec": "zlib-packs-v1",
+            "memoryBytes": 13303808,
+            "memoryLimitBytes": 33554432,
+            "maxOutputBytes": 1048576,
+            "logicalPages": 203
+          }
+        },
+        {
+          "sandboxId": "concurrent-77316693-5f1d-4081-acdc-66630992d693-w4-4",
+          "state": "idle",
+          "generation": 0,
+          "updatedAt": 1792408353018,
+          "heap": {
+            "runtime": "b25ded28c883f526f713f0527709a7c6bce1e572cdbd152fad34a2c4bfb6d07a",
+            "codec": "zlib-packs-v1",
+            "memoryBytes": 13303808,
+            "memoryLimitBytes": 33554432,
+            "maxOutputBytes": 1048576,
+            "logicalPages": 203
+          }
+        },
+        {
+          "sandboxId": "concurrent-77316693-5f1d-4081-acdc-66630992d693-w8-1",
+          "state": "running",
+          "generation": 0,
+          "updatedAt": 1792408370630,
+          "heap": null
+        },
+        {
+          "sandboxId": "concurrent-77316693-5f1d-4081-acdc-66630992d693-w8-2",
+          "state": "running",
+          "generation": 0,
+          "updatedAt": 1792408370952,
+          "heap": null
+        },
+        {
+          "sandboxId": "concurrent-77316693-5f1d-4081-acdc-66630992d693-w8-3",
+          "state": "running",
+          "generation": 0,
+          "updatedAt": 1792408370626,
+          "heap": null
+        },
+        {
+          "sandboxId": "concurrent-77316693-5f1d-4081-acdc-66630992d693-w8-4",
+          "state": "running",
+          "generation": 0,
+          "updatedAt": 1792408370718,
+          "heap": null
+        },
+        {
+          "sandboxId": "concurrent-77316693-5f1d-4081-acdc-66630992d693-w8-5",
+          "state": "running",
+          "generation": 0,
+          "updatedAt": 1792408370951,
+          "heap": null
+        },
+        {
+          "sandboxId": "concurrent-77316693-5f1d-4081-acdc-66630992d693-w8-6",
+          "state": "running",
+          "generation": 0,
+          "updatedAt": 1792408370686,
+          "heap": null
+        },
+        {
+          "sandboxId": "concurrent-77316693-5f1d-4081-acdc-66630992d693-w8-7",
+          "state": "running",
+          "generation": 0,
+          "updatedAt": 1792408370665,
+          "heap": null
+        },
+        {
+          "sandboxId": "concurrent-77316693-5f1d-4081-acdc-66630992d693-w8-8",
+          "state": "running",
+          "generation": 0,
+          "updatedAt": 1792408370666,
+          "heap": null
+        }
+      ],
+      "scope": "Owned synthetic roots only; persisted linear-memory capacity and page hashes, not RSS or aggregate isolate memory.",
+      "nontransactionalObservation": true
+    }
+  ],
+  "initialHarnessFailure": {
+    "nonce": "3fdc7c7d-255b-4c43-940a-e60c5cb414ae",
+    "phase": "creating resume preview before dispatch",
+    "error": "getaddrinfo ENOTFOUND",
+    "dnsLabelLength": 64,
+    "correction": "Shortened the diagnostic preview script name; fresh owned sandbox used for the complete sweep. Original successful seed was not replayed. Original root was disposed/reclaimed. No product code or runtime limit changed.",
+    "seedResponse": {
+      "status": 200,
+      "startedAt": 1792408202889,
+      "finishedAt": 1792408214472,
+      "body": "{\"phase\":\"seed\",\"startedAt\":1792408203543,\"finishedAt\":1792408214475,\"lanes\":[{\"sandboxId\":\"concurrent-3fdc7c7d-255b-4c43-940a-e60c5cb414ae-w1-1\",\"index\":1,\"run\":{\"id\":\"seed\",\"context\":{\"id\":\"heap\",\"generation\":0},\"status\":\"exited\",\"sourceHash\":\"63208d683f979cd17d4d5d99190101daeaa998ceb73dee133331c3cc4f4c5ec2\",\"language\":\"python\",\"startedAt\":1792408204822,\"finishedAt\":1792408213295,\"output\":{\"stdout\":\"\",\"stderr\":\"\",\"result\":[1,2097152,2097151,2],\"exitCode\":0}},\"context\":{\"id\":\"heap\",\"language\":\"python\",\"generation\":0,\"state\":\"idle\",\"createdAt\":1792408197993,\"updatedAt\":1792408212441,\"executionId\":\"seed\",\"deadlineAt\":null}}]}"
+    }
+  },
+  "cleanupReceipts": [
+    {
+      "sandboxId": "concurrent-3fdc7c7d-255b-4c43-940a-e60c5cb414ae-w1-1",
+      "receipt": {
+        "phase": "complete",
+        "status": "complete",
+        "removed": 0,
+        "blocking": []
+      }
+    },
+    {
+      "sandboxId": "concurrent-77316693-5f1d-4081-acdc-66630992d693-w1-1",
+      "receipt": {
+        "phase": "complete",
+        "status": "complete",
+        "removed": 0,
+        "blocking": []
+      }
+    },
+    {
+      "sandboxId": "concurrent-77316693-5f1d-4081-acdc-66630992d693-w2-1",
+      "receipt": {
+        "phase": "complete",
+        "status": "complete",
+        "removed": 0,
+        "blocking": []
+      }
+    },
+    {
+      "sandboxId": "concurrent-77316693-5f1d-4081-acdc-66630992d693-w2-2",
+      "receipt": {
+        "phase": "complete",
+        "status": "complete",
+        "removed": 0,
+        "blocking": []
+      }
+    },
+    {
+      "sandboxId": "concurrent-77316693-5f1d-4081-acdc-66630992d693-w4-1",
+      "receipt": {
+        "phase": "complete",
+        "status": "complete",
+        "removed": 0,
+        "blocking": []
+      }
+    },
+    {
+      "sandboxId": "concurrent-77316693-5f1d-4081-acdc-66630992d693-w4-2",
+      "receipt": {
+        "phase": "complete",
+        "status": "complete",
+        "removed": 0,
+        "blocking": []
+      }
+    },
+    {
+      "sandboxId": "concurrent-77316693-5f1d-4081-acdc-66630992d693-w4-3",
+      "receipt": {
+        "phase": "complete",
+        "status": "complete",
+        "removed": 0,
+        "blocking": []
+      }
+    },
+    {
+      "sandboxId": "concurrent-77316693-5f1d-4081-acdc-66630992d693-w4-4",
+      "receipt": {
+        "phase": "complete",
+        "status": "complete",
+        "removed": 0,
+        "blocking": []
+      }
+    },
+    {
+      "sandboxId": "concurrent-77316693-5f1d-4081-acdc-66630992d693-w8-1",
+      "receipt": {
+        "phase": "complete",
+        "status": "complete",
+        "removed": 0,
+        "blocking": []
+      }
+    },
+    {
+      "sandboxId": "concurrent-77316693-5f1d-4081-acdc-66630992d693-w8-2",
+      "receipt": {
+        "phase": "complete",
+        "status": "complete",
+        "removed": 0,
+        "blocking": []
+      }
+    },
+    {
+      "sandboxId": "concurrent-77316693-5f1d-4081-acdc-66630992d693-w8-3",
+      "receipt": {
+        "phase": "complete",
+        "status": "complete",
+        "removed": 0,
+        "blocking": []
+      }
+    },
+    {
+      "sandboxId": "concurrent-77316693-5f1d-4081-acdc-66630992d693-w8-4",
+      "receipt": {
+        "phase": "complete",
+        "status": "complete",
+        "removed": 0,
+        "blocking": []
+      }
+    },
+    {
+      "sandboxId": "concurrent-77316693-5f1d-4081-acdc-66630992d693-w8-5",
+      "receipt": {
+        "phase": "complete",
+        "status": "complete",
+        "removed": 0,
+        "blocking": []
+      }
+    },
+    {
+      "sandboxId": "concurrent-77316693-5f1d-4081-acdc-66630992d693-w8-6",
+      "receipt": {
+        "phase": "complete",
+        "status": "complete",
+        "removed": 0,
+        "blocking": []
+      }
+    },
+    {
+      "sandboxId": "concurrent-77316693-5f1d-4081-acdc-66630992d693-w8-7",
+      "receipt": {
+        "phase": "complete",
+        "status": "complete",
+        "removed": 0,
+        "blocking": []
+      }
+    },
+    {
+      "sandboxId": "concurrent-77316693-5f1d-4081-acdc-66630992d693-w8-8",
+      "receipt": {
+        "phase": "complete",
+        "status": "complete",
+        "removed": 0,
+        "blocking": []
+      }
+    }
+  ],
+  "finalNativeAudit": {
+    "measuredAt": 1792408499363,
+    "profile": "minutei",
+    "worker": "cirro-sandbox-prod-rs7wexxow56rmsoz",
+    "bucket": "cirro-objects-prod-vbk2p6ruhs2m645y",
+    "placement": {
+      "mode": "smart"
+    },
+    "counts": {
+      "pages": 7,
+      "objects": 6181,
+      "processes": 1499,
+      "schedules": 2,
+      "contexts": 0,
+      "metadataAbsent": 2832
+    },
+    "fixtureKeys": [
+      "reclamations/concurrent-3fdc7c7d-255b-4c43-940a-e60c5cb414ae-w1-1.json",
+      "reclamations/concurrent-77316693-5f1d-4081-acdc-66630992d693-w1-1.json",
+      "reclamations/concurrent-77316693-5f1d-4081-acdc-66630992d693-w2-1.json",
+      "reclamations/concurrent-77316693-5f1d-4081-acdc-66630992d693-w2-2.json",
+      "reclamations/concurrent-77316693-5f1d-4081-acdc-66630992d693-w4-1.json",
+      "reclamations/concurrent-77316693-5f1d-4081-acdc-66630992d693-w4-2.json",
+      "reclamations/concurrent-77316693-5f1d-4081-acdc-66630992d693-w4-3.json",
+      "reclamations/concurrent-77316693-5f1d-4081-acdc-66630992d693-w4-4.json",
+      "reclamations/concurrent-77316693-5f1d-4081-acdc-66630992d693-w8-1.json",
+      "reclamations/concurrent-77316693-5f1d-4081-acdc-66630992d693-w8-2.json",
+      "reclamations/concurrent-77316693-5f1d-4081-acdc-66630992d693-w8-3.json",
+      "reclamations/concurrent-77316693-5f1d-4081-acdc-66630992d693-w8-4.json",
+      "reclamations/concurrent-77316693-5f1d-4081-acdc-66630992d693-w8-5.json",
+      "reclamations/concurrent-77316693-5f1d-4081-acdc-66630992d693-w8-6.json",
+      "reclamations/concurrent-77316693-5f1d-4081-acdc-66630992d693-w8-7.json",
+      "reclamations/concurrent-77316693-5f1d-4081-acdc-66630992d693-w8-8.json",
+      "sandboxes/concurrent-3fdc7c7d-255b-4c43-940a-e60c5cb414ae-w1-1/head.json",
+      "sandboxes/concurrent-77316693-5f1d-4081-acdc-66630992d693-w1-1/head.json",
+      "sandboxes/concurrent-77316693-5f1d-4081-acdc-66630992d693-w2-1/head.json",
+      "sandboxes/concurrent-77316693-5f1d-4081-acdc-66630992d693-w2-2/head.json",
+      "sandboxes/concurrent-77316693-5f1d-4081-acdc-66630992d693-w4-1/head.json",
+      "sandboxes/concurrent-77316693-5f1d-4081-acdc-66630992d693-w4-2/head.json",
+      "sandboxes/concurrent-77316693-5f1d-4081-acdc-66630992d693-w4-3/head.json",
+      "sandboxes/concurrent-77316693-5f1d-4081-acdc-66630992d693-w4-4/head.json",
+      "sandboxes/concurrent-77316693-5f1d-4081-acdc-66630992d693-w8-1/head.json",
+      "sandboxes/concurrent-77316693-5f1d-4081-acdc-66630992d693-w8-2/head.json",
+      "sandboxes/concurrent-77316693-5f1d-4081-acdc-66630992d693-w8-3/head.json",
+      "sandboxes/concurrent-77316693-5f1d-4081-acdc-66630992d693-w8-4/head.json",
+      "sandboxes/concurrent-77316693-5f1d-4081-acdc-66630992d693-w8-5/head.json",
+      "sandboxes/concurrent-77316693-5f1d-4081-acdc-66630992d693-w8-6/head.json",
+      "sandboxes/concurrent-77316693-5f1d-4081-acdc-66630992d693-w8-7/head.json",
+      "sandboxes/concurrent-77316693-5f1d-4081-acdc-66630992d693-w8-8/head.json"
+    ],
+    "formats": {
+      "run-v7": 1499,
+      "program-json-v2": 1397,
+      "program-json": 435,
+      "historical-source-text-v1": 16,
+      "cron-v2": 2
+    },
+    "statuses": {
+      "cancelled": 28,
+      "exited": 1362,
+      "failed": 109
+    },
+    "complete": true
+  },
+  "validation": {
+    "completedLaneExecutions": 30,
+    "allExpectedOutputsVerified": true,
+    "allCurrentContextsIdleGenerationZeroBeforeDisposal": true,
+    "backendCrashInduced": false,
+    "runtimeCodeChanged": false,
+    "runtimeLimitsChanged": false,
+    "minuteiChangedOrDeployed": false
+  },
+  "remainingGates": [
+    "Queue backlog and fairness",
+    "Repeated latency distributions and cold starts",
+    "Single-isolate memory/RSS and admission under resource exhaustion",
+    "Arbitrary-crash recovery and external-effect intent boundaries",
+    "Full AgentOS behavioral parity",
+    "Comparative production CPU/billing/cost"
+  ]
+}
